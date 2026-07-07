@@ -55,26 +55,39 @@ async function sendWebhookEmail(
 export async function POST(req: Request) {
   try {
     const headerList = await headers();
+    const authHeader = headerList.get("authorization") || "";
     const signature = headerList.get("finix-signature");
     const rawBody = await req.text();
 
-    if (!WEBHOOK_SECRET) {
-      console.error("Webhook secret not configured");
-      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 });
+    const basicAuthUser = process.env.FINIX_WEBHOOK_BASIC_USERNAME || "wgc_finix_webhook";
+    const basicAuthPass = process.env.FINIX_WEBHOOK_BASIC_PASSWORD || "Pavankumarreddy145@";
+
+    let isAuthenticated = false;
+
+    // Check Basic Auth
+    const match = authHeader.match(/^Basic\s+(.*)$/i);
+    if (match) {
+      const credentials = Buffer.from(match[1], "base64").toString("utf-8");
+      const [username, password] = credentials.split(":");
+      if (username === basicAuthUser && password === basicAuthPass) {
+        isAuthenticated = true;
+      }
     }
 
-    if (!signature) {
-      return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+    // Check HMAC Signature if Basic Auth failed but secret is present
+    if (!isAuthenticated && WEBHOOK_SECRET && signature) {
+      const expectedSignature = crypto
+        .createHmac("sha256", WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest("hex");
+
+      if (signature === expectedSignature) {
+        isAuthenticated = true;
+      }
     }
 
-    // Verify signature
-    const expectedSignature = crypto
-      .createHmac("sha256", WEBHOOK_SECRET)
-      .update(rawBody)
-      .digest("hex");
-
-    if (signature !== expectedSignature) {
-      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    if (!isAuthenticated) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const payload = JSON.parse(rawBody);
