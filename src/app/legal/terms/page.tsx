@@ -1,0 +1,189 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
+export default function TermsPage() {
+  const finixTermsUrl = process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix.com/terms";
+  const finixPrivacyUrl = process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/privacy";
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <div className="max-w-4xl mx-auto px-4 py-20">
+        
+        {/* Header */}
+        <div className="mb-12">
+           <Link href="/" className="inline-block mb-10 group">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-wgc-gold-500 flex items-center justify-center shadow-lg shadow-wgc-gold-500/20 transform rotate-12 group-hover:rotate-0 transition-transform">
+                  <span className="text-wgc-navy-900 font-black text-xl -rotate-12 group-hover:rotate-0 transition-transform">W</span>
+                </div>
+                <span className="font-black text-wgc-navy-900 uppercase tracking-tighter text-2xl">WGC Payments</span>
+              </div>
+           </Link>
+           <h1 className="text-4xl font-bold text-wgc-navy-900 tracking-tight">Terms of Service</h1>
+           <p className="text-slate-500 font-medium tracking-tight mt-2 opacity-80">Last updated July 2026.</p>
+           <p className="text-xs text-slate-400 mt-4 max-w-2xl">
+             These Terms are provided for platform onboarding and payment service use. Final terms may be subject to additional agreements between WGC Payments and the church.
+           </p>
+        </div>
+
+        {/* Content */}
+        <div className="bg-white rounded-[3rem] p-10 md:p-16 border shadow-[0_32px_64px_-16px_rgba(0,0,0,0.05)] relative overflow-hidden">
+          
+          <div className="relative z-10 space-y-12 text-slate-600 leading-relaxed">
+            
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">1. Introduction</h2>
+              <p>
+                WGC Payments is a platform that helps churches accept donations and manage payment activity. WGC works with Finix Payments, Inc. ("Finix") and its processors/banks to provide payment processing services.
+              </p>
+            </section>
+            
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">2. Authorized Representative</h2>
+              <p>
+                The person accepting these terms confirms they are authorized to act on behalf of the church, non-profit, or organization utilizing WGC Payments.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">3. Acceptance of WGC and Finix Terms</h2>
+              <p className="mb-4">By continuing with onboarding and utilizing the platform, the Church agrees to:</p>
+              <ul className="list-disc pl-6 space-y-2 mb-4">
+                <li><Link href="/legal/terms" className="text-wgc-navy-600 font-medium hover:underline">WGC Payments Terms of Service</Link></li>
+                <li><Link href="/legal/fees" className="text-wgc-navy-600 font-medium hover:underline">WGC Fee Schedule</Link></li>
+                <li><Link href="/legal/privacy" className="text-wgc-navy-600 font-medium hover:underline">WGC Privacy Policy</Link></li>
+                <li><a href={finixTermsUrl} target="_blank" rel="noopener noreferrer" className="text-wgc-navy-600 font-medium hover:underline">Finix Terms of Service</a></li>
+                <li><a href={finixPrivacyUrl} target="_blank" rel="noopener noreferrer" className="text-wgc-navy-600 font-medium hover:underline">Finix Privacy Policy</a></li>
+              </ul>
+              <p>
+                Finix is an express third-party beneficiary of WGC’s Terms.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">4. Authorization to Share Information</h2>
+              <p>
+                Church authorizes WGC to collect, store, process, and share church/sub-merchant information with Finix, sponsor banks, processors, and required service providers for onboarding, underwriting, payment processing, dispute handling, risk review, compliance, payouts, and support.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">5. Authorization for WGC to Act on Behalf of Church</h2>
+              <p>
+                Church authorizes WGC to communicate with Finix on its behalf for onboarding, payment processing, refunds, disputes, ACH returns, payout support, compliance, account updates, and issue resolution. Church authorizes WGC to transmit relevant information to Finix when necessary.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">6. Accurate Information</h2>
+              <p>
+                Church must provide true, complete, and current business, owner, control person, processing, refund policy, website, tax, and payout bank information. Church must promptly update WGC/Finix if information changes.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">7. Payout Bank Account</h2>
+              <p>
+                The payout bank account must belong to the church/organization or be a legitimate business/organization account approved for payouts. Full bank account information is collected through secure Finix onboarding/update flows. WGC does not display full bank account or routing details. Payout bank changes must be completed securely through the Finix hosted onboarding/update flow. Payouts may be paused while new bank information is verified.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">8. Fees</h2>
+              <p>
+                WGC may charge application/platform fees on donations. WGC may charge a monthly platform/base fee. Processor/network/pass-through fees may apply. Refund, ACH return, dispute, chargeback, network, processor, financial institution, and pass-through fees may apply.
+              </p>
+              <p className="mt-4">
+                WGC may deduct application/platform fees through Finix from processed donations. Monthly platform fees may be billed separately. Pricing may vary by church agreement. WGC will provide prior notice before fee changes (at least 30 days where practical/required). 
+              </p>
+              <p className="mt-4">
+                See our full <Link href="/legal/fees" className="text-wgc-navy-600 font-medium hover:underline">Fee Schedule</Link> for details.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">9. Payment Processing</h2>
+              <p>
+                Payments are processed through Finix/processor/bank services. Approval is subject to underwriting, risk review, compliance review, and Finix/processor/sponsor bank approval. Finix or processor may approve, reject, suspend, terminate, request more information, hold funds, reserve funds, or impose limitations.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">10. Refunds</h2>
+              <p>
+                Church must maintain a clear refund policy. Church is responsible for refund decisions and donor communication. Refunds cannot exceed the original transaction amount unless allowed by rules/law. Cash refunds for card/ACH donations should not be allowed except where legally required or permitted. Refund-related fees may apply.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">11. Disputes, Chargebacks, ACH Returns</h2>
+              <p>
+                Church is responsible for donor disputes, chargebacks, ACH returns, failed payments, reversals, and related costs. Church must respond to disputes by deadlines. WGC may help display and transmit dispute information, but outcomes are not guaranteed. Lost disputes may reduce payouts or create amounts owed.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">12. Payouts / Settlements</h2>
+              <p>
+                Payouts are subject to settlement timing, processor/bank review, risk controls, reserves, holds, ACH returns, disputes, and chargebacks. WGC does not receive settlement funds on behalf of churches. Payouts should go to the church/sub-merchant’s approved payout bank account through Finix/processor. Dashboard payout data may be informational and should be reconciled by the church.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">13. Compliance</h2>
+              <p>
+                Church must comply with applicable law, payment network rules, Finix terms, WGC terms, ACH rules, card network rules, and required website/refund policy rules. Church must not use WGC/Finix for prohibited or restricted businesses or illegal activity.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">14. Website / Donor-Facing Requirements</h2>
+              <p>
+                Church is responsible for maintaining required donor-facing disclosures, including organization identity, contact info, refund policy, donation/payment description, and any required tax/charitable disclosures.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">15. Security / PCI / Data</h2>
+              <p>
+                WGC uses Finix Tokenization Forms for sensitive payment information. WGC should not store raw PAN, CVV, or full bank details. Church must protect its login credentials and notify WGC immediately of unauthorized access.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">16. Suspension / Termination</h2>
+              <p>
+                WGC may suspend or terminate access for compliance, risk, non-payment, suspected fraud, dispute issues, inaccurate information, violation of terms, or Finix/processor instruction.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">17. Changes to Terms</h2>
+              <p>
+                WGC may update terms with notice. Continued use after notice means acceptance.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">18. Support</h2>
+              <p>
+                For questions, support, or issues regarding your account, please contact us at <strong>support@wgcpayments.com</strong>.
+              </p>
+            </section>
+
+          </div>
+
+          {/* Background branding */}
+          <div className="absolute -right-20 -bottom-20 opacity-[0.02] pointer-events-none select-none text-[12rem] font-black text-wgc-navy-900 leading-none">TERMS</div>
+        </div>
+        
+        <div className="mt-12 text-center">
+          <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-wgc-navy-900 transition-colors uppercase tracking-widest font-mono">
+            <ArrowLeft className="w-4 h-4" /> Back to Home
+          </Link>
+        </div>
+        
+      </div>
+    </div>
+  );
+}

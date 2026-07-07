@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model OnboardingApplication {
+  id                         String    @id @default(cuid())
+  organizationName           String
+  organizationType           String
+  contactName                String
+  contactEmail               String
+  contactPhone               String?
+  website                    String?
+  status                     String
+  finixIdentityId            String?
+  finixMerchantId            String?
+  finixOnboardingFormId      String?
+  finixOnboardingUrl         String?
+  finixDashboardUrl          String?
+  finixDashboardInviteStatus String?
+  submittedAt                DateTime?
+  approvedAt                 DateTime?
+  rejectedAt                 DateTime?
+  updateRequestedAt          DateTime?
+  updateReason               String?
+  processingEnabled          Boolean   @default(false)
+  settlementEnabled          Boolean   @default(false)
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+}
+
+model LegalAcceptance {
+  id                      String    @id @default(cuid())
+  onboardingApplicationId String
+  acceptedWgcTermsAt      DateTime?
+  acceptedWgcFeesAt       DateTime?
+  acceptedWgcPrivacyAt    DateTime?
+  acceptedFinixTermsAt    DateTime?
+  acceptedFinixPrivacyAt  DateTime?
+  accepterName            String
+  accepterEmail           String
+  accepterIpAddress       String?
+  accepterUserAgent       String?
+  wgcTermsVersion         String
+  wgcFeesVersion          String
+  wgcPrivacyVersion       String
+  finixTermsUrl           String
+  finixPrivacyUrl         String
+  source                  String
+  createdAt               DateTime  @default(now())
+}
+
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  provider        String
+  eventType       String
+  providerEventId String?   @unique
+  relatedFinixId  String?
+  payload         Json
+  processedAt     DateTime?
+  processingError String?
+  createdAt       DateTime  @default(now())
+}
+
+model EmailLog {
+  id                      String    @id @default(cuid())
+  onboardingApplicationId String?
+  type                    String
+  to                      String
+  subject                 String
+  status                  String
+  providerMessageId       String?
+  error                   String?
+  sentAt                  DateTime?
+  createdAt               DateTime  @default(now())
+}
+
+model AuditLog {
+  id                      String   @id @default(cuid())
+  onboardingApplicationId String?
+  action                  String
+  actorEmail              String?
+  ipAddress               String?
+  userAgent               String?
+  metadata                Json?
+  createdAt               DateTime @default(now())
+}
+
+model Church {
+  id                      String   @id @default(cuid())
+  name                    String
+  slug                    String   @unique
+  primaryContactEmail     String
+  onboardingApplicationId String?
+  finixMerchantId         String?
+  finixIdentityId         String?
+  status                  String
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Donor {
+  id        String   @id @default(cuid())
+  churchId  String
+  name      String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id                         String    @id @default(cuid())
+  churchId                   String
+  donorId                    String?
+  finixTransferId            String?
+  finixBuyerIdentityId       String?
+  finixPaymentInstrumentId   String?
+  amountCents                Int
+  currency                   String    @default("USD")
+  paymentMethodType          String
+  status                     String
+  failureCode                String?
+  failureMessage             String?
+  failedAt                   DateTime?
+  idempotencyId              String?
+  fraudSessionId             String?
+  receiptStatus              String?
+  receiptSentAt              DateTime?
+  achAuthorizationAccepted   Boolean   @default(false)
+  achAuthorizationAcceptedAt DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+}
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  amountCents     Int
+  currency        String   @default("USD")
+  billingInterval String
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ChurchSubscription {
+  id                       String    @id @default(cuid())
+  onboardingApplicationId  String?
+  churchId                 String?
+  subscriptionPlanId       String
+  finixSubscriptionId      String?
+  finixBuyerIdentityId     String?
+  finixPaymentInstrumentId String?
+  amountCents              Int
+  currency                 String    @default("USD")
+  billingInterval          String
+  state                    String
+  subscriptionPhase        String?
+  firstChargeAt            DateTime?
+  nextBillingDate          DateTime?
+  startedAt                DateTime?
+  canceledAt               DateTime?
+  expiresAt                DateTime?
+  failedAt                 DateTime?
+  failureCode              String?
+  failureMessage           String?
+  paymentMethodType        String?
+  cardBrand                String?
+  cardLast4                String?
+  bankLast4                String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  lastSyncedAt             DateTime?
+}
+
+model SubscriptionCharge {
+  id                   String    @id @default(cuid())
+  churchSubscriptionId String
+  finixTransferId      String?
+  amountCents          Int
+  status               String
+  paidAt               DateTime?
+  failedAt             DateTime?
+  failureCode          String?
+  failureMessage       String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
