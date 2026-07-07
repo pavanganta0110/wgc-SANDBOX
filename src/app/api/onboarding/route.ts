@@ -31,86 +31,102 @@ export async function POST(req: Request) {
     const userAgent = reqHeaders.get("user-agent") || "unknown";
 
     // Create OnboardingApplication locally
-    const application = await prisma.onboardingApplication.create({
-      data: {
-        organizationName,
-        organizationType,
-        contactName,
-        contactEmail,
-        contactPhone,
-        website,
-        status: "DRAFT",
+    console.log("ONBOARDING_STEP", "REQUEST_RECEIVED");
+    console.log("ONBOARDING_STEP", "VALIDATION_PASSED");
+    
+    let application;
+    try {
+      application = await prisma.onboardingApplication.create({
+        data: {
+          organizationName,
+          organizationType,
+          contactName,
+          contactEmail,
+          contactPhone,
+          website,
+          status: "DRAFT",
 
-        legalBusinessName, doingBusinessAs, businessType: organizationType === "Nonprofit" || organizationType === "Church" ? "NON_PROFIT" : "CORPORATION",
-        businessTaxIdProvided: !!businessTaxId, businessAddressLine1, businessAddressLine2, businessCity, businessState, businessPostalCode, businessCountry,
-        businessPhone, businessDescription, mcc, defaultStatementDescriptor,
+          legalBusinessName, doingBusinessAs, businessType: organizationType === "Nonprofit" || organizationType === "Church" ? "NON_PROFIT_CORPORATION" : "CORPORATION",
+          businessTaxIdProvided: !!businessTaxId, businessAddressLine1, businessAddressLine2, businessCity, businessState, businessPostalCode, businessCountry,
+          businessPhone, businessDescription, mcc, defaultStatementDescriptor,
 
-        principalFirstName: firstName, principalLastName: lastName, principalTitle: title, principalEmail: email, principalPhone: phone,
-        principalDobYear: dobYear, principalDobMonth: dobMonth, principalDobDay: dobDay, principalOwnershipPercentage: ownershipPercentage,
-        principalAddressLine1: personalAddressLine1, principalAddressLine2: personalAddressLine2, principalCity: personalCity, principalState: personalState, principalPostalCode: personalPostalCode, principalCountry: personalCountry,
-        principalTaxIdProvided: !!taxId,
+          principalFirstName: firstName, principalLastName: lastName, principalTitle: title, principalEmail: email, principalPhone: phone,
+          principalDobYear: dobYear, principalDobMonth: dobMonth, principalDobDay: dobDay, principalOwnershipPercentage: ownershipPercentage,
+          principalAddressLine1: personalAddressLine1, principalAddressLine2: personalAddressLine2, principalCity: personalCity, principalState: personalState, principalPostalCode: personalPostalCode, principalCountry: personalCountry,
+          principalTaxIdProvided: !!taxId,
 
-        annualCardVolumeCents: annualCardVolume, annualAchVolumeCents: annualAchVolume, averageCardTransferAmountCents: averageCardTransferAmount, averageAchTransferAmountCents: averageAchTransferAmount,
-        maxTransactionAmountCents: maxTransactionAmount, achMaxTransactionAmountCents: achMaxTransactionAmount, ecommercePercentage, cardPresentPercentage, mailOrderTelephoneOrderPercentage, businessToBusinessPercentage, businessToConsumerPercentage, otherVolumePercentage,
-        refundPolicy, hasAcceptedCreditCardsPreviously,
+          annualCardVolumeCents: annualCardVolume, annualAchVolumeCents: annualAchVolume, averageCardTransferAmountCents: averageCardTransferAmount, averageAchTransferAmountCents: averageAchTransferAmount,
+          maxTransactionAmountCents: maxTransactionAmount, achMaxTransactionAmountCents: achMaxTransactionAmount, ecommercePercentage, cardPresentPercentage, mailOrderTelephoneOrderPercentage, businessToBusinessPercentage, businessToConsumerPercentage, otherVolumePercentage,
+          refundPolicy, hasAcceptedCreditCardsPreviously,
 
-        bankAccountType: accountType, bankName: accountHolderName, bankCountry, bankCurrency: currency,
-        bankLast4: accountNumber ? accountNumber.slice(-4) : null,
-      },
-    });
-
-    // Save Associated Owners if any
-    if (associatedOwners && associatedOwners.length > 0) {
-      await prisma.associatedOwner.createMany({
-        data: associatedOwners.map((owner: any) => ({
-          onboardingApplicationId: application.id,
-          firstName: owner.firstName,
-          lastName: owner.lastName,
-          title: owner.title,
-          email: owner.email,
-          phone: owner.phone,
-          dobYear: owner.dobYear,
-          dobMonth: owner.dobMonth,
-          dobDay: owner.dobDay,
-          ownershipPercentage: owner.ownershipPercentage,
-          addressLine1: owner.addressLine1,
-          addressLine2: owner.addressLine2,
-          city: owner.city,
-          state: owner.state,
-          postalCode: owner.postalCode,
-          country: owner.country,
-          taxIdProvided: !!owner.taxId,
-        })),
+          bankAccountType: accountType, bankName: accountHolderName, bankCountry, bankCurrency: currency,
+          bankLast4: accountNumber ? accountNumber.slice(-4) : null,
+        },
       });
+      console.log("ONBOARDING_STEP", "APPLICATION_CREATED", application.id);
+    } catch (err: any) {
+      console.error("ONBOARDING_FAILED", { step: "DATABASE_APPLICATION_CREATE_FAILED", errorMessage: err.message });
+      return NextResponse.json({ success: false, step: "DATABASE_APPLICATION_CREATE_FAILED", message: "Failed to create application in database." }, { status: 500 });
     }
 
-    // Save Legal Acceptance
-    await prisma.legalAcceptance.create({
-      data: {
-        onboardingApplicationId: application.id,
-        acceptedWgcTermsAt: legal.wgcTerms ? new Date() : null,
-        acceptedWgcFeesAt: legal.wgcFees ? new Date() : null,
-        acceptedWgcPrivacyAt: legal.wgcPrivacy ? new Date() : null,
-        acceptedFinixTermsAt: legal.finixTerms ? new Date() : null,
-        acceptedFinixPrivacyAt: legal.finixPrivacy ? new Date() : null,
-        accepterName: contactName,
-        accepterEmail: contactEmail,
-        accepterIpAddress: ipAddress,
-        accepterUserAgent: userAgent,
-        wgcTermsVersion: "1.0",
-        wgcFeesVersion: "1.0",
-        wgcPrivacyVersion: "1.0",
-        finixTermsUrl: process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix.com/terms",
-        finixPrivacyUrl: process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/privacy",
-        source: "API_ONBOARDING",
-      },
-    });
+    try {
+      // Save Associated Owners if any
+      if (associatedOwners && associatedOwners.length > 0) {
+        await prisma.associatedOwner.createMany({
+          data: associatedOwners.map((owner: any) => ({
+            onboardingApplicationId: application.id,
+            firstName: owner.firstName,
+            lastName: owner.lastName,
+            title: owner.title,
+            email: owner.email,
+            phone: owner.phone,
+            dobYear: owner.dobYear,
+            dobMonth: owner.dobMonth,
+            dobDay: owner.dobDay,
+            ownershipPercentage: owner.ownershipPercentage,
+            addressLine1: owner.addressLine1,
+            addressLine2: owner.addressLine2,
+            city: owner.city,
+            state: owner.state,
+            postalCode: owner.postalCode,
+            country: owner.country,
+            taxIdProvided: !!owner.taxId,
+          })),
+        });
+      }
+
+      // Save Legal Acceptance
+      await prisma.legalAcceptance.create({
+        data: {
+          onboardingApplicationId: application.id,
+          acceptedWgcTermsAt: legal.wgcTerms ? new Date() : null,
+          acceptedWgcFeesAt: legal.wgcFees ? new Date() : null,
+          acceptedWgcPrivacyAt: legal.wgcPrivacy ? new Date() : null,
+          acceptedFinixTermsAt: legal.finixTerms ? new Date() : null,
+          acceptedFinixPrivacyAt: legal.finixPrivacy ? new Date() : null,
+          accepterName: contactName,
+          accepterEmail: contactEmail,
+          accepterIpAddress: ipAddress,
+          accepterUserAgent: userAgent,
+          wgcTermsVersion: "1.0",
+          wgcFeesVersion: "1.0",
+          wgcPrivacyVersion: "1.0",
+          finixTermsUrl: process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix.com/terms",
+          finixPrivacyUrl: process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/privacy",
+          source: "API_ONBOARDING",
+        },
+      });
+      console.log("ONBOARDING_STEP", "LEGAL_ACCEPTANCE_CREATED");
+    } catch (err: any) {
+      console.error("ONBOARDING_FAILED", { step: "LEGAL_ACCEPTANCE_CREATE_FAILED", applicationId: application.id, errorMessage: err.message });
+      return NextResponse.json({ success: false, step: "LEGAL_ACCEPTANCE_CREATE_FAILED", message: "Failed to save legal acceptance." }, { status: 500 });
+    }
 
     // ==========================================
     // Finix Orchestration
     // ==========================================
 
-    // 1. Create Identity
+    console.log("ONBOARDING_STEP", "FINIX_IDENTITY_START");
     const identityPayload = {
       type: "BUSINESS",
       identity_roles: ["SELLER"],
@@ -140,10 +156,13 @@ export async function POST(req: Request) {
     let finixIdentity;
     try {
       finixIdentity = await finixClient.createSellerIdentity(identityPayload);
+      console.log("ONBOARDING_STEP", "FINIX_IDENTITY_SUCCESS", finixIdentity.id);
     } catch (err: any) {
-      console.error("Onboarding failed at step: FINIX_IDENTITY_CREATE", {
+      console.error("ONBOARDING_FAILED", {
+        step: "FINIX_IDENTITY_CREATE_FAILED",
         applicationId: application.id,
-        errorMessage: err.message
+        errorMessage: err.message,
+        status: err.status
       });
       return NextResponse.json({ 
         success: false, 
@@ -180,16 +199,19 @@ export async function POST(req: Request) {
             });
           }
         } catch (err: any) {
-          console.error("Onboarding warning at step: FINIX_ASSOCIATED_IDENTITY_CREATE", {
+          console.error("ONBOARDING_FAILED", {
+            step: "FINIX_ASSOCIATED_IDENTITY_FAILED",
             applicationId: application.id,
             finixIdentityId: finixIdentity.id,
-            errorMessage: err.message
+            errorMessage: err.message,
+            status: err.status
           });
         }
       }
     }
 
     // 3. Bank Payment Instrument
+    console.log("ONBOARDING_STEP", "BANK_INSTRUMENT_START");
     const paymentInstrumentPayload = {
       type: "BANK_ACCOUNT",
       identity: finixIdentity.id,
@@ -202,11 +224,14 @@ export async function POST(req: Request) {
     let finixPaymentInstrument;
     try {
       finixPaymentInstrument = await finixClient.createPaymentInstrument(paymentInstrumentPayload);
+      console.log("ONBOARDING_STEP", "BANK_INSTRUMENT_SUCCESS", finixPaymentInstrument.id);
     } catch (err: any) {
-      console.error("Onboarding failed at step: FINIX_BANK_INSTRUMENT_CREATE", {
+      console.error("ONBOARDING_FAILED", {
+        step: "FINIX_BANK_INSTRUMENT_FAILED",
         applicationId: application.id,
         finixIdentityId: finixIdentity.id,
-        errorMessage: err.message
+        errorMessage: err.message,
+        status: err.status
       });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
@@ -225,17 +250,20 @@ export async function POST(req: Request) {
     });
 
     // 4. Merchant
+    console.log("ONBOARDING_STEP", "MERCHANT_CREATE_START");
     const processor = process.env.FINIX_PROCESSOR || "DUMMY_V1";
     let finixMerchant;
     try {
       finixMerchant = await finixClient.createMerchant(finixIdentity.id, processor);
+      console.log("ONBOARDING_STEP", "MERCHANT_CREATE_SUCCESS", finixMerchant.id);
     } catch (err: any) {
-      console.error("Onboarding failed at step: FINIX_MERCHANT_CREATE", {
+      console.error("ONBOARDING_FAILED", {
+        step: "FINIX_MERCHANT_CREATE_FAILED",
         applicationId: application.id,
         finixIdentityId: finixIdentity.id,
         finixPaymentInstrumentId: finixPaymentInstrument.id,
-        processor,
-        errorMessage: err.message
+        errorMessage: err.message,
+        status: err.status
       });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
@@ -243,7 +271,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ 
         success: false, 
-        step: "FINIX_MERCHANT_CREATION_FAILED", 
+        step: "FINIX_MERCHANT_CREATE_FAILED", 
         message: "We could not finalize your merchant account. Please contact support." 
       }, { status: 400 });
     }
@@ -287,7 +315,8 @@ export async function POST(req: Request) {
           }
         });
       } catch (err: any) {
-        console.error("Onboarding warning at step: EMAIL_SEND", {
+        console.error("ONBOARDING_FAILED", {
+          step: "EMAIL_SEND_FAILED",
           applicationId: application.id,
           errorMessage: err.message
         });
@@ -301,13 +330,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, applicationId: application.id });
 
   } catch (error: any) {
-    console.error("Onboarding failed at step: INITIAL_SETUP_OR_UNKNOWN", {
+    console.error("ONBOARDING_FAILED", {
+      step: "UNKNOWN_ERROR",
       errorMessage: error.message
     });
     return NextResponse.json({ 
       success: false, 
-      step: "SYSTEM_ERROR", 
-      message: `System Error: ${error.message || "Unknown error occurred"}`
+      step: "UNKNOWN_ERROR", 
+      message: "We encountered an unexpected error processing your request. Please try again." 
     }, { status: 500 });
   }
 }
