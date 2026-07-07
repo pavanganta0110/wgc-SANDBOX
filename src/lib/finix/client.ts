@@ -41,7 +41,7 @@ export class FinixClient {
     if (!res.ok) {
       const errorStr = typeof data === 'object' ? JSON.stringify(data) : data;
       console.error(`Finix API Error [${res.status}] on ${url}: ${errorStr}`);
-      throw new Error(`Finix API Error: ${res.status} ${res.statusText}`);
+      throw new Error(`Finix Error: ${errorStr}`);
     }
 
     return data;

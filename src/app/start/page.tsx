@@ -167,7 +167,9 @@ export default function StartOnboardingPage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit");
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || data.error || "Failed to submit onboarding application.");
+      }
 
       toast.success("Application started!");
       router.push(`/onboarding/success?applicationId=${data.applicationId}`);

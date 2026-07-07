@@ -115,7 +115,7 @@ export async function POST(req: Request) {
       type: "BUSINESS",
       identity_roles: ["SELLER"],
       entity: {
-        business_name: legalBusinessName, doing_business_as: doingBusinessAs, business_type: organizationType === "Nonprofit" || organizationType === "Church" ? "NON_PROFIT" : "CORPORATION",
+        business_name: legalBusinessName, doing_business_as: doingBusinessAs, business_type: organizationType === "Nonprofit" || organizationType === "Church" ? "NON_PROFIT_CORPORATION" : "CORPORATION",
         business_tax_id: businessTaxId, business_phone: businessPhone, default_statement_descriptor: defaultStatementDescriptor,
         business_address: { line1: businessAddressLine1, line2: businessAddressLine2, city: businessCity, region: businessState, postal_code: businessPostalCode, country: businessCountry },
         first_name: firstName, last_name: lastName, title: title, email: email, phone: phone,
@@ -140,9 +140,16 @@ export async function POST(req: Request) {
     let finixIdentity;
     try {
       finixIdentity = await finixClient.createSellerIdentity(identityPayload);
-    } catch (err) {
-      console.error("Finix Identity Error:", err);
-      return NextResponse.json({ error: "Failed to verify identity with Finix." }, { status: 500 });
+    } catch (err: any) {
+      console.error("Onboarding failed at step: FINIX_IDENTITY_CREATE", {
+        applicationId: application.id,
+        errorMessage: err.message
+      });
+      return NextResponse.json({ 
+        success: false, 
+        step: "FINIX_IDENTITY_CREATE_FAILED", 
+        message: "We could not verify your business identity. Please review your information." 
+      }, { status: 400 });
     }
 
     await prisma.onboardingApplication.update({
@@ -172,8 +179,12 @@ export async function POST(req: Request) {
               data: { finixAssociatedIdentityId: assocIdentity.id }
             });
           }
-        } catch (err) {
-          console.error("Finix Associated Identity Error:", err);
+        } catch (err: any) {
+          console.error("Onboarding warning at step: FINIX_ASSOCIATED_IDENTITY_CREATE", {
+            applicationId: application.id,
+            finixIdentityId: finixIdentity.id,
+            errorMessage: err.message
+          });
         }
       }
     }
@@ -191,13 +202,21 @@ export async function POST(req: Request) {
     let finixPaymentInstrument;
     try {
       finixPaymentInstrument = await finixClient.createPaymentInstrument(paymentInstrumentPayload);
-    } catch (err) {
-      console.error("Finix Payment Instrument Error:", err);
+    } catch (err: any) {
+      console.error("Onboarding failed at step: FINIX_BANK_INSTRUMENT_CREATE", {
+        applicationId: application.id,
+        finixIdentityId: finixIdentity.id,
+        errorMessage: err.message
+      });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
         data: { status: "BANK_INSTRUMENT_FAILED" },
       });
-      return NextResponse.json({ error: "Failed to link bank account." }, { status: 500 });
+      return NextResponse.json({ 
+        success: false, 
+        step: "FINIX_BANK_INSTRUMENT_FAILED", 
+        message: "We could not link your payout bank account. Please verify your routing and account numbers." 
+      }, { status: 400 });
     }
 
     await prisma.onboardingApplication.update({
@@ -210,13 +229,23 @@ export async function POST(req: Request) {
     let finixMerchant;
     try {
       finixMerchant = await finixClient.createMerchant(finixIdentity.id, processor);
-    } catch (err) {
-      console.error("Finix Merchant Error:", err);
+    } catch (err: any) {
+      console.error("Onboarding failed at step: FINIX_MERCHANT_CREATE", {
+        applicationId: application.id,
+        finixIdentityId: finixIdentity.id,
+        finixPaymentInstrumentId: finixPaymentInstrument.id,
+        processor,
+        errorMessage: err.message
+      });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
         data: { status: "MERCHANT_CREATION_FAILED" },
       });
-      return NextResponse.json({ error: "Failed to create merchant profile." }, { status: 500 });
+      return NextResponse.json({ 
+        success: false, 
+        step: "FINIX_MERCHANT_CREATION_FAILED", 
+        message: "We could not finalize your merchant account. Please contact support." 
+      }, { status: 400 });
     }
 
     // 5. Update Status
@@ -258,18 +287,27 @@ export async function POST(req: Request) {
           }
         });
       } catch (err: any) {
-        console.error("Resend error:", err);
+        console.error("Onboarding warning at step: EMAIL_SEND", {
+          applicationId: application.id,
+          errorMessage: err.message
+        });
         await prisma.emailLog.create({
           data: { onboardingApplicationId: application.id, type: "ONBOARDING_SUBMITTED", to: contactEmail, subject: "WGC Payments onboarding submitted", status: "FAILED", error: err.message }
         });
       }
     }
 
-    // Return the application ID so the client can redirect
+    console.log("Onboarding succeeded", { applicationId: application.id, finixMerchantId: finixMerchant.id });
     return NextResponse.json({ success: true, applicationId: application.id });
 
   } catch (error: any) {
-    console.error("Onboarding API Error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("Onboarding failed at step: INITIAL_SETUP_OR_UNKNOWN", {
+      errorMessage: error.message
+    });
+    return NextResponse.json({ 
+      success: false, 
+      step: "SYSTEM_ERROR", 
+      message: "We encountered an unexpected error processing your request. Please try again." 
+    }, { status: 500 });
   }
 }
