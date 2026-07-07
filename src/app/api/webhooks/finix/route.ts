@@ -62,6 +62,11 @@ export async function POST(req: Request) {
       }
     }
 
+    // Allow initial webhook creation ping from Finix dashboard if secret is not set yet
+    if (WEBHOOK_SECRET === "sandbox_webhook_secret") {
+      return NextResponse.json({ message: "Bypassed signature for setup ping" }, { status: 200 });
+    }
+
     if (!WEBHOOK_SECRET || !signatureHeader) {
       return NextResponse.json({ error: "Unauthorized: Missing Signature" }, { status: 401 });
     }
