@@ -164,17 +164,24 @@ export async function POST(req: Request) {
       finixIdentity = await finixClient.createSellerIdentity(identityPayload);
       console.log("ONBOARDING_STEP", "FINIX_IDENTITY_SUCCESS", finixIdentity.id);
     } catch (err: any) {
+      let finixErrorStr = err.message;
+      if (err.response && err.response.data) {
+        finixErrorStr = JSON.stringify(err.response.data);
+      } else if (err.details) {
+        finixErrorStr = JSON.stringify(err.details);
+      }
+      
       console.error("ONBOARDING_FAILED", {
         step: "FINIX_IDENTITY_CREATE_FAILED",
         applicationId: application.id,
-        errorMessage: err.message,
+        errorMessage: finixErrorStr,
         status: err.status
       });
       return NextResponse.json({ 
         success: false, 
         step: "FINIX_IDENTITY_CREATE_FAILED", 
         message: "We could not verify your business identity. Please review your information.",
-        finixError: err.message
+        finixError: finixErrorStr
       }, { status: 400 });
     }
 
