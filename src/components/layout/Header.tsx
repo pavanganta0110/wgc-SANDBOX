@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { name: "Partners", href: "/software-partners" },
   { name: "Pricing", href: "/pricing" },
   { name: "Developers", href: "/developers" },
+  { name: "Demo", href: "/demo/donation" },
 ];
 
 export default function Header() {

@@ -134,7 +134,7 @@ export default function KansasCityTithelyAlternative() {
           headline="Looking for a better giving platform?"
           subheadline="Switch to WGC and keep more of every dollar for your Kansas City ministry."
           ctaText="Get Approved"
-          ctaLink="/auth/register?intent=church-onboarding"
+          ctaLink="/start"
         />
       </main>
       <Footer />

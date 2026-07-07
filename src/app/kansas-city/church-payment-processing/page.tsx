@@ -134,7 +134,7 @@ export default function KansasCityChurchPayments() {
           headline="Ready to upgrade your KC ministry?"
           subheadline="Join the Kansas City churches and nonprofits maximizing their stewardship with WGC."
           ctaText="Get Approved"
-          ctaLink="/auth/register?intent=church-onboarding"
+          ctaLink="/start"
         />
       </main>
       <Footer />

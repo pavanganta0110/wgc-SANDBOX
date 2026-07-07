@@ -123,10 +123,10 @@ export default function Home() {
                   WGC provides the white-label donation engine and ministry settlement rails for the platforms building the future of Kingdom stewardship.
                 </p>
                 <div className="flex flex-col sm:row gap-6">
-                  <Link href="/auth/register?intent=church-onboarding" className="bg-wgc-gold-500 text-wgc-navy-950 inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl shadow-[0_20px_40px_rgba(234,179,8,0.2)] transform transition-all hover:scale-105 hover:bg-white uppercase tracking-widest">
+                  <Link href="/start" className="bg-wgc-gold-500 text-wgc-navy-950 inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl shadow-[0_20px_40px_rgba(234,179,8,0.2)] transform transition-all hover:scale-105 hover:bg-white uppercase tracking-widest">
                     Get Approved
                   </Link>
-                  <Link href="/start" className="inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all border border-white/20 text-white/80 hover:bg-white hover:text-wgc-navy-950 uppercase tracking-widest">
+                  <Link href="/demo/church-dashboard" className="inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all border border-white/20 text-white/80 hover:bg-white hover:text-wgc-navy-950 uppercase tracking-widest">
                     View Demo Dashboard
                   </Link>
                 </div>
@@ -304,7 +304,7 @@ export default function Home() {
                   <div className="w-10 h-10 rounded-full bg-wgc-gold-500 text-wgc-navy-950 flex items-center justify-center text-lg font-black mb-10 shadow-xl group-hover:scale-110 transition-transform">02</div>
                   <h3 className="text-xl font-black !text-white mb-4 tracking-tight">Stewardship Flow</h3>
                   <p className="text-[13px] font-bold text-white/60 leading-relaxed mb-8 tracking-widest">Donors use the interface they already trust. WGC disappears behind your brand while managing complexity.</p>
-                  <Link href="/start" className="inline-flex items-center text-[11px] font-black text-wgc-gold-500 hover:text-white transition-colors tracking-[0.2em] font-mono">
+                  <Link href="/demo/donation" className="inline-flex items-center text-[11px] font-black text-wgc-gold-500 hover:text-white transition-colors tracking-[0.2em] font-mono">
                     Demo Flow 
                   </Link>
                 </div>
@@ -447,7 +447,7 @@ export default function Home() {
             headline="Ready to establish your ministry registry?"
             subheadline="Join the movement of software partners building the future of Kingdom stewardship."
             ctaText="Get Approved"
-            ctaLink="/auth/register?intent=church-onboarding"
+            ctaLink="/start"
           />
         </section>
       </main>
