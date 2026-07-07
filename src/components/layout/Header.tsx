@@ -77,8 +77,8 @@ export default function Header() {
 
             {/* Desktop CTA */}
             <div className="flex items-center gap-6">
-              <Link href={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL || "#"} className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
-                Login
+              <Link href="https://wgcpayments.payments-dashboard.com/Login" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
+                Merchant Login
               </Link>
               <Link 
                 href="/start" 
@@ -136,11 +136,11 @@ export default function Header() {
           
           <div className="mt-8 pt-8 border-t border-white/5 flex flex-col gap-4">
             <Link 
-              href={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL || "#"} 
+              href="https://wgcpayments.payments-dashboard.com/Login" 
               onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
             >
-              Ministry Login
+              Merchant Login
             </Link>
             <Link 
               href="/start" 
