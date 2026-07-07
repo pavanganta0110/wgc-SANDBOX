@@ -65,8 +65,14 @@ export async function POST(req: Request) {
       });
       console.log("ONBOARDING_STEP", "APPLICATION_CREATED", application.id);
     } catch (err: any) {
-      console.error("ONBOARDING_FAILED", { step: "DATABASE_APPLICATION_CREATE_FAILED", errorMessage: err.message });
-      return NextResponse.json({ success: false, step: "DATABASE_APPLICATION_CREATE_FAILED", message: "Failed to create application in database." }, { status: 500 });
+      console.error("ONBOARDING_FAILED", { step: "DATABASE_APPLICATION_CREATE_FAILED", errorMessage: err.message, code: err.code });
+      return NextResponse.json({ 
+        success: false, 
+        step: "DATABASE_APPLICATION_CREATE_FAILED", 
+        message: "Database create failed",
+        prismaCode: err.code,
+        prismaMessage: err.message
+      }, { status: 500 });
     }
 
     try {
