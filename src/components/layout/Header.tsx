@@ -9,8 +9,10 @@ import GatewayIcon from "@/components/ui/GatewayIcon";
 
 const NAV_LINKS = [
   { name: "Home", href: "/" },
-  { name: "Churches & Nonprofits", href: "/churches" },
+  { name: "Partners", href: "/software-partners" },
   { name: "Pricing", href: "/pricing" },
+  { name: "Developers", href: "/developers" },
+  { name: "Demo", href: "/start" },
 ];
 
 export default function Header() {
@@ -75,24 +77,14 @@ export default function Header() {
 
             {/* Desktop CTA */}
             <div className="flex items-center gap-6">
-              <Link 
-                href={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL || "#"} 
-                target={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL ? "_blank" : "_self"}
-                onClick={(e) => {
-                  if (!process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL) {
-                    e.preventDefault();
-                    alert("Dashboard URL is not configured yet.");
-                  }
-                }}
-                className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]"
-              >
+              <Link href={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL || "#"} className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Login
               </Link>
               <Link 
                 href="/start" 
                 className="metallic-gold px-10 py-4 text-[13px] font-bold rounded-2xl shadow-2xl transition-all tracking-wide"
               >
-                Start Onboarding
+                Get Started
               </Link>
             </div>
           </div>
@@ -102,7 +94,7 @@ export default function Header() {
             <button 
               type="button" 
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-xl text-white hover:bg-wgc-navy-900 transition-all"
+              className="inline-flex items-center justify-center p-2 rounded-xl text-black hover:bg-gray-100 transition-all"
             >
               <span className="sr-only">Open main menu</span>
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -132,7 +124,11 @@ export default function Header() {
                       : "text-white hover:text-[#eab308]"
                   )}
                 >
-                  {link.name}
+                  {link.name === "Pricing" ? "Fee Structure" : 
+                   link.name === "Home" ? "Home" :
+                   link.name === "Partners" ? "Partners" :
+                   link.name === "Developers" ? "Api Reference" :
+                   link.name}
                 </Link>
               ))}
             </div>
@@ -141,15 +137,7 @@ export default function Header() {
           <div className="mt-8 pt-8 border-t border-white/5 flex flex-col gap-4">
             <Link 
               href={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL || "#"} 
-              target={process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL ? "_blank" : "_self"}
-              onClick={(e) => {
-                if (!process.env.NEXT_PUBLIC_FINIX_DASHBOARD_LOGIN_URL) {
-                  e.preventDefault();
-                  alert("Dashboard URL is not configured yet.");
-                } else {
-                  closeMenu();
-                }
-              }}
+              onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
             >
               Ministry Login
@@ -159,7 +147,7 @@ export default function Header() {
               onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 metallic-gold rounded-xl text-[12px] font-bold text-wgc-navy-950 shadow-lg tracking-wide transition-all active:scale-95"
             >
-              Start Onboarding
+              Request Connection
             </Link>
           </div>
         </div>

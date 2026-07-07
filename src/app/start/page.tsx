@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 export default function StartOnboardingPage() {
   const router = useRouter();
@@ -68,8 +70,10 @@ export default function StartOnboardingPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-16 px-6">
-      <div className="text-center mb-10">
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow max-w-3xl w-full mx-auto py-16 px-6">
+        <div className="text-center mb-10">
         <h1 className="text-3xl font-bold text-slate-900 mb-4">Start accepting donations with WGC Payments</h1>
         <p className="text-slate-600">
           WGC Payments helps churches and nonprofits accept donations through our secure payment partner, Finix. To begin, complete the secure onboarding form. Most applications are reviewed within 24–48 hours. After approval, you will receive access to your Finix Sub-Merchant Dashboard where you can manage transactions, payouts, refunds, disputes, and payout bank information.
@@ -213,6 +217,8 @@ export default function StartOnboardingPage() {
           </div>
         </form>
       </div>
+      </main>
+      <Footer />
     </div>
   );
 }

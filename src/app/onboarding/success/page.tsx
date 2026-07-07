@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { Resend } from "resend";
-
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export default async function OnboardingSuccessPage({
@@ -68,8 +69,10 @@ export default async function OnboardingSuccessPage({
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-24 px-6 flex flex-col items-center text-center">
-      <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-8">
+    <div className="flex flex-col min-h-screen">
+      <Header />
+      <main className="flex-grow max-w-3xl w-full mx-auto py-24 px-6 flex flex-col items-center text-center">
+        <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-8">
         <CheckCircle className="w-10 h-10" />
       </div>
       <h1 className="text-3xl font-bold text-slate-900 mb-4">Application Submitted!</h1>
@@ -82,6 +85,8 @@ export default async function OnboardingSuccessPage({
       >
         Return to Home
       </Link>
+      </main>
+      <Footer />
     </div>
   );
 }
