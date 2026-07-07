@@ -265,7 +265,8 @@ export default function StartOnboardingPage() {
                     <select required value={formData.refundPolicy} onChange={(e) => updateField("refundPolicy", e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none bg-white">
                       <option value="NO_REFUNDS">No Refunds</option>
                       <option value="MERCHANDISE_EXCHANGE_ONLY">Exchange Only</option>
-                      <option value="ALL_REFUNDS_ACCEPTED">All Refunds Accepted</option>
+                      <option value="WITHIN_30_DAYS">Within 30 Days</option>
+                      <option value="OTHER">Other / Unrestricted</option>
                     </select>
                   </div>
                   <div>
