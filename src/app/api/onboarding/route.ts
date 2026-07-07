@@ -139,7 +139,6 @@ export async function POST(req: Request) {
     // Finix Orchestration
     // ==========================================
 
-    console.log("ONBOARDING_STEP", "FINIX_IDENTITY_START");
     const identityPayload = {
       type: "BUSINESS",
       identity_roles: ["SELLER"],
@@ -164,8 +163,10 @@ export async function POST(req: Request) {
           ecommerce_percentage: Number(ecommercePercentage || 100) 
         },
         volume_distribution_by_business_type: { 
-          business_to_business_percentage: Number(businessToBusinessPercentage || 0), 
-          business_to_consumer_percentage: Number(businessToConsumerPercentage || 100), 
+          business_to_business_volume_percentage: Number(businessToBusinessPercentage || 0), 
+          business_to_consumer_volume_percentage: Number(businessToConsumerPercentage || 100), 
+          consumer_to_consumer_volume_percentage: 0,
+          person_to_person_volume_percentage: 0,
           other_volume_percentage: Number(otherVolumePercentage || 0) 
         },
         refund_policy: refundPolicy,
