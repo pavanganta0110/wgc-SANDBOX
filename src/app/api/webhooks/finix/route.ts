@@ -307,8 +307,7 @@ export async function POST(req: Request) {
             "#10B981",
             `<p>Hi ${safeOrgName},</p>
              <p>Great news — your WGC Payments account has been approved.</p>
-             <p>Your merchant account is now approved for payment processing. You will receive a separate secure dashboard access email with instructions to access your merchant dashboard.</p>
-             <p>For security reasons, WGC Payments does not send or manage dashboard passwords directly. Once you receive the dashboard access email, you can set or reset your password from there.</p>`
+             <p>Your merchant account is now approved for payment processing. You will receive a separate secure dashboard access email with instructions to log in and set or reset your password.</p>`
           );
 
           await sendWgcAdminEmail({

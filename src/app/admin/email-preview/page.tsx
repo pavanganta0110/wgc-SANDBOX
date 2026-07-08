@@ -49,12 +49,13 @@ export default function EmailPreviewPage() {
       name: "Application Approved",
       html: generateWgcEmailHtml({
         to: contactEmail,
-        subject: "WGC Payments Onboarding Approved",
-        title: "Application Approved!",
+        subject: "Your WGC Payments account has been approved",
+        title: "Your account has been approved",
         badgeText: "Approved",
         badgeColor: "#10B981",
-        bodyHtml: `<p>Great news! Your onboarding application for <strong>${businessName}</strong> has been fully approved.</p>
-                   <p>You can now start processing payments.</p>`
+        bodyHtml: `<p>Hi ${businessName},</p>
+                   <p>Great news — your WGC Payments account has been approved.</p>
+                   <p>Your merchant account is now approved for payment processing. You will receive a separate secure dashboard access email with instructions to log in and set or reset your password.</p>`
       })
     },
     {
