@@ -66,11 +66,20 @@ function loadFinixScript(): Promise<void> {
   return scriptLoadPromise;
 }
 
+type FinixAuthInstance = ReturnType<NonNullable<Window["Finix"]>["Auth"]>;
+
+let finixAuthInstance: FinixAuthInstance | null = null;
+
 /**
  * Returns a fresh fraud_session_id for the given merchant. Call this once
  * per checkout session (e.g. on page load / when the donation form mounts),
  * and pass a new one whenever the buyer starts a new checkout session per
  * Finix's guidance (returning after time away, new browser/device, etc.).
+ *
+ * Uses Finix.Auth's callback (per Step 2 of Finix's guide) rather than
+ * calling getSessionKey() immediately after Auth() — the guide documents
+ * the callback firing "once the library has finished initializing",
+ * implying initialization isn't guaranteed synchronous, so we wait for it.
  */
 export async function getFraudSessionId(
   merchantId: string,
@@ -82,6 +91,33 @@ export async function getFraudSessionId(
     throw new Error("Finix.js failed to initialize on window");
   }
 
-  const finixAuth = window.Finix.Auth(environment, merchantId);
-  return finixAuth.getSessionKey();
+  return new Promise((resolve, reject) => {
+    try {
+      finixAuthInstance = window.Finix!.Auth(environment, merchantId, (sessionKey) => {
+        resolve(sessionKey);
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Finix.Auth initialization failed"));
+    }
+  });
+}
+
+/**
+ * Per Finix's "Managing Different Sellers" section — switches the existing
+ * Finix.Auth tracking session to a new merchant (e.g. a multi-tenant
+ * checkout page) without reloading finix.js, and returns the new session key.
+ * Must be called after getFraudSessionId() has run at least once on this page.
+ */
+export async function connectFraudSession(merchantId: string): Promise<string> {
+  if (!finixAuthInstance) {
+    throw new Error(
+      "connectFraudSession called before getFraudSessionId — no active Finix.Auth instance to connect from."
+    );
+  }
+
+  return new Promise((resolve) => {
+    finixAuthInstance!.connect(merchantId, (sessionKey) => {
+      resolve(sessionKey);
+    });
+  });
 }
