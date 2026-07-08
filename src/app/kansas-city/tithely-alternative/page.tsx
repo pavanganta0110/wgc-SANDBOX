@@ -24,7 +24,7 @@ const FAQ_SCHEMA = {
       "name": "What's the cheapest church payment processor in Kansas City?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the cheapest church payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries in the KC metro save thousands annually."
+        "text": "WGC is the most cost-effective church payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries in the KC metro save thousands annually."
       }
     },
     {
