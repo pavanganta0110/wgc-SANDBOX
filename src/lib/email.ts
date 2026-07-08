@@ -12,11 +12,11 @@ interface WgcEmailOptions {
   bodyHtml: string;
 }
 
+const WGC_LOGO_URL = "https://wgcpayments.com/wgc-logo.png";
+
 export function generateWgcEmailHtml(options: WgcEmailOptions) {
   const { title, previewText, bodyHtml, badgeText, badgeColor = "#0B5DBC" } = options;
-  const baseUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://wgcpayments.com';
-  const logoUrl = `${baseUrl}/wgc-logo.svg`;
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -25,17 +25,17 @@ export function generateWgcEmailHtml(options: WgcEmailOptions) {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${title}</title>
     </head>
-    <body style="margin: 0; padding: 0; background-color: #F8FBFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+    <body style="margin: 0; padding: 0; background-color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
       ${previewText ? `<div style="display: none; max-height: 0px; overflow: hidden;">${previewText}</div>` : ''}
-      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #F8FBFF; padding: 40px 20px;">
+      <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #FFFFFF; padding: 40px 20px;">
         <tr>
           <td align="center">
-            <table width="100%" max-width="600" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(11, 19, 32, 0.05);">
-              
+            <table width="100%" max-width="600" border="0" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #FFFFFF;">
+
               <!-- Header with Logo -->
               <tr>
-                <td style="padding: 40px 40px 20px 40px; text-align: center; border-bottom: 1px solid #F0F4F8;">
-                  <img src="${logoUrl}" alt="WGC Payments" style="width: 250px; height: auto; max-width: 100%; display: block; margin: 0 auto; border: 0;" />
+                <td style="padding: 20px 40px 30px 40px; text-align: center;">
+                  <img src="${WGC_LOGO_URL}" alt="WGC Payments" style="width: 220px; height: auto; max-width: 100%; display: block; margin: 0 auto; border: 0;" />
                 </td>
               </tr>
               
@@ -72,11 +72,11 @@ export function generateWgcEmailHtml(options: WgcEmailOptions) {
 
               <!-- Footer -->
               <tr>
-                <td style="background-color: #0B1320; padding: 30px 40px; text-align: center;">
-                  <p style="margin: 0; color: #A0AEC0; font-size: 14px; line-height: 1.5;">
+                <td style="padding: 30px 40px; text-align: center; border-top: 1px solid #F0F4F8;">
+                  <p style="margin: 0; color: #4A5568; font-size: 14px; line-height: 1.5;">
                     Thank you,<br/>
-                    <strong>WGC Payments Support Team</strong><br/>
-                    <a href="mailto:support@wgcpayments.com" style="color: #A0AEC0; text-decoration: none;">support@wgcpayments.com</a>
+                    <strong>WGC Payments Team</strong><br/>
+                    <a href="mailto:support@wgcpayments.com" style="color: #0B5DBC; text-decoration: none;">support@wgcpayments.com</a>
                   </p>
                 </td>
               </tr>
@@ -115,7 +115,7 @@ ${cleanBody}
 Need help? Contact WGC Payments Support at support@wgcpayments.com
 
 Thank you,
-WGC Payments Support Team
+WGC Payments Team
 support@wgcpayments.com
   `.trim();
 
