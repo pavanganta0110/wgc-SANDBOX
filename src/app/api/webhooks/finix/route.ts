@@ -152,9 +152,9 @@ export async function POST(req: Request) {
     let timestamp = "";
     let signature = "";
     for (const part of sigParts) {
-      const [key, value] = part.split("=");
-      if (key === "t") timestamp = value;
-      if (key === "v1") signature = value;
+      const [key, value] = part.trim().split("=");
+      if (key === "timestamp") timestamp = value;
+      if (key === "sig") signature = value;
     }
 
     if (!timestamp || !signature) {
@@ -197,7 +197,7 @@ export async function POST(req: Request) {
     }
 
     const payload = JSON.parse(rawBody);
-    const { entity, type: eventType, data } = getFinixEventData(payload);
+    const { entity, eventType, data } = getFinixEventData(payload);
     const eventId = payload.id;
     const occurredAt = payload.created_at ? new Date(payload.created_at) : new Date();
 
