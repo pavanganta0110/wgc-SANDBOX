@@ -267,23 +267,25 @@ async function syncFinixDataFromWebhookEvent(
   }
 
   if (entity === "SETTLEMENT" && data?.id) {
-    const churchId = await resolveChurchIdForMerchant(data.merchant);
+    // Confirmed against a real GET /settlements/{id} response: the state
+    // field is actually "status", the merchant is "merchant_id" (not
+    // "merchant"), and the fee total is "total_fee"/"total_fees" — there's
+    // no separate refund_amount/dispute_amount at the settlement level.
+    const churchId = await resolveChurchIdForMerchant(data.merchant_id);
 
     await prisma.finixSettlement.upsert({
       where: { finixSettlementId: data.id },
       create: {
         finixSettlementId: data.id,
         churchId,
-        finixMerchantId: data.merchant ?? null,
-        state: data.state ?? null,
+        finixMerchantId: data.merchant_id ?? null,
+        state: data.status ?? null,
         totalAmountCents: data.total_amount ?? null,
         netAmountCents: data.net_amount ?? null,
-        feeAmountCents: data.fee_amount ?? null,
-        refundAmountCents: data.refund_amount ?? null,
-        disputeAmountCents: data.dispute_amount ?? null,
+        feeAmountCents: data.total_fee ?? data.total_fees ?? null,
         currency: data.currency ?? null,
-        accruedAt: data.accrued_at ? new Date(data.accrued_at) : null,
-        settledAt: data.settled_at ? new Date(data.settled_at) : null,
+        accruedAt: data.window_start_time ? new Date(data.window_start_time) : null,
+        settledAt: data.status === "SETTLED" && data.updated_at ? new Date(data.updated_at) : null,
         rawJsonRedacted: redactFinixPayload(data),
         createdAtFinix: data.created_at ? new Date(data.created_at) : occurredAt,
         updatedAtFinix: data.updated_at ? new Date(data.updated_at) : occurredAt,
@@ -291,13 +293,11 @@ async function syncFinixDataFromWebhookEvent(
       },
       update: {
         churchId: churchId ?? undefined,
-        state: data.state ?? null,
+        state: data.status ?? null,
         totalAmountCents: data.total_amount ?? null,
         netAmountCents: data.net_amount ?? null,
-        feeAmountCents: data.fee_amount ?? null,
-        refundAmountCents: data.refund_amount ?? null,
-        disputeAmountCents: data.dispute_amount ?? null,
-        settledAt: data.settled_at ? new Date(data.settled_at) : undefined,
+        feeAmountCents: data.total_fee ?? data.total_fees ?? null,
+        settledAt: data.status === "SETTLED" && data.updated_at ? new Date(data.updated_at) : undefined,
         rawJsonRedacted: redactFinixPayload(data),
         updatedAtFinix: data.updated_at ? new Date(data.updated_at) : occurredAt,
         lastSyncedAt: new Date(),
