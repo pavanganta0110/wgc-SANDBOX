@@ -76,13 +76,13 @@ export default async function PaymentsListPage({
       <PaymentsFilterBar />
 
       <div className="flex items-start gap-6">
-      <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-visible">
+      <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         {rows.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-slate-500">
             No payments match these filters.
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                 <th className="px-6 py-3">ID</th>
