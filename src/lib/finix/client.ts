@@ -265,6 +265,13 @@ export class FinixClient {
   // buyer_details for the identity+instrument being charged, and
   // subscription_details.collection_method: "BILL_AUTOMATICALLY". Only
   // approved merchants on DUMMY_V1 or FINIX_V1 processors can subscribe.
+  //
+  // Confirmed against the real sandbox API: unlike every other endpoint in
+  // this client, /subscriptions rejects our default "Accept: application/hal+json"
+  // with a 406 "No acceptable representation" — it requires plain
+  // "application/json". Overridden per-call rather than changing the
+  // global default, since other endpoints depend on the HAL response shape
+  // (_embedded, _links).
   async createSubscription(payload: {
     amount: number;
     currency: string;
@@ -277,6 +284,7 @@ export class FinixClient {
   }) {
     return this.fetchApi("/subscriptions", {
       method: "POST",
+      headers: { Accept: "application/json" },
       body: JSON.stringify({
         subscription_details: { collection_method: "BILL_AUTOMATICALLY" },
         ...payload,
@@ -285,7 +293,9 @@ export class FinixClient {
   }
 
   async getSubscription(subscriptionId: string) {
-    return this.fetchApi(`/subscriptions/${subscriptionId}`);
+    return this.fetchApi(`/subscriptions/${subscriptionId}`, {
+      headers: { Accept: "application/json" },
+    });
   }
 
   // Confirmed against docs.finix.com/api/subscriptions: cancellation is
@@ -293,6 +303,7 @@ export class FinixClient {
   async cancelSubscription(subscriptionId: string) {
     return this.fetchApi(`/subscriptions/${subscriptionId}`, {
       method: "DELETE",
+      headers: { Accept: "application/json" },
     });
   }
 
