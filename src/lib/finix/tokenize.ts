@@ -59,7 +59,6 @@ export async function mountFinixPaymentForm(
   options: {
     paymentMethods?: ("card" | "bank")[];
     showAddress?: boolean;
-    onSubmit?: (error: unknown, response: import("./fraudSession").FinixTokenResponse) => void;
   },
   environment: "sandbox" | "live" = (process.env.NEXT_PUBLIC_FINIX_ENV as "sandbox" | "live") || "sandbox"
 ): Promise<FinixPaymentFormInstance> {

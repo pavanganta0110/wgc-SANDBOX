@@ -26,17 +26,18 @@ export interface FinixTokenResponse {
 interface FinixPaymentFormOptions {
   paymentMethods?: ("card" | "bank")[];
   showAddress?: boolean;
-  onSubmit?: (error: unknown, response: FinixTokenResponse) => void;
+  // Deliberately no onSubmit here — per docs.finix.com/guides/online-payments/payment-tokenization/tokenization-forms,
+  // including onSubmit in the options makes Finix auto-render its own
+  // submit button inside the form. We use a custom button instead, which
+  // means calling form.submit(callback) directly (confirmed below).
   onLoad?: () => void;
-  onUpdate?: (state: unknown) => void;
+  onUpdate?: (state: unknown, binInformation?: unknown, hasErrors?: boolean) => void;
 }
 
 export interface FinixPaymentFormInstance {
-  submit: (
-    environment: "sandbox" | "live",
-    applicationId: string,
-    callback: (error: unknown, response: FinixTokenResponse) => void
-  ) => void;
+  // Confirmed against docs.finix.com: for the custom-button pattern,
+  // form.submit() takes ONLY a callback — no environment/applicationId args.
+  submit: (callback: (error: unknown, response: FinixTokenResponse) => void) => void;
 }
 
 declare global {

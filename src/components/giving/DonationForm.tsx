@@ -66,8 +66,9 @@ export default function DonationForm({
   }, [paymentMethod]);
 
   const effectiveAmountCents = customAmount ? Math.round(parseFloat(customAmount) * 100) : amountCents;
+  const projectedFee = calculateFeeCoveredTotal(effectiveAmountCents || 0, paymentMethod, pricing);
   const { totalCents, feeCoveredCents } = coverFees
-    ? calculateFeeCoveredTotal(effectiveAmountCents || 0, paymentMethod, pricing)
+    ? projectedFee
     : { totalCents: effectiveAmountCents || 0, feeCoveredCents: 0 };
 
   const handleSubmit = async () => {
@@ -88,10 +89,25 @@ export default function DonationForm({
     try {
       const fraudSessionId = await getFraudSessionId(finixMerchantId);
 
-      formInstanceRef.current.submit(
-        (process.env.NEXT_PUBLIC_FINIX_ENV as "sandbox" | "live") || "sandbox",
-        APPLICATION_ID,
-        async (error, response) => {
+      // Finix never calls back if tokenization hangs (e.g. incomplete card
+      // fields it doesn't otherwise flag) — this timeout guarantees the
+      // button can't get stuck on "Processing..." forever.
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        toast.error("This is taking too long. Please check your card/bank details and try again.");
+        setSubmitting(false);
+      }, 20000);
+
+      // Confirmed against docs.finix.com/guides/online-payments/payment-tokenization/tokenization-forms:
+      // for a custom submit button, form.submit() takes only the callback —
+      // no environment/applicationId arguments.
+      formInstanceRef.current.submit(async (error, response) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+
           if (error || !response?.data?.id) {
             toast.error("Could not process your payment details. Please check your card/bank info.");
             setSubmitting(false);
@@ -227,7 +243,7 @@ export default function DonationForm({
         <label className="flex items-start gap-2 text-sm text-slate-600">
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
-            I'll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
+            I'll cover the {formatCents(projectedFee.feeCoveredCents)} processing fee so my full{" "}
             {formatCents(effectiveAmountCents)} gift goes to the organization.
           </span>
         </label>
