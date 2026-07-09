@@ -666,11 +666,41 @@ export async function POST(req: Request) {
     // Additive Finix data sync layer — stores transfers/disputes/settlements
     // into their own tables for future reporting/admin dashboard use. This
     // is independent of and does not affect the onboarding status logic
-    // below. Wrapped so a sync failure never breaks the existing flow.
-    try {
-      await syncFinixDataFromWebhookEvent(entity, eventType, data, eventId, occurredAt);
-    } catch (syncError) {
-      console.error("Finix data sync (additive layer) failed:", syncError);
+    // below. We always return 200 to Finix regardless of outcome here, so
+    // Finix will never retry a failure on our end (e.g. a transient DB
+    // connection blip) — a couple of quick retries plus a durable failure
+    // record (instead of just a log line that scrolls away) are the only
+    // safety net for that.
+    let syncSucceeded = false;
+    let lastSyncError: unknown;
+    for (let attempt = 1; attempt <= 3 && !syncSucceeded; attempt++) {
+      try {
+        await syncFinixDataFromWebhookEvent(entity, eventType, data, eventId, occurredAt);
+        syncSucceeded = true;
+      } catch (syncError) {
+        lastSyncError = syncError;
+        console.error(`Finix data sync (additive layer) failed, attempt ${attempt}/3:`, syncError);
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+      }
+    }
+    if (!syncSucceeded) {
+      await prisma.finixRawEventArchive.upsert({
+        where: { finixEventId: eventId },
+        create: {
+          finixEventId: eventId,
+          entity,
+          eventType,
+          resourceId: data?.id ?? null,
+          finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+          payloadRedactedJson: redactFinixPayload(data ?? {}),
+          processingStatus: "FAILED",
+          errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+        },
+        update: {
+          processingStatus: "FAILED",
+          errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+        },
+      }).catch((archiveError) => console.error("Failed to record sync failure:", archiveError));
     }
 
     try {
