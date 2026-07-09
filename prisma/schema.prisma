@@ -418,7 +418,11 @@ model FinixFee {
   linkedToId      String?
   linkedToType    String?
   feeType         String?
-  amountCents     Int?
+  // Float, not Int: confirmed against a real Finix fee response that
+  // basis-point-derived fees (e.g. CARD_BASIS_POINTS) come back with
+  // fractional cents (e.g. 62.544) — an Int column silently rejected
+  // these writes, which is why fee sync was failing for every payment.
+  amountCents     Float?
   currency        String?
   state           String?
   description     String?

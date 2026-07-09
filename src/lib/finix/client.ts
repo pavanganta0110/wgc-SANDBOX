@@ -115,8 +115,11 @@ export class FinixClient {
 
   // Confirmed via Finix docs (docs.finix.com/api): GET /fees, filtered by
   // the Transfer or Authorization ID it's linked to.
+  // Confirmed against the real sandbox API: ?transfer= is silently ignored
+  // (returns every fee on the application) — the real filter param is
+  // ?linked_to=, matching the field name on the fee object itself.
   async listFeesForTransfer(transferId: string) {
-    return this.fetchApi(`/fees?transfer=${transferId}`);
+    return this.fetchApi(`/fees?linked_to=${transferId}`);
   }
 
   // ==========================================

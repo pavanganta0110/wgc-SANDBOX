@@ -19,6 +19,14 @@ function formatDateTime(date: Date | null | undefined) {
   });
 }
 
+function titleCaseFromSnake(value: string | null | undefined) {
+  if (!value) return "Fee";
+  return value
+    .split("_")
+    .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
 function sourceLabel(source: string | null | undefined) {
   if (source === "wgc_giving_page") return "WGC Giving Page";
   if (source === "finix_dashboard") return "Finix Dashboard";
@@ -181,8 +189,8 @@ export default async function PaymentFullDetailPage({
                 {fees.map((f) => (
                   <div key={f.id} className="flex items-center justify-between text-sm">
                     <div>
-                      <p className="font-semibold text-slate-700">{f.feeType || "Fee"}</p>
-                      <p className="text-xs text-slate-400">{formatDateTime(f.createdAtFinix)}</p>
+                      <p className="font-semibold text-slate-700">{titleCaseFromSnake(f.feeType)}</p>
+                      <p className="text-xs text-slate-400">Processor · {formatDateTime(f.createdAtFinix)}</p>
                     </div>
                     <span className="font-semibold text-slate-900">
                       {formatCents(f.amountCents ?? 0)} {f.currency || "USD"}
