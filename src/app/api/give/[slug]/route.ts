@@ -202,9 +202,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ success: true, transferId: transfer.id, state: transfer.state });
   } catch (error: any) {
     console.error("Giving page donation failed:", error);
+    // Finix's error body is HAL+JSON (_embedded, not embedded) — surface its
+    // donor-friendly failure_message when present, falling back to the more
+    // technical message, then a generic string as a last resort.
+    const finixError = error?.details?._embedded?.errors?.[0];
     return NextResponse.json(
-      { error: error?.details?.embedded?.errors?.[0]?.message || "We couldn't process your gift. Please try again." },
-      { status: 500 }
+      { error: finixError?.failure_message || finixError?.message || "We couldn't process your gift. Please try again." },
+      { status: 402 }
     );
   }
 }
