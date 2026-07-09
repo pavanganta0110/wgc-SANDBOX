@@ -51,29 +51,39 @@ export async function GET(req: Request) {
     : [];
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 
+  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
+  const donors = donorIds.length
+    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
+    : [];
+  const donorMap = new Map(donors.map((d) => [d.id, d]));
+
   const rows = transfers.filter((t) => {
     const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
+    const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
     if (last4) {
       const l4 = instrument?.cardLast4 || instrument?.bankLast4;
       if (l4 !== last4) return false;
     }
     if (buyer) {
-      const name = instrument?.accountHolderName || "";
+      const name = donor?.name || instrument?.accountHolderName || "";
       if (!name.toLowerCase().includes(buyer.toLowerCase())) return false;
     }
     return true;
   });
 
-  const header = ["ID", "Created", "Donor", "Amount", "State", "Instrument Type", "Last Four"];
+  const header = ["ID", "Created", "Donor", "Email", "Phone", "Amount", "State", "Instrument Type", "Last Four"];
   const lines = [header.join(",")];
 
   for (const t of rows) {
     const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
+    const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
     lines.push(
       [
         csvEscape(t.finixTransferId),
         csvEscape(t.createdAtFinix ? t.createdAtFinix.toISOString() : ""),
-        csvEscape(instrument?.accountHolderName || ""),
+        csvEscape(donor?.name || instrument?.accountHolderName || ""),
+        csvEscape(donor?.email || ""),
+        csvEscape(donor?.phone || ""),
         csvEscape(formatCents(t.amountCents ?? 0)),
         csvEscape(t.state || "UNKNOWN"),
         csvEscape(instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : "Unknown")),

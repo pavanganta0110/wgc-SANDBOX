@@ -49,6 +49,12 @@ export default async function DisputesPage({
     : [];
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 
+  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
+  const donors = donorIds.length
+    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
+    : [];
+  const donorMap = new Map(donors.map((d) => [d.id, d]));
+
   function titleCase(s: string | null | undefined) {
     if (!s) return "—";
     return s
@@ -88,6 +94,7 @@ export default async function DisputesPage({
                   const instrument = transfer?.finixPaymentInstrumentId
                     ? instrumentMap.get(transfer.finixPaymentInstrumentId)
                     : null;
+                  const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : null;
 
                   return (
                     <ClickableTableRow
@@ -112,7 +119,7 @@ export default async function DisputesPage({
                           : "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-700">
-                        {instrument?.accountHolderName || "—"}
+                        {donor?.name || instrument?.accountHolderName || "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-600">{titleCase(d.reason)}</td>
                       <td className="px-6 py-3">

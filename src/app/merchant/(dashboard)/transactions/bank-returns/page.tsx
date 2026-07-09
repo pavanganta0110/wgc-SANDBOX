@@ -46,6 +46,12 @@ export default async function BankReturnsListPage({
     : [];
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 
+  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
+  const donors = donorIds.length
+    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
+    : [];
+  const donorMap = new Map(donors.map((d) => [d.id, d]));
+
   const byReasonTable = Array.from(
     returns.reduce((map, r) => {
       const reason = r.failureCode || "UNKNOWN";
@@ -92,6 +98,7 @@ export default async function BankReturnsListPage({
                   const instrument = r.finixPaymentInstrumentId
                     ? instrumentMap.get(r.finixPaymentInstrumentId)
                     : null;
+                  const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : null;
 
                   return (
                     <ClickableTableRow
@@ -115,7 +122,7 @@ export default async function BankReturnsListPage({
                           : "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-700">
-                        {instrument?.accountHolderName || "—"}
+                        {donor?.name || instrument?.accountHolderName || "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-600">{r.failureCode || "—"}</td>
                       <td className="px-6 py-3">

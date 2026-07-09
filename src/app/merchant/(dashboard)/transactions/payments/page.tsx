@@ -52,15 +52,25 @@ export default async function PaymentsListPage({
     : [];
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 
+  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
+  const donors = donorIds.length
+    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
+    : [];
+  const donorMap = new Map(donors.map((d) => [d.id, d]));
+
   const rows = transfers
-    .map((t) => ({ transfer: t, instrument: instrumentMap.get(t.finixPaymentInstrumentId ?? "") }))
-    .filter(({ instrument }) => {
+    .map((t) => {
+      const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
+      const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
+      return { transfer: t, instrument, donor };
+    })
+    .filter(({ instrument, donor }) => {
       if (last4) {
         const l4 = instrument?.cardLast4 || instrument?.bankLast4;
         if (l4 !== last4) return false;
       }
       if (buyer) {
-        const name = instrument?.accountHolderName || "";
+        const name = donor?.name || instrument?.accountHolderName || "";
         if (!name.toLowerCase().includes(buyer.toLowerCase())) return false;
       }
       return true;
@@ -95,7 +105,7 @@ export default async function PaymentsListPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ transfer: t, instrument }) => {
+              {rows.map(({ transfer: t, instrument, donor }) => {
                 const last4Value = instrument?.cardLast4 || instrument?.bankLast4;
                 const instrumentLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : null);
                 const isSucceeded = (t.state || "").toUpperCase() === "SUCCEEDED";
@@ -124,7 +134,7 @@ export default async function PaymentsListPage({
                         : "—"}
                     </td>
                     <td className="px-6 py-3 text-slate-700">
-                      {instrument?.accountHolderName || "—"}
+                      {donor?.name || instrument?.accountHolderName || "—"}
                     </td>
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(t.amountCents ?? 0)}

@@ -48,6 +48,12 @@ export default async function RefundsPage({
     : [];
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 
+  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
+  const donors = donorIds.length
+    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
+    : [];
+  const donorMap = new Map(donors.map((d) => [d.id, d]));
+
   return (
     <div>
       <h2 className="text-lg font-bold text-slate-900 mb-6">Refunds</h2>
@@ -80,6 +86,7 @@ export default async function RefundsPage({
                 const instrument = transfer?.finixPaymentInstrumentId
                   ? instrumentMap.get(transfer.finixPaymentInstrumentId)
                   : null;
+                const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : null;
 
                 const cells = (
                   <>
@@ -98,7 +105,7 @@ export default async function RefundsPage({
                         : "—"}
                     </td>
                     <td className="px-6 py-3 text-slate-700">
-                      {instrument?.accountHolderName || "—"}
+                      {donor?.name || instrument?.accountHolderName || "—"}
                     </td>
                     <td className="px-6 py-3">
                       {r.finixOriginalTransferId ? (
