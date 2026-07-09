@@ -58,6 +58,21 @@ export default async function PaymentsListPage({
     : [];
   const donorMap = new Map(donors.map((d) => [d.id, d]));
 
+  const transferIds = transfers.map((t) => t.finixTransferId);
+  const refunds = transferIds.length
+    ? await prisma.finixRefundOrReversal.findMany({
+        where: { finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" },
+      })
+    : [];
+  const refundedCentsByTransfer = new Map<string, number>();
+  for (const r of refunds) {
+    if (!r.finixOriginalTransferId) continue;
+    refundedCentsByTransfer.set(
+      r.finixOriginalTransferId,
+      (refundedCentsByTransfer.get(r.finixOriginalTransferId) ?? 0) + (r.amountCents ?? 0)
+    );
+  }
+
   const rows = transfers
     .map((t) => {
       const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
@@ -110,6 +125,9 @@ export default async function PaymentsListPage({
                 const instrumentLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : null);
                 const isSucceeded = (t.state || "").toUpperCase() === "SUCCEEDED";
                 const isFailed = (t.state || "").toUpperCase() === "FAILED";
+                const refundedCents = refundedCentsByTransfer.get(t.finixTransferId) ?? 0;
+                const isFullyRefunded = refundedCents > 0 && refundedCents >= (t.amountCents ?? 0);
+                const isPartiallyRefunded = refundedCents > 0 && !isFullyRefunded;
 
                 return (
                   <ClickableTableRow
@@ -151,6 +169,11 @@ export default async function PaymentsListPage({
                       >
                         {t.state || "UNKNOWN"}
                       </span>
+                      {(isFullyRefunded || isPartiallyRefunded) && (
+                        <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700">
+                          {isFullyRefunded ? "Refunded" : "Partially Refunded"}
+                        </span>
+                      )}
                       {isFailed && t.failureCode && (
                         <p className="text-xs text-slate-400 mt-0.5">{t.failureCode}</p>
                       )}

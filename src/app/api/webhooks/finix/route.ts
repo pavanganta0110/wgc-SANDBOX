@@ -702,23 +702,37 @@ export async function POST(req: Request) {
       }
     }
     if (!syncSucceeded) {
-      await prisma.finixRawEventArchive.upsert({
-        where: { finixEventId: eventId },
-        create: {
-          finixEventId: eventId,
-          entity,
-          eventType,
-          resourceId: data?.id ?? null,
-          finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
-          payloadRedactedJson: redactFinixPayload(data ?? {}),
-          processingStatus: "FAILED",
-          errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
-        },
-        update: {
-          processingStatus: "FAILED",
-          errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
-        },
-      }).catch((archiveError) => console.error("Failed to record sync failure:", archiveError));
+      // This archive write is the last line of defense — if the sync above
+      // failed because of a sustained connection issue (not just a blip),
+      // this write can hit the same issue and fail too, silently losing
+      // the event with no trace anywhere. A few retries here specifically
+      // guard against that "shouldn't retry, must, then can't even record
+      // it" case.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          await prisma.finixRawEventArchive.upsert({
+            where: { finixEventId: eventId },
+            create: {
+              finixEventId: eventId,
+              entity,
+              eventType,
+              resourceId: data?.id ?? null,
+              finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+              payloadRedactedJson: redactFinixPayload(data ?? {}),
+              processingStatus: "FAILED",
+              errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+            },
+            update: {
+              processingStatus: "FAILED",
+              errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+            },
+          });
+          break;
+        } catch (archiveError) {
+          console.error(`Failed to record sync failure, attempt ${attempt}/3:`, archiveError);
+          if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
+        }
+      }
     }
 
     try {
