@@ -49,7 +49,9 @@ export default async function DonorsPage({
           churchId,
           finixPaymentInstrumentId: { in: allInstrumentIds },
           state: "SUCCEEDED",
-          NOT: { subtype: { contains: "RETURN" } },
+          // See the OR-in-null fix in transactions/payments/page.tsx — NOT
+          // alone would exclude every null-subtype (i.e. most) transfers too.
+          OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
         },
       })
     : [];

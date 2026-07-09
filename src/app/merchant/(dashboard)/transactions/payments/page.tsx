@@ -30,7 +30,11 @@ export default async function PaymentsListPage({
   const transfers = await prisma.finixTransfer.findMany({
     where: {
       churchId,
-      NOT: { subtype: { contains: "RETURN" } },
+      // subtype is null for most transfers (only bank returns set it) —
+      // NOT: { subtype: { contains: "RETURN" } } alone would silently
+      // exclude every null-subtype row too, since SQL's NOT NULL is NULL,
+      // not TRUE. OR-ing in the null case keeps the exclusion working.
+      OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
       ...(state ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },

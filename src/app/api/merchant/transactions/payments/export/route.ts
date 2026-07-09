@@ -31,7 +31,10 @@ export async function GET(req: Request) {
   const transfers = await prisma.finixTransfer.findMany({
     where: {
       churchId: session.churchId,
-      NOT: { subtype: { contains: "RETURN" } },
+      // See the same OR-in-null fix in transactions/payments/page.tsx —
+      // NOT: { subtype: { contains: "RETURN" } } alone excludes every
+      // null-subtype row too under SQL's three-valued logic.
+      OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
       ...(state ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },

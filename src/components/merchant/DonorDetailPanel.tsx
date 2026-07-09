@@ -39,7 +39,13 @@ export default async function DonorDetailPanel({
 
   const transfers = instrumentIds.length
     ? await prisma.finixTransfer.findMany({
-        where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, NOT: { subtype: { contains: "RETURN" } } },
+        // See the OR-in-null fix in transactions/payments/page.tsx — NOT
+        // alone would exclude every null-subtype (i.e. most) transfers too.
+        where: {
+          churchId,
+          finixPaymentInstrumentId: { in: instrumentIds },
+          OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
+        },
         orderBy: { createdAtFinix: "desc" },
         take: 50,
       })
