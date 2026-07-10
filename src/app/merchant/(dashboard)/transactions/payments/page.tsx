@@ -32,6 +32,9 @@ export default async function PaymentsListPage({
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
+  const church = await prisma.church.findUnique({ where: { id: churchId } });
+  const pricing = await prisma.churchPricing.findUnique({ where: { churchId } });
+
   // Refund-derived states (REFUNDED, etc.) aren't a real value of the
   // transfer's own `state` column — the underlying charge state stays
   // SUCCEEDED even after a full refund. Those get filtered in-memory below
@@ -108,7 +111,15 @@ export default async function PaymentsListPage({
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-bold text-slate-900">Payments</h2>
-        <PaymentsHeaderActions />
+        <PaymentsHeaderActions
+          finixMerchantId={church?.finixMerchantId || ""}
+          churchName={church?.name || ""}
+          pricing={{
+            cardPercentageFee: pricing?.cardPercentageFee ?? null,
+            cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
+            achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
+          }}
+        />
       </div>
 
       <PaymentsFilterBar />
