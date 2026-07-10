@@ -4,32 +4,13 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState } from "react";
 import { Download, ChevronDown, SlidersHorizontal, X, Columns3 } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
+import { REFUND_COLUMNS, parseVisibleColumns, type RefundColumnKey } from "@/lib/refundColumns";
 
 function titleCase(s: string) {
   return s
     .split("_")
     .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
     .join(" ");
-}
-
-export const REFUND_COLUMNS = [
-  { key: "created", label: "Created" },
-  { key: "organization", label: "Organization" },
-  { key: "donor", label: "Donor" },
-  { key: "amount", label: "Refund Amount" },
-  { key: "state", label: "State" },
-  { key: "originalPayment", label: "Original Payment" },
-  { key: "instrument", label: "Payment Instrument" },
-  { key: "instrumentType", label: "Instrument Type" },
-  { key: "updated", label: "Updated" },
-] as const;
-
-export type RefundColumnKey = (typeof REFUND_COLUMNS)[number]["key"];
-
-export function parseVisibleColumns(colsParam: string | undefined): Set<RefundColumnKey> {
-  if (!colsParam) return new Set(REFUND_COLUMNS.map((c) => c.key));
-  const requested = new Set(colsParam.split(","));
-  return new Set(REFUND_COLUMNS.map((c) => c.key).filter((k) => requested.has(k)));
 }
 
 const STATES = ["SUCCEEDED", "FAILED", "PENDING", "CANCELED"];
