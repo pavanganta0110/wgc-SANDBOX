@@ -220,6 +220,30 @@ export class FinixClient {
   }
 
   // ==========================================
+  // Digital Wallets (Apple Pay)
+  // ==========================================
+
+  /**
+   * Per docs.finix.com/guides/online-payments/digital-wallets/apple-pay/apple-pay-on-web:
+   * exchanges the validationURL the browser gets from Apple's onvalidatemerchant
+   * callback for a signed Apple merchant session. The response wraps Apple's
+   * merchant session as a *stringified* JSON blob in `session_details` —
+   * callers must JSON.parse() it before handing it to
+   * ApplePaySession.completeMerchantValidation().
+   */
+  async createApplePaySession(payload: {
+    display_name: string;
+    domain: string;
+    merchant_identity: string;
+    validation_url: string;
+  }) {
+    return this.fetchApi("/apple_pay_sessions/", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  // ==========================================
   // Transfers (Payments)
   // ==========================================
 

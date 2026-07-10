@@ -9,8 +9,11 @@ import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { formatCents } from "@/lib/format";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
+import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
+import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
+const APPLE_PAY_ENABLED = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
 
 const FREQUENCY_LABELS: Record<FrequencyKey, string> = {
   WEEKLY: "Weekly",
@@ -46,6 +49,9 @@ export default function GivingLinkForm({
   donorFieldSettings,
   pricing,
   thankYouMessage,
+  googlePayGatewayMerchantId,
+  googlePayMerchantId,
+  googlePayEnvironment,
 }: {
   slug: string;
   finixMerchantId: string;
@@ -65,6 +71,10 @@ export default function GivingLinkForm({
   donorFieldSettings: DonorFieldSettings;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
+  /** Finix Application Owner Identity ID ("ID..."), used as Google Pay's gatewayMerchantId. Null when not configured. */
+  googlePayGatewayMerchantId: string | null;
+  googlePayMerchantId: string | null;
+  googlePayEnvironment: "TEST" | "PRODUCTION";
 }) {
   const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
@@ -86,6 +96,157 @@ export default function GivingLinkForm({
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const cardBankMethods = allowedPaymentMethods.filter((m) => m === "CARD" || m === "BANK");
+
+  const [appleAvailable, setAppleAvailable] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
+  const googlePayButtonRef = useRef<HTMLDivElement>(null);
+
+  // Apple Pay / Google Pay always ride card-network rails, so their fee
+  // uses the card rate regardless of which manual-entry tab (card/bank)
+  // happens to be selected — kept separate from the card/bank form's own
+  // paymentMethod-driven totalCents/feeCoveredCents declared further below.
+  const effectiveAmountCents = amountType === "FIXED" ? (fixedAmountCents ?? 0) : customAmount ? Math.round(parseFloat(customAmount) * 100) : amountCents;
+  const walletProjectedFee = calculateFeeCoveredTotal(effectiveAmountCents || 0, "card", pricing);
+  const { totalCents: walletTotalCents } = coverFees ? walletProjectedFee : { totalCents: effectiveAmountCents || 0 };
+
+  const submitWalletPayment = async (
+    method: "apple_pay" | "google_pay",
+    walletResult: ApplePayResult | GooglePayResult
+  ): Promise<{ success: boolean }> => {
+    try {
+      const fraudSessionId = await getFraudSessionId(finixMerchantId);
+      const res = await fetch(`/api/g/${slug}/donate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paymentMethod: method,
+          walletToken: walletResult.walletToken,
+          walletBillingContact: walletResult.billingContact,
+          donationAmountCents: effectiveAmountCents,
+          coverFees: feeCoverEnabled ? coverFees : false,
+          isRecurring: false,
+          fraudSessionId,
+          donor: {
+            name: walletResult.billingContact.name,
+            email: walletResult.billingContact.email || email.trim(),
+            phone: phone.trim() || undefined,
+            note: note.trim() || undefined,
+            isAnonymous,
+          },
+        }),
+      });
+      const data = await res.json();
+      setWalletProcessing(null);
+
+      if (!res.ok) {
+        setResult({ step: "failed", error: data?.error || "Payment failed. Please try again." });
+        return { success: false };
+      }
+
+      const state = (data.state || "").toUpperCase();
+      if (state === "PENDING") {
+        setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
+      } else {
+        setResult({
+          step: "success",
+          totalCents: data.totalCents,
+          feeCoveredCents: data.feeCoveredCents,
+          donationAmountCents: data.donationAmountCents,
+          transferId: data.transferId,
+        });
+      }
+      return { success: true };
+    } catch {
+      setWalletProcessing(null);
+      setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
+      return { success: false };
+    }
+  };
+
+  const handleApplePayClick = () => {
+    if (effectiveAmountCents < 100) {
+      toast.error("Please enter an amount of at least $1.00");
+      return;
+    }
+    setWalletProcessing("apple_pay");
+    beginApplePaySession({
+      amountCents: walletTotalCents,
+      totalLabel: churchName,
+      onValidateMerchant: async (validationURL) => {
+        const res = await fetch("/api/wallet/apple-pay/validate-merchant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ validationURL }),
+        });
+        if (!res.ok) throw new Error("Merchant validation failed");
+        const data = await res.json();
+        return data.merchantSession;
+      },
+      onAuthorized: (walletResult) => submitWalletPayment("apple_pay", walletResult),
+      onCancel: () => setWalletProcessing(null),
+    });
+  };
+
+  const handleGooglePayClickRef = useRef<() => void>(() => {});
+  handleGooglePayClickRef.current = async () => {
+    if (effectiveAmountCents < 100) {
+      toast.error("Please enter an amount of at least $1.00");
+      return;
+    }
+    if (!googlePayGatewayMerchantId) return;
+    setWalletProcessing("google_pay");
+    try {
+      const walletResult = await requestGooglePayment(
+        {
+          environment: googlePayEnvironment,
+          gatewayMerchantId: googlePayGatewayMerchantId,
+          merchantId: googlePayMerchantId || undefined,
+          merchantName: churchName,
+        },
+        walletTotalCents
+      );
+      await submitWalletPayment("google_pay", walletResult);
+    } catch {
+      // Donor closed the Google Pay sheet or it failed before authorization —
+      // not an error state, just return to the form.
+      setWalletProcessing(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!APPLE_PAY_ENABLED || !allowedPaymentMethods.includes("APPLE_PAY")) return;
+    if (!isApplePayAvailable()) return;
+    setAppleAvailable(true);
+    loadApplePayButtonScript().catch(() => {});
+  }, [allowedPaymentMethods]);
+
+  useEffect(() => {
+    if (!googlePayGatewayMerchantId || !allowedPaymentMethods.includes("GOOGLE_PAY")) return;
+    let cancelled = false;
+    const config = {
+      environment: googlePayEnvironment,
+      gatewayMerchantId: googlePayGatewayMerchantId,
+      merchantId: googlePayMerchantId || undefined,
+      merchantName: churchName,
+    };
+    isGooglePayAvailable(config)
+      .then((available) => {
+        if (cancelled || !available) return;
+        setGoogleAvailable(true);
+        return createGooglePayButton(config, () => handleGooglePayClickRef.current());
+      })
+      .then((button) => {
+        if (cancelled || !button || !googlePayButtonRef.current) return;
+        googlePayButtonRef.current.innerHTML = "";
+        googlePayButtonRef.current.appendChild(button);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
 
   useEffect(() => {
     if (!APPLICATION_ID) return;
@@ -114,7 +275,6 @@ export default function GivingLinkForm({
     };
   }, [paymentMethod]);
 
-  const effectiveAmountCents = amountType === "FIXED" ? (fixedAmountCents ?? 0) : customAmount ? Math.round(parseFloat(customAmount) * 100) : amountCents;
   const projectedFee = calculateFeeCoveredTotal(effectiveAmountCents || 0, paymentMethod, pricing);
   const { totalCents, feeCoveredCents } = coverFees ? projectedFee : { totalCents: effectiveAmountCents || 0, feeCoveredCents: 0 };
 
@@ -401,6 +561,46 @@ export default function GivingLinkForm({
           </>
         )}
       </div>
+
+      {!isRecurring && (appleAvailable || googleAvailable) && (
+        <div className="space-y-2">
+          {appleAvailable && (
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Donate with Apple Pay"
+              onClick={() => walletProcessing === null && handleApplePayClick()}
+              onKeyDown={(e) => e.key === "Enter" && walletProcessing === null && handleApplePayClick()}
+              className={walletProcessing !== null ? "opacity-50 pointer-events-none" : "cursor-pointer"}
+            >
+              {/* Apple's official button web component — never hand-styled, per Apple's HIG. */}
+              {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
+              <apple-pay-button
+                buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
+                type="donate"
+                locale="en-US"
+                style={{ width: "100%", height: "44px", display: "block" }}
+              />
+              {walletProcessing === "apple_pay" && (
+                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+              )}
+            </div>
+          )}
+          {googleAvailable && (
+            <div>
+              <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
+              {walletProcessing === "google_pay" && (
+                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+              )}
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-xs" style={{ color: light.bodyTextColor }}>
+            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+            <span>or pay with card / bank</span>
+            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+          </div>
+        </div>
+      )}
 
       {cardBankMethods.length > 1 && (
         <div>

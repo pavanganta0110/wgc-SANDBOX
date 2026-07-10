@@ -54,6 +54,19 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
     ? (link.suggestedAmountsJson as number[])
     : [2500, 5000, 10000, 25000];
 
+  // Google Pay's gatewayMerchantId is not a secret (Google's own JS requires
+  // it in the client-side PaymentDataRequest) but it's still read server-side
+  // and passed down as a prop rather than a NEXT_PUBLIC_ env var, matching
+  // how finixMerchantId already flows through this page. PRODUCTION mode is
+  // only used once Google has approved WGC's production Google Pay access —
+  // otherwise every environment (including live Finix) runs Google Pay TEST.
+  const googlePayGatewayMerchantId = process.env.FINIX_APPLICATION_OWNER_ID || null;
+  const googlePayMerchantId = process.env.GOOGLE_PAY_MERCHANT_ID || null;
+  const googlePayEnvironment: "TEST" | "PRODUCTION" =
+    process.env.NEXT_PUBLIC_FINIX_ENV === "live" && process.env.GOOGLE_PAY_PRODUCTION_APPROVED === "true"
+      ? "PRODUCTION"
+      : "TEST";
+
   return (
     <div className="min-h-screen py-12 px-4" style={{ backgroundColor: light.pageBackground }}>
       <div
@@ -96,6 +109,9 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
             achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
           }}
           thankYouMessage={branding.thankYouMessage}
+          googlePayGatewayMerchantId={googlePayGatewayMerchantId}
+          googlePayMerchantId={googlePayMerchantId}
+          googlePayEnvironment={googlePayEnvironment}
         />
 
         {!branding.hideFooter && (

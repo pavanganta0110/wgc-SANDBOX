@@ -23,6 +23,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const body = await req.json();
     const {
       token,
+      // Digital-wallet flows (Apple Pay / Google Pay) bypass Finix.js's
+      // card/bank tokenization form entirely — the browser gets an
+      // already-encrypted wallet token directly from Apple/Google's own
+      // JS SDK, plus the billing contact the wallet collected. This is
+      // never written to the database; it's read once here and handed
+      // straight to Finix.
+      walletToken,
+      walletBillingContact,
       donationAmountCents,
       coverFees,
       isRecurring,
@@ -32,8 +40,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       donor,
     } = body;
 
-    if (!token || !donationAmountCents || donationAmountCents < 100) {
+    const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
+
+    if (!donationAmountCents || donationAmountCents < 100) {
       return NextResponse.json({ error: "Invalid donation amount" }, { status: 400 });
+    }
+    if (isWallet ? !walletToken : !token) {
+      return NextResponse.json({ error: "Missing payment token" }, { status: 400 });
     }
     if (!fraudSessionId) {
       return NextResponse.json({ error: "Missing fraud session" }, { status: 400 });
@@ -76,8 +89,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const allowedMethods = parseAllowedPaymentMethods(link.allowedPaymentMethodsJson);
     const method: "card" | "bank" = paymentMethod === "bank" ? "bank" : "card";
-    if ((method === "card" && !allowedMethods.includes("CARD")) || (method === "bank" && !allowedMethods.includes("BANK"))) {
+    const methodCheck =
+      paymentMethod === "apple_pay"
+        ? allowedMethods.includes("APPLE_PAY")
+        : paymentMethod === "google_pay"
+          ? allowedMethods.includes("GOOGLE_PAY")
+          : method === "card"
+            ? allowedMethods.includes("CARD")
+            : allowedMethods.includes("BANK");
+    if (!methodCheck) {
       return NextResponse.json({ error: "This payment method is not accepted for this giving link" }, { status: 400 });
+    }
+    if (isWallet && (!walletBillingContact?.name || !walletBillingContact?.address)) {
+      return NextResponse.json({ error: "Missing billing information from wallet" }, { status: 400 });
     }
 
     if (isRecurring && !link.recurringEnabled) {
@@ -86,9 +110,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const allowedFrequencies = parseAllowedFrequencies(link.allowedFrequenciesJson);
     const interval = allowedFrequencies.includes(billingInterval) ? billingInterval : allowedFrequencies[0];
 
-    // Donor-field validation, driven by this link's configured visibility
+    // Donor-field validation, driven by this link's configured visibility.
+    // Wallet checkouts collect name/address from Apple/Google's own contact
+    // sheet rather than this link's donor-field form, so that's the fallback
+    // source of truth for fullName/email when the manual fields are empty.
     const fieldSettings = parseDonorFieldSettings(link.donorFieldSettingsJson);
-    const fullName = [donor?.firstName, donor?.lastName].filter(Boolean).join(" ").trim() || donor?.name?.trim();
+    const fullName =
+      [donor?.firstName, donor?.lastName].filter(Boolean).join(" ").trim() ||
+      donor?.name?.trim() ||
+      (isWallet ? walletBillingContact?.name?.trim() : undefined);
     if (fieldSettings.firstName === "REQUIRED" || fieldSettings.lastName === "REQUIRED" || fieldSettings.email === "REQUIRED") {
       if (!fullName) {
         return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -152,7 +182,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const identityId = identity?.id;
     if (!identityId) throw new Error("Failed to create buyer identity");
 
-    const instrument = await finixClient.createPaymentInstrument({ identity: identityId, token, type: "TOKEN" });
+    // Wallet payment instruments are created from the encrypted token
+    // Apple/Google's SDK produced, per docs.finix.com/guides/online-payments/
+    // digital-wallets — third_party_token instead of Finix.js's `token`,
+    // and merchant_identity set to the Application Owner Identity (not this
+    // church's Finix Merchant ID) since WGC hosts every giving page on its
+    // own domain. walletToken is read once here and never assigned to any
+    // variable that gets logged or persisted.
+    const instrument = isWallet
+      ? await finixClient.createPaymentInstrument({
+          identity: identityId,
+          type: paymentMethod === "apple_pay" ? "APPLE_PAY" : "GOOGLE_PAY",
+          third_party_token: walletToken,
+          merchant_identity: process.env.FINIX_APPLICATION_OWNER_ID,
+          name: walletBillingContact.name,
+          address: walletBillingContact.address,
+        })
+      : await finixClient.createPaymentInstrument({ identity: identityId, token, type: "TOKEN" });
     const instrumentId = instrument?.id;
     if (!instrumentId) throw new Error("Failed to create payment instrument");
 
@@ -263,7 +309,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         amountCents: totalCents,
         donationAmountCents,
         feeCoveredCents,
-        paymentMethodType: method === "card" ? "PAYMENT_CARD" : "BANK_ACCOUNT",
+        paymentMethodType:
+          paymentMethod === "apple_pay"
+            ? "APPLE_PAY"
+            : paymentMethod === "google_pay"
+              ? "GOOGLE_PAY"
+              : method === "card"
+                ? "PAYMENT_CARD"
+                : "BANK_ACCOUNT",
         status: transfer.state ?? "PENDING",
         fundName: link.fundName || null,
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
