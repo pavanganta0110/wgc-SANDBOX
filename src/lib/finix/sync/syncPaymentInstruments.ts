@@ -4,6 +4,19 @@ import { redactFinixPayload } from "@/lib/finix/redact";
 import { upsertDonorFromIdentity } from "@/lib/finix/sync/syncDonor";
 
 /**
+ * Confirmed against a real GET /payment_instruments/{id}: there is no
+ * "state" field on this resource at all, only enabled (boolean) and
+ * disabled_code/disabled_message when enabled is false. Finix's own
+ * dashboard's "Enabled"/"Disabled" label is derived from this, not read
+ * off a state field — deriving ours the same way instead of reading a
+ * field that was always silently null.
+ */
+function deriveInstrumentState(instrument: { enabled?: boolean; disabled_code?: string | null }) {
+  if (instrument.disabled_code === "DELETED") return "DELETED";
+  return instrument.enabled ? "ENABLED" : "DISABLED";
+}
+
+/**
  * Syncs a single payment instrument's safe/masked metadata into
  * FinixPaymentInstrumentSnapshot. Never stores full card/bank numbers —
  * only last4, brand, and expiration, matching Finix's own masked response.
@@ -37,16 +50,28 @@ export async function syncPaymentInstrument(
       bankLast4: instrument.masked_account_number ?? null,
       bankAccountType: instrument.account_type ?? null,
       accountHolderName: instrument.name ?? null,
-      state: instrument.state ?? null,
+      state: deriveInstrumentState(instrument),
       enabled: Boolean(instrument.enabled),
+      disabledCode: instrument.disabled_code ?? null,
+      disabledMessage: instrument.disabled_message ?? null,
+      securityCodeVerification: instrument.security_code_verification ?? null,
+      addressVerification: instrument.address_verification ?? null,
+      issuerCountry: instrument.issuer_country ?? null,
+      addressCountry: instrument.address?.country ?? null,
       rawJsonRedacted: redactFinixPayload(instrument),
       createdAtFinix: instrument.created_at ? new Date(instrument.created_at) : null,
       updatedAtFinix: instrument.updated_at ? new Date(instrument.updated_at) : null,
       lastSyncedAt: new Date(),
     },
     update: {
-      state: instrument.state ?? null,
+      state: deriveInstrumentState(instrument),
       enabled: Boolean(instrument.enabled),
+      disabledCode: instrument.disabled_code ?? null,
+      disabledMessage: instrument.disabled_message ?? null,
+      securityCodeVerification: instrument.security_code_verification ?? null,
+      addressVerification: instrument.address_verification ?? null,
+      issuerCountry: instrument.issuer_country ?? null,
+      addressCountry: instrument.address?.country ?? null,
       rawJsonRedacted: redactFinixPayload(instrument),
       updatedAtFinix: instrument.updated_at ? new Date(instrument.updated_at) : null,
       lastSyncedAt: new Date(),

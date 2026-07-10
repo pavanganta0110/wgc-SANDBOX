@@ -34,6 +34,14 @@ function titleCaseFromSnake(value: string | null | undefined) {
     .join(" ");
 }
 
+function instrumentStateLabel(state: string | null | undefined) {
+  const s = (state || "").toUpperCase();
+  if (s === "ENABLED") return "Enabled";
+  if (s === "DISABLED") return "Disabled";
+  if (s === "DELETED") return "Deleted";
+  return "—";
+}
+
 function sourceLabel(source: string | null | undefined) {
   if (source === "wgc_giving_page") return "WGC Giving Page";
   if (source === "finix_dashboard") return "Finix Dashboard";
@@ -283,11 +291,9 @@ export default async function PaymentDetailPanel({
 
       {instrument && (
         <Section title="Payment Instrument">
-          <Row label="State" value={instrument.state || "—"} />
-          <Row
-            label="Type"
-            value={instrument.cardBrand || (instrument.bankLast4 ? "Bank Account" : instrument.instrumentType || "—")}
-          />
+          <Row label="State" value={instrumentStateLabel(instrument.state)} />
+          <Row label="Type" value={instrument.bankLast4 ? "Bank Account" : "Card"} />
+          {instrument.cardBrand && <Row label="Brand" value={instrument.cardBrand} />}
           <Row label="Account Holder Name" value={instrument.accountHolderName || "—"} />
           <Row
             label="Masked Number"
@@ -305,6 +311,17 @@ export default async function PaymentDetailPanel({
           )}
           {instrument.bankAccountType && (
             <Row label="Account Type" value={instrument.bankAccountType} />
+          )}
+          {instrument.securityCodeVerification && (
+            <Row label="CVV Verification" value={titleCaseFromSnake(instrument.securityCodeVerification)} />
+          )}
+          {instrument.addressVerification && (
+            <Row label="Address Verification" value={titleCaseFromSnake(instrument.addressVerification)} />
+          )}
+          {instrument.issuerCountry && <Row label="Issuer Country" value={instrument.issuerCountry} />}
+          {instrument.addressCountry && <Row label="Address Country" value={instrument.addressCountry} />}
+          {instrument.disabledMessage && (
+            <Row label="Disabled Reason" value={instrument.disabledMessage} />
           )}
           <Row label="Created" value={formatDateTime(instrument.createdAtFinix)} />
         </Section>

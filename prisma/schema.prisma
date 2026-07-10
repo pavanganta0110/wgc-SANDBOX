@@ -519,6 +519,12 @@ model FinixPaymentInstrumentSnapshot {
   accountHolderName        String?
   state                    String?
   enabled                  Boolean?
+  disabledCode             String?
+  disabledMessage          String?
+  securityCodeVerification String?
+  addressVerification      String?
+  issuerCountry            String?
+  addressCountry           String?
   instrumentUse            String?
   rawJsonRedacted          Json?
   createdAtFinix           DateTime?

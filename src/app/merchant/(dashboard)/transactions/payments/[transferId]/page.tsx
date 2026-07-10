@@ -42,6 +42,14 @@ function sourceLabel(source: string | null | undefined) {
   return "Unknown";
 }
 
+function instrumentStateLabel(state: string | null | undefined) {
+  const s = (state || "").toUpperCase();
+  if (s === "ENABLED") return "Enabled";
+  if (s === "DISABLED") return "Disabled";
+  if (s === "DELETED") return "Deleted";
+  return "—";
+}
+
 export default async function PaymentFullDetailPage({
   params,
 }: {
@@ -323,11 +331,9 @@ export default async function PaymentFullDetailPage({
           {instrument && (
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h3 className="text-sm font-bold text-slate-900 mb-4">Payment Instrument</h3>
-              <Row label="State" value={instrument.state || "—"} />
-              <Row
-                label="Type"
-                value={instrument.cardBrand || (instrument.bankLast4 ? "Bank Account" : instrument.instrumentType || "—")}
-              />
+              <Row label="State" value={instrumentStateLabel(instrument.state)} />
+              <Row label="Type" value={instrument.bankLast4 ? "Bank Account" : "Card"} />
+              {instrument.cardBrand && <Row label="Brand" value={instrument.cardBrand} />}
               <Row label="Account Holder Name" value={instrument.accountHolderName || "—"} />
               <Row
                 label="Masked Number"
@@ -337,6 +343,15 @@ export default async function PaymentFullDetailPage({
                 <Row label="Expiration" value={`${instrument.cardExpirationMonth}/${instrument.cardExpirationYear}`} />
               )}
               {instrument.bankAccountType && <Row label="Account Type" value={instrument.bankAccountType} />}
+              {instrument.securityCodeVerification && (
+                <Row label="CVV Verification" value={titleCaseFromSnake(instrument.securityCodeVerification)} />
+              )}
+              {instrument.addressVerification && (
+                <Row label="Address Verification" value={titleCaseFromSnake(instrument.addressVerification)} />
+              )}
+              {instrument.issuerCountry && <Row label="Issuer Country" value={instrument.issuerCountry} />}
+              {instrument.addressCountry && <Row label="Address Country" value={instrument.addressCountry} />}
+              {instrument.disabledMessage && <Row label="Disabled Reason" value={instrument.disabledMessage} />}
               <Row label="Created" value={formatDateTime(instrument.createdAtFinix)} />
             </div>
           )}
