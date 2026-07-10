@@ -150,12 +150,26 @@ export async function syncFinixDataFromWebhookEvent(
 ) {
   if (entity === "TRANSFER" && data?.id) {
     const tags = data.tags ?? {};
-    const source = tags.source === "wgc_giving_page" ? "wgc_giving_page" : "finix_dashboard";
+    const source =
+      tags.source === "wgc_giving_page" || tags.source === "wgc_giving_link" || tags.source === "wgc_admin_payment"
+        ? tags.source
+        : "finix_dashboard";
 
     const church = data.merchant
       ? await prisma.church.findFirst({ where: { finixMerchantId: data.merchant } })
       : null;
     const churchId = church?.id ?? null;
+
+    // Read the transfer's prior state before upserting so a later state
+    // change (e.g. PENDING -> SUCCEEDED on ACH settlement, arriving via a
+    // separate transfer.updated webhook) can be told apart from a state
+    // that was already counted when the Giving Link donate route created
+    // this record synchronously — prevents double-counting successful
+    // donations against the link's aggregate totals below.
+    const priorTransfer = await prisma.finixTransfer.findUnique({
+      where: { finixTransferId: data.id },
+      select: { state: true },
+    });
 
     await prisma.finixTransfer.upsert({
       where: { finixTransferId: data.id },
@@ -210,9 +224,48 @@ export async function syncFinixDataFromWebhookEvent(
       console.error("Fee sync failed:", err);
     }
 
+    // Attribute an async success/failure transition to the Giving Link that
+    // generated this transfer (subtype REVERSAL/RETURN transfers are
+    // handled by their own blocks below, not here).
+    const isPrimaryDonationTransfer = data.subtype !== "REVERSAL" && !String(data.subtype || data.type || "").toUpperCase().includes("RETURN");
+    if (isPrimaryDonationTransfer) {
+      // A recurring payment generated later from a subscription may not
+      // carry the original tags (unconfirmed Finix API shape) — fall back
+      // to looking up the subscription's own givingLinkId so every
+      // recurring charge still attributes back to the link that created it.
+      let attributedGivingLinkId: string | undefined = tags.givingLinkId;
+      if (!attributedGivingLinkId && data.subscription) {
+        const subscription = await prisma.finixSubscription.findUnique({
+          where: { finixSubscriptionId: data.subscription },
+          select: { givingLinkId: true },
+        });
+        attributedGivingLinkId = subscription?.givingLinkId ?? undefined;
+      }
+
+      if (attributedGivingLinkId) {
+        const wasSucceeded = (priorTransfer?.state || "").toUpperCase() === "SUCCEEDED";
+        const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";
+        if (!wasSucceeded && isSucceeded) {
+          await prisma.givingLink.updateMany({
+            where: { id: attributedGivingLinkId },
+            data: {
+              successfulDonations: { increment: 1 },
+              totalCollectedCents: { increment: data.amount ?? 0 },
+              lastUsedAt: occurredAt,
+            },
+          });
+        }
+      }
+    }
+
     // A transfer of subtype REVERSAL/RETURN represents a refund/ACH return —
     // also record it in FinixRefundOrReversal, keyed by the reversal's own id.
     if (data.subtype === "REVERSAL" || data.type === "REVERSAL" || eventType.includes("reversal")) {
+      const priorReversal = await prisma.finixRefundOrReversal.findUnique({
+        where: { finixReversalId: data.id },
+        select: { state: true },
+      });
+
       await prisma.finixRefundOrReversal.upsert({
         where: { finixReversalId: data.id },
         create: {
@@ -247,6 +300,25 @@ export async function syncFinixDataFromWebhookEvent(
           lastSyncedAt: new Date(),
         },
       });
+
+      // Attribute the refund back to the Giving Link that generated the
+      // original donation, so the link's refundedCents total (and its Net
+      // Collected figure) stays accurate.
+      const wasSucceeded = (priorReversal?.state || "").toUpperCase() === "SUCCEEDED";
+      const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";
+      if (!wasSucceeded && isSucceeded && data.parent_transfer) {
+        const originalTransfer = await prisma.finixTransfer.findUnique({
+          where: { finixTransferId: data.parent_transfer },
+          select: { tagsJson: true },
+        });
+        const originalGivingLinkId = (originalTransfer?.tagsJson as Record<string, string> | null)?.givingLinkId;
+        if (originalGivingLinkId) {
+          await prisma.givingLink.updateMany({
+            where: { id: originalGivingLinkId },
+            data: { refundedCents: { increment: data.amount ?? 0 } },
+          });
+        }
+      }
     }
 
     // An actual ACH return (NACHA reason code) is a distinct event from a
@@ -258,6 +330,11 @@ export async function syncFinixDataFromWebhookEvent(
     if (isReturn) {
       const originalTransferId = data.parent_transfer ?? data.source_transfer ?? null;
       const reasonCode = data.failure_code ?? data.return_code ?? null;
+
+      const priorReturn = await prisma.bankReturn.findUnique({
+        where: { bankReturnId: data.id },
+        select: { state: true },
+      });
 
       await prisma.bankReturn.upsert({
         where: { bankReturnId: data.id },
@@ -317,6 +394,22 @@ export async function syncFinixDataFromWebhookEvent(
           where: { finixTransferId: originalTransferId },
           data: { status: "RETURNED" },
         });
+
+        const wasSucceeded = (priorReturn?.state || "").toUpperCase() === "SUCCEEDED";
+        const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";
+        if (!wasSucceeded && isSucceeded) {
+          const originalTransfer = await prisma.finixTransfer.findUnique({
+            where: { finixTransferId: originalTransferId },
+            select: { tagsJson: true },
+          });
+          const originalGivingLinkId = (originalTransfer?.tagsJson as Record<string, string> | null)?.givingLinkId;
+          if (originalGivingLinkId) {
+            await prisma.givingLink.updateMany({
+              where: { id: originalGivingLinkId },
+              data: { returnedCents: { increment: data.amount ?? 0 } },
+            });
+          }
+        }
       }
     }
     return;

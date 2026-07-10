@@ -9,11 +9,11 @@ export default function QuickLinksPanel() {
       </div>
       <div className="p-5">
         <Link
-          href="/merchant/giving-page"
+          href="/merchant/giving-links"
           className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
         >
           <HeartHandshake className="w-4 h-4" />
-          View Giving Page
+          Manage Giving Links
         </Link>
       </div>
     </div>

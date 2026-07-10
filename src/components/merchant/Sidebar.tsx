@@ -48,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Settlements", href: "/merchant/settlements", icon: Landmark },
   { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank },
   { name: "Donors", href: "/merchant/donors", icon: Users },
-  { name: "Giving Page", href: "/merchant/giving-page", icon: HeartHandshake },
+  { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscription", href: "/merchant/subscription", icon: CreditCard },
   { name: "Settings", href: "/merchant/settings", icon: Settings },

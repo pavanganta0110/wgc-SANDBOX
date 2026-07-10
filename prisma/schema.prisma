@@ -245,6 +245,7 @@ model Payment {
   churchId                   String
   donorId                    String?
   givingPageId               String?
+  givingLinkId               String?
   finixTransferId            String?
   finixBuyerIdentityId       String?
   finixPaymentInstrumentId   String?
@@ -285,6 +286,7 @@ model PaymentAttempt {
   churchId          String
   adminUserId       String?
   donorId           String?
+  givingLinkId      String?
   clientAttemptId   String    @unique
   idempotencyId     String    @unique
   amountCents       Int
@@ -603,6 +605,7 @@ model FinixSubscription {
   id                       String    @id @default(cuid())
   churchId                 String?
   churchSubscriptionId     String?
+  givingLinkId             String?
   finixSubscriptionId      String    @unique
   finixMerchantId          String?
   finixBuyerIdentityId     String?
@@ -792,6 +795,70 @@ model FinixAuthorization {
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
   lastSyncedAt              DateTime?
+}
+
+// A configurable, trackable donation link — distinct from the simpler
+// GivingPage model below (which powers each church's one always-on default
+// giving page). A GivingLink is created per-campaign, has its own lifecycle
+// (active/inactive/expired/archived), amount rules, donor-field visibility,
+// branding, and attempt/share tracking. Every Payment/PaymentAttempt/
+// FinixSubscription created through one is tagged with its id for
+// attribution (see givingLinkId fields above).
+model GivingLink {
+  id                     String    @id @default(cuid())
+  churchId               String
+  publicSlug             String    @unique
+  internalName           String
+  publicTitle            String
+  description            String?
+  status                 String    @default("ACTIVE") // ACTIVE | INACTIVE | EXPIRED | ARCHIVED
+  amountType             String    @default("FIXED") // FIXED | VARIABLE
+  fixedAmountCents       Int?
+  minAmountCents         Int?
+  maxAmountCents         Int?
+  suggestedAmountsJson   Json?
+  allowCustomAmount      Boolean   @default(true)
+  linkType               String    @default("MULTI_USE") // ONE_TIME | MULTI_USE
+  maxSuccessfulUses      Int?
+  maxCollectedAmountCents Int?
+  expiresAt              DateTime?
+  fundName               String?
+  recurringEnabled       Boolean   @default(false)
+  allowedFrequenciesJson Json?
+  allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
+  donorFieldSettingsJson Json?
+  feeCoverEnabled        Boolean   @default(true)
+  feeCoverDefaultOn      Boolean   @default(true)
+  receiptSettingsJson    Json?
+  statementDescriptor    String?
+  internalNote           String?
+  referenceNumber        String?
+  successReturnUrl       String?
+  failureReturnUrl       String?
+  cancelReturnUrl        String?
+  brandingSettingsJson   Json?
+  totalAttempts          Int       @default(0)
+  successfulDonations    Int       @default(0)
+  totalCollectedCents    Int       @default(0)
+  refundedCents          Int       @default(0)
+  returnedCents          Int       @default(0)
+  lastUsedAt             DateTime?
+  createdByUserId        String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+}
+
+model GivingLinkShare {
+  id             String    @id @default(cuid())
+  givingLinkId   String
+  churchId       String
+  sharedByUserId String?
+  channel        String // COPY_LINK | QR_CODE | EMAIL | TEXT | MANUAL | EMBED
+  recipient      String?
+  message        String?
+  state          String    @default("SENT") // SENT | FAILED | PENDING
+  openedAt       DateTime?
+  createdAt      DateTime  @default(now())
 }
 
 model GivingPage {
