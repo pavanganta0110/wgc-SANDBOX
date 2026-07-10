@@ -263,8 +263,43 @@ model Payment {
   receiptSentAt              DateTime?
   achAuthorizationAccepted   Boolean   @default(false)
   achAuthorizationAcceptedAt DateTime?
+  fundName                   String?
+  note                       String?
+  isAnonymous                Boolean   @default(false)
+  createdByAdminUserId       String?
+  paymentAttemptId           String?
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
+}
+
+// A payment attempt initiated by a church admin from the dashboard's "Take
+// a Payment" flow, tracked from before the Finix API call is made so a
+// browser retry / double-click / refresh can be recognized as the same
+// logical attempt instead of minting a second charge. clientAttemptId is
+// the stable key the frontend keeps across its own retries of one
+// submission (a genuinely new attempt, e.g. hitting Retry after a failure,
+// gets a fresh one). idempotencyId is generated here server-side exactly
+// once per clientAttemptId and is the value actually sent to Finix.
+model PaymentAttempt {
+  id                String    @id @default(cuid())
+  churchId          String
+  adminUserId       String?
+  donorId           String?
+  clientAttemptId   String    @unique
+  idempotencyId     String    @unique
+  amountCents       Int
+  feeCents          Int?
+  totalCents        Int
+  paymentMethodType String
+  fundName          String?
+  note              String?
+  isAnonymous       Boolean   @default(false)
+  fraudSessionId    String?
+  status            String // PROCESSING | PENDING | SUCCEEDED | FAILED | CANCELED
+  finixTransferId   String?
+  failureMessage    String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model SubscriptionPlan {
@@ -403,6 +438,8 @@ model FinixRefundOrReversal {
   type                    String?
   subtype                 String?
   source                  String?
+  traceId                 String?
+  tagsJson                Json?
   rawJsonRedacted         Json?
   createdAtFinix          DateTime?
   updatedAtFinix          DateTime?
