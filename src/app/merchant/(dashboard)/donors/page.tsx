@@ -5,6 +5,7 @@ import DonorsFilterBar from "@/components/merchant/DonorsFilterBar";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import DonorDetailPanel from "@/components/merchant/DonorDetailPanel";
 import { computeRefundStatus } from "@/lib/finix/refundStatus";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 export default async function DonorsPage({
   searchParams,
@@ -130,7 +131,7 @@ export default async function DonorsPage({
                     }`}
                   >
                     <td className="px-6 py-3 font-semibold text-slate-800">
-                      {donor.name || "Unknown Donor"}
+                      {formatPersonName(donor.name) === "—" ? "Unknown Donor" : formatPersonName(donor.name)}
                     </td>
                     <td className="px-6 py-3 text-slate-600">{donor.email || "—"}</td>
                     <td className="px-6 py-3 text-slate-600">{donor.phone || "—"}</td>

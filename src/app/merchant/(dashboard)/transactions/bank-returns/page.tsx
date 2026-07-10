@@ -7,6 +7,7 @@ import TransactionsFilterBar from "@/components/merchant/TransactionsFilterBar";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import StateBadge from "@/components/merchant/StateBadge";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 const STATES = ["SUCCEEDED", "FAILED", "PENDING", "CANCELED"];
 
@@ -122,7 +123,7 @@ export default async function BankReturnsListPage({
                           : "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-700">
-                        {donor?.name || instrument?.accountHolderName || "—"}
+                        {formatPersonName(donor?.name, instrument?.accountHolderName)}
                       </td>
                       <td className="px-6 py-3 text-slate-600">{r.failureCode || "—"}</td>
                       <td className="px-6 py-3">

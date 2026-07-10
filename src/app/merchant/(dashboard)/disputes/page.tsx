@@ -7,6 +7,7 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import StateBadge from "@/components/merchant/StateBadge";
 import DisputeDetailPanel from "@/components/merchant/DisputeDetailPanel";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 const STATES = ["PENDING", "SUCCEEDED", "FAILED", "CANCELED"];
 
@@ -119,7 +120,7 @@ export default async function DisputesPage({
                           : "—"}
                       </td>
                       <td className="px-6 py-3 text-slate-700">
-                        {donor?.name || instrument?.accountHolderName || "—"}
+                        {formatPersonName(donor?.name, instrument?.accountHolderName)}
                       </td>
                       <td className="px-6 py-3 text-slate-600">{titleCase(d.reason)}</td>
                       <td className="px-6 py-3">

@@ -4,6 +4,7 @@ import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
+import { formatPersonName } from "@/lib/formatPersonName";
 import {
   PanelNavArrows,
   ViewAllDetailsButton,
@@ -136,7 +137,7 @@ export default async function DisputeDetailPanel({
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Donor</span>
             <span className="font-semibold text-slate-700">
-              {donor?.name || instrument?.accountHolderName || "—"}
+              {formatPersonName(donor?.name, instrument?.accountHolderName)}
             </span>
           </div>
           {dispute.finixTransferId && (

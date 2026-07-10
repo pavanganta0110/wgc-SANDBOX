@@ -9,6 +9,7 @@ import PaymentDetailPanel from "@/components/merchant/PaymentDetailPanel";
 import StateBadge from "@/components/merchant/StateBadge";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -160,7 +161,7 @@ export default async function PaymentsListPage({
                         : "—"}
                     </td>
                     <td className="px-6 py-3 text-slate-700">
-                      {donor?.name || instrument?.accountHolderName || "—"}
+                      {formatPersonName(donor?.name, instrument?.accountHolderName)}
                     </td>
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(t.amountCents ?? 0)}

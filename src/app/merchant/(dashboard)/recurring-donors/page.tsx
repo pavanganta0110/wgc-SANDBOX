@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 function titleCase(s: string | null | undefined) {
   if (!s) return "—";
@@ -88,7 +89,7 @@ export default async function RecurringDonorsPage() {
                       <CopyableIdBadge id={s.finixSubscriptionId} />
                     </td>
                     <td className="px-6 py-3 text-slate-700">
-                      {donor?.name || instrument?.accountHolderName || "—"}
+                      {formatPersonName(donor?.name, instrument?.accountHolderName)}
                     </td>
                     <td className="px-6 py-3 text-slate-600">{titleCase(s.billingInterval)}</td>
                     <td className="px-6 py-3">

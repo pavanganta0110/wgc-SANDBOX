@@ -14,6 +14,7 @@ import IssueRefundButton from "@/components/merchant/IssueRefundButton";
 import CreateReceiptButton from "@/components/merchant/CreateReceiptButton";
 import StateBadge from "@/components/merchant/StateBadge";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 function formatDateTime(date: Date | null | undefined) {
   if (!date) return "—";
@@ -231,7 +232,7 @@ export default async function PaymentDetailPanel({
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Donor</span>
             <span className="font-semibold text-slate-700">
-              {donor?.name || instrument?.accountHolderName || "—"}
+              {formatPersonName(donor?.name, instrument?.accountHolderName)}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -284,7 +285,7 @@ export default async function PaymentDetailPanel({
       </Section>
 
       <Section title="Donor">
-        <Row label="Name" value={donor?.name || instrument?.accountHolderName || "—"} />
+        <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
         <Row label="Email" value={donor?.email || "—"} />
         <Row label="Phone" value={donor?.phone || "—"} />
       </Section>

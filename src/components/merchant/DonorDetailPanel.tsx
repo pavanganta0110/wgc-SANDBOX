@@ -4,6 +4,7 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 function formatDateTime(date: Date | null | undefined) {
   if (!date) return "—";
@@ -85,7 +86,9 @@ export default async function DonorDetailPanel({
       </div>
 
       <div className="px-5 py-4 border-b border-slate-100">
-        <p className="text-lg font-bold text-slate-900">{donor.name || "Unknown Donor"}</p>
+        <p className="text-lg font-bold text-slate-900">
+          {formatPersonName(donor.name) === "—" ? "Unknown Donor" : formatPersonName(donor.name)}
+        </p>
         <div className="mt-3 space-y-1.5 text-sm">
           <Row label="Email" value={donor.email || "—"} />
           <Row label="Phone" value={donor.phone || "—"} />

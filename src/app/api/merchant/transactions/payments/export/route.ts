@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
+import { formatPersonName } from "@/lib/formatPersonName";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -118,7 +119,7 @@ export async function GET(req: Request) {
       [
         csvEscape(t.finixTransferId),
         csvEscape(t.createdAtFinix ? t.createdAtFinix.toISOString() : ""),
-        csvEscape(donor?.name || instrument?.accountHolderName || ""),
+        csvEscape(formatPersonName(donor?.name, instrument?.accountHolderName)),
         csvEscape(donor?.email || ""),
         csvEscape(donor?.phone || ""),
         csvEscape(formatCents(t.amountCents ?? 0)),
