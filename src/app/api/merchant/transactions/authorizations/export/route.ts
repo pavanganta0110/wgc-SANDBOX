@@ -116,7 +116,7 @@ export async function GET(req: Request) {
     "ID",
     "Created",
     "Organization",
-    "Buyer",
+    "Donor",
     "Amount",
     "State",
     "Payment Instrument",

@@ -124,9 +124,9 @@ export default async function AuthorizationDetailPanel({
         )}
       </div>
 
-      {/* Buyer */}
+      {/* Donor */}
       <div className="px-5 py-4 border-b border-slate-100">
-        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Buyer</h4>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Donor</h4>
         <div className="space-y-0.5">
           <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
           <Row label="Email" value={donor?.email || "—"} />

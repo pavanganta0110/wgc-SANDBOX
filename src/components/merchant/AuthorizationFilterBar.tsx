@@ -121,10 +121,10 @@ export default function AuthorizationFilterBar({
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-28"
       />
 
-      {/* Buyer Name */}
+      {/* Donor Name */}
       <input
         type="text"
-        placeholder="Buyer Name"
+        placeholder="Donor Name"
         value={buyer}
         onChange={(e) => setParam("buyer", e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-40"

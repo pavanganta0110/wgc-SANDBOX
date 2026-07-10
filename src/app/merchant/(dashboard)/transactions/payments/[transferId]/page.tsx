@@ -190,7 +190,7 @@ export default async function PaymentFullDetailPage({
               </div>
             )}
             <p className="text-sm text-slate-600">
-              Buyer: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
+              Donor: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
               {" · "}
               Payment Instrument:{" "}
               <span className="font-semibold text-slate-900">
@@ -323,7 +323,7 @@ export default async function PaymentFullDetailPage({
 
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">Buyer</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
             <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
             <Row label="Email" value={donor?.email || "—"} />
             <Row label="Phone" value={donor?.phone || "—"} />

@@ -121,7 +121,7 @@ export default async function AuthorizationsListPage({
     return null;
   }
 
-  // Buyer name and organization name filters run in memory — the result
+  // Donor name and organization name filters run in memory — the result
   // set is already narrowed to <=200 rows for this church by the query above.
   const rows = authorizations.filter((a) => {
     const instrument = resolveInstrument(a);
@@ -168,7 +168,7 @@ export default async function AuthorizationsListPage({
                   <th className="px-6 py-3">ID</th>
                   <th className="px-6 py-3">Created</th>
                   <th className="px-6 py-3">Organization</th>
-                  <th className="px-6 py-3">Buyer</th>
+                  <th className="px-6 py-3">Donor</th>
                   <th className="px-6 py-3 text-right">Amount</th>
                   <th className="px-6 py-3">State</th>
                   <th className="px-6 py-3">Payment Instrument</th>
