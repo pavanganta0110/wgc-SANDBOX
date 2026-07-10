@@ -5,6 +5,9 @@ import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendWgcEmail } from "@/lib/email";
+import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
+
+const isDev = process.env.NODE_ENV === "development";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -30,6 +33,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
     if (!donor?.name || !donor?.email) {
       return NextResponse.json({ error: "Name and email are required" }, { status: 400 });
+    }
+    if (!isValidEmail(donor.email)) {
+      return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
+    }
+    if (donor.phone) {
+      const normalized = normalizeUSPhone(donor.phone);
+      if (!normalized) {
+        return NextResponse.json({ error: "Please enter a valid U.S. phone number" }, { status: 400 });
+      }
+      donor.phone = normalized;
+    }
+
+    if (isDev) {
+      console.log("[give] Donor from form →", { name: donor.name, email: donor.email, phone: donor.phone });
     }
 
     const givingPage = await prisma.givingPage.findUnique({ where: { slug } });
@@ -98,6 +115,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         phone: donor.phone || undefined,
       },
     });
+
+    if (isDev) {
+      console.log("[give] Donor saved to DB →", { id: donorRecord.id, name: donorRecord.name, email: donorRecord.email, phone: donorRecord.phone });
+    }
 
     // The dashboard's Donor columns everywhere (Payments, Recurring Donors,
     // detail panels) join through FinixPaymentInstrumentSnapshot, not

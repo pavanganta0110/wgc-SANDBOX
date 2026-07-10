@@ -88,6 +88,17 @@ export default function DonationForm({
       toast.error("Please enter your name and email");
       return;
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (phone) {
+      const digits = phone.replace(/\D/g, "");
+      if (!(digits.length === 10 || (digits.length === 11 && digits.startsWith("1")))) {
+        toast.error("Please enter a valid U.S. phone number (10 digits)");
+        return;
+      }
+    }
     if (!formInstanceRef.current || !formReady) {
       toast.error("Payment form is still loading — please wait a moment");
       return;
@@ -123,6 +134,10 @@ export default function DonationForm({
           }
 
           try {
+            if (process.env.NODE_ENV === "development") {
+              console.log("[DonationForm] Submitting donor →", { name, email, phone });
+            }
+
             const res = await fetch(`/api/give/${slug}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -134,7 +149,7 @@ export default function DonationForm({
                 billingInterval: isRecurring ? interval : undefined,
                 paymentMethod,
                 fraudSessionId,
-                donor: { name, email, phone },
+                donor: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
               }),
             });
 
