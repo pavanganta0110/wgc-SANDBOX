@@ -16,9 +16,14 @@ const STATE_STYLES: Record<string, string> = {
   PROCESSING: "bg-amber-50 text-amber-700",
   SENT: "bg-blue-50 text-blue-700",
   COMPLETED: "bg-green-50 text-green-700",
-  // Disputes (FinixDispute.state)
+  // Disputes (FinixDispute.state / resolveDisputeDisplayStatus)
   WON: "bg-green-50 text-green-700",
   LOST: "bg-red-50 text-red-700",
+  OPEN: "bg-blue-50 text-blue-700",
+  NEEDS_RESPONSE: "bg-red-50 text-red-700",
+  UNDER_REVIEW: "bg-amber-50 text-amber-700",
+  ACCEPTED: "bg-slate-100 text-slate-600",
+  CLOSED: "bg-slate-100 text-slate-500",
   // Settlements
   ACCRUING: "bg-amber-50 text-amber-700",
   SETTLED: "bg-green-50 text-green-700",

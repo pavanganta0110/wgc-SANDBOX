@@ -1,19 +1,20 @@
-import { ReactNode } from "react";
-import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import { formatPersonName } from "@/lib/formatPersonName";
 import Link from "next/link";
-import {
-  PanelNavArrows,
-  PaymentMoreMenu,
-  PinButton,
-} from "@/components/merchant/PaymentDetailActions";
+import { PanelNavArrows, PaymentMoreMenu, PinButton } from "@/components/merchant/PaymentDetailActions";
 import ViewAllDetailsLink from "@/components/merchant/ViewAllDetailsLink";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
+import { Row, Section } from "@/components/merchant/detail/DetailDrawerPrimitives";
+import { TransactionTimeline } from "@/components/merchant/detail/TransactionTimeline";
+import { loadDisputeDetail } from "@/lib/finix/disputeDetail";
+import { buildDisputeTimeline } from "@/lib/finix/disputeTimeline";
+import { resolveDisputeDisplayStatus } from "@/lib/finix/disputeStatus";
+import DisputeDeadlineBanner from "@/components/merchant/DisputeDeadlineBanner";
+import DisputeFinancialImpactCard from "@/components/merchant/DisputeFinancialImpactCard";
 
 export default async function DisputeDetailPanel({
   disputeId,
@@ -22,11 +23,9 @@ export default async function DisputeDetailPanel({
   disputeId: string;
   churchId: string;
 }) {
-  const dispute = await prisma.finixDispute.findFirst({
-    where: { finixDisputeId: disputeId, churchId },
-  });
+  const detail = await loadDisputeDetail(disputeId, churchId);
 
-  if (!dispute) {
+  if (!detail) {
     return (
       <div className="w-full lg:w-[420px] shrink-0 border-l border-slate-100 bg-white rounded-2xl lg:rounded-none p-6">
         <p className="text-sm text-slate-500">This dispute could not be found.</p>
@@ -34,47 +33,10 @@ export default async function DisputeDetailPanel({
     );
   }
 
-  const transfer = dispute.finixTransferId
-    ? await prisma.finixTransfer.findFirst({
-        where: { finixTransferId: dispute.finixTransferId, churchId },
-      })
-    : null;
-
-  const instrument = transfer?.finixPaymentInstrumentId
-    ? await prisma.finixPaymentInstrumentSnapshot.findUnique({
-        where: { finixPaymentInstrumentId: transfer.finixPaymentInstrumentId },
-      })
-    : null;
-
-  const donor = instrument?.donorId
-    ? await prisma.donor.findUnique({ where: { id: instrument.donorId } })
-    : null;
-
-  type FlowEvent = { label: string; sublabel?: string; date: Date | null };
-  const flow: FlowEvent[] = [
-    { label: `Dispute Opened`, sublabel: dispute.reason ? titleCase(dispute.reason) : undefined, date: dispute.createdAtFinix },
-    ...(dispute.evidenceDueAt
-      ? [{ label: "Evidence Due", date: dispute.evidenceDueAt } as FlowEvent]
-      : []),
-    ...(dispute.respondedAt
-      ? [{ label: "Evidence Submitted", date: dispute.respondedAt } as FlowEvent]
-      : []),
-    ...(dispute.resolvedAt
-      ? [
-          {
-            label: `Dispute Resolved`,
-            sublabel: dispute.outcome ? titleCase(dispute.outcome) : undefined,
-            date: dispute.resolvedAt,
-          } as FlowEvent,
-        ]
-      : []),
-  ]
-    .filter((e) => e.date)
-    .sort((a, b) => (a.date && b.date ? a.date.getTime() - b.date.getTime() : 0));
-
-  const now = new Date();
-  const evidenceOpen =
-    dispute.evidenceDueAt && !dispute.respondedAt && dispute.evidenceDueAt.getTime() > now.getTime();
+  const { dispute, transfer, instrument, donor, settlement, deposit } = detail;
+  const displayStatus = resolveDisputeDisplayStatus(dispute);
+  const timeline = buildDisputeTimeline(detail);
+  const locked = Boolean(dispute.respondedAt);
 
   return (
     <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm h-fit lg:sticky lg:top-6">
@@ -84,6 +46,7 @@ export default async function DisputeDetailPanel({
         <ClosePanelButton />
       </div>
 
+      {/* Summary */}
       <div className="px-5 py-4 border-b border-slate-100">
         <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
           <span>Dispute · {formatDateTime(dispute.createdAtFinix)}</span>
@@ -94,28 +57,16 @@ export default async function DisputeDetailPanel({
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">
-              {formatCents(dispute.amountCents ?? 0)}
-            </span>
+            <span className="text-2xl font-bold text-slate-900">{formatCents(dispute.amountCents ?? 0)}</span>
             <span className="text-sm font-semibold text-slate-400">{dispute.currency || "USD"}</span>
           </div>
-          <StateBadge state={dispute.state} />
+          <StateBadge state={displayStatus} />
         </div>
         <PaymentMoreMenu />
 
-        {evidenceOpen && (
-          <div className="mt-3 flex items-center justify-between bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
-            <span className="text-xs font-semibold text-amber-800">
-              Evidence due {formatDateTime(dispute.evidenceDueAt)}
-            </span>
-            <Link
-              href={`/merchant/disputes/${dispute.finixDisputeId}`}
-              className="text-xs font-bold text-blue-600 hover:underline"
-            >
-              Submit Evidence
-            </Link>
-          </div>
-        )}
+        <div className="mt-3">
+          <DisputeDeadlineBanner evidenceDueAt={dispute.evidenceDueAt} respondedAt={dispute.respondedAt} />
+        </div>
 
         <div className="mt-3 space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
@@ -133,27 +84,22 @@ export default async function DisputeDetailPanel({
         </div>
       </div>
 
-      <Section title="Dispute Timeline">
-        <div className="space-y-4">
-          {flow.map((event, i) => (
-            <div key={i} className="flex gap-3">
-              <div className="flex flex-col items-center pt-1">
-                <span className="w-2 h-2 rounded-full bg-slate-400" />
-                {i < flow.length - 1 && <span className="w-px flex-1 bg-slate-200 mt-1" />}
-              </div>
-              <div className="pb-1">
-                <p className="text-sm font-semibold text-slate-800">{event.label}</p>
-                {event.sublabel && <p className="text-xs text-slate-500">{event.sublabel}</p>}
-                <p className="text-xs text-slate-400">{formatDateTime(event.date)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Financial Impact */}
+      <div className="px-5 py-4 border-b border-slate-100">
+        <DisputeFinancialImpactCard
+          originalAmountCents={transfer?.amountCents ?? null}
+          disputedAmountCents={dispute.amountCents}
+          displayStatus={displayStatus}
+        />
+      </div>
+
+      <Section title="Timeline">
+        <TransactionTimeline events={timeline} />
       </Section>
 
       <Section title="Dispute Details">
         <Row label="Reason" value={titleCase(dispute.reason)} />
-        <Row label="State" value={titleCase(dispute.state)} />
+        <Row label="Status" value={titleCase(displayStatus)} />
         {dispute.outcome && <Row label="Outcome" value={titleCase(dispute.outcome)} />}
         <Row label="Evidence Due" value={formatDateTime(dispute.evidenceDueAt)} />
         <Row label="Responded" value={formatDateTime(dispute.respondedAt)} />
@@ -161,7 +107,7 @@ export default async function DisputeDetailPanel({
       </Section>
 
       {instrument && (
-        <Section title="Payment Instrument" last>
+        <Section title="Payment Instrument">
           <Row label="Type" value={instrument.cardBrand || (instrument.bankLast4 ? "Bank Account" : instrument.instrumentType || "—")} />
           <Row
             label="Masked Number"
@@ -174,32 +120,36 @@ export default async function DisputeDetailPanel({
           <Row label="Account Holder Name" value={instrument.accountHolderName || "—"} />
         </Section>
       )}
-    </div>
-  );
-}
 
-function Section({
-  title,
-  last,
-  children,
-}: {
-  title: string;
-  last?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`px-5 py-4 ${last ? "" : "border-b border-slate-100"}`}>
-      <h3 className="text-sm font-bold text-slate-900 mb-3">{title}</h3>
-      {children}
-    </div>
-  );
-}
+      {(settlement || deposit) && (
+        <Section title="Related Settlement / Deposit">
+          {settlement && (
+            <Row label="Settlement" value={<CopyableIdBadge id={settlement.finixSettlementId} label={settlement.finixSettlementId} variant="link" />} />
+          )}
+          {deposit && (
+            <Row label="Deposit" value={<CopyableIdBadge id={deposit.finixFundingTransferAttemptId} label={deposit.finixFundingTransferAttemptId} variant="link" />} />
+          )}
+        </Section>
+      )}
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between text-sm py-1">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-semibold text-slate-700 text-right">{value}</span>
+      <Section title="Quick Actions" last>
+        <div className="flex flex-col gap-2">
+          {!locked && (
+            <Link
+              href={`/merchant/disputes/${dispute.finixDisputeId}`}
+              className="text-sm font-semibold text-blue-600 hover:underline"
+            >
+              Manage Evidence
+            </Link>
+          )}
+          <Link
+            href={`/merchant/disputes/${dispute.finixDisputeId}`}
+            className="text-sm font-semibold text-slate-600 hover:underline"
+          >
+            Open Full Details
+          </Link>
+        </div>
+      </Section>
     </div>
   );
 }

@@ -560,7 +560,8 @@ model FinixDispute {
   finixTransferId String?
   paymentId       String?
   finixMerchantId String?
-  state           String?
+  state           String? // legacy: historically the mapped display value — left as-is for backward compat with existing readers/filters
+  processorState  String? // raw processor state as returned by every sync, never overwritten by a mapped value
   reason          String?
   amountCents     Int?
   currency        String?
@@ -568,17 +569,29 @@ model FinixDispute {
   respondedAt     DateTime?
   resolvedAt      DateTime?
   outcome         String?
-  rawJsonRedacted Json?
-  createdAtFinix  DateTime?
-  updatedAtFinix  DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  lastSyncedAt    DateTime?
-  evidence        DisputeEvidence[]
+  // Submission failure/retry tracking: keep uploaded evidence and let the
+  // admin retry final submission without re-uploading if it fails.
+  submissionError       String?
+  submissionAttemptedAt DateTime?
+  submissionRetryCount  Int       @default(0)
+  internalNote          String?
+  rawJsonRedacted       Json?
+  createdAtFinix        DateTime?
+  updatedAtFinix        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  lastSyncedAt          DateTime?
+  evidence              DisputeEvidence[]
+
+  @@index([churchId])
+  @@index([evidenceDueAt])
 }
 
 // Metadata-only record of a dispute-evidence upload — the actual file bytes
-// live in Finix (POST /disputes/{id}/evidence), never stored here.
+// live in the processor (POST /disputes/{id}/evidence), never stored here.
+// Deletion is soft (deletedAt) so audit-log rows referencing an evidenceId
+// stay valid — the file is still gone from the admin's perspective (hidden
+// everywhere, excluded from counts/allowance) without losing audit history.
 model DisputeEvidence {
   id              String       @id @default(cuid())
   disputeId       String
@@ -590,6 +603,8 @@ model DisputeEvidence {
   mimeType        String
   finixFileId     String?
   submittedAt     DateTime?
+  deletedAt       DateTime?
+  deletedByEmail  String?
   createdAt       DateTime     @default(now())
 
   @@index([disputeId])

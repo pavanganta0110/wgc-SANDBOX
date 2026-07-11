@@ -442,6 +442,26 @@ export class FinixClient {
     return data;
   }
 
+  // UNCONFIRMED: no retrieval endpoint for a previously uploaded evidence
+  // file is documented anywhere we've verified — this guesses the most
+  // logical REST shape (mirroring the upload URL) rather than fabricating
+  // file content. Verify against Finix support/docs before depending on
+  // this for anything beyond a best-effort "Download" button; on failure
+  // callers should show a clear error, not silently succeed with nothing.
+  async getDisputeEvidenceFile(disputeId: string, finixFileId: string): Promise<{ data: ArrayBuffer; contentType: string | null }> {
+    const url = `${this.baseUrl}/disputes/${disputeId}/evidence/${finixFileId}`;
+    const res = await fetch(url, {
+      headers: {
+        "Authorization": this.authHeader,
+        "Finix-Version": this.version,
+      },
+    });
+    if (!res.ok) {
+      throw new Error(`Could not retrieve evidence file (${res.status})`);
+    }
+    return { data: await res.arrayBuffer(), contentType: res.headers.get("content-type") };
+  }
+
   // Final submission step — notifies the issuing bank the evidence is complete.
   // Finix docs: "once submitted, additional evidence can't be uploaded."
   async submitDisputeResponse(disputeId: string) {

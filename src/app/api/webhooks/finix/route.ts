@@ -426,6 +426,7 @@ export async function syncFinixDataFromWebhookEvent(
         finixMerchantId: data.merchant ?? null,
         finixTransferId: data.transfer ?? null,
         state: mapFinixDisputeStateToWgcStatus(data.state),
+        processorState: data.state ?? null,
         reason: data.reason ?? null,
         amountCents: data.amount ?? null,
         currency: data.currency ?? null,
@@ -441,6 +442,7 @@ export async function syncFinixDataFromWebhookEvent(
       update: {
         churchId: churchId ?? undefined,
         state: mapFinixDisputeStateToWgcStatus(data.state),
+        processorState: data.state ?? null,
         evidenceDueAt: data.evidence_due_at ? new Date(data.evidence_due_at) : undefined,
         respondedAt: data.responded_at ? new Date(data.responded_at) : undefined,
         resolvedAt: data.resolved_at ? new Date(data.resolved_at) : undefined,

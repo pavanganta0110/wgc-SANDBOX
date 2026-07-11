@@ -4,6 +4,7 @@ export type TimelineEvent = {
   label: string;
   sublabel?: string;
   date: Date | string | null;
+  actor?: string;
 };
 
 export function TransactionTimeline({ events }: { events: TimelineEvent[] }) {
@@ -18,7 +19,10 @@ export function TransactionTimeline({ events }: { events: TimelineEvent[] }) {
           <div className="pb-1">
             <p className="text-sm font-semibold text-slate-800">{event.label}</p>
             {event.sublabel && <p className="text-xs text-slate-500">{event.sublabel}</p>}
-            <p className="text-xs text-slate-400">{formatDateTime(event.date)}</p>
+            <p className="text-xs text-slate-400">
+              {formatDateTime(event.date)}
+              {event.actor && <span> · {event.actor}</span>}
+            </p>
           </div>
         </div>
       ))}

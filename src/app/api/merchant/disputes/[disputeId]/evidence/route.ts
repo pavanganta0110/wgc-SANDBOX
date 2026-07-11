@@ -3,29 +3,26 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { getDisputePermissions } from "@/lib/finix/disputePermissions";
 
 // Matches Finix's documented constraints for dispute evidence:
 // docs.finix.com/guides/after-the-payment/disputes/responding-disputes
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
-const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB per file
-const MAX_FILES_PER_DISPUTE = 8;
-const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10MB combined
-
-// "church_owner" isn't a role this app's session model issues yet (only
-// wgc_admin/church_admin exist) — dropped since it can never match a real
-// session and just reads as aspirational RBAC that isn't actually wired up.
-const CAN_MANAGE_EVIDENCE = new Set(["church_admin"]);
+export const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
+export const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB per file
+export const MAX_FILES_PER_DISPUTE = 8;
+export const MAX_TOTAL_SIZE = 10 * 1024 * 1024; // 10MB combined
 
 export async function POST(req: Request, { params }: { params: Promise<{ disputeId: string }> }) {
   const session = await getSession();
-  if (!session || !session.churchId || !CAN_MANAGE_EVIDENCE.has(session.role)) {
+  const permissions = getDisputePermissions(session?.role);
+  if (!session || !session.churchId || !permissions.canUpload) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { disputeId } = await params;
   const dispute = await prisma.finixDispute.findFirst({
     where: { finixDisputeId: disputeId, churchId: session.churchId },
-    include: { evidence: true },
+    include: { evidence: { where: { deletedAt: null } } },
   });
   if (!dispute) {
     return NextResponse.json({ error: "Dispute not found" }, { status: 404 });

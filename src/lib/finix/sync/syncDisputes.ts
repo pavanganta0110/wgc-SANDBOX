@@ -28,6 +28,7 @@ export async function syncDisputes(finixMerchantId: string, churchId?: string) {
         finixMerchantId,
         finixTransferId: dispute.transfer ?? null,
         state: mapFinixDisputeStateToWgcStatus(dispute.state),
+        processorState: dispute.state ?? null,
         reason: dispute.reason ?? null,
         amountCents: dispute.amount ?? null,
         currency: dispute.currency ?? null,
@@ -38,6 +39,7 @@ export async function syncDisputes(finixMerchantId: string, churchId?: string) {
       },
       update: {
         state: mapFinixDisputeStateToWgcStatus(dispute.state),
+        processorState: dispute.state ?? null,
         rawJsonRedacted: redactFinixPayload(dispute),
         updatedAtFinix: dispute.updated_at ? new Date(dispute.updated_at) : null,
         lastSyncedAt: new Date(),
