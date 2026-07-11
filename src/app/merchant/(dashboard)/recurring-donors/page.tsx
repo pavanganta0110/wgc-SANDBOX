@@ -4,6 +4,7 @@ import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 
 function titleCase(s: string | null | undefined) {
   if (!s) return "—";
@@ -96,13 +97,7 @@ export default async function RecurringDonorsPage() {
                       <StateBadge state={s.state} />
                     </td>
                     <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                      {s.nextBillingDate
-                        ? new Date(s.nextBillingDate).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {formatDateCDT(s.nextBillingDate)}
                     </td>
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(s.amountCents ?? 0)}

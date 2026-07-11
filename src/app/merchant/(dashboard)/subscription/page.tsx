@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import StateBadge from "@/components/merchant/StateBadge";
 import ComingSoon from "@/components/merchant/ComingSoon";
+import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 
 function titleCase(s: string | null | undefined) {
   if (!s) return "—";
@@ -100,10 +101,7 @@ export default async function SubscriptionPage() {
   );
 }
 
-function formatDate(date: Date | null | undefined) {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+const formatDate = formatDateCDT;
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

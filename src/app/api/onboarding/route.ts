@@ -4,6 +4,66 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { sendWgcEmail } from "@/lib/email";
 
+function extractFinixErrorMessage(err: any): string {
+  let finixErrorStr = err.message || "Unknown error";
+  const errData = err.details || (err.response && err.response.data);
+  if (errData) {
+    if (errData._embedded && errData._embedded.errors && errData._embedded.errors.length > 0) {
+      finixErrorStr = errData._embedded.errors.map((e: any) => e.message).join(", ");
+    } else {
+      finixErrorStr = JSON.stringify(errData);
+    }
+  }
+  return finixErrorStr;
+}
+
+// Known API field identifiers mapped to the labels shown on our own form,
+// so error text reads like it's talking about the field the user actually saw.
+const FIELD_LABELS: Record<string, string> = {
+  account_number: "account number",
+  bank_code: "routing number",
+  routing_number: "routing number",
+  first_name: "first name",
+  last_name: "last name",
+  business_name: "business name",
+  business_tax_id: "business tax ID",
+  business_address: "business address",
+  personal_address: "personal address",
+  tax_id: "tax ID",
+  dob: "date of birth",
+  max_transaction_amount: "max transaction amount",
+  ach_max_transaction_amount: "max ACH transaction amount",
+  annual_card_volume: "expected annual card volume",
+  annual_ach_volume: "expected annual ACH volume",
+};
+
+// Turns a raw processor error into plain-English copy that's safe to show
+// customers: no vendor name, no internal field paths, dollars instead of cents.
+function humanizeErrorDetail(raw: string): string {
+  if (!raw) return "";
+
+  // Untranslated JSON blobs (no _embedded.errors match) aren't customer-safe.
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return "Please double-check the information you entered and try again.";
+  }
+
+  const message = trimmed
+    .replace(/Invalid Field:\s*[\w.]+;\s*/gi, "")
+    .replace(/\b(\d+)\s*cents\b/gi, (_match, cents) =>
+      `$${(Number(cents) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    )
+    // Field identifiers embedded mid-sentence, e.g. "account_number must not equal bank_code"
+    .replace(/\b[a-z][a-z0-9]*(?:\.[a-z0-9]+|_[a-z0-9]+)+\b/gi, (token: string) => {
+      const key = token.toLowerCase().split(".").pop() as string;
+      return FIELD_LABELS[key] || key.replace(/_/g, " ");
+    })
+    .replace(/\bFinix\b/gi, "our payment processor")
+    .trim();
+
+  return message.charAt(0).toUpperCase() + message.slice(1);
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -28,6 +88,18 @@ export async function POST(req: Request) {
     const reqHeaders = await headers();
     const ipAddress = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || "unknown";
     const userAgent = reqHeaders.get("user-agent") || "unknown";
+
+    // The Payout Bank / Processing form fields are labeled in whole dollars,
+    // but both our DB columns (*Cents) and Finix's underwriting fields
+    // (annual_card_volume, max_transaction_amount, etc.) are in cents.
+    // Convert once here so nothing downstream has to guess the unit.
+    const toCents = (dollars: any) => Math.round(Number(dollars || 0) * 100);
+    const annualCardVolumeCents = toCents(annualCardVolume);
+    const annualAchVolumeCents = toCents(annualAchVolume);
+    const averageCardTransferAmountCents = toCents(averageCardTransferAmount);
+    const averageAchTransferAmountCents = toCents(averageAchTransferAmount);
+    const maxTransactionAmountCents = toCents(maxTransactionAmount);
+    const achMaxTransactionAmountCents = toCents(achMaxTransactionAmount);
 
     // Create OnboardingApplication locally
     console.log("ONBOARDING_STEP", "REQUEST_RECEIVED");
@@ -60,8 +132,8 @@ export async function POST(req: Request) {
           principalTaxIdProvided: !!taxId,
           incorporationYear, incorporationMonth, incorporationDay,
 
-          annualCardVolumeCents: annualCardVolume, annualAchVolumeCents: annualAchVolume, averageCardTransferAmountCents: averageCardTransferAmount, averageAchTransferAmountCents: averageAchTransferAmount,
-          maxTransactionAmountCents: maxTransactionAmount, achMaxTransactionAmountCents: achMaxTransactionAmount, ecommercePercentage, cardPresentPercentage, mailOrderTelephoneOrderPercentage, businessToBusinessPercentage, businessToConsumerPercentage, otherVolumePercentage,
+          annualCardVolumeCents, annualAchVolumeCents, averageCardTransferAmountCents, averageAchTransferAmountCents,
+          maxTransactionAmountCents, achMaxTransactionAmountCents, ecommercePercentage, cardPresentPercentage, mailOrderTelephoneOrderPercentage, businessToBusinessPercentage, businessToConsumerPercentage, otherVolumePercentage,
           refundPolicy, hasAcceptedCreditCardsPreviously,
 
           bankAccountType: accountType, bankName: accountHolderName, bankCountry, bankCurrency: currency,
@@ -71,12 +143,10 @@ export async function POST(req: Request) {
       console.log("ONBOARDING_STEP", "APPLICATION_CREATED", application.id);
     } catch (err: any) {
       console.error("ONBOARDING_FAILED", { step: "DATABASE_APPLICATION_CREATE_FAILED", errorMessage: err.message, code: err.code });
-      return NextResponse.json({ 
-        success: false, 
-        step: "DATABASE_APPLICATION_CREATE_FAILED", 
-        message: "Database create failed",
-        prismaCode: err.code,
-        prismaMessage: err.message
+      return NextResponse.json({
+        success: false,
+        step: "DATABASE_APPLICATION_CREATE_FAILED",
+        message: "We couldn't save your application. Please try again."
       }, { status: 500 });
     }
 
@@ -130,7 +200,7 @@ export async function POST(req: Request) {
       console.log("ONBOARDING_STEP", "LEGAL_ACCEPTANCE_CREATED");
     } catch (err: any) {
       console.error("ONBOARDING_FAILED", { step: "LEGAL_ACCEPTANCE_CREATE_FAILED", applicationId: application.id, errorMessage: err.message });
-      return NextResponse.json({ success: false, step: "LEGAL_ACCEPTANCE_CREATE_FAILED", message: "Failed to save legal acceptance." }, { status: 500 });
+      return NextResponse.json({ success: false, step: "LEGAL_ACCEPTANCE_CREATE_FAILED", message: "We couldn't save your legal acceptance. Please try again." }, { status: 500 });
     }
 
     // ==========================================
@@ -164,11 +234,11 @@ export async function POST(req: Request) {
         dob: formatFinixDate(dobYear, dobMonth, dobDay, "Date of Birth"),
         personal_address: { line1: personalAddressLine1, line2: personalAddressLine2, city: personalCity, region: personalState, postal_code: personalPostalCode, country: personalCountry },
         tax_id: taxId, principal_percentage_ownership: ownershipPercentage,
-        annual_card_volume: annualCardVolume, max_transaction_amount: maxTransactionAmount, ach_max_transaction_amount: achMaxTransactionAmount, mcc,
+        annual_card_volume: annualCardVolumeCents, max_transaction_amount: maxTransactionAmountCents, ach_max_transaction_amount: achMaxTransactionAmountCents, mcc,
         url: website, has_accepted_credit_cards_previously: hasAcceptedCreditCardsPreviously
       },
       additional_underwriting_data: {
-        annual_ach_volume: Number(annualAchVolume), average_ach_transfer_amount: Number(averageAchTransferAmount), average_card_transfer_amount: Number(averageCardTransferAmount),
+        annual_ach_volume: annualAchVolumeCents, average_ach_transfer_amount: averageAchTransferAmountCents, average_card_transfer_amount: averageCardTransferAmountCents,
         business_description: businessDescription,
         card_volume_distribution: { 
           card_present_percentage: Number(cardPresentPercentage || 0), 
@@ -194,27 +264,19 @@ export async function POST(req: Request) {
       finixIdentity = await finixClient.createSellerIdentity(identityPayload);
       console.log("ONBOARDING_STEP", "FINIX_IDENTITY_SUCCESS", finixIdentity.id);
     } catch (err: any) {
-      let finixErrorStr = err.message || "Unknown error";
-      const errData = err.details || (err.response && err.response.data);
-      if (errData) {
-        if (errData._embedded && errData._embedded.errors && errData._embedded.errors.length > 0) {
-          finixErrorStr = errData._embedded.errors.map((e: any) => e.message).join(", ");
-        } else {
-          finixErrorStr = JSON.stringify(errData);
-        }
-      }
-      
+      const finixErrorStr = extractFinixErrorMessage(err);
+
       console.error("ONBOARDING_FAILED", {
         step: "FINIX_IDENTITY_CREATE_FAILED",
         applicationId: application.id,
         errorMessage: finixErrorStr,
         status: err.status
       });
-      return NextResponse.json({ 
-        success: false, 
-        step: "FINIX_IDENTITY_CREATE_FAILED", 
+      return NextResponse.json({
+        success: false,
+        step: "FINIX_IDENTITY_CREATE_FAILED",
         message: "We could not verify your business identity.",
-        finixError: finixErrorStr
+        errorDetail: humanizeErrorDetail(finixErrorStr)
       }, { status: 400 });
     }
 
@@ -273,21 +335,24 @@ export async function POST(req: Request) {
       finixPaymentInstrument = await finixClient.createPaymentInstrument(paymentInstrumentPayload);
       console.log("ONBOARDING_STEP", "BANK_INSTRUMENT_SUCCESS", finixPaymentInstrument.id);
     } catch (err: any) {
+      const finixErrorStr = extractFinixErrorMessage(err);
+
       console.error("ONBOARDING_FAILED", {
         step: "FINIX_BANK_INSTRUMENT_FAILED",
         applicationId: application.id,
         finixIdentityId: finixIdentity.id,
-        errorMessage: err.message,
+        errorMessage: finixErrorStr,
         status: err.status
       });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
         data: { status: "BANK_INSTRUMENT_FAILED" },
       });
-      return NextResponse.json({ 
-        success: false, 
-        step: "FINIX_BANK_INSTRUMENT_FAILED", 
-        message: "We could not link your payout bank account. Please verify your routing and account numbers." 
+      return NextResponse.json({
+        success: false,
+        step: "FINIX_BANK_INSTRUMENT_FAILED",
+        message: "We could not link your payout bank account. Please verify your routing and account numbers.",
+        errorDetail: humanizeErrorDetail(finixErrorStr)
       }, { status: 400 });
     }
 
@@ -304,22 +369,25 @@ export async function POST(req: Request) {
       finixMerchant = await finixClient.createMerchant(finixIdentity.id, processor);
       console.log("ONBOARDING_STEP", "MERCHANT_CREATE_SUCCESS", finixMerchant.id);
     } catch (err: any) {
+      const finixErrorStr = extractFinixErrorMessage(err);
+
       console.error("ONBOARDING_FAILED", {
         step: "FINIX_MERCHANT_CREATE_FAILED",
         applicationId: application.id,
         finixIdentityId: finixIdentity.id,
         finixPaymentInstrumentId: finixPaymentInstrument.id,
-        errorMessage: err.message,
+        errorMessage: finixErrorStr,
         status: err.status
       });
       await prisma.onboardingApplication.update({
         where: { id: application.id },
         data: { status: "MERCHANT_CREATION_FAILED" },
       });
-      return NextResponse.json({ 
-        success: false, 
-        step: "FINIX_MERCHANT_CREATE_FAILED", 
-        message: "We could not finalize your merchant account. Please contact support." 
+      return NextResponse.json({
+        success: false,
+        step: "FINIX_MERCHANT_CREATE_FAILED",
+        message: "We could not finalize your merchant account. Please contact support.",
+        errorDetail: humanizeErrorDetail(finixErrorStr)
       }, { status: 400 });
     }
 

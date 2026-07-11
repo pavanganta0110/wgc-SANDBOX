@@ -10,6 +10,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -161,15 +162,7 @@ export default async function PaymentsListPage({
                       <CopyableIdBadge id={t.finixTransferId} />
                     </td>
                     <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                      {t.createdAtFinix
-                        ? new Date(t.createdAtFinix).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "—"}
+                      {formatDateTimeCDT(t.createdAtFinix)}
                     </td>
                     <td className="px-6 py-3 text-slate-700">
                       {formatPersonName(donor?.name, instrument?.accountHolderName)}

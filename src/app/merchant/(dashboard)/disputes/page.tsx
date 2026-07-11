@@ -8,8 +8,13 @@ import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import StateBadge from "@/components/merchant/StateBadge";
 import DisputeDetailPanel from "@/components/merchant/DisputeDetailPanel";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { formatDateTimeCDT, formatDateCDT } from "@/lib/formatDateTimeCDT";
 
-const STATES = ["PENDING", "SUCCEEDED", "FAILED", "CANCELED"];
+// Must match mapFinixDisputeStateToWgcStatus's actual output (lowercase
+// pending/won/lost/expired), not transfer-shaped values like SUCCEEDED/
+// FAILED/CANCELED — those never match what's stored, so the filter
+// previously returned zero rows for almost every selection.
+const STATES = ["pending", "won", "lost", "expired"];
 
 export default async function DisputesPage({
   searchParams,
@@ -109,15 +114,7 @@ export default async function DisputesPage({
                         <CopyableIdBadge id={d.finixDisputeId} />
                       </td>
                       <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                        {d.createdAtFinix
-                          ? new Date(d.createdAtFinix).toLocaleString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })
-                          : "—"}
+                        {formatDateTimeCDT(d.createdAtFinix)}
                       </td>
                       <td className="px-6 py-3 text-slate-700">
                         {formatPersonName(donor?.name, instrument?.accountHolderName)}
@@ -127,13 +124,7 @@ export default async function DisputesPage({
                         <StateBadge state={d.state} />
                       </td>
                       <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                        {d.evidenceDueAt
-                          ? new Date(d.evidenceDueAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })
-                          : "—"}
+                        {formatDateCDT(d.evidenceDueAt)}
                       </td>
                       <td className="px-6 py-3 text-right font-semibold text-slate-900">
                         {formatCents(d.amountCents ?? 0)}

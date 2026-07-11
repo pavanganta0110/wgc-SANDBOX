@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
+
+const CENTRAL_TIME_ZONE = "America/Chicago";
 
 export interface TrendPoint {
   label: string;
@@ -23,11 +26,11 @@ function groupTrend<T extends { createdAtFinix: Date | null; amountCents: number
   const buckets: TrendPoint[] = [];
 
   for (let i = config.buckets - 1; i >= 0; i--) {
-    const periodStart = new Date(now);
-    periodStart.setDate(now.getDate() - i * config.stepDays);
-    periodStart.setHours(0, 0, 0, 0);
+    const dayOffset = new Date(now);
+    dayOffset.setDate(now.getDate() - i * config.stepDays);
+    const periodStart = startOfDayCentral(dayOffset);
     const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodStart.getDate() + config.stepDays);
+    periodEnd.setDate(periodEnd.getDate() + config.stepDays);
 
     const values: Record<string, number> = {};
     for (const key of seriesKeys) values[key] = 0;
@@ -40,7 +43,7 @@ function groupTrend<T extends { createdAtFinix: Date | null; amountCents: number
     }
 
     buckets.push({
-      label: periodStart.toLocaleDateString("en-US", config.format),
+      label: periodStart.toLocaleDateString("en-US", { ...config.format, timeZone: CENTRAL_TIME_ZONE }),
       values,
     });
   }

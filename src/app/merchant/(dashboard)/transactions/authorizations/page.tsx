@@ -10,19 +10,9 @@ import AuthorizationDetailPanel from "@/components/merchant/AuthorizationDetailP
 import AuthorizationFilterBar from "@/components/merchant/AuthorizationFilterBar";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
 import { resolveAuthorizationEffectiveStatus, isAuthorizationCaptured } from "@/lib/finix/authorizationStatus";
+import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 
 const STATES = ["CAPTURED", "SUCCEEDED", "VOIDED", "EXPIRED", "PENDING", "FAILED"];
-
-function formatDateTime(date: Date | null | undefined) {
-  if (!date) return "—";
-  return new Date(date).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 export default async function AuthorizationsListPage({
   searchParams,

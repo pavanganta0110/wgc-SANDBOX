@@ -7,6 +7,7 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import StateBadge from "@/components/merchant/StateBadge";
 import SettlementDetailPanel from "@/components/merchant/SettlementDetailPanel";
+import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 
 const STATES = ["ACCRUING", "PENDING", "SETTLED"];
 
@@ -67,15 +68,7 @@ export default async function SettlementsPage({
                       <CopyableIdBadge id={s.finixSettlementId} />
                     </td>
                     <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                      {s.createdAtFinix
-                        ? new Date(s.createdAtFinix).toLocaleString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "—"}
+                      {formatDateTimeCDT(s.createdAtFinix)}
                     </td>
                     <td className="px-6 py-3">
                       <StateBadge state={s.state} />

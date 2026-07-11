@@ -6,6 +6,7 @@ import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import DonorDetailPanel from "@/components/merchant/DonorDetailPanel";
 import { computeRefundStatus } from "@/lib/finix/refundStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 
 export default async function DonorsPage({
   searchParams,
@@ -140,13 +141,7 @@ export default async function DonorsPage({
                       {formatCents(totalGivenCents)}
                     </td>
                     <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
-                      {lastGiftAt
-                        ? lastGiftAt.toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "—"}
+                      {formatDateCDT(lastGiftAt)}
                     </td>
                   </ClickableTableRow>
                 ))}

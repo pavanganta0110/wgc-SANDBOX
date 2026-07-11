@@ -1,19 +1,16 @@
+import { startOfDayCentral, endOfDayCentral, formatDateCDT } from "@/lib/formatDateTimeCDT";
+
 export interface DateRange {
   from: Date | null;
   to: Date | null;
 }
 
-function startOfDay(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(0, 0, 0, 0);
-  return copy;
-}
-
-function endOfDay(d: Date) {
-  const copy = new Date(d);
-  copy.setHours(23, 59, 59, 999);
-  return copy;
-}
+// Boundaries are computed in America/Chicago, not server-local time, so
+// "Today"/"This Month"/etc. bucket transactions the way the business
+// actually experiences the day, regardless of where the server (or a
+// visitor's browser) happens to be.
+const startOfDay = startOfDayCentral;
+const endOfDay = endOfDayCentral;
 
 export const RANGE_PRESETS: { key: string; label: string; compute: () => DateRange }[] = [
   {
@@ -116,7 +113,7 @@ export function resolveDateRange(rangeKey: string | undefined, from?: string, to
 
 export function rangeLabel(rangeKey: string | undefined, from?: string, to?: string): string {
   if (rangeKey === "custom" && from && to) {
-    return `${new Date(from).toLocaleDateString()} - ${new Date(to).toLocaleDateString()}`;
+    return `${formatDateCDT(new Date(from))} - ${formatDateCDT(new Date(to))}`;
   }
   const preset = RANGE_PRESETS.find((p) => p.key === rangeKey);
   return preset?.label ?? RANGE_PRESETS.find((p) => p.key === DEFAULT_RANGE_KEY)!.label;

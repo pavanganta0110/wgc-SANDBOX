@@ -7,6 +7,9 @@ import CustomizeSummaryPanel from "@/components/merchant/CustomizeSummaryPanel";
 import { computeSummaryMetrics, DEFAULT_METRICS, METRIC_LABELS } from "@/lib/reports/summaryMetrics";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import QuickLinksPanel from "@/components/merchant/QuickLinksPanel";
+import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
+
+const CENTRAL_TIME_ZONE = "America/Chicago";
 
 const TREND_CONFIG: Record<string, { buckets: number; stepDays: number; format: Intl.DateTimeFormatOptions }> = {
   daily: { buckets: 14, stepDays: 1, format: { month: "short", day: "numeric" } },
@@ -23,11 +26,11 @@ function groupByPeriod(
   const buckets: { label: string; value: number }[] = [];
 
   for (let i = config.buckets - 1; i >= 0; i--) {
-    const periodStart = new Date(now);
-    periodStart.setDate(now.getDate() - i * config.stepDays);
-    periodStart.setHours(0, 0, 0, 0);
+    const dayOffset = new Date(now);
+    dayOffset.setDate(now.getDate() - i * config.stepDays);
+    const periodStart = startOfDayCentral(dayOffset);
     const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodStart.getDate() + config.stepDays);
+    periodEnd.setDate(periodEnd.getDate() + config.stepDays);
 
     const total = records
       .filter(
@@ -36,7 +39,7 @@ function groupByPeriod(
       .reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
 
     buckets.push({
-      label: periodStart.toLocaleDateString("en-US", config.format),
+      label: periodStart.toLocaleDateString("en-US", { ...config.format, timeZone: CENTRAL_TIME_ZONE }),
       value: total / 100,
     });
   }

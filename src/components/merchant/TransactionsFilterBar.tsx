@@ -6,7 +6,7 @@ import { Download, ChevronDown } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 
 function titleCase(s: string) {
-  return s.charAt(0) + s.slice(1).toLowerCase();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 export default function TransactionsFilterBar({
