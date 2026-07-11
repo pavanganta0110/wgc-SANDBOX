@@ -511,11 +511,22 @@ export async function syncFinixDataFromWebhookEvent(
         finixSettlementId: data.settlement ?? null,
         state: data.state ?? null,
         amountCents: data.amount ?? null,
+        // Finix's funding_transfer_attempt payload does not have a
+        // dedicated "net" field — the amount here is already the net
+        // after fees were withheld at settlement time, so netAmountCents
+        // mirrors amountCents unless a future Finix API change adds one.
+        netAmountCents: data.net_amount ?? data.amount ?? null,
         currency: data.currency ?? null,
+        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? null,
+        settlementCount: data.settlement_count ?? null,
+        paymentCount: data.transfer_count ?? data.payment_count ?? null,
         bankAccountLast4: data.masked_account_number ?? null,
         bankAccountType: data.account_type ?? null,
+        bankName: data.bank_name ?? data.bank ?? null,
+        accountHolderName: data.name ?? data.account_holder_name ?? null,
         failureCode: data.failure_code ?? null,
         failureMessage: data.failure_message ?? null,
+        traceId: data.trace_id ?? null,
         estimatedArrivalDate: data.estimated_arrival_date ? new Date(data.estimated_arrival_date) : null,
         sentAt: data.sent_at ? new Date(data.sent_at) : null,
         arrivedAt: data.arrived_at ? new Date(data.arrived_at) : null,
@@ -527,6 +538,13 @@ export async function syncFinixDataFromWebhookEvent(
       update: {
         churchId: churchId ?? undefined,
         state: data.state ?? null,
+        netAmountCents: data.net_amount ?? undefined,
+        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? undefined,
+        settlementCount: data.settlement_count ?? undefined,
+        paymentCount: data.transfer_count ?? data.payment_count ?? undefined,
+        bankName: data.bank_name ?? data.bank ?? undefined,
+        accountHolderName: data.name ?? data.account_holder_name ?? undefined,
+        traceId: data.trace_id ?? undefined,
         failureCode: data.failure_code ?? null,
         failureMessage: data.failure_message ?? null,
         sentAt: data.sent_at ? new Date(data.sent_at) : undefined,

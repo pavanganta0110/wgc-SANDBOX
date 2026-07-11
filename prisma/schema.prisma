@@ -530,11 +530,18 @@ model FinixFundingTransferAttempt {
   finixMerchantId               String?
   state                         String?
   amountCents                   Int?
+  netAmountCents                Int?
   currency                      String?
+  fundingSpeed                  String? // NEXT_DAY | SAME_DAY | STANDARD | EXPRESS
+  settlementCount               Int?
+  paymentCount                  Int?
   bankAccountLast4              String?
   bankAccountType               String?
+  bankName                      String?
+  accountHolderName             String?
   failureCode                   String?
   failureMessage                String?
+  traceId                       String?
   estimatedArrivalDate          DateTime?
   sentAt                        DateTime?
   arrivedAt                     DateTime?
