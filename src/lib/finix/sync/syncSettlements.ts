@@ -95,7 +95,7 @@ export async function recomputeSettlementAggregates(finixSettlementId: string) {
 // actually "status", fee total is "total_fee"/"total_fees" (no separate
 // refund/dispute amount at the settlement level), window_start_time is
 // the closest analog to an "accrued at" timestamp.
-function toSettlementFieldsForCreate(settlement: any) {
+export function toSettlementFieldsForCreate(settlement: any) {
   return {
     state: settlement.status ?? null,
     processorState: settlement.status ?? null,
@@ -113,7 +113,7 @@ function toSettlementFieldsForCreate(settlement: any) {
 // (Prisma skips the field entirely) instead of `null` — a later webhook
 // firing with a partial payload must never blank out a value a previous,
 // more complete sync already populated.
-function toSettlementFieldsForUpdate(settlement: any) {
+export function toSettlementFieldsForUpdate(settlement: any) {
   return {
     state: settlement.status ?? undefined,
     processorState: settlement.status ?? undefined,
