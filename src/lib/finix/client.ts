@@ -391,6 +391,19 @@ export class FinixClient {
     return this.fetchApi(`/settlements/${settlementId}/transfers`);
   }
 
+  /**
+   * Retries a failed settlement funding transfer to a specific bank payment
+   * instrument. Per Finix's documented failed-payout recovery flow: PUT
+   * /settlements/{id} with a new destination + rail creates a NEW credit
+   * funding transfer — it does not rewrite the failed historical one.
+   */
+  async retrySettlementFundingTransfer(settlementId: string, destinationInstrumentId: string, rail: "ACH" | "WIRE" = "ACH") {
+    return this.fetchApi(`/settlements/${settlementId}`, {
+      method: "PUT",
+      body: JSON.stringify({ destination: destinationInstrumentId, rail }),
+    });
+  }
+
   // ==========================================
   // Disputes (Stubs)
   // ==========================================

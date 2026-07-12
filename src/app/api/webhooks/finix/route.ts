@@ -643,6 +643,41 @@ export async function syncFinixDataFromWebhookEvent(
     return;
   }
 
+  if (entity === "PAYMENT_INSTRUMENT" && data?.id) {
+    // Primary update mechanism for payout-account status tracking — advances
+    // any OrganizationBankAccount row for this instrument as far as the real
+    // instrument state allows (never fabricates ACTIVE_FOR_FUTURE_PAYOUTS;
+    // see advancePayoutAccountStatus). The reconciliation job is the
+    // fallback for missed/delayed webhooks.
+    const existingAccount = await prisma.organizationBankAccount.findFirst({
+      where: { finixPaymentInstrumentId: data.id },
+    });
+    if (existingAccount && existingAccount.churchId) {
+      const { advancePayoutAccountStatus } = await import("@/lib/organization/bankAccountStatus");
+      const newStatus = advancePayoutAccountStatus(existingAccount.status, {
+        enabled: data.enabled,
+        disabled_code: data.disabled_code ?? null,
+      });
+      const becameVerified = newStatus === "VERIFIED" && existingAccount.status !== "VERIFIED";
+      await prisma.organizationBankAccount.update({
+        where: { id: existingAccount.id },
+        data: {
+          status: newStatus,
+          processorState: data.enabled ? "ENABLED" : data.disabled_code ? "DISABLED" : "PENDING",
+          failureCode: data.disabled_code ?? undefined,
+          failureMessageSafe: data.disabled_message ?? undefined,
+          verifiedAt: becameVerified ? new Date() : undefined,
+          lastWebhookAt: new Date(),
+        },
+      });
+      if (becameVerified) {
+        const { flagPayoutAccountVerifiedForActivationConfirmation } = await import("@/lib/organization/payoutAccountReconciliation");
+        await flagPayoutAccountVerifiedForActivationConfirmation(existingAccount.churchId, existingAccount);
+      }
+    }
+    return;
+  }
+
   if (entity === "SUBSCRIPTION" && data?.id) {
     // Confirmed against a real GET /subscriptions/{id} response: the
     // merchant is under linked_to (not merchant), buyer identity/instrument

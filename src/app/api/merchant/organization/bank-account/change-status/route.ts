@@ -25,6 +25,8 @@ export async function GET() {
       accountType: pending.accountType,
       displayStatus: resolveBankAccountDisplayStatus(pending),
       submittedAt: pending.addedAt,
+      verifiedAt: pending.verifiedAt,
+      failureMessageSafe: pending.failureMessageSafe,
       supportTicketId: pending.supportTicketId,
     },
   });

@@ -7,9 +7,14 @@ describe("resolveBankAccountDisplayStatus", () => {
     expect(resolveBankAccountDisplayStatus({ status: "REQUIRES_ACTION", isActiveDestination: true })).toBe("REQUIRES_ACTION");
   });
 
-  it("falls back to ACTIVE when isActiveDestination is true but status is unrecognized", () => {
-    expect(resolveBankAccountDisplayStatus({ status: null, isActiveDestination: true })).toBe("ACTIVE");
-    expect(resolveBankAccountDisplayStatus({ status: "SOMETHING_WEIRD", isActiveDestination: true })).toBe("ACTIVE");
+  it("falls back to ACTIVE_FOR_FUTURE_PAYOUTS when isActiveDestination is true but status is unrecognized", () => {
+    expect(resolveBankAccountDisplayStatus({ status: null, isActiveDestination: true })).toBe("ACTIVE_FOR_FUTURE_PAYOUTS");
+    expect(resolveBankAccountDisplayStatus({ status: "SOMETHING_WEIRD", isActiveDestination: true })).toBe("ACTIVE_FOR_FUTURE_PAYOUTS");
+  });
+
+  it("still recognizes legacy ACTIVE/PENDING/VERIFYING statuses written before this rename", () => {
+    expect(resolveBankAccountDisplayStatus({ status: "ACTIVE", isActiveDestination: true })).toBe("ACTIVE");
+    expect(resolveBankAccountDisplayStatus({ status: "PENDING", isActiveDestination: false })).toBe("PENDING");
   });
 
   it("falls back to UNKNOWN when not active and status is unrecognized", () => {

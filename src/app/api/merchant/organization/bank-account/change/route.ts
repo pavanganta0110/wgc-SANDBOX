@@ -11,13 +11,16 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * "TOKEN"}) pattern already used and confirmed by the donor setup-link flow
  * — see src/app/api/setup/[token]/complete/route.ts). Raw account/routing
  * numbers never reach this server; Finix.js's hosted iframe form tokenizes
- * them client-side.
+ * them client-side, and the token itself is never persisted (only used once
+ * here, then discarded).
  *
- * There is no confirmed Finix API in this codebase to reassign a merchant's
- * payout/funding destination, so the new instrument is stored as PENDING
- * and NOT made the active destination here — a WGC Support review (tracked
- * via a real support ticket) confirms the change on the processor side,
- * then a separate activate action flips isActiveDestination.
+ * No WGC approval step happens here — this is the automated normal path.
+ * The new instrument is created under the org's existing seller Identity
+ * (never a new Identity, never another org's), stored as SUBMITTED, and
+ * status advances automatically from real Finix signals (webhook +
+ * reconciliation). A support ticket is only auto-created later, once
+ * verified, if WGC can't confirm activation via API — see
+ * flagPayoutAccountVerifiedForActivationConfirmation.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -29,8 +32,24 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const finixToken = typeof body.finixToken === "string" ? body.finixToken : "";
   const changeReason = typeof body.changeReason === "string" ? body.changeReason.trim() : "";
+  const idempotencyKey = typeof body.idempotencyKey === "string" && body.idempotencyKey ? body.idempotencyKey : `payout-change-${session.churchId}-${Date.now()}`;
+  const consentSnapshot = typeof body.consentSnapshot === "string" ? body.consentSnapshot : "";
   if (!finixToken) {
     return NextResponse.json({ error: "Missing tokenized bank details" }, { status: 400 });
+  }
+
+  // Idempotency: if this exact request was already submitted (e.g. a
+  // duplicate click or a retried network request), return the original
+  // result instead of creating a second payout account.
+  const existingRequest = await prisma.payoutAccountChangeRequest.findUnique({ where: { idempotencyKey } });
+  if (existingRequest?.proposedAccountId) {
+    const existingAccount = await prisma.organizationBankAccount.findUnique({ where: { id: existingRequest.proposedAccountId } });
+    if (existingAccount) {
+      return NextResponse.json(
+        { account: { id: existingAccount.id, last4: existingAccount.last4, accountType: existingAccount.accountType, status: existingAccount.status }, idempotent: true },
+        { status: 200 }
+      );
+    }
   }
 
   const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { finixIdentityId: true, name: true } });
@@ -40,15 +59,29 @@ export async function POST(req: Request) {
 
   const current = await resolveActiveBankAccount(session.churchId);
 
+  const changeRequest = await prisma.payoutAccountChangeRequest.upsert({
+    where: { idempotencyKey },
+    create: {
+      churchId: session.churchId,
+      requestedByUserId: session.userId,
+      state: "SUBMITTED",
+      idempotencyKey,
+      consentSnapshot: consentSnapshot || null,
+    },
+    update: {},
+  });
+
   const { finixClient } = await import("@/lib/finix/client");
   let instrument;
   try {
     instrument = await finixClient.createPaymentInstrument({ identity: church.finixIdentityId, token: finixToken, type: "TOKEN" });
   } catch (err) {
     console.error("Bank instrument creation failed:", err);
+    await prisma.payoutAccountChangeRequest.update({ where: { id: changeRequest.id }, data: { state: "FAILED", failedAt: new Date() } });
     return NextResponse.json({ error: "We couldn't process those bank details. Please check them and try again." }, { status: 502 });
   }
   if (!instrument?.id) {
+    await prisma.payoutAccountChangeRequest.update({ where: { id: changeRequest.id }, data: { state: "FAILED", failedAt: new Date() } });
     return NextResponse.json({ error: "We couldn't process those bank details. Please try again." }, { status: 502 });
   }
 
@@ -56,43 +89,26 @@ export async function POST(req: Request) {
     data: {
       churchId: session.churchId,
       finixPaymentInstrumentId: instrument.id,
+      sellerIdentityId: church.finixIdentityId,
       accountHolderName: instrument.name ?? null,
       last4: instrument.masked_account_number ?? null,
       accountType: instrument.account_type ?? null,
-      status: "PENDING",
-      processorState: instrument.enabled ? "ENABLED" : "DISABLED",
+      status: "SUBMITTED",
+      processorState: instrument.enabled ? "ENABLED" : "PENDING",
       isActiveDestination: false,
       createdByUserId: session.userId,
       changeReason: changeReason || null,
-      verificationMethod: "SUPPORT_REVIEW",
+      verificationMethod: "PROCESSOR_REVIEW",
     },
   });
 
-  const ticket = await prisma.supportTicket.create({
+  await prisma.payoutAccountChangeRequest.update({
+    where: { id: changeRequest.id },
     data: {
-      churchId: session.churchId,
-      subject: "Bank Account Change Request",
-      category: "ACCOUNT_ACCESS",
-      priority: "HIGH",
-      description:
-        `Organization requested a bank account change.\n\n` +
-        `Current account on file: ${current ? `${current.bankName || "Unknown bank"} ••••${current.last4 || "----"}` : "None on file"}\n` +
-        `New account submitted: ${instrument.account_type || "Unknown type"} ••••${instrument.masked_account_number || "----"}\n` +
-        (changeReason ? `Reason given: ${changeReason}\n` : "") +
-        `\nThis request requires manual confirmation on the processor side before the new account becomes the active deposit destination.`,
-      createdByUserId: session.userId,
-      createdByEmail: session.email,
-    },
-  });
-
-  await prisma.organizationBankAccount.update({ where: { id: newAccount.id }, data: { supportTicketId: ticket.id } });
-  await prisma.supportTicketMessage.create({
-    data: {
-      ticketId: ticket.id,
-      senderRole: session.role,
-      senderUserId: session.userId,
-      senderEmail: session.email,
-      body: "Bank account change submitted via Organization Profile.",
+      currentAccountId: current?.organizationBankAccountId ?? null,
+      proposedAccountId: newAccount.id,
+      processorRequestReference: instrument.id,
+      state: "SUBMITTED",
     },
   });
 
@@ -101,13 +117,13 @@ export async function POST(req: Request) {
     actorUserId: session.userId,
     actorEmail: session.email,
     actorRole: session.role,
-    action: "organization.bank_account_change_submitted",
+    action: "organization.payout_account_change_submitted",
     entityType: "organization_bank_account",
     entityId: newAccount.id,
     metadata: {
       oldLastFour: current?.last4 ?? null,
       newLastFour: instrument.masked_account_number ?? null,
-      supportTicketId: ticket.id,
+      changeRequestId: changeRequest.id,
     },
     req,
   });
@@ -116,22 +132,17 @@ export async function POST(req: Request) {
   await notifyEvent({
     churchId: session.churchId,
     eventKey: "BANK_ACCOUNT_CHANGE_SUBMITTED",
-    subject: "Bank account change submitted for review",
-    title: "Bank Account Change Submitted",
+    subject: "Payout bank account change submitted",
+    title: "Payout Bank Account Submitted",
     badgeText: "Under Review",
     badgeColor: "#D97706",
-    bodyHtml: `<p>A bank account change was submitted for <strong>${church.name}</strong> and is under review. The current account on file remains the active deposit destination until this change is approved.</p>`,
+    bodyHtml: `<p>A payout bank account change was submitted for <strong>${church.name}</strong> and is now under review. Your current payout account remains active until the new account is approved.</p>`,
   });
 
   return NextResponse.json(
     {
-      account: {
-        id: newAccount.id,
-        last4: newAccount.last4,
-        accountType: newAccount.accountType,
-        status: newAccount.status,
-      },
-      ticketId: ticket.id,
+      account: { id: newAccount.id, last4: newAccount.last4, accountType: newAccount.accountType, status: newAccount.status },
+      changeRequestId: changeRequest.id,
     },
     { status: 201 }
   );

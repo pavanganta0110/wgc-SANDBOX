@@ -4,11 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 
 /**
- * Activating a bank-account change is a WGC Support action, not a
- * self-service Organization Admin one — there is no confirmed Finix API to
- * auto-verify a new payout instrument, so this route exists for the
- * wgc_admin support-context flow only, after the change has been reviewed
- * and confirmed on the processor side outside this app.
+ * Exception-path activation only — not a routine approval step. The normal
+ * path (SUBMITTED -> VALIDATION_PENDING -> UNDER_REVIEW -> VERIFIED) is
+ * fully automated via webhooks/reconciliation. This route exists because
+ * there is no confirmed Finix API in this codebase to detect or trigger
+ * "this instrument is now the active payout destination," so once an
+ * account is VERIFIED, WGC support confirms activation once out of band
+ * (via the auto-created exception ticket) and calls this to finalize it.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params;
@@ -42,7 +44,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ account
       : []),
     prisma.organizationBankAccount.update({
       where: { id: newAccount.id },
-      data: { isActiveDestination: true, status: "ACTIVE", activatedAt: now },
+      data: { isActiveDestination: true, status: "ACTIVE_FOR_FUTURE_PAYOUTS", activatedAt: now },
+    }),
+    prisma.payoutAccountChangeRequest.updateMany({
+      where: { proposedAccountId: newAccount.id },
+      data: { state: "ACTIVATED", completedAt: now },
     }),
   ]);
 
@@ -51,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ account
     actorUserId: session.userId,
     actorEmail: session.email,
     actorRole: session.role,
-    action: "organization.bank_account_activated",
+    action: "organization.payout_account_activated",
     entityType: "organization_bank_account",
     entityId: newAccount.id,
     metadata: { previousAccountId: previousActive?.id ?? null, newLastFour: newAccount.last4, oldLastFour: previousActive?.last4 ?? null },
@@ -62,11 +68,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ account
   await notifyEvent({
     churchId: session.churchId,
     eventKey: "BANK_ACCOUNT_CHANGE_ACTIVATED",
-    subject: "New bank account is now active",
-    title: "Bank Account Change Activated",
-    badgeText: "Active",
+    subject: "Your new payout bank account is now active",
+    title: "Payout Bank Account Active",
+    badgeText: "Active for Future Payouts",
     badgeColor: "#059669",
-    bodyHtml: `<p>Your new bank account ending in <strong>${newAccount.last4 || "----"}</strong> is now the active deposit destination. New deposits created after this point will be sent to this account; deposits already in progress on the previous account are unaffected.</p>`,
+    bodyHtml: `<p>Your new payout bank account ending in <strong>${newAccount.last4 || "----"}</strong> is now active for future eligible payouts. Payouts already scheduled or processing may continue to the previous account.</p>`,
   });
 
   return NextResponse.json({ success: true });

@@ -317,17 +317,20 @@ model Church {
   bankAccounts            OrganizationBankAccount[]
 }
 
-/// The organization's payout bank account(s) on file. No Finix API exists in
-/// this codebase to reassign a merchant's payout destination programmatically
-/// (confirmed via audit — only one-shot BANK_ACCOUNT instrument creation at
-/// onboarding exists), so a bank-account change creates a new row here in
-/// PENDING status and a support ticket; `isActiveDestination` only flips once
-/// WGC Support has confirmed the change on the processor side. Never delete a
-/// row — history must be preserved (see Bank Account History requirement).
+/// The organization's payout bank account(s) on file (Finix calls this a
+/// bank Payment Instrument tied to the org's seller Identity — confirmed via
+/// audit that a Payment Instrument cannot move between Identities). No
+/// confirmed Finix API exists in this codebase to programmatically flip
+/// which instrument is the seller's active payout destination, so activation
+/// is tracked here as a status that only advances via real signals (webhook
+/// / reconciliation of the instrument's own state) and, when the API gap
+/// blocks final activation, an auto-flagged exception rather than a routine
+/// manual-approval queue. Never delete a row — history must be preserved.
 model OrganizationBankAccount {
   id                       String    @id @default(cuid())
   churchId                 String
   finixPaymentInstrumentId String?
+  sellerIdentityId         String? // the seller Identity this instrument was created under — confirms it was never attached to the wrong Identity
   bankName                 String?
   accountHolderName        String?
   last4                    String?
@@ -335,25 +338,63 @@ model OrganizationBankAccount {
   currency                 String?
   // WGC-facing display status, computed separately from whatever raw state
   // Finix reports — see resolveBankAccountDisplayStatus.
-  status                   String    @default("PENDING") // ACTIVE | PENDING | VERIFYING | VERIFIED | REQUIRES_ACTION | DISABLED | REJECTED | REPLACED | UNKNOWN
+  status                   String    @default("SUBMITTED") // CURRENT | SUBMITTED | VALIDATION_PENDING | UNDER_REVIEW | VERIFIED | ACTIVE_FOR_FUTURE_PAYOUTS | REQUIRES_ACTION | REJECTED | FAILED | REPLACED | DISABLED | UNKNOWN
   processorState           String? // raw Finix instrument state, kept separate from `status`
   isActiveDestination      Boolean   @default(false)
   addedAt                  DateTime  @default(now())
+  validationStartedAt      DateTime?
+  reviewStartedAt          DateTime?
+  verifiedAt               DateTime?
   activatedAt              DateTime?
+  rejectedAt                DateTime?
+  disabledAt               DateTime?
   replacedAt               DateTime?
   replacedByAccountId      String?
   createdByUserId          String?
   changeReason             String?
-  verificationMethod       String? // e.g. "SUPPORT_REVIEW" — no automated verification path is confirmed today
+  verificationMethod       String? // e.g. "PROCESSOR_REVIEW" | "SUPPORT_REVIEW" — the latter only when the API can't confirm activation
   supportTicketId          String?
-  lastSyncedAt             DateTime?
+  lastSyncedAt             DateTime? // last time we checked (webhook or reconciliation)
+  lastWebhookAt            DateTime?
+  retryCount               Int       @default(0)
+  failureCode              String?
+  failureMessageSafe       String? // never a raw processor payload — a short, safe summary only
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
   church Church @relation(fields: [churchId], references: [id])
+  changeRequestsAsCurrent  PayoutAccountChangeRequest[] @relation("CurrentAccount")
+  changeRequestsAsProposed PayoutAccountChangeRequest[] @relation("ProposedAccount")
 
   @@index([churchId, isActiveDestination])
   @@index([churchId, status])
+  @@index([finixPaymentInstrumentId])
+}
+
+/// Tracks a single payout-bank-account change request end-to-end, separate
+/// from the account rows themselves, so the request's own lifecycle
+/// (idempotency, consent, processor reference) doesn't get conflated with
+/// the account's own long-lived state.
+model PayoutAccountChangeRequest {
+  id                       String    @id @default(cuid())
+  churchId                 String
+  currentAccountId         String?
+  proposedAccountId        String?
+  requestedByUserId        String?
+  state                    String    @default("SUBMITTED") // SUBMITTED | VALIDATION_PENDING | UNDER_REVIEW | VERIFIED | ACTIVATED | REJECTED | FAILED | SUPPORT_REVIEW_REQUIRED
+  idempotencyKey           String    @unique
+  consentSnapshot          String? // the exact confirmation text the admin agreed to, for audit
+  processorRequestReference String? // finixPaymentInstrumentId of the proposed account, once created
+  submittedAt              DateTime  @default(now())
+  completedAt              DateTime?
+  failedAt                 DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  currentAccount  OrganizationBankAccount? @relation("CurrentAccount", fields: [currentAccountId], references: [id])
+  proposedAccount OrganizationBankAccount? @relation("ProposedAccount", fields: [proposedAccountId], references: [id])
+
+  @@index([churchId, state])
 }
 
 /// One row per (organization, event type) — the org-wide notification
@@ -888,6 +929,11 @@ model FinixFundingTransferAttempt {
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
   lastSyncedAt                  DateTime?
+  // Failed-payout retry tracking (PUT /settlements/{id} recovery flow) —
+  // never rewrites this row's own state; a retry creates a brand new
+  // FinixFundingTransferAttempt row via the normal webhook sync.
+  retriedAt                     DateTime?
+  retriedByUserId               String?
 }
 
 model FinixDispute {
