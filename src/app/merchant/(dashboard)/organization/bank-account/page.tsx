@@ -37,6 +37,9 @@ export default async function OrganizationBankAccountPage() {
               last4: account.last4,
               accountType: account.accountType,
               displayStatus: account.displayStatus,
+              paymentInstrumentState: account.paymentInstrumentState,
+              verificationState: account.verificationState,
+              isActivePayoutDestination: account.isActivePayoutDestination,
               addedAt: account.addedAt ? account.addedAt.toISOString() : null,
             }
           : null

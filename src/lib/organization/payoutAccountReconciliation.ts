@@ -1,17 +1,15 @@
 import { prisma } from "@/lib/prisma";
-import { advancePayoutAccountStatus } from "@/lib/organization/bankAccountStatus";
+import { advancePayoutAccountStatus, isTerminalPayoutAccountStatus, resolveVerificationState, resolvePaymentInstrumentState } from "@/lib/organization/bankAccountStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 
-const TERMINAL_STATUSES = new Set(["ACTIVE_FOR_FUTURE_PAYOUTS", "REPLACED", "REJECTED", "FAILED"]);
-
 /**
- * Called whenever an account first reaches VERIFIED, from either the
+ * Called whenever an account first reaches APPROVED, from either the
  * PAYMENT_INSTRUMENT webhook handler or the reconciliation fallback below.
  * No confirmed Finix API exists in this codebase to detect or trigger
  * "this instrument is now the seller's active payout destination," so
- * instead of fabricating ACTIVE_FOR_FUTURE_PAYOUTS this auto-creates a
- * support exception — an automatic alert, not a routine approval queue —
- * so WGC can confirm activation once, out of band, per account.
+ * instead of fabricating ACTIVE this auto-creates a support exception — an
+ * automatic alert, not a routine approval queue — so WGC can confirm
+ * activation once, out of band, per account.
  */
 export async function flagPayoutAccountVerifiedForActivationConfirmation(churchId: string, account: { id: string; last4: string | null; supportTicketId: string | null }) {
   const existingTicket = account.supportTicketId
@@ -22,17 +20,17 @@ export async function flagPayoutAccountVerifiedForActivationConfirmation(churchI
     const ticket = await prisma.supportTicket.create({
       data: {
         churchId,
-        subject: "Payout bank account verified — activation confirmation needed",
+        subject: "Payout bank account approved — activation confirmation needed",
         category: "ACCOUNT_ACCESS",
         priority: "HIGH",
         description:
-          `A new payout bank account (••••${account.last4 || "----"}) has been verified by the processor. ` +
+          `A new payout bank account (••••${account.last4 || "----"}) has been approved by the processor. ` +
           `WGC could not confirm via API that this account is now the organization's active payout destination — ` +
           `please confirm activation status directly with the processor and mark it active for future payouts once confirmed.`,
       },
     });
     await prisma.supportTicketMessage.create({
-      data: { ticketId: ticket.id, senderRole: "system", body: "Auto-created after processor verification.", isSystemEvent: true },
+      data: { ticketId: ticket.id, senderRole: "system", body: "Auto-created after processor approval.", isSystemEvent: true },
     });
     await prisma.organizationBankAccount.update({
       where: { id: account.id },
@@ -42,7 +40,7 @@ export async function flagPayoutAccountVerifiedForActivationConfirmation(churchI
 
   await logDashboardAction({
     churchId,
-    action: "organization.payout_account_verified",
+    action: "organization.payout_account_approved",
     entityType: "organization_bank_account",
     entityId: account.id,
     metadata: { lastFour: account.last4 },
@@ -51,13 +49,52 @@ export async function flagPayoutAccountVerifiedForActivationConfirmation(churchI
   const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
   await notifyEvent({
     churchId,
-    eventKey: "BANK_ACCOUNT_CHANGE_SUBMITTED",
+    eventKey: "PAYOUT_ACCOUNT_APPROVED",
     subject: "Payout bank account approved",
     title: "Payout Bank Account Approved",
     badgeText: "Approved",
     badgeColor: "#059669",
     bodyHtml: `<p>Your new payout bank account ending in <strong>${account.last4 || "----"}</strong> has been approved. WGC is confirming activation as your future payout destination.</p>`,
   });
+}
+
+export async function notifyPayoutAccountStatusTransition(churchId: string, accountId: string, last4: string | null, newStatus: string, failureMessageSafe: string | null | undefined) {
+  const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
+
+  if (newStatus === "UNDER_REVIEW") {
+    await logDashboardAction({ churchId, action: "organization.payout_review_started", entityType: "organization_bank_account", entityId: accountId, metadata: { lastFour: last4 } });
+    await notifyEvent({
+      churchId,
+      eventKey: "PAYOUT_ACCOUNT_UNDER_REVIEW",
+      subject: "Payout bank account under review",
+      title: "Payout Bank Account Under Review",
+      badgeText: "Under Review",
+      badgeColor: "#D97706",
+      bodyHtml: `<p>Your payout bank account ending in <strong>${last4 || "----"}</strong> is under processor review. Your current payout account remains active until this is approved.</p>`,
+    });
+  } else if (newStatus === "REQUIRES_ACTION") {
+    await logDashboardAction({ churchId, action: "organization.payout_documents_required", entityType: "organization_bank_account", entityId: accountId, metadata: { lastFour: last4, reason: failureMessageSafe ?? null } });
+    await notifyEvent({
+      churchId,
+      eventKey: "PAYOUT_ACCOUNT_DOCUMENTS_REQUIRED",
+      subject: "Action required on your payout bank account",
+      title: "Payout Bank Account Requires Action",
+      badgeText: "Requires Action",
+      badgeColor: "#DC2626",
+      bodyHtml: `<p>Additional information is required before your payout bank account ending in <strong>${last4 || "----"}</strong> can become active.${failureMessageSafe ? ` ${failureMessageSafe}` : ""}</p>`,
+    });
+  } else if (newStatus === "REJECTED") {
+    await logDashboardAction({ churchId, action: "organization.payout_account_rejected", entityType: "organization_bank_account", entityId: accountId, metadata: { lastFour: last4 } });
+    await notifyEvent({
+      churchId,
+      eventKey: "PAYOUT_ACCOUNT_REJECTED",
+      subject: "Payout bank account could not be approved",
+      title: "Payout Bank Account Rejected",
+      badgeText: "Rejected",
+      badgeColor: "#DC2626",
+      bodyHtml: `<p>The payout bank account ending in <strong>${last4 || "----"}</strong> could not be approved. Review the information or contact WGC Support.</p>`,
+    });
+  }
 }
 
 /**
@@ -77,7 +114,7 @@ export async function reconcilePendingPayoutAccountsForChurch(churchId: string) 
 
   for (const account of pending) {
     const previousStatus = account.status;
-    if (TERMINAL_STATUSES.has(previousStatus)) {
+    if (isTerminalPayoutAccountStatus(previousStatus)) {
       results.push({ id: account.id, previousStatus, newStatus: previousStatus, checked: false });
       continue;
     }
@@ -96,26 +133,30 @@ export async function reconcilePendingPayoutAccountsForChurch(churchId: string) 
     }
 
     const newStatus = advancePayoutAccountStatus(previousStatus, instrument);
-    const becameVerified = newStatus === "VERIFIED" && previousStatus !== "VERIFIED";
+    const becameApproved = newStatus === "APPROVED" && previousStatus !== "APPROVED";
+    const statusChanged = newStatus !== previousStatus;
 
     await prisma.organizationBankAccount.update({
       where: { id: account.id },
       data: {
         status: newStatus,
-        processorState: instrument.enabled ? "ENABLED" : instrument.disabled_code ? "DISABLED" : "PENDING",
+        paymentInstrumentState: resolvePaymentInstrumentState(instrument),
+        verificationState: resolveVerificationState(instrument, newStatus),
         failureCode: instrument.disabled_code ?? undefined,
         failureMessageSafe: instrument.disabled_message ?? undefined,
-        verifiedAt: becameVerified ? new Date() : undefined,
+        verifiedAt: becameApproved ? new Date() : undefined,
         reviewStartedAt: newStatus === "UNDER_REVIEW" && !account.reviewStartedAt ? new Date() : undefined,
-        validationStartedAt: newStatus === "VALIDATION_PENDING" && !account.validationStartedAt ? new Date() : undefined,
+        validationStartedAt: newStatus === "PENDING_VERIFICATION" && !account.validationStartedAt ? new Date() : undefined,
         rejectedAt: newStatus === "REJECTED" ? new Date() : undefined,
         lastSyncedAt: new Date(),
         retryCount: { increment: 1 },
       },
     });
 
-    if (becameVerified) {
+    if (becameApproved) {
       await flagPayoutAccountVerifiedForActivationConfirmation(churchId, account);
+    } else if (statusChanged) {
+      await notifyPayoutAccountStatusTransition(churchId, account.id, account.last4, newStatus, instrument.disabled_message);
     }
 
     results.push({ id: account.id, previousStatus, newStatus, checked: true });

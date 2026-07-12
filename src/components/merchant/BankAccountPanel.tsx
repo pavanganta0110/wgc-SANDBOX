@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
 import ChangeBankAccountFlow from "@/components/merchant/ChangeBankAccountFlow";
+import PayoutAccountDocumentsUpload from "@/components/merchant/PayoutAccountDocumentsUpload";
 import { formatCents } from "@/lib/format";
 
 interface Account {
@@ -14,6 +15,9 @@ interface Account {
   last4: string | null;
   accountType: string | null;
   displayStatus: string;
+  paymentInstrumentState: string | null;
+  verificationState: string | null;
+  isActivePayoutDestination: boolean;
   addedAt: string | null;
 }
 
@@ -77,10 +81,10 @@ function Row({ label, value }: { label: string; value: string }) {
 
 const PENDING_CHANGE_MESSAGES: Record<string, string> = {
   SUBMITTED: "Your new payout bank account has been submitted.",
-  VALIDATION_PENDING: "Your new payout bank account is under review. Your current payout account remains active until the new account is approved.",
+  PENDING_VERIFICATION: "Your new payout bank account is pending verification. Your current payout account remains active until the new account is approved.",
   UNDER_REVIEW: "Your new payout bank account is under review. Your current payout account remains active until the new account is approved.",
-  REQUIRES_ACTION: "Additional information is required before this account can be activated.",
-  VERIFIED: "Your new payout bank account has been approved. WGC is confirming activation as your future payout destination.",
+  REQUIRES_ACTION: "Additional information is required before this payout account can become active.",
+  APPROVED: "Your new payout bank account has been approved. WGC is confirming activation as your future payout destination.",
   REJECTED: "The bank account could not be approved. Review the information or contact WGC Support.",
 };
 
@@ -188,6 +192,9 @@ export default function BankAccountPanel({
               <Row label="Account Type" value={account.accountType || "—"} />
               <Row label="Masked Account Number" value={account.last4 ? `••••${account.last4}` : "—"} />
               <Row label="Payout Destination State" value={account.displayStatus.replace(/_/g, " ")} />
+              <Row label="Is Active Payout Destination" value={account.isActivePayoutDestination ? "Yes" : "No"} />
+              <Row label="Payment Instrument State" value={account.paymentInstrumentState || "—"} />
+              <Row label="Verification State" value={account.verificationState || "—"} />
               <Row label="Funding Speed" value={latestDeposit?.fundingSpeed || "—"} />
               <Row label="Added Date" value={account.addedAt ? new Date(account.addedAt).toLocaleDateString() : "—"} />
               <Row
@@ -211,6 +218,7 @@ export default function BankAccountPanel({
           </p>
           <p className="text-sm text-slate-600">{PENDING_CHANGE_MESSAGES[pendingChange.displayStatus] || "Your current payout account remains active while this is reviewed."}</p>
           {pendingChange.failureMessageSafe && <p className="text-sm text-red-600 mt-2">{pendingChange.failureMessageSafe}</p>}
+          {pendingChange.displayStatus === "REQUIRES_ACTION" && <PayoutAccountDocumentsUpload accountId={pendingChange.id} />}
         </div>
       )}
 
@@ -297,7 +305,7 @@ export default function BankAccountPanel({
       {showChangeFlow && (
         <ChangeBankAccountFlow
           current={account ? { bankName: account.bankName, last4: account.last4, accountType: account.accountType } : null}
-          hasPendingFunding={pendingFunding.hasAnyPending}
+          pendingFunding={pendingFunding}
           onClose={() => setShowChangeFlow(false)}
           onSubmitted={() => {
             loadChangeStatus();

@@ -82,6 +82,12 @@ const STATE_STYLES: Record<string, string> = {
   OPERATIONAL: "bg-green-50 text-green-700",
   DEGRADED: "bg-amber-50 text-amber-700",
   OUTAGE: "bg-red-50 text-red-700",
+  // Payout bank account
+  CURRENT: "bg-green-50 text-green-700",
+  SUBMITTED: "bg-amber-50 text-amber-700",
+  PENDING_VERIFICATION: "bg-amber-50 text-amber-700",
+  APPROVED: "bg-green-50 text-green-700",
+  HISTORICAL: "bg-slate-100 text-slate-400",
 };
 
 export default function StateBadge({ state }: { state: string | null | undefined }) {

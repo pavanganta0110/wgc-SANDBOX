@@ -84,7 +84,7 @@ export async function getPaymentMethodAvailability(churchId: string): Promise<Pa
   const cardEnabled = Boolean(onboarding?.hasAcceptedCreditCardsPreviously || onboarding?.processingEnabled);
 
   const bankAccount = await resolveActiveBankAccount(churchId);
-  const bankVerified = bankAccount?.displayStatus === "ACTIVE" || bankAccount?.displayStatus === "VERIFIED";
+  const bankVerified = bankAccount?.displayStatus === "ACTIVE" || bankAccount?.displayStatus === "APPROVED";
   const achEnabled = Boolean(bankVerified && onboarding?.processingEnabled);
 
   const applePayConfigured = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);

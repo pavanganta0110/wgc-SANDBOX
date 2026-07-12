@@ -15,14 +15,23 @@ interface CurrentAccount {
   accountType: string | null;
 }
 
+interface PendingFunding {
+  accruingSettlements: number;
+  processingSettlements: number;
+  scheduledDeposits: number;
+  processingDeposits: number;
+  failedOrReturnedDeposits: number;
+  hasAnyPending: boolean;
+}
+
 export default function ChangeBankAccountFlow({
   current,
-  hasPendingFunding,
+  pendingFunding,
   onClose,
   onSubmitted,
 }: {
   current: CurrentAccount | null;
-  hasPendingFunding: boolean;
+  pendingFunding: PendingFunding;
   onClose: () => void;
   onSubmitted: () => void;
 }) {
@@ -98,9 +107,17 @@ export default function ChangeBankAccountFlow({
           This securely submits a new payout bank account for verification. Your current payout account stays active until the change is approved.
         </p>
 
-        {hasPendingFunding && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-800">
-            You have settlements or deposits currently in progress. Already-created payouts will continue to your current bank account and will not be affected by this change.
+        {pendingFunding.hasAnyPending && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-xs text-amber-800 space-y-1">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {pendingFunding.accruingSettlements + pendingFunding.processingSettlements > 0 && (
+                <div>Pending Settlements: <strong>{pendingFunding.accruingSettlements + pendingFunding.processingSettlements}</strong></div>
+              )}
+              {pendingFunding.scheduledDeposits > 0 && <div>Pending Deposits: <strong>{pendingFunding.scheduledDeposits}</strong></div>}
+              {pendingFunding.processingDeposits > 0 && <div>Processing Deposits: <strong>{pendingFunding.processingDeposits}</strong></div>}
+              {pendingFunding.failedOrReturnedDeposits > 0 && <div>Failed Deposits: <strong>{pendingFunding.failedOrReturnedDeposits}</strong></div>}
+            </div>
+            <p className="pt-1">Payouts already scheduled or processing may still be deposited into the current bank account. Future eligible payouts will use the newly approved payout account.</p>
           </div>
         )}
 
@@ -145,8 +162,8 @@ export default function ChangeBankAccountFlow({
                 <p className="text-sm text-slate-800">Submitted securely — details tokenized, not stored in plain text.</p>
               </div>
               <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1">
-                <p>This account requires processor verification before it can receive payouts.</p>
-                <p>After it's approved and activated, it will be used for future eligible payouts. Payouts already scheduled or processing may continue to the previous account.</p>
+                <p>This account requires processor verification before it can receive payouts. Verification alone does not make it active — a separate activation step follows.</p>
+                <p>Your new bank account will be used for future eligible payouts after it is approved and activated. Payouts already scheduled or processing may continue to your previous account.</p>
                 <p>Review may take some time — no action is needed from you while it's in progress.</p>
               </div>
             </div>

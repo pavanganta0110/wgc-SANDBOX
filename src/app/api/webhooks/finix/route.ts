@@ -646,33 +646,44 @@ export async function syncFinixDataFromWebhookEvent(
   if (entity === "PAYMENT_INSTRUMENT" && data?.id) {
     // Primary update mechanism for payout-account status tracking — advances
     // any OrganizationBankAccount row for this instrument as far as the real
-    // instrument state allows (never fabricates ACTIVE_FOR_FUTURE_PAYOUTS;
-    // see advancePayoutAccountStatus). The reconciliation job is the
-    // fallback for missed/delayed webhooks.
+    // instrument state allows (never fabricates ACTIVE; see
+    // advancePayoutAccountStatus). The reconciliation job is the fallback
+    // for missed/delayed webhooks.
     const existingAccount = await prisma.organizationBankAccount.findFirst({
       where: { finixPaymentInstrumentId: data.id },
     });
     if (existingAccount && existingAccount.churchId) {
-      const { advancePayoutAccountStatus } = await import("@/lib/organization/bankAccountStatus");
-      const newStatus = advancePayoutAccountStatus(existingAccount.status, {
-        enabled: data.enabled,
-        disabled_code: data.disabled_code ?? null,
-      });
-      const becameVerified = newStatus === "VERIFIED" && existingAccount.status !== "VERIFIED";
-      await prisma.organizationBankAccount.update({
-        where: { id: existingAccount.id },
-        data: {
-          status: newStatus,
-          processorState: data.enabled ? "ENABLED" : data.disabled_code ? "DISABLED" : "PENDING",
-          failureCode: data.disabled_code ?? undefined,
-          failureMessageSafe: data.disabled_message ?? undefined,
-          verifiedAt: becameVerified ? new Date() : undefined,
-          lastWebhookAt: new Date(),
-        },
-      });
-      if (becameVerified) {
-        const { flagPayoutAccountVerifiedForActivationConfirmation } = await import("@/lib/organization/payoutAccountReconciliation");
-        await flagPayoutAccountVerifiedForActivationConfirmation(existingAccount.churchId, existingAccount);
+      const { advancePayoutAccountStatus, isTerminalPayoutAccountStatus, resolveVerificationState, resolvePaymentInstrumentState } = await import("@/lib/organization/bankAccountStatus");
+      if (!isTerminalPayoutAccountStatus(existingAccount.status)) {
+        const newStatus = advancePayoutAccountStatus(existingAccount.status, {
+          enabled: data.enabled,
+          disabled_code: data.disabled_code ?? null,
+        });
+        const becameApproved = newStatus === "APPROVED" && existingAccount.status !== "APPROVED";
+        const statusChanged = newStatus !== existingAccount.status;
+        await prisma.organizationBankAccount.update({
+          where: { id: existingAccount.id },
+          data: {
+            status: newStatus,
+            paymentInstrumentState: resolvePaymentInstrumentState({ enabled: data.enabled, disabled_code: data.disabled_code ?? null }),
+            verificationState: resolveVerificationState({ enabled: data.enabled, disabled_code: data.disabled_code ?? null }, newStatus),
+            fingerprint: data.fingerprint ?? existingAccount.fingerprint ?? undefined,
+            failureCode: data.disabled_code ?? undefined,
+            failureMessageSafe: data.disabled_message ?? undefined,
+            verifiedAt: becameApproved ? new Date() : undefined,
+            reviewStartedAt: newStatus === "UNDER_REVIEW" && !existingAccount.reviewStartedAt ? new Date() : undefined,
+            validationStartedAt: newStatus === "PENDING_VERIFICATION" && !existingAccount.validationStartedAt ? new Date() : undefined,
+            rejectedAt: newStatus === "REJECTED" ? new Date() : undefined,
+            lastWebhookAt: new Date(),
+          },
+        });
+        if (becameApproved) {
+          const { flagPayoutAccountVerifiedForActivationConfirmation } = await import("@/lib/organization/payoutAccountReconciliation");
+          await flagPayoutAccountVerifiedForActivationConfirmation(existingAccount.churchId, existingAccount);
+        } else if (statusChanged) {
+          const { notifyPayoutAccountStatusTransition } = await import("@/lib/organization/payoutAccountReconciliation");
+          await notifyPayoutAccountStatusTransition(existingAccount.churchId, existingAccount.id, existingAccount.last4, newStatus, data.disabled_message);
+        }
       }
     }
     return;

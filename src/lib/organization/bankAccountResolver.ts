@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { resolveBankAccountDisplayStatus, type BankAccountDisplayStatus } from "@/lib/organization/bankAccountStatus";
+import { resolveBankAccountDisplayStatus, type PayoutDestinationState } from "@/lib/organization/bankAccountStatus";
 
 export interface ResolvedBankAccount {
   source: "EXPLICIT" | "INSTRUMENT_SNAPSHOT" | "ONBOARDING" | "DEPOSIT_HISTORY";
@@ -9,7 +9,12 @@ export interface ResolvedBankAccount {
   last4: string | null;
   accountType: string | null;
   currency: string | null;
-  displayStatus: BankAccountDisplayStatus;
+  /** @deprecated use payoutDestinationState — kept for backward compatibility with existing callers. */
+  displayStatus: PayoutDestinationState;
+  payoutDestinationState: PayoutDestinationState;
+  paymentInstrumentState: string | null;
+  verificationState: string | null;
+  isActivePayoutDestination: boolean;
   addedAt: Date | null;
   organizationBankAccountId: string | null;
 }
@@ -33,6 +38,7 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
     orderBy: { activatedAt: "desc" },
   });
   if (explicit) {
+    const payoutDestinationState = resolveBankAccountDisplayStatus(explicit);
     return {
       source: "EXPLICIT",
       isHistoricalFallback: false,
@@ -41,7 +47,11 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
       last4: explicit.last4,
       accountType: explicit.accountType,
       currency: explicit.currency,
-      displayStatus: resolveBankAccountDisplayStatus(explicit),
+      displayStatus: payoutDestinationState,
+      payoutDestinationState,
+      paymentInstrumentState: explicit.paymentInstrumentState,
+      verificationState: explicit.verificationState,
+      isActivePayoutDestination: explicit.isActiveDestination,
       addedAt: explicit.addedAt,
       organizationBankAccountId: explicit.id,
     };
@@ -68,7 +78,11 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
       last4: snapshot.bankLast4,
       accountType: snapshot.bankAccountType,
       currency: null,
-      displayStatus: "ACTIVE",
+      displayStatus: "CURRENT",
+      payoutDestinationState: "CURRENT",
+      paymentInstrumentState: snapshot.enabled ? "ENABLED" : "UNKNOWN",
+      verificationState: null,
+      isActivePayoutDestination: true,
       addedAt: snapshot.createdAt,
       organizationBankAccountId: null,
     };
@@ -89,6 +103,7 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
         ? await prisma.onboardingApplication.findFirst({ where: { finixMerchantId: church.finixMerchantId } })
         : null;
     if (onboarding?.finixPaymentInstrumentId) {
+      const payoutDestinationState = onboarding.bankInstrumentEnabled ? "CURRENT" : "UNKNOWN";
       return {
         source: "ONBOARDING",
         isHistoricalFallback: false,
@@ -97,7 +112,11 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
         last4: onboarding.bankLast4,
         accountType: onboarding.bankAccountType,
         currency: onboarding.bankCurrency,
-        displayStatus: onboarding.bankInstrumentEnabled ? "ACTIVE" : "UNKNOWN",
+        displayStatus: payoutDestinationState,
+        payoutDestinationState,
+        paymentInstrumentState: onboarding.bankInstrumentEnabled ? "ENABLED" : "UNKNOWN",
+        verificationState: onboarding.bankInstrumentEnabled ? "VERIFIED" : null,
+        isActivePayoutDestination: !!onboarding.bankInstrumentEnabled,
         addedAt: onboarding.createdAt,
         organizationBankAccountId: null,
       };
@@ -118,6 +137,10 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
       accountType: latestDeposit.bankAccountType,
       currency: null,
       displayStatus: "UNKNOWN",
+      payoutDestinationState: "UNKNOWN",
+      paymentInstrumentState: null,
+      verificationState: null,
+      isActivePayoutDestination: false,
       addedAt: latestDeposit.arrivedAt,
       organizationBankAccountId: null,
     };

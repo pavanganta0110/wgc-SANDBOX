@@ -3,6 +3,8 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
+import { isTerminalPayoutAccountStatus, resolvePaymentInstrumentState, resolveVerificationState } from "@/lib/organization/bankAccountStatus";
+import { PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS } from "@/lib/organization/payoutAccountLimits";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 
 /**
@@ -19,8 +21,13 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * (never a new Identity, never another org's), stored as SUBMITTED, and
  * status advances automatically from real Finix signals (webhook +
  * reconciliation). A support ticket is only auto-created later, once
- * verified, if WGC can't confirm activation via API — see
+ * approved, if WGC can't confirm activation via API — see
  * flagPayoutAccountVerifiedForActivationConfirmation.
+ *
+ * WGC product policy (not a Finix processor limit): only one non-terminal
+ * change request may be in flight per organization at a time, and a
+ * processor fingerprint match (when Finix returns one) is treated as a
+ * duplicate rather than creating a redundant account row.
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -50,6 +57,23 @@ export async function POST(req: Request) {
         { status: 200 }
       );
     }
+  }
+
+  // WGC product policy (not a Finix processor limit — Finix does not
+  // publish a maximum bank-account count): at most
+  // PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS change(s) in SUBMITTED,
+  // PENDING_VERIFICATION, UNDER_REVIEW, or REQUIRES_ACTION at a time.
+  const allNonTerminal = await prisma.organizationBankAccount.findMany({
+    where: { churchId: session.churchId, isActiveDestination: false },
+    select: { id: true, status: true, last4: true },
+  });
+  const pendingAccounts = allNonTerminal.filter((a) => !isTerminalPayoutAccountStatus(a.status));
+  if (pendingAccounts.length >= PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS) {
+    const pendingAccount = pendingAccounts[0];
+    return NextResponse.json(
+      { error: `A payout bank account change is already in progress (ending in ••••${pendingAccount.last4 || "----"}). Only ${PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS} change can be reviewed at a time.` },
+      { status: 409 }
+    );
   }
 
   const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { finixIdentityId: true, name: true } });
@@ -85,16 +109,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "We couldn't process those bank details. Please try again." }, { status: 502 });
   }
 
+  // Duplicate check: when Finix returns a fingerprint on the new instrument,
+  // treat a match against any prior account for this org as the same bank
+  // account already on file, rather than creating a redundant row. The
+  // Finix instrument itself was already created at this point (no API to
+  // undo that), but we don't compound the duplication locally.
+  if (instrument.fingerprint) {
+    const duplicate = await prisma.organizationBankAccount.findFirst({
+      where: { churchId: session.churchId, fingerprint: instrument.fingerprint },
+    });
+    if (duplicate) {
+      await prisma.payoutAccountChangeRequest.update({ where: { id: changeRequest.id }, data: { state: "FAILED", failedAt: new Date() } });
+      return NextResponse.json(
+        { error: `This bank account is already on file (ending in ••••${duplicate.last4 || "----"}, status ${duplicate.status}). No new account was added.` },
+        { status: 409 }
+      );
+    }
+  }
+
+  const newStatus = "SUBMITTED";
   const newAccount = await prisma.organizationBankAccount.create({
     data: {
       churchId: session.churchId,
       finixPaymentInstrumentId: instrument.id,
       sellerIdentityId: church.finixIdentityId,
+      fingerprint: instrument.fingerprint ?? null,
       accountHolderName: instrument.name ?? null,
       last4: instrument.masked_account_number ?? null,
       accountType: instrument.account_type ?? null,
-      status: "SUBMITTED",
-      processorState: instrument.enabled ? "ENABLED" : "PENDING",
+      status: newStatus,
+      paymentInstrumentState: resolvePaymentInstrumentState(instrument),
+      verificationState: resolveVerificationState(instrument, newStatus),
       isActiveDestination: false,
       createdByUserId: session.userId,
       changeReason: changeReason || null,
@@ -131,12 +176,12 @@ export async function POST(req: Request) {
   const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
   await notifyEvent({
     churchId: session.churchId,
-    eventKey: "BANK_ACCOUNT_CHANGE_SUBMITTED",
+    eventKey: "PAYOUT_ACCOUNT_SUBMITTED",
     subject: "Payout bank account change submitted",
     title: "Payout Bank Account Submitted",
-    badgeText: "Under Review",
+    badgeText: "Submitted",
     badgeColor: "#D97706",
-    bodyHtml: `<p>A payout bank account change was submitted for <strong>${church.name}</strong> and is now under review. Your current payout account remains active until the new account is approved.</p>`,
+    bodyHtml: `<p>A payout bank account change was submitted for <strong>${church.name}</strong>. Your new bank account will be used for future eligible payouts after it is approved and activated. Payouts already scheduled or processing may continue to your previous account.</p>`,
   });
 
   return NextResponse.json(

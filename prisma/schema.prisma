@@ -336,10 +336,22 @@ model OrganizationBankAccount {
   last4                    String?
   accountType              String? // CHECKING | SAVINGS
   currency                 String?
-  // WGC-facing display status, computed separately from whatever raw state
-  // Finix reports — see resolveBankAccountDisplayStatus.
-  status                   String    @default("SUBMITTED") // CURRENT | SUBMITTED | VALIDATION_PENDING | UNDER_REVIEW | VERIFIED | ACTIVE_FOR_FUTURE_PAYOUTS | REQUIRES_ACTION | REJECTED | FAILED | REPLACED | DISABLED | UNKNOWN
-  processorState           String? // raw Finix instrument state, kept separate from `status`
+  fingerprint              String? // Finix's processor-computed fingerprint, when returned — used to detect a duplicate bank account before creating a redundant one; a null value here just means Finix didn't return one, not that dedup is guaranteed
+  // Four intentionally separate state concepts (never conflated):
+  // 1. paymentInstrumentState — raw instrument state as Finix reports it
+  //    (ENABLED/DISABLED/PENDING), independent of payout-destination status.
+  // 2. verificationState — whether Finix has verified this specific
+  //    instrument (NOT_STARTED/PENDING/VERIFIED/REJECTED). Verified does
+  //    NOT mean active — see isActivePayoutDestination.
+  // 3. payoutDestinationState (the `status` column, kept named `status` for
+  //    schema stability) — the WGC-facing lifecycle label: CURRENT |
+  //    SUBMITTED | PENDING_VERIFICATION | UNDER_REVIEW | REQUIRES_ACTION |
+  //    APPROVED | ACTIVE | REJECTED | DISABLED | HISTORICAL | UNKNOWN.
+  // 4. isActiveDestination (exposed to API/UI as isActivePayoutDestination)
+  //    — the single boolean answer to "is this the account payouts go to."
+  status                   String    @default("SUBMITTED")
+  paymentInstrumentState   String? // raw Finix instrument state (ENABLED/DISABLED/PENDING)
+  verificationState        String? // NOT_STARTED | PENDING | VERIFIED | REJECTED — separate from payoutDestinationState
   isActiveDestination      Boolean   @default(false)
   addedAt                  DateTime  @default(now())
   validationStartedAt      DateTime?
@@ -365,10 +377,33 @@ model OrganizationBankAccount {
   church Church @relation(fields: [churchId], references: [id])
   changeRequestsAsCurrent  PayoutAccountChangeRequest[] @relation("CurrentAccount")
   changeRequestsAsProposed PayoutAccountChangeRequest[] @relation("ProposedAccount")
+  documents                PayoutAccountDocument[]
 
   @@index([churchId, isActiveDestination])
   @@index([churchId, status])
   @@index([finixPaymentInstrumentId])
+}
+
+/// Documents uploaded for a REQUIRES_ACTION payout account. Finix does not
+/// expose a structured "these exact document types are required" field
+/// anywhere in this codebase's confirmed API surface — `failureMessageSafe`
+/// on the account carries whatever safe reason text the processor gave, and
+/// the admin uploads whatever they were asked for under a free-text label
+/// they choose, rather than this app guessing/hardcoding a fixed list.
+model PayoutAccountDocument {
+  id                      String   @id @default(cuid())
+  organizationBankAccountId String
+  label                   String? // e.g. "Voided Check" — freely entered by the admin, never a hardcoded enum
+  fileName                String
+  fileSize                Int
+  mimeType                String
+  finixFileId             String?
+  uploadedByUserId        String?
+  createdAt               DateTime @default(now())
+
+  organizationBankAccount OrganizationBankAccount @relation(fields: [organizationBankAccountId], references: [id])
+
+  @@index([organizationBankAccountId])
 }
 
 /// Tracks a single payout-bank-account change request end-to-end, separate

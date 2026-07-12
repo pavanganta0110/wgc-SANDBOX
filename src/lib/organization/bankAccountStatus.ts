@@ -1,69 +1,111 @@
-export type BankAccountDisplayStatus =
+export type PayoutDestinationState =
   | "CURRENT"
-  | "ACTIVE" // legacy alias for CURRENT/ACTIVE_FOR_FUTURE_PAYOUTS on older rows — kept for backward compatibility
   | "SUBMITTED"
-  | "PENDING" // legacy alias for SUBMITTED
-  | "VALIDATION_PENDING"
-  | "VERIFYING" // legacy alias for VALIDATION_PENDING
+  | "PENDING_VERIFICATION"
   | "UNDER_REVIEW"
-  | "VERIFIED"
-  | "ACTIVE_FOR_FUTURE_PAYOUTS"
   | "REQUIRES_ACTION"
+  | "APPROVED"
+  | "ACTIVE"
   | "REJECTED"
-  | "FAILED"
-  | "REPLACED"
   | "DISABLED"
+  | "HISTORICAL"
   | "UNKNOWN";
 
-const RECOGNIZED = new Set<string>([
+/** @deprecated use PayoutDestinationState — kept as an alias so existing imports keep compiling. */
+export type BankAccountDisplayStatus = PayoutDestinationState;
+
+export type VerificationState = "NOT_STARTED" | "PENDING" | "VERIFIED" | "REJECTED";
+export type PaymentInstrumentState = "ENABLED" | "DISABLED" | "PENDING" | "UNKNOWN";
+
+// Legacy status strings written by earlier iterations of this feature,
+// mapped to their current equivalent so existing rows keep displaying
+// correctly without a migration.
+const LEGACY_ALIASES: Record<string, PayoutDestinationState> = {
+  PENDING: "SUBMITTED",
+  VERIFYING: "PENDING_VERIFICATION",
+  VALIDATION_PENDING: "PENDING_VERIFICATION",
+  VERIFIED: "APPROVED",
+  ACTIVE_FOR_FUTURE_PAYOUTS: "ACTIVE",
+  REPLACED: "HISTORICAL",
+  FAILED: "REJECTED",
+};
+
+const CANONICAL = new Set<PayoutDestinationState>([
   "CURRENT",
-  "ACTIVE",
   "SUBMITTED",
-  "PENDING",
-  "VALIDATION_PENDING",
-  "VERIFYING",
+  "PENDING_VERIFICATION",
   "UNDER_REVIEW",
-  "VERIFIED",
-  "ACTIVE_FOR_FUTURE_PAYOUTS",
   "REQUIRES_ACTION",
+  "APPROVED",
+  "ACTIVE",
   "REJECTED",
-  "FAILED",
-  "REPLACED",
   "DISABLED",
+  "HISTORICAL",
 ]);
 
 /**
- * WGC-facing display status, kept separate from whatever raw processor
- * state a bank instrument reports — mirrors the pattern used throughout
- * this codebase (resolveSubscriptionDisplayStatus, resolveDonorDisplayStatus,
- * etc.) of never trusting a raw processor string directly in the UI.
+ * WGC-facing payout-destination lifecycle state, kept separate from
+ * verificationState and paymentInstrumentState (never conflated — see the
+ * OrganizationBankAccount schema comment). Mirrors the pattern used
+ * throughout this codebase (resolveSubscriptionDisplayStatus,
+ * resolveDonorDisplayStatus, etc.) of never trusting a raw processor string
+ * directly in the UI.
  */
 export function resolveBankAccountDisplayStatus(row: {
   status?: string | null;
   isActiveDestination: boolean;
-  processorState?: string | null;
-}): BankAccountDisplayStatus {
+  paymentInstrumentState?: string | null;
+}): PayoutDestinationState {
   const explicit = (row.status || "").toUpperCase();
-  if (RECOGNIZED.has(explicit)) return explicit as BankAccountDisplayStatus;
-  if (row.isActiveDestination) return "ACTIVE_FOR_FUTURE_PAYOUTS";
+  if (CANONICAL.has(explicit as PayoutDestinationState)) return explicit as PayoutDestinationState;
+  if (explicit in LEGACY_ALIASES) return LEGACY_ALIASES[explicit];
+  if (row.isActiveDestination) return "ACTIVE";
   return "UNKNOWN";
 }
 
+const TERMINAL_STATUSES = new Set<PayoutDestinationState>(["ACTIVE", "HISTORICAL", "REJECTED", "DISABLED"]);
+
+export function isTerminalPayoutAccountStatus(status: string | null | undefined): boolean {
+  return TERMINAL_STATUSES.has(resolveBankAccountDisplayStatus({ status, isActiveDestination: false }));
+}
+
 /**
- * Given the account's current local status and a fresh instrument snapshot
- * from Finix (enabled / disabled_code), computes the next honest local
- * status. This can only ever advance as far as VERIFIED — it never sets
- * ACTIVE_FOR_FUTURE_PAYOUTS itself, because there is no confirmed signal in
- * this codebase that an instrument being "enabled" also means Finix has
- * made it the seller's active payout destination (see
- * PROCESSOR_PERMISSION_REQUIRED handling in payoutAccountReconciliation.ts).
+ * Verification is Finix's judgment about the instrument itself — distinct
+ * from payoutDestinationState, which is WGC's lifecycle label for the
+ * change request. An instrument can be VERIFIED without being the active
+ * payout destination (see isActivePayoutDestination) — this codebase must
+ * never imply otherwise in copy.
+ */
+export function resolveVerificationState(instrument: { enabled?: boolean; disabled_code?: string | null }, payoutDestinationState: PayoutDestinationState): VerificationState {
+  if (instrument.disabled_code === "DELETED" || instrument.disabled_code === "REJECTED") return "REJECTED";
+  if (instrument.enabled === true) return "VERIFIED";
+  if (payoutDestinationState === "SUBMITTED" || payoutDestinationState === "CURRENT") return "NOT_STARTED";
+  return "PENDING";
+}
+
+export function resolvePaymentInstrumentState(instrument: { enabled?: boolean; disabled_code?: string | null }): PaymentInstrumentState {
+  if (instrument.enabled === true) return "ENABLED";
+  if (instrument.disabled_code) return "DISABLED";
+  return "PENDING";
+}
+
+/**
+ * Given the account's current local payoutDestinationState and a fresh
+ * instrument snapshot from Finix (enabled / disabled_code), computes the
+ * next honest local state. This can only ever advance as far as APPROVED —
+ * it never sets ACTIVE itself, because there is no confirmed signal in this
+ * codebase that an instrument being "enabled" also means Finix has made it
+ * the seller's active payout destination (see
+ * flagPayoutAccountVerifiedForActivationConfirmation in
+ * payoutAccountReconciliation.ts). Approval/verification never implies
+ * activation — those are deliberately separate fields.
  */
 export function advancePayoutAccountStatus(
   currentStatus: string | null | undefined,
   instrument: { enabled?: boolean; disabled_code?: string | null }
-): BankAccountDisplayStatus {
+): PayoutDestinationState {
   const current = resolveBankAccountDisplayStatus({ status: currentStatus, isActiveDestination: false });
-  if (current === "ACTIVE_FOR_FUTURE_PAYOUTS" || current === "REPLACED" || current === "REJECTED" || current === "FAILED") {
+  if (isTerminalPayoutAccountStatus(current)) {
     return current; // terminal — reconciliation should have already stopped polling
   }
   if (instrument.disabled_code === "DELETED" || instrument.disabled_code === "REJECTED") {
@@ -73,9 +115,9 @@ export function advancePayoutAccountStatus(
     return "REQUIRES_ACTION";
   }
   if (instrument.enabled === true) {
-    return "VERIFIED";
+    return "APPROVED";
   }
   // Instrument exists but not yet enabled and no disabled_code — still
   // being reviewed by the processor.
-  return current === "SUBMITTED" || current === "PENDING" ? "VALIDATION_PENDING" : "UNDER_REVIEW";
+  return current === "SUBMITTED" ? "PENDING_VERIFICATION" : "UNDER_REVIEW";
 }

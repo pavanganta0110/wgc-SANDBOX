@@ -11,8 +11,8 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * failed historical one (see FinixFundingTransferAttempt, which is never
  * mutated by this route beyond flagging it as retried).
  *
- * Retry only runs against the organization's current ACTIVE_FOR_FUTURE_PAYOUTS
- * (or legacy ACTIVE) account, requires explicit admin confirmation from the
+ * Retry only runs against the organization's current ACTIVE payout
+ * account, requires explicit admin confirmation from the
  * client, and is idempotent per funding-transfer-attempt via a retry marker.
  */
 export async function POST(req: Request) {
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   if (!activeAccount?.finixPaymentInstrumentId) {
     return NextResponse.json({ error: "No active, verified payout bank account is on file to retry this payout to" }, { status: 400 });
   }
-  if (activeAccount.status !== "ACTIVE_FOR_FUTURE_PAYOUTS" && activeAccount.status !== "ACTIVE") {
+  if (activeAccount.status !== "ACTIVE") {
     return NextResponse.json({ error: "The current payout account is not yet active — resolve that before retrying" }, { status: 400 });
   }
 
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
   const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
   await notifyEvent({
     churchId: session.churchId,
-    eventKey: "BANK_ACCOUNT_CHANGE_SUBMITTED",
+    eventKey: "PAYOUT_DEPOSIT_DELAYED",
     subject: "Payout retry submitted",
     title: "Payout Retry Submitted",
     badgeText: "Retrying",
