@@ -39,6 +39,15 @@ const STATE_STYLES: Record<string, string> = {
   // Donors (resolveDonorDisplayStatus)
   AT_RISK: "bg-red-50 text-red-700",
   RECURRING: "bg-blue-50 text-blue-700",
+  // Subscriptions / Recurring Donors (resolveSubscriptionDisplayStatus / resolveRecurringDonorStatus)
+  PAST_DUE: "bg-red-50 text-red-700",
+  PAUSED: "bg-amber-50 text-amber-700",
+  MIXED: "bg-amber-50 text-amber-700",
+  NONE: "bg-slate-100 text-slate-400",
+  // Subscription Setup Links
+  OPENED: "bg-blue-50 text-blue-700",
+  REVOKED: "bg-slate-100 text-slate-500",
+  COMPLETING: "bg-amber-50 text-amber-700",
   // Annual statements
   NOT_GENERATED: "bg-slate-100 text-slate-500",
   GENERATED: "bg-green-50 text-green-700",

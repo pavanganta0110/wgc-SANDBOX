@@ -512,6 +512,15 @@ model FinixTransfer {
   // a subscription attached (which a one-time gift on the same card would
   // also match).
   createdVia               String?
+  // Exact payment-to-subscription attribution: the raw Finix transfer
+  // payload's own `subscription` reference (not inferred from donor/amount/
+  // instrument matching). Populated going forward by the TRANSFER webhook
+  // handler, and backfillable from already-stored rawJsonRedacted for
+  // historical rows with zero new Finix API calls. A transfer with
+  // createdVia === "SUBSCRIPTION" but a null finixSubscriptionId has no
+  // verified relationship and must be labeled "Unattributed Recurring
+  // Candidate" rather than counted in confirmed recurring totals.
+  finixSubscriptionId      String?
   tagsJson                 Json?
   rawJsonRedacted          Json?
   createdAtFinix           DateTime?
@@ -519,6 +528,8 @@ model FinixTransfer {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
   lastSyncedAt             DateTime?
+
+  @@index([churchId, finixSubscriptionId])
 }
 
 model FinixRefundOrReversal {
@@ -788,28 +799,151 @@ model FinixPaymentInstrumentSnapshot {
 }
 
 model FinixSubscription {
-  id                       String    @id @default(cuid())
-  churchId                 String?
-  churchSubscriptionId     String?
-  givingLinkId             String?
-  finixSubscriptionId      String    @unique
-  finixMerchantId          String?
-  finixBuyerIdentityId     String?
-  finixPaymentInstrumentId String?
-  state                    String?
-  amountCents              Int?
-  currency                 String?
-  billingInterval          String?
-  collectionMethod         String?
-  nextBillingDate          DateTime?
-  startedAt                DateTime?
-  canceledAt               DateTime?
-  rawJsonRedacted          Json?
-  createdAtFinix           DateTime?
-  updatedAtFinix           DateTime?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
-  lastSyncedAt             DateTime?
+  id                         String    @id @default(cuid())
+  churchId                   String?
+  churchSubscriptionId       String?
+  givingLinkId               String?
+  fundId                     String?
+  // Denormalized from FinixPaymentInstrumentSnapshot.donorId at webhook-sync
+  // time — donor is only ever real-linked through the instrument, this
+  // column exists purely so the Recurring Donors / Subscriptions list
+  // queries can filter/sort/join by donor without an N+1 lookup per row.
+  donorId                    String?
+  finixSubscriptionId        String    @unique
+  finixMerchantId            String?
+  finixBuyerIdentityId       String?
+  finixPaymentInstrumentId   String?
+  // Raw processor state as reported by Finix (e.g. "ACTIVE", "CANCELED").
+  // Display status (including MIXED/PAST_DUE/attention derivations across
+  // a donor's multiple subscriptions) is always computed on read from this
+  // plus related payment/instrument state — never stored redundantly.
+  state                      String?
+  amountCents                Int?
+  currency                   String?
+  billingInterval            String?
+  collectionMethod           String?
+  nextBillingDate            DateTime?
+  startedAt                  DateTime?
+  canceledAt                 DateTime?
+  // Finix's subscriptions API (confirmed in src/lib/finix/client.ts) only
+  // supports create/get/cancel — no pause/resume/update-in-place endpoint.
+  // completedAt is set when Finix reports a finite subscription reaching
+  // its natural end (not an admin action); cancelReason/canceledByUserId
+  // distinguish a real admin-initiated cancellation from that.
+  completedAt                DateTime?
+  cancelReason               String?
+  canceledByUserId           String?
+  failureCode                String?
+  failureMessage             String?
+  retryCount                 Int?
+  // "Update Amount"/"Update Frequency" have no in-place Finix endpoint, so
+  // they're implemented as cancel-old + create-new. These two columns chain
+  // that history so the UI can show "this subscription replaced/was
+  // replaced by" instead of presenting two unrelated rows.
+  supersedesSubscriptionId   String?
+  supersededBySubscriptionId String?
+  // Distinguishes an admin-created subscription (existing saved payment
+  // method flow) from one created by a donor via the public giving page or
+  // a secure setup link — never inferred, always set at creation time.
+  createdByUserId            String?
+  consentSource              String? // ADMIN_CONFIRMED | DONOR_DIRECT
+  rawJsonRedacted            Json?
+  createdAtFinix             DateTime?
+  updatedAtFinix             DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+  lastSyncedAt               DateTime?
+
+  @@index([churchId, donorId])
+  @@index([churchId, state])
+}
+
+/// Immutable record of donor authorization for a recurring donation —
+/// created exactly once at subscription-creation time and never mutated
+/// afterward, even if the subscription itself is later changed/canceled.
+model SubscriptionConsent {
+  id                            String   @id @default(cuid())
+  churchId                      String
+  donorId                       String
+  finixSubscriptionId           String   @unique
+  consentSource                 String // ADMIN_CONFIRMED | DONOR_DIRECT
+  confirmedByUserId             String?
+  acceptedAt                    DateTime @default(now())
+  termsVersion                  String
+  ipAddress                     String?
+  userAgent                     String?
+  setupLinkId                   String?
+  recurringTermsSnapshot        Json
+  donorNameSnapshot             String?
+  donorEmailSnapshot            String?
+  amountCentsSnapshot           Int
+  frequencySnapshot             String
+  startDateSnapshot             DateTime
+  paymentMethodLastFourSnapshot String?
+  organizationNameSnapshot      String?
+  createdAt                     DateTime @default(now())
+
+  @@index([churchId, donorId])
+}
+
+/// Secure, single-purpose, expiring token a donor uses to set up a new
+/// recurring donation without an admin ever touching raw payment data.
+/// Only tokenHash is stored — the raw token exists only in the emailed URL.
+model SubscriptionSetupLink {
+  id                              String    @id @default(cuid())
+  churchId                        String
+  donorId                         String? // null until an existing donor is matched/a new one is created on completion
+  donorFirstName                  String?
+  donorLastName                   String?
+  donorEmail                      String
+  donorPhone                      String?
+  tokenHash                       String    @unique
+  amountCents                     Int
+  billingInterval                 String
+  startDate                       DateTime
+  endDate                         DateTime?
+  fundId                          String?
+  message                         String?
+  status                          String    @default("PENDING") // PENDING | SENT | OPENED | COMPLETED | EXPIRED | REVOKED | FAILED
+  finixSubscriptionId             String? // set once the donor completes setup
+  // When set, this link is a "Send Payment Update Link" for an existing
+  // subscription rather than a brand-new one — completion cancels this
+  // subscription and creates a replacement with the new payment method
+  // (see FinixSubscription.supersedesSubscriptionId), same terms otherwise.
+  updateTargetFinixSubscriptionId String?
+  expiresAt                       DateTime
+  sentAt                          DateTime?
+  deliveredAt                     DateTime?
+  openedAt                        DateTime?
+  completedAt                     DateTime?
+  revokedAt                       DateTime?
+  revokedByUserId                 String?
+  failureReason                   String?
+  createdByUserId                 String?
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
+
+  @@index([churchId, status])
+}
+
+/// Audit + idempotency log for every subscription mutation (admin-initiated
+/// or donor-initiated). idempotencyKey has a unique constraint so a
+/// double-click or network retry can never apply the same action twice.
+model SubscriptionAction {
+  id                  String    @id @default(cuid())
+  churchId            String
+  finixSubscriptionId String
+  actionType          String // CREATE | CANCEL | UPDATE_AMOUNT | UPDATE_FREQUENCY | SEND_PAYMENT_UPDATE_LINK | PAYMENT_METHOD_UPDATED
+  idempotencyKey      String    @unique
+  requestedByUserId   String?
+  oldValue            Json?
+  newValue            Json?
+  state               String    @default("PENDING") // PENDING | COMPLETED | FAILED
+  failureReason       String?
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  @@index([churchId, finixSubscriptionId])
 }
 
 model FinixSyncJob {

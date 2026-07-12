@@ -191,6 +191,7 @@ export async function syncFinixDataFromWebhookEvent(
         statementDescriptor: data.statement_descriptor ?? null,
         source,
         createdVia: data.created_via ?? null,
+        finixSubscriptionId: data.subscription ?? null,
         tagsJson: tags,
         rawJsonRedacted: redactFinixPayload(data),
         createdAtFinix: data.created_at ? new Date(data.created_at) : occurredAt,
@@ -577,14 +578,24 @@ export async function syncFinixDataFromWebhookEvent(
     // (not interval).
     const churchId = await resolveChurchIdForMerchant(data.linked_to);
 
+    // Denormalized donorId is resolved from the instrument snapshot, not
+    // trusted from the webhook payload — the instrument snapshot itself is
+    // synced separately (see syncPaymentInstrument) and is the only place
+    // donor linkage is genuinely established.
+    const instrumentId = data.buyer_details?.instrument_id ?? null;
+    const resolvedDonorId = instrumentId
+      ? (await prisma.finixPaymentInstrumentSnapshot.findUnique({ where: { finixPaymentInstrumentId: instrumentId }, select: { donorId: true } }))?.donorId ?? null
+      : null;
+
     await prisma.finixSubscription.upsert({
       where: { finixSubscriptionId: data.id },
       create: {
         finixSubscriptionId: data.id,
         churchId,
+        donorId: resolvedDonorId,
         finixMerchantId: data.linked_to ?? null,
         finixBuyerIdentityId: data.buyer_details?.identity_id ?? null,
-        finixPaymentInstrumentId: data.buyer_details?.instrument_id ?? null,
+        finixPaymentInstrumentId: instrumentId,
         state: data.state ?? null,
         amountCents: data.amount ?? null,
         currency: data.currency ?? null,
@@ -600,6 +611,9 @@ export async function syncFinixDataFromWebhookEvent(
       },
       update: {
         churchId: churchId ?? undefined,
+        // donorId can only improve (become known), never be overwritten
+        // back to null by a later webhook that lacks buyer_details.
+        donorId: resolvedDonorId ?? undefined,
         state: data.state ?? null,
         nextBillingDate: parseFinixDate(data.next_billing_date) ?? undefined,
         canceledAt: data.canceled_at ? new Date(data.canceled_at) : undefined,
