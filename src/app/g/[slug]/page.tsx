@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import { resolveGivingLinkStatus } from "@/lib/givingLinks/status";
+import { getPaymentMethodAvailability } from "@/lib/payments/paymentMethodAvailability";
 import {
   parseDonorFieldSettings,
   parseAllowedPaymentMethods,
@@ -67,6 +68,12 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
       ? "PRODUCTION"
       : "TEST";
 
+  const availability = await getPaymentMethodAvailability(church.id);
+  const serverAvailability = {
+    APPLE_PAY: { enabledForOrganization: availability.find((a) => a.method === "APPLE_PAY")?.enabledForOrganization ?? false },
+    GOOGLE_PAY: { enabledForOrganization: availability.find((a) => a.method === "GOOGLE_PAY")?.enabledForOrganization ?? false },
+  };
+
   return (
     <div className="min-h-screen py-12 px-4" style={{ backgroundColor: light.pageBackground }}>
       <div
@@ -112,6 +119,7 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           googlePayGatewayMerchantId={googlePayGatewayMerchantId}
           googlePayMerchantId={googlePayMerchantId}
           googlePayEnvironment={googlePayEnvironment}
+          serverAvailability={serverAvailability}
         />
 
         {!branding.hideFooter && (

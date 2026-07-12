@@ -52,6 +52,9 @@ export default function GivingLinkForm({
   googlePayGatewayMerchantId,
   googlePayMerchantId,
   googlePayEnvironment,
+  previewMode = false,
+  serverAvailability,
+  onFormError,
 }: {
   slug: string;
   finixMerchantId: string;
@@ -75,6 +78,12 @@ export default function GivingLinkForm({
   googlePayGatewayMerchantId: string | null;
   googlePayMerchantId: string | null;
   googlePayEnvironment: "TEST" | "PRODUCTION";
+  /** Preview-only: renders the identical form but never creates a real payment instrument, fraud session, donation, or wallet charge. */
+  previewMode?: boolean;
+  /** Shared server-side availability result (getPaymentMethodAvailability) — gates wallet visibility alongside the real device capability check, so this page, the preview, and Settings never disagree. */
+  serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
+  /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
+  onFormError?: () => void;
 }) {
   const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
@@ -165,6 +174,10 @@ export default function GivingLinkForm({
   };
 
   const handleApplePayClick = () => {
+    if (previewMode) {
+      toast("This is a preview — no real payment session is started.");
+      return;
+    }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
@@ -190,6 +203,10 @@ export default function GivingLinkForm({
 
   const handleGooglePayClickRef = useRef<() => void>(() => {});
   handleGooglePayClickRef.current = async () => {
+    if (previewMode) {
+      toast("This is a preview — no real payment session is started.");
+      return;
+    }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
@@ -216,13 +233,15 @@ export default function GivingLinkForm({
 
   useEffect(() => {
     if (!APPLE_PAY_ENABLED || !allowedPaymentMethods.includes("APPLE_PAY")) return;
+    if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) return;
     if (!isApplePayAvailable()) return;
     setAppleAvailable(true);
     loadApplePayButtonScript().catch(() => {});
-  }, [allowedPaymentMethods]);
+  }, [allowedPaymentMethods, serverAvailability]);
 
   useEffect(() => {
     if (!googlePayGatewayMerchantId || !allowedPaymentMethods.includes("GOOGLE_PAY")) return;
+    if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) return;
     let cancelled = false;
     const config = {
       environment: googlePayEnvironment,
@@ -267,7 +286,9 @@ export default function GivingLinkForm({
         setFormReady(true);
       })
       .catch(() => {
-        if (!cancelled) toast.error("Could not load the payment form. Please refresh and try again.");
+        if (cancelled) return;
+        toast.error("Could not load the payment form. Please refresh and try again.");
+        onFormError?.();
       });
 
     return () => {
@@ -282,6 +303,10 @@ export default function GivingLinkForm({
   const isFieldRequired = (key: keyof DonorFieldSettings) => donorFieldSettings[key] === "REQUIRED";
 
   const handleSubmit = async () => {
+    if (previewMode) {
+      toast("This is a preview — no real donation is submitted.");
+      return;
+    }
     if (amountType === "VARIABLE") {
       if (minAmountCents != null && effectiveAmountCents < minAmountCents) {
         toast.error(`Please enter at least ${formatCents(minAmountCents)}`);

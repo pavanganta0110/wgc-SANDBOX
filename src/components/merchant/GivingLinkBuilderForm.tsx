@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { ChevronDown, Monitor, Smartphone } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import GivingLinkPreviewPanel from "@/components/merchant/GivingLinkPreviewPanel";
 import {
   DONOR_FIELDS,
   DonorFieldKey,
@@ -155,15 +156,18 @@ export default function GivingLinkBuilderForm({
   mode,
   linkId,
   initial,
+  churchName,
+  pricing,
 }: {
   mode: "create" | "edit";
   linkId?: string;
   initial?: Partial<BuilderState> & { publicSlug?: string };
+  churchName: string;
+  pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
 }) {
   const router = useRouter();
   const [state, setState] = useState<BuilderState>({ ...defaultState(), ...(initial || {}) });
   const [saving, setSaving] = useState(false);
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
 
   const update = <K extends keyof BuilderState>(key: K, value: BuilderState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));
@@ -271,9 +275,6 @@ export default function GivingLinkBuilderForm({
     toast.success(mode === "create" ? "Giving link created" : "Giving link updated");
     router.push(`/merchant/giving-links/${data.link.id}`);
   };
-
-  const effectiveAmountCents =
-    state.amountType === "FIXED" ? Math.round(parseFloat(state.fixedAmount || "0") * 100) : amountsToCents(state.suggestedAmounts)[0] || 0;
 
   return (
     <div className="grid lg:grid-cols-2 gap-6">
@@ -625,117 +626,29 @@ export default function GivingLinkBuilderForm({
         </Section>
       </div>
 
-      {/* Right: live preview */}
-      <div className="lg:sticky lg:top-6 h-fit">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-sm font-bold text-slate-900">Live Preview</h4>
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 p-1">
-            <button
-              onClick={() => setPreviewDevice("desktop")}
-              className={`p-1.5 rounded-lg ${previewDevice === "desktop" ? "bg-slate-900 text-white" : "text-slate-500"}`}
-            >
-              <Monitor className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPreviewDevice("mobile")}
-              className={`p-1.5 rounded-lg ${previewDevice === "mobile" ? "bg-slate-900 text-white" : "text-slate-500"}`}
-            >
-              <Smartphone className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        <div className={`mx-auto transition-all ${previewDevice === "mobile" ? "max-w-[340px]" : "max-w-md"}`}>
-          <div
-            className="rounded-2xl border shadow-sm p-8"
-            style={{ backgroundColor: state.branding.light.headerBackground, borderColor: state.branding.light.borderColor }}
-          >
-            {state.branding.campaignImageUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={state.branding.campaignImageUrl} alt="" className="w-full h-24 object-cover rounded-xl mb-4" />
-            )}
-            <h2 className="text-lg font-bold text-center mb-1" style={{ color: state.branding.light.headingColor }}>
-              {state.publicTitle || "Your Giving Link Title"}
-            </h2>
-            {state.description && (
-              <p className="text-sm text-center mb-4" style={{ color: state.branding.light.bodyTextColor }}>
-                {state.description}
-              </p>
-            )}
-
-            <div className="space-y-3">
-              {state.amountType === "FIXED" ? (
-                <p className="text-2xl font-bold text-center" style={{ color: state.branding.light.headingColor }}>
-                  {effectiveAmountCents ? formatCents(effectiveAmountCents) : "$0.00"}
-                </p>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  {amountsToCents(state.suggestedAmounts).slice(0, 6).map((cents, i) => (
-                    <div
-                      key={i}
-                      className="py-2 rounded-lg border text-center text-sm font-semibold"
-                      style={
-                        i === 0
-                          ? { backgroundColor: state.branding.light.buttonBackground, color: state.branding.light.buttonText, borderColor: state.branding.light.buttonBackground }
-                          : { borderColor: state.branding.light.borderColor, color: state.branding.light.bodyTextColor }
-                      }
-                    >
-                      {formatCents(cents)}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {state.allowedPaymentMethods.length > 1 && (
-                <div className="flex rounded-xl border p-1" style={{ borderColor: state.branding.light.borderColor }}>
-                  {state.allowedPaymentMethods.slice(0, 2).map((m, i) => (
-                    <div
-                      key={m}
-                      className="flex-1 py-1.5 rounded-lg text-center text-xs font-semibold"
-                      style={i === 0 ? { backgroundColor: state.branding.light.buttonBackground, color: state.branding.light.buttonText } : { color: state.branding.light.bodyTextColor }}
-                    >
-                      {PAYMENT_METHOD_LABELS[m]}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="rounded-lg border p-3 text-xs text-center" style={{ borderColor: state.branding.light.borderColor, color: state.branding.light.bodyTextColor }}>
-                Secure payment form
-              </div>
-
-              {state.feeCoverEnabled && (
-                <p className="text-xs" style={{ color: state.branding.light.bodyTextColor }}>
-                  ☐ I&apos;ll cover the processing fee
-                </p>
-              )}
-
-              <div className="grid grid-cols-2 gap-2">
-                {state.donorFieldSettings.firstName !== "HIDDEN" && (
-                  <div className="h-8 rounded-lg border" style={{ borderColor: state.branding.light.borderColor }} />
-                )}
-                {state.donorFieldSettings.lastName !== "HIDDEN" && (
-                  <div className="h-8 rounded-lg border" style={{ borderColor: state.branding.light.borderColor }} />
-                )}
-              </div>
-              {state.donorFieldSettings.email !== "HIDDEN" && (
-                <div className="h-8 rounded-lg border" style={{ borderColor: state.branding.light.borderColor }} />
-              )}
-
-              <div
-                className="w-full py-2.5 rounded-xl text-center text-sm font-bold"
-                style={{ backgroundColor: state.branding.light.buttonBackground, color: state.branding.light.buttonText }}
-              >
-                Give {effectiveAmountCents ? formatCents(effectiveAmountCents) : ""}
-              </div>
-            </div>
-
-            {!state.branding.hideFooter && (
-              <p className="text-center text-xs text-slate-300 mt-4">Powered by WGC Payments</p>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Right: live preview — renders the actual public GivingLinkForm component in a safe preview mode, so this can never drift from the real giving page. */}
+      <GivingLinkPreviewPanel
+        churchName={churchName}
+        light={state.branding.light}
+        amountType={state.amountType}
+        fixedAmountCents={state.fixedAmount ? Math.round(parseFloat(state.fixedAmount) * 100) : null}
+        minAmountCents={state.minAmount ? Math.round(parseFloat(state.minAmount) * 100) : null}
+        maxAmountCents={state.maxAmount ? Math.round(parseFloat(state.maxAmount) * 100) : null}
+        suggestedAmountsCents={amountsToCents(state.suggestedAmounts)}
+        allowCustomAmount={state.allowCustomAmount}
+        recurringEnabled={state.recurringEnabled}
+        allowedFrequencies={state.allowedFrequencies}
+        allowedPaymentMethods={state.allowedPaymentMethods}
+        feeCoverEnabled={state.feeCoverEnabled}
+        feeCoverDefaultOn={state.feeCoverDefaultOn}
+        donorFieldSettings={state.donorFieldSettings}
+        pricing={pricing}
+        thankYouMessage={state.receiptSettings.customMessage || "Thank you for your gift!"}
+        campaignImageUrl={state.branding.campaignImageUrl || undefined}
+        publicTitle={state.publicTitle}
+        description={state.description}
+        hideFooter={state.branding.hideFooter}
+      />
 
       {/* Bottom actions */}
       <div className="lg:col-span-2 flex items-center justify-end gap-3 pt-2">

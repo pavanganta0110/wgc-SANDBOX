@@ -55,7 +55,9 @@ const STATE_STYLES: Record<string, string> = {
   REQUIRES_ACTION: "bg-red-50 text-red-700",
   NOT_AVAILABLE: "bg-slate-100 text-slate-400",
   VERIFIED: "bg-green-50 text-green-700",
+  VERIFYING: "bg-amber-50 text-amber-700",
   REJECTED: "bg-red-50 text-red-700",
+  REPLACED: "bg-slate-100 text-slate-400",
   NOT_STARTED: "bg-slate-100 text-slate-400",
   // Organization account status
   LIMITED: "bg-amber-50 text-amber-700",
@@ -68,6 +70,9 @@ const STATE_STYLES: Record<string, string> = {
   BOUNCED: "bg-red-50 text-red-700",
   // Team & Access / Security
   NOT_SUPPORTED: "bg-slate-100 text-slate-400",
+  // Payment method availability
+  DOMAIN_VERIFICATION_REQUIRED: "bg-amber-50 text-amber-700",
+  CONFIGURATION_REQUIRED: "bg-slate-100 text-slate-500",
   // Support tickets
   IN_PROGRESS: "bg-blue-50 text-blue-700",
   WAITING_ON_ORGANIZATION: "bg-amber-50 text-amber-700",

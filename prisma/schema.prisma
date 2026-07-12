@@ -314,6 +314,46 @@ model Church {
   notificationPreferences NotificationPreference[]
   organizationContacts    OrganizationContact[]
   supportTickets          SupportTicket[]
+  bankAccounts            OrganizationBankAccount[]
+}
+
+/// The organization's payout bank account(s) on file. No Finix API exists in
+/// this codebase to reassign a merchant's payout destination programmatically
+/// (confirmed via audit — only one-shot BANK_ACCOUNT instrument creation at
+/// onboarding exists), so a bank-account change creates a new row here in
+/// PENDING status and a support ticket; `isActiveDestination` only flips once
+/// WGC Support has confirmed the change on the processor side. Never delete a
+/// row — history must be preserved (see Bank Account History requirement).
+model OrganizationBankAccount {
+  id                       String    @id @default(cuid())
+  churchId                 String
+  finixPaymentInstrumentId String?
+  bankName                 String?
+  accountHolderName        String?
+  last4                    String?
+  accountType              String? // CHECKING | SAVINGS
+  currency                 String?
+  // WGC-facing display status, computed separately from whatever raw state
+  // Finix reports — see resolveBankAccountDisplayStatus.
+  status                   String    @default("PENDING") // ACTIVE | PENDING | VERIFYING | VERIFIED | REQUIRES_ACTION | DISABLED | REJECTED | REPLACED | UNKNOWN
+  processorState           String? // raw Finix instrument state, kept separate from `status`
+  isActiveDestination      Boolean   @default(false)
+  addedAt                  DateTime  @default(now())
+  activatedAt              DateTime?
+  replacedAt               DateTime?
+  replacedByAccountId      String?
+  createdByUserId          String?
+  changeReason             String?
+  verificationMethod       String? // e.g. "SUPPORT_REVIEW" — no automated verification path is confirmed today
+  supportTicketId          String?
+  lastSyncedAt             DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  church Church @relation(fields: [churchId], references: [id])
+
+  @@index([churchId, isActiveDestination])
+  @@index([churchId, status])
 }
 
 /// One row per (organization, event type) — the org-wide notification

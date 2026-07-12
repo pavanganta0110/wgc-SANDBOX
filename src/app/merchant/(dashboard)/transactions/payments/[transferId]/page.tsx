@@ -16,6 +16,7 @@ import {
   sourceLabel,
   settlementStateLabel,
 } from "@/lib/finix/displayFormatters";
+import { mapFeeType } from "@/lib/fees/feeTypeLabels";
 
 const titleCaseFromSnake = (value: string | null | undefined) => titleCaseFromSnakeBase(value, "Fee");
 
@@ -168,6 +169,33 @@ export default async function PaymentFullDetailPage({
             </p>
           </div>
 
+          {payment && (payment.donationAmountCents != null || payment.feeCoveredCents != null) && (
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+              <h3 className="text-sm font-bold text-slate-900 mb-1">Donation Breakdown</h3>
+              <p className="text-xs text-slate-400 mb-4">
+                A donor-covered fee is an amount added to the donor's charge — separate from any processor fee shown under Associated Fees below.
+              </p>
+              <div className="space-y-2 text-sm">
+                {payment.donationAmountCents != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Intended Donation Amount</span>
+                    <span className="font-semibold text-slate-900">{formatCents(payment.donationAmountCents)}</span>
+                  </div>
+                )}
+                {payment.feeCoveredCents != null && payment.feeCoveredCents > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Donor-Covered Fee</span>
+                    <span className="font-semibold text-slate-900">{formatCents(payment.feeCoveredCents)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold">
+                  <span className="text-slate-900">Total Charged</span>
+                  <span className="text-slate-900">{formatCents(transfer.amountCents ?? 0)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Transaction Flow</h3>
             <div className="space-y-4">
@@ -201,17 +229,21 @@ export default async function PaymentFullDetailPage({
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
               <h3 className="text-sm font-bold text-slate-900 mb-4">Associated Fees</h3>
               <div className="space-y-2">
-                {fees.map((f) => (
-                  <div key={f.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="font-semibold text-slate-700">{titleCaseFromSnake(f.feeType)}</p>
-                      <p className="text-xs text-slate-400">Processor · {formatDateTime(f.createdAtFinix)}</p>
+                {fees.map((f) => {
+                  const mapped = mapFeeType(f.feeType);
+                  return (
+                    <div key={f.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <p className="font-semibold text-slate-700">{mapped.label}</p>
+                        <p className="text-xs text-slate-400">{mapped.description}</p>
+                        <p className="text-xs text-slate-400">Processor · {formatDateTime(f.createdAtFinix)}</p>
+                      </div>
+                      <span className="font-semibold text-slate-900 whitespace-nowrap ml-4">
+                        {formatCents(f.amountCents ?? 0)} {f.currency || "USD"}
+                      </span>
                     </div>
-                    <span className="font-semibold text-slate-900">
-                      {formatCents(f.amountCents ?? 0)} {f.currency || "USD"}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="flex items-center justify-between text-sm font-bold text-slate-900 mt-3 pt-3 border-t border-slate-100">
                 <span>Estimated Total</span>

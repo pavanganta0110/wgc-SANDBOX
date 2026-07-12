@@ -614,6 +614,32 @@ export async function syncFinixDataFromWebhookEvent(
         lastSyncedAt: new Date(),
       },
     });
+
+    // A completed deposit is real proof money landed in a bank account —
+    // if this organization has no explicit active-destination mapping yet,
+    // seed one from it. Never downgrade or overwrite an existing explicit
+    // mapping from here; that only happens through the reviewed change flow.
+    if (churchId && data.bank_name && (data.masked_account_number || data.account_type)) {
+      const hasExplicitActive = await prisma.organizationBankAccount.findFirst({
+        where: { churchId, isActiveDestination: true },
+        select: { id: true },
+      });
+      if (!hasExplicitActive) {
+        await prisma.organizationBankAccount.create({
+          data: {
+            churchId,
+            bankName: data.bank_name ?? data.bank ?? null,
+            accountHolderName: data.name ?? data.account_holder_name ?? null,
+            last4: data.masked_account_number ?? null,
+            accountType: data.account_type ?? null,
+            status: "ACTIVE",
+            isActiveDestination: true,
+            activatedAt: occurredAt,
+            verificationMethod: "DEPOSIT_CONFIRMED",
+          },
+        });
+      }
+    }
     return;
   }
 

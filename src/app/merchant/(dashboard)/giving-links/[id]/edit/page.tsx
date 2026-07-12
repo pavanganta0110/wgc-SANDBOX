@@ -11,7 +11,11 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
   const churchId = session!.churchId!;
   const { id } = await params;
 
-  const link = await prisma.givingLink.findFirst({ where: { id, churchId } });
+  const [link, church, pricing] = await Promise.all([
+    prisma.givingLink.findFirst({ where: { id, churchId } }),
+    prisma.church.findUnique({ where: { id: churchId }, select: { name: true } }),
+    prisma.churchPricing.findUnique({ where: { churchId } }),
+  ]);
   if (!link) notFound();
 
   const suggestedAmounts = Array.isArray(link.suggestedAmountsJson)
@@ -56,7 +60,17 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
         <ArrowLeft className="w-4 h-4" /> Back to Giving Link
       </Link>
       <h2 className="text-lg font-bold text-slate-900 mb-6">Edit Giving Link</h2>
-      <GivingLinkBuilderForm mode="edit" linkId={id} initial={initial} />
+      <GivingLinkBuilderForm
+        mode="edit"
+        linkId={id}
+        initial={initial}
+        churchName={church?.name || "Your Organization"}
+        pricing={{
+          cardPercentageFee: pricing?.cardPercentageFee ?? null,
+          cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
+          achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
+        }}
+      />
     </div>
   );
 }
