@@ -183,14 +183,18 @@ export class FinixClient {
       },
     });
 
-    if (res.status === 302 || res.status === 301 || res.status === 307 || res.status === 308) {
+    console.log(`[Finix Client] getFileContent for ${fileId} response status: ${res.status}`);
+
+    if (res.status >= 300 && res.status < 400) {
       const redirectUrl = res.headers.get("location");
+      console.log(`[Finix Client] Following redirect to: ${redirectUrl}`);
       if (!redirectUrl) {
         throw new Error(`Finix download redirect response missing Location header`);
       }
       
       // Fetch from S3 target URL without sending Authorization header
       const s3Res = await fetch(redirectUrl);
+      console.log(`[Finix Client] Redirect fetch returned status: ${s3Res.status}`);
       if (!s3Res.ok) {
         throw new Error(`Could not download file from redirect storage link (${s3Res.status})`);
       }
