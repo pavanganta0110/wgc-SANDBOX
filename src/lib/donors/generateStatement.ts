@@ -6,6 +6,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
 import { DEFAULT_THANK_YOU_MESSAGE, STATEMENT_DISCLAIMER, resolveStatementPdfSettings } from "@/lib/donors/generateStatementDefaults";
+import { resolveAcknowledgmentText } from "@/lib/settings/acknowledgmentDefaults";
 
 export { DEFAULT_THANK_YOU_MESSAGE };
 
@@ -107,6 +108,10 @@ export async function generateYearEndStatement(
       returnedAmountCents: l.returnedAmountCents,
       disputeAdjustmentCents: 0,
       eligibleAmountCents: l.finalRecordedAmountCents,
+      goodsServicesProvided: l.goodsServicesProvided,
+      goodsServicesDescription: l.goodsServicesDescription,
+      goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,
+      recordedContributionAmountCents: l.recordedContributionAmountCents,
     })),
   });
 
@@ -124,12 +129,30 @@ export async function renderStatementPdf(statementId: string, churchId: string):
   const orgAddress = statement.organizationAddressSnapshot as any;
   const settings = resolveStatementPdfSettings(church);
 
+  // A statement covers many contributions — when any of them individually
+  // disclosed goods/services, that per-contribution disclosure is listed
+  // rather than collapsed into one blanket line, since the "no goods or
+  // services" statement would otherwise be inaccurate for the year as a
+  // whole.
+  const linesWithGoodsServices = lines.filter((l) => l.goodsServicesProvided);
+  const acknowledgmentText =
+    linesWithGoodsServices.length > 0
+      ? linesWithGoodsServices
+          .map((l) => resolveAcknowledgmentText(church, l.goodsServicesDescription, l.goodsServicesFairMarketValueCents))
+          .join(" ")
+      : resolveAcknowledgmentText(church, null, null);
+
+  const totalGoodsServicesValueCents = lines.reduce((s, l) => s + (l.goodsServicesFairMarketValueCents ?? 0), 0);
+  const totalRecordedContributionAmountCents = lines.reduce((s, l) => s + (l.recordedContributionAmountCents ?? l.eligibleAmountCents), 0);
+
   const buffer = await renderToBuffer(
     YearEndStatementPdf({
       organizationName: statement.organizationNameSnapshot || church?.name || "Organization",
+      organizationLogoUrl: church?.logoUrl ?? null,
       organizationAddress: orgAddress?.formatted ?? null,
       organizationEmail: church?.primaryContactEmail ?? null,
       organizationPhone: church?.phone ?? null,
+      organizationWebsite: settings.organizationWebsite,
       organizationTaxId: settings.organizationTaxId,
       donorName: statement.donorNameSnapshot || "Donor",
       donorEmail: statement.donorEmailSnapshot,
@@ -140,6 +163,8 @@ export async function renderStatementPdf(statementId: string, churchId: string):
       returnedAmountCents: statement.returnedAmountCents,
       recordedTotalCents: statement.eligibleAmountCents,
       showDonorCoveredFees: settings.showDonorCoveredFees,
+      totalGoodsServicesValueCents,
+      totalRecordedContributionAmountCents,
       lines: lines.map((l) => ({
         donationDate: l.donationDate!,
         reference: l.reference || "",
@@ -150,9 +175,17 @@ export async function renderStatementPdf(statementId: string, churchId: string):
         returnedAmountCents: l.returnedAmountCents,
         finalRecordedAmountCents: l.eligibleAmountCents,
         paymentMethodLabel: "",
+        goodsServicesProvided: l.goodsServicesProvided,
+        goodsServicesDescription: l.goodsServicesDescription,
+        goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,
+        recordedContributionAmountCents: l.recordedContributionAmountCents ?? l.eligibleAmountCents,
       })),
       thankYouMessage: settings.thankYouMessage,
+      acknowledgmentText,
       disclaimer: settings.disclaimer,
+      signatureName: settings.signatureName,
+      signatureTitle: settings.signatureTitle,
+      signatureImageUrl: settings.signatureImageUrl,
       generatedAt: statement.generatedAt || statement.createdAt,
     }),
   );

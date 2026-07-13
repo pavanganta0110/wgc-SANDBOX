@@ -12,6 +12,7 @@ import {
 import ViewAllDetailsLink from "@/components/merchant/ViewAllDetailsLink";
 import IssueRefundButton from "@/components/merchant/IssueRefundButton";
 import CreateReceiptButton from "@/components/merchant/CreateReceiptButton";
+import GoodsServicesCorrectionPanel from "@/components/merchant/GoodsServicesCorrectionPanel";
 import StateBadge from "@/components/merchant/StateBadge";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
@@ -395,6 +396,22 @@ export default async function PaymentDetailPanel({
           <p className="text-sm text-slate-500">No past receipt created or sent at this time.</p>
         )}
       </Section>
+
+      {payment && (
+        <Section title="Goods or Services Acknowledgment">
+          <GoodsServicesCorrectionPanel
+            transferId={transfer.finixTransferId}
+            paymentAmountCents={payment.donationAmountCents ?? payment.amountCents}
+            receiptAlreadySent={Boolean(payment.receiptSentAt)}
+            initial={{
+              goodsServicesProvided: payment.goodsServicesProvided,
+              goodsServicesDescription: payment.goodsServicesDescription,
+              goodsServicesFairMarketValueCents: payment.goodsServicesFairMarketValueCents,
+              goodsServicesInternalNote: payment.goodsServicesInternalNote,
+            }}
+          />
+        </Section>
+      )}
 
       <Section
         title="Tags"

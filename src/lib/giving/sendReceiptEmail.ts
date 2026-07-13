@@ -1,14 +1,20 @@
 import { sendWgcEmail } from "@/lib/email";
 
 /**
- * Shared donation receipt email — used by both the public giving page and
- * the church admin's "Take a Payment" flow, so a donation looks identical
- * to the donor regardless of how it was entered.
+ * Recurring-signup confirmation only — sent when a donor sets up a new
+ * recurring schedule, before any individual charge has actually occurred.
+ * This is intentionally NOT the IRS-style tax receipt (no receipt number,
+ * no acknowledgment/goods-or-services section, no PDF) since no completed
+ * contribution exists yet to receipt. The real, settings-driven, PDF tax
+ * receipt for a completed donation is sendDonationReceipt() in
+ * @/lib/giving/generateReceipt, used for every one-time gift and should be
+ * used for each individual recurring charge once one is recorded as a
+ * Payment.
  */
 export async function sendReceiptEmail(
   to: string,
   name: string,
-  churchName: string,
+  organizationName: string,
   amountCents: number,
   isRecurring: boolean,
   interval?: string
@@ -18,13 +24,13 @@ export async function sendReceiptEmail(
   try {
     await sendWgcEmail({
       to,
-      subject: `Thank you for your gift to ${churchName}`,
+      subject: `Thank you for your gift to ${organizationName}`,
       title: "Thank You for Your Gift",
       badgeText: "Receipt",
       badgeColor: "#10B981",
       bodyHtml: `
         <p>Hi ${name},</p>
-        <p>Thank you for your ${isRecurring ? `recurring (${(interval || "monthly").toLowerCase()})` : ""} gift of <strong>${amount}</strong> to <strong>${churchName}</strong>.</p>
+        <p>Thank you for your ${isRecurring ? `recurring (${(interval || "monthly").toLowerCase()})` : ""} gift of <strong>${amount}</strong> to <strong>${organizationName}</strong>.</p>
         <p>This receipt is confirmation of your generosity. Keep it for your tax records.</p>
       `,
     });

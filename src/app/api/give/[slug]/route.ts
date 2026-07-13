@@ -5,6 +5,7 @@ import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
+import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 
@@ -213,7 +214,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       },
     });
 
-    await prisma.payment.create({
+    const newPayment = await prisma.payment.create({
       data: {
         churchId: church.id,
         donorId: donorRecord.id,
@@ -231,7 +232,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const succeeded = (transfer.state || "").toUpperCase() === "SUCCEEDED";
     if (succeeded) {
-      await sendReceiptEmail(donor.email, donor.name, church.name, totalCents, false);
+      try {
+        await sendDonationReceipt(newPayment.id, church.id);
+      } catch (err) {
+        console.error("Failed to send donation receipt:", err);
+      }
     }
 
     return NextResponse.json({ success: true, transferId: transfer.id, state: transfer.state });

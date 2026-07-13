@@ -16,6 +16,7 @@ export async function GET() {
     select: {
       logoUrl: true,
       taxId: true,
+      website: true,
       statementSenderName: true,
       statementReplyToEmail: true,
       statementSubjectTemplate: true,
@@ -23,6 +24,12 @@ export async function GET() {
       statementDisclaimer: true,
       statementShowDonorCoveredFees: true,
       statementShowTaxId: true,
+      statementShowWebsite: true,
+      statementSignatureName: true,
+      statementSignatureTitle: true,
+      statementSignatureImageUrl: true,
+      acknowledgmentNoGoodsServicesText: true,
+      acknowledgmentGoodsServicesTemplate: true,
     },
   });
 
@@ -56,6 +63,12 @@ export async function PATCH(req: Request) {
     statementDisclaimer: cleanString(body.statementDisclaimer, 2000),
     statementShowDonorCoveredFees: body.statementShowDonorCoveredFees === true,
     statementShowTaxId: body.statementShowTaxId === true,
+    statementShowWebsite: body.statementShowWebsite === true,
+    statementSignatureName: cleanString(body.statementSignatureName, 200),
+    statementSignatureTitle: cleanString(body.statementSignatureTitle, 200),
+    statementSignatureImageUrl: cleanString(body.statementSignatureImageUrl, 2000),
+    acknowledgmentNoGoodsServicesText: cleanString(body.acknowledgmentNoGoodsServicesText, 1000),
+    acknowledgmentGoodsServicesTemplate: cleanString(body.acknowledgmentGoodsServicesTemplate, 1000),
   };
 
   const church = await prisma.church.update({ where: { id: session.churchId }, data });

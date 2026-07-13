@@ -23,10 +23,14 @@ const RECEIPT_FIELDS = [
   "receiptShowRecurringSchedule",
   "receiptShowDonationReference",
   "receiptShowTaxId",
+  "receiptShowWebsite",
   "receiptDisclaimer",
   "receiptLanguage",
   "receiptSendCopyToOrg",
   "receiptSupportContact",
+  "receiptNumberPrefix",
+  "acknowledgmentNoGoodsServicesText",
+  "acknowledgmentGoodsServicesTemplate",
 ] as const;
 
 const BOOLEAN_FIELDS = new Set([
@@ -40,6 +44,7 @@ const BOOLEAN_FIELDS = new Set([
   "receiptShowRecurringSchedule",
   "receiptShowDonationReference",
   "receiptShowTaxId",
+  "receiptShowWebsite",
   "receiptSendCopyToOrg",
 ]);
 

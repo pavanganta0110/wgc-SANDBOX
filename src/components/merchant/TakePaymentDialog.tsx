@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, CheckCircle, AlertCircle } from "lucide-react";
+import { X, CheckCircle, AlertCircle, ChevronDown } from "lucide-react";
 import toast from "react-hot-toast";
 import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { formatCents } from "@/lib/format";
+import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
+import { DEFAULT_NO_GOODS_SERVICES_TEXT, DEFAULT_GOODS_SERVICES_TEMPLATE } from "@/lib/settings/acknowledgmentDefaults";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 
-type Step = "form" | "processing" | "result";
+type Step = "form" | "review" | "processing" | "result";
 
 interface PaymentResult {
   success: boolean;
@@ -45,6 +47,13 @@ export default function TakePaymentDialog({
   const [coverFees, setCoverFees] = useState(false);
   const [formReady, setFormReady] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const [goodsServicesOpen, setGoodsServicesOpen] = useState(false);
+  const [goodsServicesProvided, setGoodsServicesProvided] = useState(false);
+  const [goodsServicesDescription, setGoodsServicesDescription] = useState("");
+  const [goodsServicesFairMarketValue, setGoodsServicesFairMarketValue] = useState("");
+  const [goodsServicesInternalNote, setGoodsServicesInternalNote] = useState("");
+  const [confirmAccurate, setConfirmAccurate] = useState(false);
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const clientAttemptIdRef = useRef(crypto.randomUUID());
@@ -82,10 +91,34 @@ export default function TakePaymentDialog({
     ? projected
     : { totalCents: amountCents, feeCoveredCents: 0 };
 
+  const goodsServicesFairMarketValueCents = goodsServicesFairMarketValue.trim() ? Math.round((parseFloat(goodsServicesFairMarketValue) || 0) * 100) : null;
+  const goodsServicesValidation = validateGoodsServicesInput(
+    { provided: goodsServicesProvided, description: goodsServicesDescription, fairMarketValueCents: goodsServicesFairMarketValueCents },
+    amountCents,
+  );
+  const recordedContributionAmountCents = goodsServicesProvided
+    ? computeRecordedContributionAmountCents(amountCents, goodsServicesFairMarketValueCents ?? 0)
+    : amountCents;
+  const acknowledgmentPreviewText = goodsServicesProvided
+    ? DEFAULT_GOODS_SERVICES_TEMPLATE.replace(/\[DESCRIPTION\]/g, goodsServicesDescription.trim() || "—").replace(
+        /\[VALUE\]/g,
+        formatCents(goodsServicesFairMarketValueCents ?? 0),
+      )
+    : DEFAULT_NO_GOODS_SERVICES_TEXT;
+
   const canSubmit = formReady && !submitting && amountCents >= 100 && name.trim() && email.trim();
+  const canProceedToReview = canSubmit && goodsServicesValidation.valid;
+
+  const proceedToReview = () => {
+    if (!canProceedToReview) {
+      if (!goodsServicesValidation.valid) setGoodsServicesOpen(true);
+      return;
+    }
+    setStep("review");
+  };
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canProceedToReview || !confirmAccurate) return;
     setSubmitting(true);
 
     try {
@@ -117,6 +150,10 @@ export default function TakePaymentDialog({
           fundName: fundName.trim() || undefined,
           note: note.trim() || undefined,
           isAnonymous,
+          goodsServicesProvided,
+          goodsServicesDescription: goodsServicesProvided ? goodsServicesDescription.trim() : undefined,
+          goodsServicesFairMarketValueCents: goodsServicesProvided ? goodsServicesFairMarketValueCents : undefined,
+          goodsServicesInternalNote: goodsServicesInternalNote.trim() || undefined,
         }),
       });
 
@@ -141,6 +178,7 @@ export default function TakePaymentDialog({
   const handleRetry = () => {
     clientAttemptIdRef.current = crypto.randomUUID();
     setResult(null);
+    setConfirmAccurate(false);
     setStep("form");
   };
 
@@ -284,13 +322,149 @@ export default function TakePaymentDialog({
               </div>
             )}
 
+            <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setGoodsServicesOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100"
+              >
+                <span>Goods or Services</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${goodsServicesOpen ? "rotate-180" : ""}`} />
+              </button>
+              {goodsServicesOpen && (
+                <div className="p-4 space-y-3">
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="radio" name="goodsServices" checked={!goodsServicesProvided} onChange={() => setGoodsServicesProvided(false)} />
+                      No goods or services were provided
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="radio" name="goodsServices" checked={goodsServicesProvided} onChange={() => setGoodsServicesProvided(true)} />
+                      Goods or services were provided
+                    </label>
+                  </div>
+
+                  {goodsServicesProvided && (
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Description of Goods or Services *</label>
+                        <input
+                          value={goodsServicesDescription}
+                          onChange={(e) => setGoodsServicesDescription(e.target.value)}
+                          placeholder="Dinner ticket and event admission"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {goodsServicesValidation.errors.description && (
+                          <p className="text-xs text-red-600 mt-1">{goodsServicesValidation.errors.description}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Estimated Fair Market Value ($) *</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={goodsServicesFairMarketValue}
+                          onChange={(e) => setGoodsServicesFairMarketValue(e.target.value)}
+                          placeholder="35.00"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        {goodsServicesValidation.errors.fairMarketValueCents && (
+                          <p className="text-xs text-red-600 mt-1">{goodsServicesValidation.errors.fairMarketValueCents}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Internal Note (optional)</label>
+                        <input
+                          value={goodsServicesInternalNote}
+                          onChange={(e) => setGoodsServicesInternalNote(e.target.value)}
+                          placeholder="Not shown on the donor receipt"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      {amountCents >= 100 && (
+                        <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 space-y-1">
+                          <div className="flex justify-between">
+                            <span>Payment Amount</span>
+                            <span className="font-semibold text-slate-900">{formatCents(amountCents)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Estimated Value of Goods/Services</span>
+                            <span className="text-slate-500">-{formatCents(goodsServicesFairMarketValueCents ?? 0)}</span>
+                          </div>
+                          <div className="flex justify-between border-t border-slate-200 pt-1 mt-1">
+                            <span className="font-semibold">Recorded Contribution Amount</span>
+                            <span className="font-bold text-slate-900">{formatCents(recordedContributionAmountCents)}</span>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-slate-400">
+                        This calculation is for acknowledgment and record-keeping purposes only. The organization is responsible for confirming the
+                        correct fair market value.
+                      </p>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-500 italic pt-1">"{acknowledgmentPreviewText}"</p>
+                </div>
+              )}
+            </div>
+
             <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
+              onClick={proceedToReview}
+              disabled={!canProceedToReview}
               className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {submitting ? "Processing…" : `Charge ${amountCents >= 100 ? formatCents(totalCents) : ""}`}
+              Continue to Review
             </button>
+          </div>
+        )}
+
+        {step === "review" && (
+          <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
+              <div className="flex justify-between"><span className="text-slate-500">Donor</span><span className="font-semibold">{name}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Payment Amount</span><span className="font-semibold">{formatCents(amountCents)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Payment Method</span><span className="font-semibold">{paymentMethod === "card" ? "Card" : "Bank Account"}</span></div>
+              {fundName.trim() && <div className="flex justify-between"><span className="text-slate-500">Fund/Campaign</span><span className="font-semibold">{fundName.trim()}</span></div>}
+              <div className="flex justify-between">
+                <span className="text-slate-500">Goods or Services</span>
+                <span className="font-semibold">{goodsServicesProvided ? "Provided" : "None Provided"}</span>
+              </div>
+              {goodsServicesProvided && (
+                <>
+                  <div className="flex justify-between"><span className="text-slate-500">Description</span><span className="font-semibold text-right max-w-[60%]">{goodsServicesDescription}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-500">Fair Market Value</span><span className="font-semibold">{formatCents(goodsServicesFairMarketValueCents ?? 0)}</span></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-2 mt-1"><span className="text-slate-500">Recorded Contribution Amount</span><span className="font-bold">{formatCents(recordedContributionAmountCents)}</span></div>
+                </>
+              )}
+              <div className="pt-2 border-t border-slate-200">
+                <p className="text-xs text-slate-500 mb-1">Receipt Acknowledgment</p>
+                <p className="text-xs italic">"{acknowledgmentPreviewText}"</p>
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={confirmAccurate} onChange={(e) => setConfirmAccurate(e.target.checked)} className="mt-0.5" />
+              I confirm that the entered information is accurate.
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setStep("form")}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!confirmAccurate || submitting}
+                className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {submitting ? "Processing…" : `Charge ${formatCents(totalCents)}`}
+              </button>
+            </div>
           </div>
         )}
 

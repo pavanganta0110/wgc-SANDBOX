@@ -5,6 +5,7 @@ import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
+import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
@@ -299,7 +300,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       update: { state: transfer.state ?? undefined, lastSyncedAt: new Date() },
     });
 
-    await prisma.payment.create({
+    const newPayment = await prisma.payment.create({
       data: {
         churchId: church.id,
         donorId: donorRecord.id,
@@ -342,7 +343,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const receiptSettings = link.receiptSettingsJson as { sendAutomatically?: boolean } | null;
     if (succeeded && (receiptSettings?.sendAutomatically ?? true)) {
-      await sendReceiptEmail(donor.email, fullName, church.name, totalCents, false);
+      try {
+        await sendDonationReceipt(newPayment.id, church.id);
+      } catch (err) {
+        console.error("Failed to send donation receipt:", err);
+      }
     }
 
     return NextResponse.json({

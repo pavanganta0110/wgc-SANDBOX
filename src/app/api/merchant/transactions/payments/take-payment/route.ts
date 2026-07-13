@@ -4,9 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
-import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
+import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
+import { logDashboardAction } from "@/lib/dashboardAudit";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -28,10 +30,26 @@ export async function POST(req: Request) {
       fundName,
       note,
       isAnonymous,
+      goodsServicesProvided,
+      goodsServicesDescription,
+      goodsServicesFairMarketValueCents,
+      goodsServicesInternalNote,
     } = body;
 
     if (!token || !donationAmountCents || donationAmountCents < 100) {
       return NextResponse.json({ error: "Invalid payment amount (minimum $1.00)" }, { status: 400 });
+    }
+
+    const goodsServicesValidation = validateGoodsServicesInput(
+      {
+        provided: Boolean(goodsServicesProvided),
+        description: typeof goodsServicesDescription === "string" ? goodsServicesDescription : "",
+        fairMarketValueCents: typeof goodsServicesFairMarketValueCents === "number" ? goodsServicesFairMarketValueCents : null,
+      },
+      donationAmountCents,
+    );
+    if (!goodsServicesValidation.valid) {
+      return NextResponse.json({ error: "Please correct the goods/services information", fieldErrors: goodsServicesValidation.errors }, { status: 400 });
     }
     if (!fraudSessionId) {
       return NextResponse.json({ error: "Missing fraud session" }, { status: 400 });
@@ -205,7 +223,16 @@ export async function POST(req: Request) {
       },
     });
 
-    await prisma.payment.create({
+    // Quid-pro-quo disclosure for this specific contribution (e.g. a gala
+    // ticket or event with a fair-market value) — entered by the admin
+    // taking the payment via the "Goods or Services" section of the form.
+    const goodsServicesProvidedValue = Boolean(goodsServicesProvided);
+    const goodsServicesFairMarketValueCentsValue = goodsServicesProvidedValue ? goodsServicesFairMarketValueCents ?? 0 : null;
+    const recordedContributionAmountCents = goodsServicesProvidedValue
+      ? computeRecordedContributionAmountCents(donationAmountCents, goodsServicesFairMarketValueCentsValue ?? 0)
+      : donationAmountCents;
+
+    const newPayment = await prisma.payment.create({
       data: {
         churchId: church.id,
         donorId: donorRecord.id,
@@ -224,12 +251,40 @@ export async function POST(req: Request) {
         isAnonymous: isAnonymous ?? false,
         createdByAdminUserId: session.userId,
         paymentAttemptId: attempt.id,
+        goodsServicesProvided: goodsServicesProvidedValue,
+        goodsServicesDescription: goodsServicesProvidedValue ? String(goodsServicesDescription).trim() : null,
+        goodsServicesFairMarketValueCents: goodsServicesFairMarketValueCentsValue,
+        goodsServicesInternalNote: typeof goodsServicesInternalNote === "string" ? goodsServicesInternalNote.trim() || null : null,
+        recordedContributionAmountCents,
+        acknowledgmentConfiguredByUserId: session.userId,
+        acknowledgmentConfiguredAt: new Date(),
       },
+    });
+
+    await logDashboardAction({
+      churchId: church.id,
+      actorUserId: session.userId,
+      actorEmail: session.email,
+      actorRole: session.role,
+      action: "giving.goods_services_acknowledgment_set",
+      entityType: "payment",
+      entityId: newPayment.id,
+      metadata: {
+        goodsServicesProvided: goodsServicesProvidedValue,
+        goodsServicesDescription: goodsServicesProvidedValue ? goodsServicesDescription : null,
+        goodsServicesFairMarketValueCents: goodsServicesFairMarketValueCentsValue,
+        recordedContributionAmountCents,
+      },
+      req,
     });
 
     const succeeded = (transfer.state || "").toUpperCase() === "SUCCEEDED";
     if (succeeded) {
-      await sendReceiptEmail(donor.email, donor.name, church.name, totalCents, false);
+      try {
+        await sendDonationReceipt(newPayment.id, church.id, session.userId);
+      } catch (err) {
+        console.error("Failed to send donation receipt:", err);
+      }
     }
 
     return NextResponse.json({

@@ -22,9 +22,13 @@ interface FormValues {
   receiptShowRecurringSchedule: boolean;
   receiptShowDonationReference: boolean;
   receiptShowTaxId: boolean;
+  receiptShowWebsite: boolean;
   receiptDisclaimer: string;
   receiptSendCopyToOrg: boolean;
   receiptSupportContact: string;
+  receiptNumberPrefix: string;
+  acknowledgmentNoGoodsServicesText: string;
+  acknowledgmentGoodsServicesTemplate: string;
 }
 
 const inputClass = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400";
@@ -110,19 +114,52 @@ export default function ReceiptSettingsForm({ initial }: { initial: FormValues }
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Footer</label><textarea className={inputClass} rows={2} value={values.receiptFooter} onChange={(e) => set("receiptFooter", e.target.value)} /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Custom Disclaimer</label><textarea className={inputClass} rows={2} value={values.receiptDisclaimer} onChange={(e) => set("receiptDisclaimer", e.target.value)} /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Support Contact</label><input className={inputClass} value={values.receiptSupportContact} onChange={(e) => set("receiptSupportContact", e.target.value)} /></div>
+          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Number Prefix</label><input className={inputClass} value={values.receiptNumberPrefix} onChange={(e) => set("receiptNumberPrefix", e.target.value)} placeholder="RCPT" /></div>
         </div>
 
         <div className="mt-4 pt-4 border-t border-slate-100">
           <Toggle label="Include Organization Address" checked={values.receiptShowAddress} onChange={(v) => set("receiptShowAddress", v)} />
           <Toggle label="Include Organization Phone" checked={values.receiptShowPhone} onChange={(v) => set("receiptShowPhone", v)} />
           <Toggle label="Include Organization Email" checked={values.receiptShowEmail} onChange={(v) => set("receiptShowEmail", v)} />
+          <Toggle label="Include Organization Website" checked={values.receiptShowWebsite} onChange={(v) => set("receiptShowWebsite", v)} />
           <Toggle label="Include Fund/Campaign" checked={values.receiptShowFund} onChange={(v) => set("receiptShowFund", v)} />
           <Toggle label="Include Donor-Covered Fee" checked={values.receiptShowDonorCoveredFee} onChange={(v) => set("receiptShowDonorCoveredFee", v)} />
           <Toggle label="Include Payment Method Last Four" checked={values.receiptShowPaymentMethodLastFour} onChange={(v) => set("receiptShowPaymentMethodLastFour", v)} />
           <Toggle label="Include Recurring Schedule Details" checked={values.receiptShowRecurringSchedule} onChange={(v) => set("receiptShowRecurringSchedule", v)} />
           <Toggle label="Include Donation Reference" checked={values.receiptShowDonationReference} onChange={(v) => set("receiptShowDonationReference", v)} />
-          <Toggle label="Include Organization Tax ID" checked={values.receiptShowTaxId} onChange={(v) => set("receiptShowTaxId", v)} />
+          <Toggle label="Include EIN / Tax ID" checked={values.receiptShowTaxId} onChange={(v) => set("receiptShowTaxId", v)} />
           <Toggle label="Send Copy to Organization" checked={values.receiptSendCopyToOrg} onChange={(v) => set("receiptSendCopyToOrg", v)} />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <p className="text-xs font-semibold text-slate-700 mb-1">Acknowledgment Wording</p>
+          <p className="text-xs text-slate-500 mb-3">
+            Used on both donation receipts and year-end statements. WGC does not provide tax or legal advice — your organization is
+            responsible for ensuring this wording complies with applicable tax laws.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">When No Goods or Services Were Provided</label>
+              <textarea
+                className={inputClass}
+                rows={2}
+                value={values.acknowledgmentNoGoodsServicesText}
+                onChange={(e) => set("acknowledgmentNoGoodsServicesText", e.target.value)}
+                placeholder="No goods or services were provided in exchange for this contribution."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">When Goods or Services Were Provided</label>
+              <textarea
+                className={inputClass}
+                rows={2}
+                value={values.acknowledgmentGoodsServicesTemplate}
+                onChange={(e) => set("acknowledgmentGoodsServicesTemplate", e.target.value)}
+                placeholder="Goods or services valued at [VALUE] were provided in exchange for this contribution. [DESCRIPTION]"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">Use [VALUE] and [DESCRIPTION] as placeholders — replaced per contribution.</p>
+            </div>
+          </div>
         </div>
 
         <SettingsSaveBar isDirty={isDirty} saving={saving} error={error} onSave={save} onReset={() => setValues(initial)} />

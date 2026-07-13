@@ -249,6 +249,13 @@ model Church {
   statementDisclaimer           String?
   statementShowDonorCoveredFees Boolean @default(false)
   statementShowTaxId            Boolean @default(false)
+  statementShowWebsite          Boolean @default(false)
+  // Optional authorized-signature block on year-end statements — a name/
+  // title pair renders as a signature line even without an image; the image
+  // (if provided) renders above them. All optional per organization.
+  statementSignatureName        String?
+  statementSignatureTitle       String?
+  statementSignatureImageUrl    String?
 
   // General settings (Settings -> General). All optional/nullable —
   // display falls back to existing fields (name, primaryContactEmail) or
@@ -296,10 +303,27 @@ model Church {
   receiptShowRecurringSchedule     Boolean @default(true)
   receiptShowDonationReference     Boolean @default(true)
   receiptShowTaxId                 Boolean @default(false)
+  receiptShowWebsite               Boolean @default(false)
   receiptDisclaimer                String?
   receiptLanguage                  String? // default "en"
   receiptSendCopyToOrg             Boolean @default(false)
   receiptSupportContact            String?
+  // Sequential-looking receipt number prefix, e.g. "RCPT" -> "RCPT-2026-AB12CD34".
+  // Not a database counter — derived deterministically from the payment id,
+  // so no cross-request coordination is needed and it's stable on resend.
+  receiptNumberPrefix              String? @default("RCPT")
+
+  // Acknowledgment / tax-compliance wording (Settings -> Receipts). Shared
+  // between individual receipts and year-end statements. Never hardcoded in
+  // UI or PDF templates — every organization can rewrite this to match its
+  // own tax counsel's guidance; these are only the built-in starting
+  // defaults, applied by resolveAcknowledgmentSettings() when unset.
+  acknowledgmentNoGoodsServicesText   String?
+  // Supports [DESCRIPTION] and [VALUE] tokens, replaced with the per-payment
+  // (or, for statements, per-line) goods/services description and formatted
+  // fair-market-value amount when a contribution had goods or services
+  // provided in exchange.
+  acknowledgmentGoodsServicesTemplate String?
 
   // Branding (Settings -> Branding). logoUrl already existed; colors/favicon
   // are net-new, no schema precedent before this.
@@ -358,7 +382,7 @@ model OrganizationBankAccount {
   reviewStartedAt          DateTime?
   verifiedAt               DateTime?
   activatedAt              DateTime?
-  rejectedAt                DateTime?
+  rejectedAt               DateTime?
   disabledAt               DateTime?
   replacedAt               DateTime?
   replacedByAccountId      String?
@@ -374,7 +398,7 @@ model OrganizationBankAccount {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  church Church @relation(fields: [churchId], references: [id])
+  church                   Church                       @relation(fields: [churchId], references: [id])
   changeRequestsAsCurrent  PayoutAccountChangeRequest[] @relation("CurrentAccount")
   changeRequestsAsProposed PayoutAccountChangeRequest[] @relation("ProposedAccount")
   documents                PayoutAccountDocument[]
@@ -391,15 +415,15 @@ model OrganizationBankAccount {
 /// the admin uploads whatever they were asked for under a free-text label
 /// they choose, rather than this app guessing/hardcoding a fixed list.
 model PayoutAccountDocument {
-  id                      String   @id @default(cuid())
+  id                        String   @id @default(cuid())
   organizationBankAccountId String
-  label                   String? // e.g. "Voided Check" — freely entered by the admin, never a hardcoded enum
-  fileName                String
-  fileSize                Int
-  mimeType                String
-  finixFileId             String?
-  uploadedByUserId        String?
-  createdAt               DateTime @default(now())
+  label                     String? // e.g. "Voided Check" — freely entered by the admin, never a hardcoded enum
+  fileName                  String
+  fileSize                  Int
+  mimeType                  String
+  finixFileId               String?
+  uploadedByUserId          String?
+  createdAt                 DateTime @default(now())
 
   organizationBankAccount OrganizationBankAccount @relation(fields: [organizationBankAccountId], references: [id])
 
@@ -411,20 +435,20 @@ model PayoutAccountDocument {
 /// (idempotency, consent, processor reference) doesn't get conflated with
 /// the account's own long-lived state.
 model PayoutAccountChangeRequest {
-  id                       String    @id @default(cuid())
-  churchId                 String
-  currentAccountId         String?
-  proposedAccountId        String?
-  requestedByUserId        String?
-  state                    String    @default("SUBMITTED") // SUBMITTED | VALIDATION_PENDING | UNDER_REVIEW | VERIFIED | ACTIVATED | REJECTED | FAILED | SUPPORT_REVIEW_REQUIRED
-  idempotencyKey           String    @unique
-  consentSnapshot          String? // the exact confirmation text the admin agreed to, for audit
+  id                        String    @id @default(cuid())
+  churchId                  String
+  currentAccountId          String?
+  proposedAccountId         String?
+  requestedByUserId         String?
+  state                     String    @default("SUBMITTED") // SUBMITTED | VALIDATION_PENDING | UNDER_REVIEW | VERIFIED | ACTIVATED | REJECTED | FAILED | SUPPORT_REVIEW_REQUIRED
+  idempotencyKey            String    @unique
+  consentSnapshot           String? // the exact confirmation text the admin agreed to, for audit
   processorRequestReference String? // finixPaymentInstrumentId of the proposed account, once created
-  submittedAt              DateTime  @default(now())
-  completedAt              DateTime?
-  failedAt                 DateTime?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  submittedAt               DateTime  @default(now())
+  completedAt               DateTime?
+  failedAt                  DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   currentAccount  OrganizationBankAccount? @relation("CurrentAccount", fields: [currentAccountId], references: [id])
   proposedAccount OrganizationBankAccount? @relation("ProposedAccount", fields: [proposedAccountId], references: [id])
@@ -611,37 +635,96 @@ model Fund {
 }
 
 model Payment {
-  id                         String    @id @default(cuid())
-  churchId                   String
-  donorId                    String?
-  givingPageId               String?
-  givingLinkId               String?
-  finixTransferId            String?
-  finixBuyerIdentityId       String?
-  finixPaymentInstrumentId   String?
-  amountCents                Int
-  donationAmountCents        Int?
-  feeCoveredCents            Int?
-  currency                   String    @default("USD")
-  paymentMethodType          String
-  status                     String
-  failureCode                String?
-  failureMessage             String?
-  failedAt                   DateTime?
-  idempotencyId              String?
-  fraudSessionId             String?
-  receiptStatus              String?
-  receiptSentAt              DateTime?
-  achAuthorizationAccepted   Boolean   @default(false)
-  achAuthorizationAcceptedAt DateTime?
-  fundName                   String?
-  fundId                     String?
-  note                       String?
-  isAnonymous                Boolean   @default(false)
-  createdByAdminUserId       String?
-  paymentAttemptId           String?
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
+  id                                String    @id @default(cuid())
+  churchId                          String
+  donorId                           String?
+  givingPageId                      String?
+  givingLinkId                      String?
+  finixTransferId                   String?
+  finixBuyerIdentityId              String?
+  finixPaymentInstrumentId          String?
+  amountCents                       Int
+  donationAmountCents               Int?
+  feeCoveredCents                   Int?
+  currency                          String    @default("USD")
+  paymentMethodType                 String
+  status                            String
+  failureCode                       String?
+  failureMessage                    String?
+  failedAt                          DateTime?
+  idempotencyId                     String?
+  fraudSessionId                    String?
+  receiptStatus                     String?
+  receiptSentAt                     DateTime?
+  // Latest receipt number/status cache — mirrors the current (non-superseded)
+  // DonationReceipt row for this payment. DonationReceipt is the source of
+  // truth for the full version history; these two fields exist so payment
+  // list/detail views don't need an extra join for the common case.
+  receiptNumber                     String?
+  // Quid-pro-quo disclosure for this specific contribution, entered by the
+  // admin taking the payment (or corrected afterward — see DonationReceipt
+  // for the immutable per-version snapshot actually shown to the donor).
+  // goodsServicesProvided is the authoritative flag; description/value are
+  // only meaningful when it's true.
+  goodsServicesProvided             Boolean   @default(false)
+  goodsServicesDescription          String?
+  goodsServicesFairMarketValueCents Int?
+  // Staff-only context for why/what was recorded — never shown on the donor
+  // receipt.
+  goodsServicesInternalNote         String?
+  // paymentAmountCents - goodsServicesFairMarketValueCents (0 when nothing
+  // was provided). For acknowledgment/record-keeping purposes only — not a
+  // computed tax deduction.
+  recordedContributionAmountCents   Int?
+  acknowledgmentConfiguredByUserId  String?
+  acknowledgmentConfiguredAt        DateTime?
+  achAuthorizationAccepted          Boolean   @default(false)
+  achAuthorizationAcceptedAt        DateTime?
+  fundName                          String?
+  fundId                            String?
+  note                              String?
+  isAnonymous                       Boolean   @default(false)
+  createdByAdminUserId              String?
+  paymentAttemptId                  String?
+  createdAt                         DateTime  @default(now())
+  updatedAt                         DateTime  @updatedAt
+
+  receipts DonationReceipt[]
+}
+
+// One immutable snapshot per receipt version sent (or prepared) for a
+// Payment — mirrors the AnnualDonationStatement versioning pattern
+// (immutable snapshot + supersededAt) rather than mutating a single row in
+// place, so a correction after a receipt has already been sent to a donor
+// never silently rewrites what they were shown. version 1 is the original;
+// any correction creates version 2, 3, ... and marks the prior
+// non-superseded row supersededAt.
+model DonationReceipt {
+  id            String @id @default(cuid())
+  paymentId     String
+  churchId      String
+  version       Int    @default(1)
+  receiptNumber String
+
+  paymentAmountCentsSnapshot                Int
+  goodsServicesProvidedSnapshot             Boolean @default(false)
+  goodsServicesDescriptionSnapshot          String?
+  goodsServicesFairMarketValueCentsSnapshot Int?
+  recordedContributionAmountCentsSnapshot   Int?
+  acknowledgmentTextSnapshot                String
+
+  recipientEmail String?
+  sentAt         DateTime?
+  failureReason  String?
+  supersededAt   DateTime?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([paymentId])
+  @@index([churchId])
 }
 
 // A payment attempt initiated by a church admin from the dashboard's "Take
@@ -1590,6 +1673,14 @@ model AnnualDonationStatementLine {
   returnedAmountCents    Int @default(0)
   disputeAdjustmentCents Int @default(0)
   eligibleAmountCents    Int @default(0)
+
+  // Snapshotted from the Payment's goods/services fields at generation
+  // time, per line — a statement immutably reflects what each individual
+  // contribution actually disclosed, not a live re-read.
+  goodsServicesProvided             Boolean @default(false)
+  goodsServicesDescription          String?
+  goodsServicesFairMarketValueCents Int?
+  recordedContributionAmountCents   Int?
 
   createdAt DateTime @default(now())
 

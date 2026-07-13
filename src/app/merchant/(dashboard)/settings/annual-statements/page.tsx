@@ -13,6 +13,7 @@ export default async function StatementSettingsPage() {
     select: {
       logoUrl: true,
       taxId: true,
+      website: true,
       statementSenderName: true,
       statementReplyToEmail: true,
       statementSubjectTemplate: true,
@@ -20,6 +21,10 @@ export default async function StatementSettingsPage() {
       statementDisclaimer: true,
       statementShowDonorCoveredFees: true,
       statementShowTaxId: true,
+      statementShowWebsite: true,
+      statementSignatureName: true,
+      statementSignatureTitle: true,
+      statementSignatureImageUrl: true,
     },
   });
 
@@ -34,6 +39,7 @@ export default async function StatementSettingsPage() {
           initial={{
             logoUrl: church?.logoUrl ?? null,
             taxId: church?.taxId ?? null,
+            website: church?.website ?? null,
             statementSenderName: church?.statementSenderName ?? null,
             statementReplyToEmail: church?.statementReplyToEmail ?? null,
             statementSubjectTemplate: church?.statementSubjectTemplate ?? null,
@@ -41,6 +47,10 @@ export default async function StatementSettingsPage() {
             statementDisclaimer: church?.statementDisclaimer ?? null,
             statementShowDonorCoveredFees: church?.statementShowDonorCoveredFees ?? false,
             statementShowTaxId: church?.statementShowTaxId ?? false,
+            statementShowWebsite: church?.statementShowWebsite ?? false,
+            statementSignatureName: church?.statementSignatureName ?? null,
+            statementSignatureTitle: church?.statementSignatureTitle ?? null,
+            statementSignatureImageUrl: church?.statementSignatureImageUrl ?? null,
           }}
         />
       </div>

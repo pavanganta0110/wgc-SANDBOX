@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import ReceiptSettingsForm from "@/components/merchant/ReceiptSettingsForm";
 import { DEFAULT_RECEIPT_SUBJECT_TEMPLATE, DEFAULT_RECEIPT_THANK_YOU_MESSAGE, DEFAULT_RECEIPT_DISCLAIMER } from "@/lib/settings/receiptDefaults";
+import { DEFAULT_NO_GOODS_SERVICES_TEXT, DEFAULT_GOODS_SERVICES_TEMPLATE } from "@/lib/settings/acknowledgmentDefaults";
 
 export default async function ReceiptSettingsPage() {
   const session = await getSession();
@@ -32,9 +33,13 @@ export default async function ReceiptSettingsPage() {
           receiptShowRecurringSchedule: church.receiptShowRecurringSchedule,
           receiptShowDonationReference: church.receiptShowDonationReference,
           receiptShowTaxId: church.receiptShowTaxId,
+          receiptShowWebsite: church.receiptShowWebsite,
           receiptDisclaimer: church.receiptDisclaimer || DEFAULT_RECEIPT_DISCLAIMER,
           receiptSendCopyToOrg: church.receiptSendCopyToOrg,
           receiptSupportContact: church.receiptSupportContact || "",
+          receiptNumberPrefix: church.receiptNumberPrefix || "RCPT",
+          acknowledgmentNoGoodsServicesText: church.acknowledgmentNoGoodsServicesText || DEFAULT_NO_GOODS_SERVICES_TEXT,
+          acknowledgmentGoodsServicesTemplate: church.acknowledgmentGoodsServicesTemplate || DEFAULT_GOODS_SERVICES_TEMPLATE,
         }}
       />
     </div>

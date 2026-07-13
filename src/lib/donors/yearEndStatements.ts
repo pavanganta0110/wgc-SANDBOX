@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidEmail } from "@/lib/donors/donorContact";
+import { computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 
 /** A statement can't be generated/sent with confidence until the donor has a valid email and a resolvable display name (anonymous donors are exempt from the name check by design). */
 export function hasMissingStatementInfo(donor: { email: string | null; name: string | null }, displayName: string, isAnonymous: boolean): boolean {
@@ -24,6 +25,10 @@ export interface StatementLine {
   returnedAmountCents: number;
   finalRecordedAmountCents: number;
   paymentMethodLabel: string;
+  goodsServicesProvided: boolean;
+  goodsServicesDescription: string | null;
+  goodsServicesFairMarketValueCents: number | null;
+  recordedContributionAmountCents: number;
 }
 
 export interface StatementCalculation {
@@ -33,6 +38,8 @@ export interface StatementCalculation {
   refundedAmountCents: number;
   returnedAmountCents: number;
   recordedTotalCents: number;
+  totalGoodsServicesValueCents: number;
+  totalRecordedContributionAmountCents: number;
   lines: StatementLine[];
 }
 
@@ -67,7 +74,17 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
   const instrumentIds = instruments.map((i) => i.finixPaymentInstrumentId);
   const instrumentById = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
   if (instrumentIds.length === 0) {
-    return { taxYear, donationCount: 0, grossDonatedCents: 0, refundedAmountCents: 0, returnedAmountCents: 0, recordedTotalCents: 0, lines: [] };
+    return {
+      taxYear,
+      donationCount: 0,
+      grossDonatedCents: 0,
+      refundedAmountCents: 0,
+      returnedAmountCents: 0,
+      recordedTotalCents: 0,
+      totalGoodsServicesValueCents: 0,
+      totalRecordedContributionAmountCents: 0,
+      lines: [],
+    };
   }
 
   const transfers = await prisma.finixTransfer.findMany({
@@ -84,7 +101,18 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
       ? prisma.bankReturn.findMany({ where: { churchId, originalTransferId: { in: transferIds } }, select: { originalTransferId: true, amountCents: true } })
       : Promise.resolve([]),
     transferIds.length
-      ? prisma.payment.findMany({ where: { churchId, finixTransferId: { in: transferIds } }, select: { id: true, finixTransferId: true, fundId: true, feeCoveredCents: true } })
+      ? prisma.payment.findMany({
+          where: { churchId, finixTransferId: { in: transferIds } },
+          select: {
+            id: true,
+            finixTransferId: true,
+            fundId: true,
+            feeCoveredCents: true,
+            goodsServicesProvided: true,
+            goodsServicesDescription: true,
+            goodsServicesFairMarketValueCents: true,
+          },
+        })
       : Promise.resolve([]),
   ]);
 
@@ -102,6 +130,8 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
   let grossDonatedCents = 0;
   let refundedAmountCents = 0;
   let returnedAmountCents = 0;
+  let totalGoodsServicesValueCents = 0;
+  let totalRecordedContributionAmountCents = 0;
 
   for (const t of transfers) {
     const gross = t.amountCents ?? 0;
@@ -115,6 +145,10 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
 
     const instrument = t.finixPaymentInstrumentId ? instrumentById.get(t.finixPaymentInstrumentId) : undefined;
     const payment = paymentByTransfer.get(t.finixTransferId);
+
+    const goodsServicesProvided = payment?.goodsServicesProvided ?? false;
+    const fairMarketValueCents = goodsServicesProvided ? payment?.goodsServicesFairMarketValueCents ?? 0 : 0;
+    const recordedContributionAmountCents = goodsServicesProvided ? computeRecordedContributionAmountCents(final, fairMarketValueCents) : final;
 
     lines.push({
       paymentId: payment?.id ?? null,
@@ -132,16 +166,24 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
         : instrument?.bankLast4
           ? `Bank •••• ${instrument.bankLast4}`
           : "—",
+      goodsServicesProvided,
+      goodsServicesDescription: goodsServicesProvided ? payment?.goodsServicesDescription ?? null : null,
+      goodsServicesFairMarketValueCents: goodsServicesProvided ? payment?.goodsServicesFairMarketValueCents ?? null : null,
+      recordedContributionAmountCents,
     });
 
     grossDonatedCents += gross;
     refundedAmountCents += refunded;
     returnedAmountCents += returned;
+    totalGoodsServicesValueCents += fairMarketValueCents;
+    totalRecordedContributionAmountCents += recordedContributionAmountCents;
   }
 
   return {
     taxYear,
     donationCount: lines.length,
+    totalGoodsServicesValueCents,
+    totalRecordedContributionAmountCents,
     grossDonatedCents,
     refundedAmountCents,
     returnedAmountCents,

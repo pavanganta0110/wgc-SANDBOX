@@ -20,6 +20,7 @@ export interface ReceiptSettingsSource {
   receiptShowRecurringSchedule?: boolean | null;
   receiptShowDonationReference?: boolean | null;
   receiptShowTaxId?: boolean | null;
+  receiptShowWebsite?: boolean | null;
   receiptDisclaimer?: string | null;
   receiptLanguage?: string | null;
 }
@@ -43,6 +44,7 @@ export function resolveReceiptSettings(church: ReceiptSettingsSource | null) {
     showRecurringSchedule: church?.receiptShowRecurringSchedule ?? true,
     showDonationReference: church?.receiptShowDonationReference ?? true,
     showTaxId: church?.receiptShowTaxId ?? false,
+    showWebsite: church?.receiptShowWebsite ?? false,
     disclaimer: church?.receiptDisclaimer || DEFAULT_RECEIPT_DISCLAIMER,
     language: church?.receiptLanguage || "en",
   };
