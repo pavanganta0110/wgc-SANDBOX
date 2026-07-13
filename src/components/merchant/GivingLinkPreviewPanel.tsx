@@ -49,42 +49,58 @@ export default function GivingLinkPreviewPanel({
   hideFooter: boolean;
 }) {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [formError, setFormError] = useState(false);
   const [formKey, setFormKey] = useState(0);
 
   return (
     <div className="lg:sticky lg:top-6 h-fit">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-bold text-slate-900">Live Preview</h4>
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 p-1">
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-bold text-slate-900">Live Preview</h4>
+          <span className="lg:hidden text-xs text-slate-400">(Device preview)</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+            <button
+              onClick={() => setPreviewDevice("desktop")}
+              className={`p-1.5 rounded-lg ${previewDevice === "desktop" ? "bg-slate-900 text-white" : "text-slate-500"}`}
+              aria-label="Desktop preview"
+            >
+              <Monitor className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setPreviewDevice("mobile")}
+              className={`p-1.5 rounded-lg ${previewDevice === "mobile" ? "bg-slate-900 text-white" : "text-slate-500"}`}
+              aria-label="Mobile preview"
+            >
+              <Smartphone className="w-4 h-4" />
+            </button>
+          </div>
+
           <button
-            onClick={() => setPreviewDevice("desktop")}
-            className={`p-1.5 rounded-lg ${previewDevice === "desktop" ? "bg-slate-900 text-white" : "text-slate-500"}`}
-            aria-label="Desktop preview"
+            type="button"
+            onClick={() => setPreviewCollapsed(!previewCollapsed)}
+            className="lg:hidden px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50"
           >
-            <Monitor className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setPreviewDevice("mobile")}
-            className={`p-1.5 rounded-lg ${previewDevice === "mobile" ? "bg-slate-900 text-white" : "text-slate-500"}`}
-            aria-label="Mobile preview"
-          >
-            <Smartphone className="w-4 h-4" />
+            {previewCollapsed ? "Show Preview" : "Collapse"}
           </button>
         </div>
       </div>
 
-      <p className="text-xs text-slate-400 mb-3">
-        This renders the actual giving page component in a safe preview mode — no real payment, donation, or receipt is ever created here.
-      </p>
+      {!previewCollapsed && (
+        <>
+          <p className="text-xs text-slate-400 mb-3">
+            This renders the actual giving page component in a safe preview mode — no real payment, donation, or receipt is ever created here.
+          </p>
 
-      {/* Mobile preview uses a real narrow viewport container (not a scaled-down desktop frame) so responsive Tailwind breakpoints inside the shared form actually engage. */}
-      <div
-        className={`mx-auto border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 transition-all ${
-          previewDevice === "mobile" ? "w-[375px]" : "w-full"
-        }`}
-      >
-        <div className="overflow-y-auto max-h-[720px] py-8 px-4" style={{ backgroundColor: light.pageBackground }}>
+          {/* Mobile preview uses a real narrow viewport container (not a scaled-down desktop frame) so responsive Tailwind breakpoints inside the shared form actually engage. */}
+          <div
+            className={`mx-auto border border-slate-200 rounded-2xl overflow-hidden bg-slate-50 transition-all ${
+              previewDevice === "mobile" ? "w-[375px]" : "w-full"
+            }`}
+          >
+            <div className="overflow-y-auto max-h-[720px] py-8 px-4" style={{ backgroundColor: light.pageBackground }}>
           {formError ? (
             <div className="max-w-md mx-auto bg-white rounded-2xl border border-red-100 p-8 text-center">
               <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
@@ -105,6 +121,10 @@ export default function GivingLinkPreviewPanel({
               className="max-w-md mx-auto bg-white rounded-2xl shadow-sm border p-8"
               style={{ borderColor: light.borderColor, backgroundColor: light.headerBackground }}
             >
+              {light.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={light.logoUrl} alt="Logo" className="h-12 mb-6 mx-auto object-contain" />
+              )}
               {campaignImageUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={campaignImageUrl} alt="" className="w-full h-32 object-cover rounded-xl mb-6" />
@@ -150,6 +170,8 @@ export default function GivingLinkPreviewPanel({
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
