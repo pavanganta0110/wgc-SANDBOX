@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -252,10 +253,89 @@ export default async function PaymentDetailPanel({
         </div>
       </Section>
 
-      <Section title="Payment Details">
-        {paymentSettlement && (
-          <Row label="Settlement State" value={settlementStateLabel(paymentSettlement.state) || "—"} />
+      {/* ── Fee Section ── */}
+      <Section title="Fee">
+        {(() => {
+          const tags =
+            transfer.tagsJson && typeof transfer.tagsJson === "object" && !Array.isArray(transfer.tagsJson)
+              ? (transfer.tagsJson as Record<string, string>)
+              : {};
+
+          const grossCents = transfer.amountCents ?? 0;
+
+          // Processing fee: real DB field first, then tags fallback
+          const processingFeeCents =
+            transfer.feeCents !== null && transfer.feeCents !== undefined
+              ? transfer.feeCents
+              : tags.processing_fee_cents !== undefined
+                ? Number(tags.processing_fee_cents)
+                : null;
+
+          // Supplemental fee (donor covers fee portion)
+          const supplementalFeeCents =
+            payment?.feeCoveredCents !== null && payment?.feeCoveredCents !== undefined
+              ? payment.feeCoveredCents
+              : null;
+
+          // Net: gross minus processing fee (supplemental is donor-paid, not deducted from merchant net)
+          const netCents =
+            processingFeeCents !== null
+              ? grossCents - processingFeeCents
+              : payment?.merchantExpectedNetCents !== null && payment?.merchantExpectedNetCents !== undefined
+                ? payment.merchantExpectedNetCents
+                : null;
+
+          const donorCoversFee = payment?.donorCoversFee ?? false;
+
+          return (
+            <div className="space-y-1">
+              <Row label="Gross Amount" value={formatCents(grossCents)} />
+              <Row
+                label="Processing Fee"
+                value={processingFeeCents !== null ? formatCents(processingFeeCents) : "—"}
+              />
+              {supplementalFeeCents !== null && (
+                <Row label="Supplemental Fee" value={formatCents(supplementalFeeCents)} />
+              )}
+              {netCents !== null && (
+                <Row label="Net Amount" value={formatCents(netCents)} />
+              )}
+              <Row label="Donor Covers Fee" value={donorCoversFee ? "Yes" : "No"} />
+            </div>
+          );
+        })()}
+      </Section>
+
+      {/* ── Settlement Section ── */}
+      <Section title="Settlement">
+        {paymentSettlement ? (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-sm py-1">
+              <span className="text-slate-500">Settlement ID</span>
+              <CopyableIdBadge id={paymentSettlement.finixSettlementId} />
+            </div>
+            <Row label="State" value={settlementStateLabel(paymentSettlement.state) || "—"} />
+            {paymentSettlement.createdAtFinix && (
+              <Row label="Date" value={formatDateTime(paymentSettlement.createdAtFinix)} />
+            )}
+            {paymentSettlement.netAmountCents !== null && paymentSettlement.netAmountCents !== undefined && (
+              <Row label="Net Settlement Amount" value={formatCents(paymentSettlement.netAmountCents)} />
+            )}
+            <div className="pt-1">
+              <Link
+                href={`/merchant/settlements/${paymentSettlement.finixSettlementId}`}
+                className="text-xs font-semibold text-blue-600 hover:underline"
+              >
+                View Settlement Details →
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Not yet included in a settlement.</p>
         )}
+      </Section>
+
+      <Section title="Payment Details">
         <Row label="Created Via" value={sourceLabel(transfer.source)} />
         <Row label="Statement Descriptor" value={transfer.statementDescriptor || "—"} />
         {transfer.failureCode && <Row label="Failure Code" value={transfer.failureCode} />}
