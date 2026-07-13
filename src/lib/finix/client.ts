@@ -200,6 +200,22 @@ export class FinixClient {
     return this.fetchApi(`/fee_profiles/${feeProfileId}`);
   }
 
+  /**
+   * Read-only. `merchant_profile.payout_profile` (confirmed present via a
+   * real GET /merchant_profiles/{id} response — see syncFeeProfiles.ts) is
+   * an ID Finix returns but this codebase has never fetched or inspected
+   * before. GET /payout_profiles/{id} follows the exact same
+   * resource-per-URL-segment convention as every other confirmed Finix
+   * endpoint in this client (merchant_profiles, fee_profiles, settlements).
+   * Its response SHAPE — specifically, whether it references a bank
+   * Payment Instrument, and whether that reference is writable — is NOT
+   * confirmed. Do not assume field names from this response; log/store the
+   * raw payload and inspect before building any write path against it.
+   */
+  async getPayoutProfile(payoutProfileId: string) {
+    return this.fetchApi(`/payout_profiles/${payoutProfileId}`);
+  }
+
   async listFeeProfiles() {
     return this.fetchApi("/fee_profiles");
   }

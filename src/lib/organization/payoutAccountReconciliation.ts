@@ -5,13 +5,28 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 /**
  * Called whenever an account first reaches APPROVED, from either the
  * PAYMENT_INSTRUMENT webhook handler or the reconciliation fallback below.
- * No confirmed Finix API exists in this codebase to detect or trigger
- * "this instrument is now the seller's active payout destination," so
- * instead of fabricating ACTIVE this auto-creates a support exception — an
- * automatic alert, not a routine approval queue — so WGC can confirm
- * activation once, out of band, per account.
+ * Always tries the automatic activation plug-in point first
+ * (attemptAutomaticPayoutDestinationActivation) — today that always
+ * reports PROCESSOR_PERMISSION_REQUIRED since no confirmed Finix API
+ * exists to change the payout destination, so this falls through to an
+ * auto-created support exception (an automatic alert, not a routine
+ * approval queue) so WGC can confirm activation once, out of band.
  */
-export async function flagPayoutAccountVerifiedForActivationConfirmation(churchId: string, account: { id: string; last4: string | null; supportTicketId: string | null }) {
+export async function flagPayoutAccountVerifiedForActivationConfirmation(
+  churchId: string,
+  account: { id: string; last4: string | null; supportTicketId: string | null; finixPaymentInstrumentId?: string | null; sellerIdentityId?: string | null }
+) {
+  const { attemptAutomaticPayoutDestinationActivation, activatePayoutDestination } = await import("@/lib/organization/payoutDestinationActivation");
+  const automatic = await attemptAutomaticPayoutDestinationActivation(churchId, {
+    id: account.id,
+    finixPaymentInstrumentId: account.finixPaymentInstrumentId ?? null,
+    sellerIdentityId: account.sellerIdentityId ?? null,
+  });
+  if (automatic.automated) {
+    await activatePayoutDestination(churchId, account.id, "system");
+    return;
+  }
+
   const existingTicket = account.supportTicketId
     ? await prisma.supportTicket.findUnique({ where: { id: account.supportTicketId } })
     : null;

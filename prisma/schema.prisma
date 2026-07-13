@@ -1358,6 +1358,22 @@ model FinixMerchantProfile {
   lastSyncedAt           DateTime?
 }
 
+/// Observability only — records what GET /payout_profiles/{id} actually
+/// returns for a church's merchant profile, so the real response shape can
+/// be inspected before any write path is ever attempted against it. Not
+/// used as a source of truth for activation until the shape is confirmed.
+model FinixPayoutProfileSnapshot {
+  id                   String    @id @default(cuid())
+  churchId             String?
+  finixPayoutProfileId String    @unique
+  rawJsonRedacted      Json?
+  createdAtFinix       DateTime?
+  updatedAtFinix       DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  lastSyncedAt         DateTime?
+}
+
 model User {
   id                        String    @id @default(cuid())
   email                     String    @unique
