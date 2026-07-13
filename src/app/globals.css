@@ -32,26 +32,28 @@
   --shadow-gold-glow: 0 0 20px rgba(234, 179, 8, .3);
 }
 
-html {
-  scroll-behavior: smooth;
-}
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
 
-* {
-  font-family: var(--font-inter), sans-serif !important;
-}
+  * {
+    font-family: var(--font-inter), sans-serif !important;
+  }
 
-body {
-  background-color: var(--color-wgc-off);
-  color: var(--color-wgc-navy-900);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  body {
+    background-color: var(--color-wgc-off);
+    color: var(--color-wgc-navy-900);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-inter), sans-serif !important;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--color-wgc-navy-500);
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-inter), sans-serif !important;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--color-wgc-navy-500);
+  }
 }
 
 .metallic-gold {
