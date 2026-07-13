@@ -20,6 +20,8 @@ import { mapFeeType } from "@/lib/fees/feeTypeLabels";
 
 const titleCaseFromSnake = (value: string | null | undefined) => titleCaseFromSnakeBase(value, "Fee");
 
+import { checkRefundEligibility } from "@/lib/payments/refundEligibility";
+
 export default async function PaymentFullDetailPage({
   params,
 }: {
@@ -44,7 +46,7 @@ export default async function PaymentFullDetailPage({
     );
   }
 
-  const [instrument, refunds, disputes, fees, payment] = await Promise.all([
+  const [instrument, refunds, disputes, fees, payment, bankReturns] = await Promise.all([
     transfer.finixPaymentInstrumentId
       ? prisma.finixPaymentInstrumentSnapshot.findUnique({
           where: { finixPaymentInstrumentId: transfer.finixPaymentInstrumentId },
@@ -60,6 +62,9 @@ export default async function PaymentFullDetailPage({
     }),
     prisma.finixFee.findMany({ where: { linkedToId: transfer.finixTransferId } }),
     prisma.payment.findFirst({ where: { finixTransferId: transfer.finixTransferId, churchId } }),
+    prisma.bankReturn.findMany({
+      where: { originalTransferId: transfer.finixTransferId, churchId },
+    }),
   ]);
 
   const donor = instrument?.donorId ? await prisma.donor.findUnique({ where: { id: instrument.donorId } }) : null;
@@ -70,6 +75,7 @@ export default async function PaymentFullDetailPage({
   const feesTotal = fees.reduce((sum, f) => sum + (f.amountCents || 0), 0);
   const refund = computeRefundStatus(transfer, refunds);
   const displayStatus = resolveDisplayStatus(transfer.state, refund);
+  const eligibility = checkRefundEligibility(transfer, refunds, bankReturns, churchId);
   const remainingRefundableCents =
     (transfer.state || "").toUpperCase() === "SUCCEEDED" ? refund.netAmountCents : 0;
 
@@ -255,8 +261,12 @@ export default async function PaymentFullDetailPage({
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-slate-900">Refunds</h3>
-              {remainingRefundableCents > 0 && (
+              {eligibility.eligible ? (
                 <IssueRefundButton transferId={transfer.finixTransferId} maxAmountCents={remainingRefundableCents} />
+              ) : (
+                <span className="text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
+                  {eligibility.reason || "This transaction is not eligible for a refund."}
+                </span>
               )}
             </div>
             {refunds.length === 0 ? (

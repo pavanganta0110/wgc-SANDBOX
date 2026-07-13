@@ -20,6 +20,8 @@ import { titleCaseFromSnake as titleCaseFromSnakeBase, instrumentStateLabel, sou
 
 const titleCaseFromSnake = (value: string | null | undefined) => titleCaseFromSnakeBase(value, "Fee");
 
+import { checkRefundEligibility } from "@/lib/payments/refundEligibility";
+
 export default async function PaymentDetailPanel({
   transferId,
   churchId,
@@ -39,7 +41,7 @@ export default async function PaymentDetailPanel({
     );
   }
 
-  const [instrument, refunds, disputes, fees, payment] = await Promise.all([
+  const [instrument, refunds, disputes, fees, payment, bankReturns] = await Promise.all([
     transfer.finixPaymentInstrumentId
       ? prisma.finixPaymentInstrumentSnapshot.findUnique({
           where: { finixPaymentInstrumentId: transfer.finixPaymentInstrumentId },
@@ -59,6 +61,9 @@ export default async function PaymentDetailPanel({
     prisma.payment.findFirst({
       where: { finixTransferId: transfer.finixTransferId, churchId },
     }),
+    prisma.bankReturn.findMany({
+      where: { originalTransferId: transfer.finixTransferId, churchId },
+    }),
   ]);
 
   const donor = instrument?.donorId
@@ -69,6 +74,7 @@ export default async function PaymentDetailPanel({
 
   const refund = computeRefundStatus(transfer, refunds);
   const displayStatus = resolveDisplayStatus(transfer.state, refund);
+  const eligibility = checkRefundEligibility(transfer, refunds, bankReturns, churchId);
   const remainingRefundableCents =
     (transfer.state || "").toUpperCase() === "SUCCEEDED" ? refund.netAmountCents : 0;
 
@@ -324,9 +330,13 @@ export default async function PaymentDetailPanel({
       <Section
         title="Refunds"
         action={
-          remainingRefundableCents > 0 ? (
+          eligibility.eligible ? (
             <IssueRefundButton transferId={transfer.finixTransferId} maxAmountCents={remainingRefundableCents} />
-          ) : undefined
+          ) : (
+            <span className="text-xs font-semibold text-slate-400 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1">
+              {eligibility.reason || "This transaction is not eligible for a refund."}
+            </span>
+          )
         }
       >
         {refunds.length === 0 ? (

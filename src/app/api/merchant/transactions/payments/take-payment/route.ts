@@ -6,12 +6,13 @@ import { calculateFeeCoveredTotal } from "@/lib/giving/feeCalculator";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
+import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 
 export async function POST(req: Request) {
   const session = await getSession();
 
   if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return toSafeErrorResponse("You do not have permission to perform this action.", 401);
   }
 
   try {
@@ -238,15 +239,11 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     console.error("Take a Payment failed:", error);
-    const finixError = error?.details?._embedded?.errors?.[0];
-    return NextResponse.json(
-      {
-        error:
-          finixError?.failure_message ||
-          finixError?.message ||
-          "We couldn't process this payment. Please try again.",
-      },
-      { status: 402 }
-    );
+    return toSafeErrorResponse(error, 402, {
+      userId: session.userId,
+      organizationId: session.churchId,
+      route: `/api/merchant/transactions/payments/take-payment`,
+      action: "TAKE_PAYMENT",
+    });
   }
 }

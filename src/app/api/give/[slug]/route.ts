@@ -6,6 +6,7 @@ import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
+import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -236,13 +237,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ success: true, transferId: transfer.id, state: transfer.state });
   } catch (error: any) {
     console.error("Giving page donation failed:", error);
-    // Finix's error body is HAL+JSON (_embedded, not embedded) — surface its
-    // donor-friendly failure_message when present, falling back to the more
-    // technical message, then a generic string as a last resort.
-    const finixError = error?.details?._embedded?.errors?.[0];
-    return NextResponse.json(
-      { error: finixError?.failure_message || finixError?.message || "We couldn't process your gift. Please try again." },
-      { status: 402 }
-    );
+    return toSafeErrorResponse(error, 402, {
+      route: `/api/give/[slug]`,
+      action: "DONATE_LEGACY",
+    });
   }
 }

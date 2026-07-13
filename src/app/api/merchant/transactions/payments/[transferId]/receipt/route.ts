@@ -3,10 +3,12 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 
+import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+
 export async function POST(_req: Request, { params }: { params: Promise<{ transferId: string }> }) {
   const session = await getSession();
   if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return toSafeErrorResponse("You do not have permission to perform this action.", 401);
   }
 
   const { transferId } = await params;
@@ -44,10 +46,12 @@ export async function POST(_req: Request, { params }: { params: Promise<{ transf
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error(`Receipt send failed for transfer ${transferId}:`, error);
-    const finixError = error?.details?._embedded?.errors?.[0];
-    return NextResponse.json(
-      { error: finixError?.failure_message || finixError?.message || "We couldn't send this receipt. Please try again." },
-      { status: 402 }
-    );
+    return toSafeErrorResponse(error, 402, {
+      userId: session.userId,
+      organizationId: session.churchId,
+      route: `/api/merchant/transactions/payments/${transferId}/receipt`,
+      action: "SEND_RECEIPT",
+      resourceId: transferId,
+    });
   }
 }

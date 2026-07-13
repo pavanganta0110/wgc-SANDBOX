@@ -3,27 +3,43 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { redactFinixPayload } from "@/lib/finix/redact";
+import { checkRefundEligibility } from "@/lib/payments/refundEligibility";
+import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 
 export async function POST(req: Request, { params }: { params: Promise<{ transferId: string }> }) {
   const session = await getSession();
   if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return toSafeErrorResponse("You do not have permission to perform this action.", 401);
   }
 
   const { transferId } = await params;
 
-  const transfer = await prisma.finixTransfer.findFirst({
-    where: { finixTransferId: transferId, churchId: session.churchId },
-  });
+  const [transfer, refunds, bankReturns] = await Promise.all([
+    prisma.finixTransfer.findFirst({
+      where: { finixTransferId: transferId, churchId: session.churchId },
+    }),
+    prisma.finixRefundOrReversal.findMany({
+      where: { finixOriginalTransferId: transferId, churchId: session.churchId },
+    }),
+    prisma.bankReturn.findMany({
+      where: { originalTransferId: transferId, churchId: session.churchId },
+    }),
+  ]);
+
   if (!transfer) {
-    return NextResponse.json({ error: "Payment not found" }, { status: 404 });
+    return toSafeErrorResponse("This record could not be found.", 404);
+  }
+
+  const eligibility = checkRefundEligibility(transfer, refunds, bankReturns, session.churchId);
+  if (!eligibility.eligible) {
+    return toSafeErrorResponse(eligibility.reason || "This transaction is not eligible for a refund.", 400);
   }
 
   const body = await req.json().catch(() => ({}));
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : undefined;
 
   if (amountCents != null && (amountCents <= 0 || amountCents > (transfer.amountCents ?? 0))) {
-    return NextResponse.json({ error: "Refund amount must be between $0.01 and the original payment amount." }, { status: 400 });
+    return toSafeErrorResponse("The refund amount cannot exceed the remaining refundable balance.", 400);
   }
 
   try {
@@ -32,9 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ transfe
       tags: { source: "wgc_merchant_dashboard", merchantId: transfer.finixMerchantId ?? "", churchId: session.churchId },
     });
 
-    // Persist immediately so the UI reflects it right away — the
-    // transfer.updated webhook will also sync this independently, this is
-    // just so the merchant doesn't have to wait on webhook delivery.
+    // Persist immediately so the UI reflects it right away
     await prisma.finixRefundOrReversal.upsert({
       where: { finixReversalId: reversal.id },
       create: {
@@ -62,10 +76,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ transfe
     return NextResponse.json({ success: true, reversalId: reversal.id, state: reversal.state });
   } catch (error: any) {
     console.error(`Refund failed for transfer ${transferId}:`, error);
-    const finixError = error?.details?._embedded?.errors?.[0];
-    return NextResponse.json(
-      { error: finixError?.failure_message || finixError?.message || "We couldn't process this refund. Please try again." },
-      { status: 402 }
-    );
+    return toSafeErrorResponse(error, 400, {
+      userId: session.userId,
+      organizationId: session.churchId,
+      route: `/api/merchant/transactions/payments/${transferId}/refund`,
+      action: "CREATE_REFUND",
+      resourceId: transferId,
+    });
   }
 }

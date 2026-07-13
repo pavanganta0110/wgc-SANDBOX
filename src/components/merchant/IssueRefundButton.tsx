@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
 import { formatCents } from "@/lib/format";
+import { toastSuccess, toastApiError } from "@/lib/support/toast";
 
 export default function IssueRefundButton({
   transferId,
@@ -20,7 +20,7 @@ export default function IssueRefundButton({
   const handleSubmit = async () => {
     const amountCents = Math.round(parseFloat(amount) * 100);
     if (!amountCents || amountCents <= 0 || amountCents > maxAmountCents) {
-      toast.error(`Enter an amount between $0.01 and ${formatCents(maxAmountCents)}`);
+      toastApiError("The refund amount cannot exceed the remaining refundable balance.");
       return;
     }
 
@@ -32,13 +32,16 @@ export default function IssueRefundButton({
         body: JSON.stringify({ amountCents }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Refund failed");
+      if (!res.ok) {
+        toastApiError(data);
+        return;
+      }
 
-      toast.success("Refund issued");
+      toastSuccess("Refund issued", "The refund has been successfully initiated.");
       setOpen(false);
       router.refresh();
     } catch (err: any) {
-      toast.error(err.message || "Refund failed");
+      toastApiError(err);
     } finally {
       setSubmitting(false);
     }

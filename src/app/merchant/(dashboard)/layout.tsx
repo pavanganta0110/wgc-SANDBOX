@@ -6,6 +6,8 @@ import Footer from "@/components/layout/Footer";
 import Sidebar from "@/components/merchant/Sidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
 
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+
 export default async function MerchantDashboardLayout({
   children,
 }: {
@@ -36,7 +38,9 @@ export default async function MerchantDashboardLayout({
             </div>
             <LogoutButton />
           </div>
-          <main className="flex-grow px-6 md:px-10 py-8">{children}</main>
+          <main className="flex-grow px-6 md:px-10 py-8">
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </main>
         </div>
       </div>
       <Footer />

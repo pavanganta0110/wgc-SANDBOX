@@ -8,6 +8,7 @@ import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
+import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -367,10 +368,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     console.error("Giving link donation failed:", error);
-    const finixError = error?.details?._embedded?.errors?.[0];
-    return NextResponse.json(
-      { error: finixError?.failure_message || finixError?.message || "We couldn't process your gift. Please try again." },
-      { status: 402 }
-    );
+    return toSafeErrorResponse(error, 402, {
+      route: `/api/g/[slug]/donate`,
+      action: "DONATE",
+    });
   }
 }
