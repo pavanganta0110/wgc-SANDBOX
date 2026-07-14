@@ -1152,6 +1152,16 @@ export async function POST(req: Request) {
     const eventId = payload.id;
     const occurredAt = payload.created_at ? new Date(payload.created_at) : new Date();
 
+    // A real event always carries its own id — a payload without one (e.g.
+    // Finix's dashboard "create webhook" verification ping, which sends a
+    // non-empty but minimal/no-id body) is a reachability check, not an
+    // event to process. Answered here, before eventId is ever passed into a
+    // Prisma unique lookup, which throws PrismaClientValidationError on
+    // `undefined` rather than treating it as "no match."
+    if (!eventId) {
+      return NextResponse.json({ message: "Verification ping successful" }, { status: 200 });
+    }
+
     let identityId = data?.identity;
     let merchantId = data?.merchant;
     if (!merchantId && entity === "MERCHANT") {
