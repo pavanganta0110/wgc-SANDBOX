@@ -131,9 +131,9 @@ support@wgcpayments.com
   `.trim();
 
   try {
-    const data = await getResendClient().emails.send({
-      from: "WGC Payments <no-reply@wgcpayments.com>",
-      replyTo: "support@wgcpayments.com",
+    const response = await getResendClient().emails.send({
+      from: process.env.EMAIL_FROM || "WGC Payments <no-reply@wgcpayments.com>",
+      replyTo: process.env.SUPPORT_EMAIL || "support@wgcpayments.com",
       to: options.to,
       subject: options.subject,
       html,
@@ -141,8 +141,13 @@ support@wgcpayments.com
       ...(options.attachments ? { attachments: options.attachments } : {}),
     });
 
-    console.log("WGC Email sent successfully:", data);
-    return { success: true, data };
+    if (response.error) {
+      console.error("Resend API returned error:", response.error);
+      return { success: false, error: response.error };
+    }
+
+    console.log("WGC Email sent successfully:", response.data);
+    return { success: true, data: response.data };
   } catch (error) {
     console.error("Failed to send WGC email:", error);
     return { success: false, error };
