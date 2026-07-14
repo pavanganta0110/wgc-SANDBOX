@@ -1128,6 +1128,10 @@ export async function POST(req: Request) {
       }
     }
 
+    if (!rawBody || rawBody.trim() === "") {
+      return NextResponse.json({ message: "Verification ping successful" }, { status: 200 });
+    }
+
     const payload = JSON.parse(rawBody);
     const { entity, eventType, data } = getFinixEventData(payload);
     const eventId = payload.id;
