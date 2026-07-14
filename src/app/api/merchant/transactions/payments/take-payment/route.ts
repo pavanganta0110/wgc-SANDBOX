@@ -8,6 +8,7 @@ import {
   calculateDynamicSupplementalFee,
   normalizeCardBrand,
   checkPricingWarning,
+  FEE_CALCULATION_VERSION,
 } from "@/lib/giving/feeCalculator";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
@@ -218,18 +219,19 @@ export async function POST(req: Request) {
       transferPayload.tags = {
         ...transferPayload.tags,
         donation_amount_cents: String(donationAmountCents),
-        processing_fee_cents: String(feeCoveredCents),
+        processing_fee_cents: String(feeRes.processingFeeCents),
         donor_covers_fee: String(coverFees),
-        card_brand: feeRes.normalizedCardBrand,
+        fee_strategy: coverFees ? "DONOR_PAID" : "ORGANIZATION_PAID",
+        card_brand: feeRes.normalizedCardBrand || "NONE",
         fee_percentage_bps: String(feeRes.percentageBps),
         fee_fixed_cents: String(feeRes.fixedFeeCents),
-        fee_calculation_version: "v1",
+        fee_calculation_version: FEE_CALCULATION_VERSION,
       };
-      if (feeCoveredCents > 0) {
+      if (coverFees && feeCoveredCents > 0) {
         transferPayload.supplemental_fee = feeCoveredCents;
       }
     } else {
-      if (feeCoveredCents > 0) {
+      if (coverFees && feeCoveredCents > 0) {
         transferPayload.supplemental_fee = feeCoveredCents;
       }
     }
@@ -301,7 +303,7 @@ export async function POST(req: Request) {
         cardBrand: dynamicFeesEnabled ? feeRes.normalizedCardBrand : null,
         percentageBps: dynamicFeesEnabled ? feeRes.percentageBps : null,
         fixedFeeCents: dynamicFeesEnabled ? feeRes.fixedFeeCents : null,
-        feeCalculationVersion: dynamicFeesEnabled ? "v1" : null,
+        feeCalculationVersion: dynamicFeesEnabled ? FEE_CALCULATION_VERSION : null,
         merchantExpectedNetCents: dynamicFeesEnabled ? feeRes.merchantExpectedNetCents : (totalCents - feeCoveredCents),
       },
     });

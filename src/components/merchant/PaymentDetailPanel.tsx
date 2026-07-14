@@ -271,36 +271,57 @@ export default async function PaymentDetailPanel({
                 ? Number(tags.processing_fee_cents)
                 : null;
 
-          // Supplemental fee (donor covers fee portion)
+          // supplementalFeeCents from payment record (donor-paid fee)
           const supplementalFeeCents =
             payment?.feeCoveredCents !== null && payment?.feeCoveredCents !== undefined
               ? payment.feeCoveredCents
               : null;
 
-          // Net: gross minus processing fee (supplemental is donor-paid, not deducted from merchant net)
-          const netCents =
-            processingFeeCents !== null
-              ? grossCents - processingFeeCents
-              : payment?.merchantExpectedNetCents !== null && payment?.merchantExpectedNetCents !== undefined
-                ? payment.merchantExpectedNetCents
-                : null;
-
+          const donationAmountCents = payment?.donationAmountCents ?? grossCents;
           const donorCoversFee = payment?.donorCoversFee ?? false;
 
+          // Net donation to organization (what the org receives after fees)
+          const netCents =
+            payment?.merchantExpectedNetCents !== null && payment?.merchantExpectedNetCents !== undefined
+              ? payment.merchantExpectedNetCents
+              : processingFeeCents !== null
+                ? grossCents - processingFeeCents
+                : null;
+
+          // Is the actual fee record available from the processor yet?
+          const feeIsActual = processingFeeCents !== null;
+
+          if (donorCoversFee) {
+            // Donor-covered path
+            const donorPaidFee = supplementalFeeCents;
+            return (
+              <div className="space-y-1">
+                <Row label="Donation Amount" value={formatCents(donationAmountCents)} />
+                <Row
+                  label={feeIsActual ? "Donor-Paid Processing Fee" : "Estimated Donor-Paid Processing Fee"}
+                  value={donorPaidFee !== null ? formatCents(donorPaidFee) : "—"}
+                />
+                <Row label="Total Charged to Donor" value={formatCents(grossCents)} />
+                {netCents !== null && (
+                  <Row label="Net Donation to Organization" value={formatCents(netCents)} />
+                )}
+                <Row label="Donor Covers Fee" value="Yes" />
+              </div>
+            );
+          }
+
+          // Organization-covered path
           return (
             <div className="space-y-1">
-              <Row label="Gross Amount" value={formatCents(grossCents)} />
+              <Row label="Donation Amount" value={formatCents(donationAmountCents)} />
               <Row
-                label="Processing Fee"
+                label={feeIsActual ? "Organization-Paid Processing Fee" : "Estimated Organization-Paid Processing Fee"}
                 value={processingFeeCents !== null ? formatCents(processingFeeCents) : "—"}
               />
-              {supplementalFeeCents !== null && (
-                <Row label="Supplemental Fee" value={formatCents(supplementalFeeCents)} />
-              )}
               {netCents !== null && (
                 <Row label="Net Amount" value={formatCents(netCents)} />
               )}
-              <Row label="Donor Covers Fee" value={donorCoversFee ? "Yes" : "No"} />
+              <Row label="Donor Covers Fee" value="No" />
             </div>
           );
         })()}

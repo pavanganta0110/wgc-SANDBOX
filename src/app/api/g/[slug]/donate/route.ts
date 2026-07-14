@@ -7,6 +7,7 @@ import {
   calculateDynamicSupplementalFee,
   normalizeCardBrand,
   checkPricingWarning,
+  FEE_CALCULATION_VERSION,
 } from "@/lib/giving/feeCalculator";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
@@ -298,12 +299,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     if (dynamicFeesEnabled) {
       tags.donation_amount_cents = String(donationAmountCents);
-      tags.processing_fee_cents = String(feeCoveredCents);
+      tags.processing_fee_cents = String(feeRes.processingFeeCents);
       tags.donor_covers_fee = String(link.feeCoverEnabled && coverFees);
-      tags.card_brand = feeRes.normalizedCardBrand;
+      tags.fee_strategy = (link.feeCoverEnabled && coverFees) ? "DONOR_PAID" : "ORGANIZATION_PAID";
+      tags.card_brand = feeRes.normalizedCardBrand || "NONE";
       tags.fee_percentage_bps = String(feeRes.percentageBps);
       tags.fee_fixed_cents = String(feeRes.fixedFeeCents);
-      tags.fee_calculation_version = "v1";
+      tags.fee_calculation_version = FEE_CALCULATION_VERSION;
     }
 
     // 6. Handle Subscription flow
@@ -368,7 +370,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       tags,
     };
 
-    if (feeCoveredCents > 0) {
+    if ((link.feeCoverEnabled && coverFees) && feeCoveredCents > 0) {
       transferPayload.supplemental_fee = feeCoveredCents;
     }
 
@@ -417,7 +419,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         cardBrand: dynamicFeesEnabled ? feeRes.normalizedCardBrand : null,
         percentageBps: dynamicFeesEnabled ? feeRes.percentageBps : null,
         fixedFeeCents: dynamicFeesEnabled ? feeRes.fixedFeeCents : null,
-        feeCalculationVersion: dynamicFeesEnabled ? "v1" : null,
+        feeCalculationVersion: dynamicFeesEnabled ? FEE_CALCULATION_VERSION : null,
         merchantExpectedNetCents: dynamicFeesEnabled ? feeRes.merchantExpectedNetCents : (totalCents - feeCoveredCents),
         fundName: link.fundName || null,
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,

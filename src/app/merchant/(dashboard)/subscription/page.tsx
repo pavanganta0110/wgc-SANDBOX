@@ -74,11 +74,13 @@ export default async function SubscriptionPage() {
 
       {pricing && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <div className="flex items-start justify-between mb-1">
+          {/* Header */}
+          <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900">Processing Rates</h3>
+              <h3 className="text-sm font-bold text-slate-900">WGC Processing Rates</h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Synced from your processing fee profile
+                These rates determine how processing fees are applied based on whether
+                the donor chooses to cover the fee.
                 {pricing.updatedAt && (
                   <> · Last updated {formatDateTimeCDT(pricing.updatedAt)}</>
                 )}
@@ -86,31 +88,56 @@ export default async function SubscriptionPage() {
             </div>
             <RefreshPricingButton />
           </div>
-          <div className="grid grid-cols-3 gap-4 text-sm mt-4">
-            <div>
-              <p className="text-xs text-slate-500 mb-1">Card Rate</p>
-              <p className="text-lg font-bold text-slate-900">
-                {pricing.cardPercentageFee != null ? `${pricing.cardPercentageFee}%` : "—"}
-              </p>
-              {pricing.cardFixedFeeCents != null && (
-                <p className="text-xs text-slate-400">+ {formatCents(pricing.cardFixedFeeCents)} per transaction</p>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1">ACH Fixed Fee</p>
-              <p className="text-lg font-bold text-slate-900">
-                {pricing.achFixedFeeCents != null ? formatCents(pricing.achFixedFeeCents) : "—"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-slate-500 mb-1">Plan Name</p>
-              <p className="text-lg font-bold text-slate-900">{pricing.pricingPlanName || "Standard"}</p>
+
+          {/* Section 1: Donor Covers */}
+          <div className="mb-5">
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
+              When Donors Cover Processing Fees
+            </p>
+            <div className="space-y-3">
+              <RateRow
+                label="Non-American-Express Cards"
+                rate="3.00% of the donation amount"
+                description="Added to the donor's total when the donor chooses to cover processing fees."
+              />
+              <RateRow
+                label="American Express"
+                rate="3.50% of the donation amount"
+                description="Added to the donor's total when the donor chooses to cover processing fees."
+              />
+              <RateRow
+                label="ACH"
+                rate="$0.25 per transaction"
+                description="Added to the donor's total when the donor chooses to cover processing fees."
+              />
             </div>
           </div>
-          <p className="text-xs text-slate-400 mt-4 pt-3 border-t border-slate-50">
-            These are your WGC processing rates. If your rates were recently updated and these
-            values appear outdated, click &ldquo;Refresh Rates&rdquo; above to retrieve the latest information.
-          </p>
+
+          <div className="border-t border-slate-100 my-4" />
+
+          {/* Section 2: Org Covers */}
+          <div>
+            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
+              When the Organization Covers Processing Fees
+            </p>
+            <div className="space-y-3">
+              <RateRow
+                label="Non-American-Express Cards"
+                rate="2.30% + $0.30 per transaction"
+                description="Deducted from donation proceeds when the donor does not cover the fee."
+              />
+              <RateRow
+                label="American Express"
+                rate="3.50% + $0.30 per transaction"
+                description="Deducted from donation proceeds when the donor does not cover the fee."
+              />
+              <RateRow
+                label="ACH"
+                rate="$0.25 per transaction"
+                description="Deducted from donation proceeds when the donor does not cover the fee."
+              />
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -124,6 +151,18 @@ function Row({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs text-slate-500 mb-1">{label}</p>
       <p className="font-semibold text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function RateRow({ label, rate, description }: { label: string; rate: string; description: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <div>
+        <p className="font-semibold text-slate-800">{label}</p>
+        <p className="text-xs text-slate-500 mt-0.5">{description}</p>
+      </div>
+      <p className="font-bold text-slate-900 whitespace-nowrap shrink-0">{rate}</p>
     </div>
   );
 }
