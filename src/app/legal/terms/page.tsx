@@ -3,7 +3,7 @@ import { ArrowLeft } from "lucide-react";
 
 export default function TermsPage() {
   const finixTermsUrl = process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix-hosted-content.s3.amazonaws.com/flex/v3/finix-terms-of-service.html";
-  const finixPrivacyUrl = process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/terms-and-policies/privacy-policy";
+  const finixPrivacyUrl = process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/privacy";
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
