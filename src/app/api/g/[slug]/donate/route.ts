@@ -166,11 +166,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         });
       }
     }
-    await prisma.paymentAttempt.upsert({
-      where: { clientAttemptId },
-      update: { status: "STARTED" },
-      create: { clientAttemptId, status: "STARTED" }
-    });
+
 
     // 1. Resolve Identity and Payment Instrument
     let identityId: string;
