@@ -377,7 +377,9 @@ export default function GivingLinkForm({
     setResult({ step: "processing" });
 
     try {
-      const fraudSessionId = await getFraudSessionId(finixMerchantId);
+      // For ACH/bank payments, Finix.Auth callback never fires — skip it.
+      // The backend already omits fraud_session_id for bank transfers.
+      const fraudSessionId = paymentMethod === "bank" ? "" : await getFraudSessionId(finixMerchantId);
 
       let settled = false;
       const timeout = setTimeout(() => {
