@@ -211,6 +211,30 @@ export async function syncFinixDataFromWebhookEvent(
       },
     });
 
+    if (churchId && data.id) {
+      const priorPayment = await prisma.payment.findFirst({
+        where: { finixTransferId: data.id },
+      });
+      if (priorPayment && priorPayment.status !== (data.state || "PENDING").toUpperCase()) {
+        await prisma.payment.updateMany({
+          where: { finixTransferId: data.id },
+          data: { status: (data.state || "PENDING").toUpperCase() },
+        });
+
+        if (
+          priorPayment.status !== "SUCCEEDED" &&
+          (data.state || "").toUpperCase() === "SUCCEEDED"
+        ) {
+          try {
+            const { sendDonationReceipt } = await import("@/lib/giving/generateReceipt");
+            await sendDonationReceipt(priorPayment.id, churchId);
+          } catch (err) {
+            console.error("Failed to send async donation receipt:", err);
+          }
+        }
+      }
+    }
+
     // Non-blocking: pull the buyer's payment instrument (+ linked donor
     // identity) and any processor fees now associated with this transfer.
     // Wrapped individually so a Finix API hiccup on one never drops the

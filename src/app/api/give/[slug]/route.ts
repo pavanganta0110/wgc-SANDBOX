@@ -335,7 +335,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       currency: "USD",
       source: instrumentId,
       fee_profile: feeStrategy.feeProfileId,
-      fraud_session_id: fraudSessionId,
+      ...(paymentMethod !== "bank" && { fraud_session_id: fraudSessionId }),
       idempotency_id: idempotencyId,
       statement_descriptor: church.name.slice(0, 18).toUpperCase(),
       tags: {
