@@ -184,9 +184,9 @@ export default function DonationForm({
               }),
             });
 
-            const data = await res.json();
-            if (!res.ok) {
-              toast.error(data?.error || "Payment failed. Please try again.");
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.success) {
+              toast.error(data?.message || data?.error || "Payment failed. Please try again.");
               setSubmitting(false);
               return;
             }

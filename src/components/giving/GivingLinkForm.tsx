@@ -410,11 +410,11 @@ export default function GivingLinkForm({
             }),
           });
 
-          const data = await res.json();
+          const data = await res.json().catch(() => null);
           setSubmitting(false);
 
-          if (!res.ok) {
-            setResult({ step: "failed", error: data?.error || "Payment failed. Please try again." });
+          if (!res.ok || !data?.success) {
+            setResult({ step: "failed", error: data?.message || data?.error || "Payment failed. Please try again." });
             return;
           }
 

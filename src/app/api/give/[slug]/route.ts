@@ -15,9 +15,24 @@ const isDev = process.env.NODE_ENV === "development";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const correlationId = crypto.randomUUID();
+  const logEvent = (checkpoint: string, data: any) => {
+    console.log(JSON.stringify({
+      checkpoint,
+      correlationId,
+      slug,
+      timestamp: new Date().toISOString(),
+      ...data
+    }));
+  };
 
   try {
     const body = await req.json();
+    logEvent("1_DONATION_REQUEST_RECEIVED", {
+      donationAmountCents: body.donationAmountCents,
+      paymentMethod: body.paymentMethod,
+      donorCoversFee: body.coverFees
+    });
     const {
       token,
       paymentInstrumentId,
@@ -35,7 +50,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     } = body;
 
     if (!token && !paymentInstrumentId) {
-      return NextResponse.json({ error: "Invalid payment details" }, { status: 400 });
+      logEvent("10_DONATION_RESPONSE_RETURNED", {});
+    return NextResponse.json({ error: "Invalid payment details" }, { status: 400 });
     }
     if (!donationAmountCents || donationAmountCents < 100) {
       return NextResponse.json({ error: "Invalid donation amount" }, { status: 400 });
@@ -104,6 +120,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const finixMerchantId = church.finixMerchantId;
+    logEvent("2_INPUT_VALIDATION_PASSED", { churchId: church.id, givingPageId: givingPage.id });
 
     // 1. Resolve Identity and Payment Instrument
     let identityId: string;
@@ -196,6 +213,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       }
     }
 
+    logEvent("3_PAYMENT_INSTRUMENT_CREATED", { identityId, instrumentId });
     // 2. Perform Fee Calculation
     const feeStrategy = resolveWgcTransferFeeStrategy({
       donationAmountCents,
@@ -345,7 +363,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       transferPayload.supplemental_fee = feeStrategy.supplementalFeeCents;
     }
 
+    logEvent("7_FINIX_TRANSFER_REQUEST_START", {
+      amount: transferPayload.amount,
+      fee_profile: transferPayload.fee_profile,
+      supplemental_fee: transferPayload.supplemental_fee,
+      feePaidBy: feeStrategy.feePaidBy
+    });
     const transfer = await finixClient.createTransfer(transferPayload);
+    logEvent("8_FINIX_TRANSFER_RESPONSE_RECEIVED", { transferId: transfer.id, state: transfer.state });
 
     await prisma.finixTransfer.upsert({
       where: { finixTransferId: transfer.id },
@@ -397,6 +422,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       },
     });
 
+    logEvent("9_PAYMENT_DATABASE_SAVE_COMPLETED", { paymentId: newPayment.id });
     const succeeded = (transfer.state || "").toUpperCase() === "SUCCEEDED";
     if (succeeded) {
       try {

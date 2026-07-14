@@ -15,11 +15,26 @@ import crypto from "crypto";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const correlationId = crypto.randomUUID();
+  const logEvent = (checkpoint: string, data: any) => {
+    console.log(JSON.stringify({
+      checkpoint,
+      correlationId,
+      slug,
+      timestamp: new Date().toISOString(),
+      ...data
+    }));
+  };
 
   let claimedOneTimeLinkId: string | null = null;
 
   try {
     const body = await req.json();
+    logEvent("1_DONATION_REQUEST_RECEIVED", {
+      donationAmountCents: body.donationAmountCents,
+      paymentMethod: body.paymentMethod,
+      donorCoversFee: body.coverFees
+    });
     const {
       token,
       paymentInstrumentId,
@@ -40,7 +55,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
 
     if (!donationAmountCents || donationAmountCents < 100) {
-      return NextResponse.json({ error: "Invalid donation amount" }, { status: 400 });
+      logEvent("10_DONATION_RESPONSE_RETURNED", {});
+    return NextResponse.json({ error: "Invalid donation amount" }, { status: 400 });
     }
     if (isWallet ? !walletToken : (!token && !paymentInstrumentId)) {
       return NextResponse.json({ error: "Missing payment token" }, { status: 400 });
@@ -71,6 +87,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const finixMerchantId = church.finixMerchantId;
+    logEvent("2_INPUT_VALIDATION_PASSED", { churchId: church.id, givingLinkId: link.id });
 
     // Amount rules
     if (link.amountType === "FIXED") {
@@ -208,13 +225,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       }
     }
 
+    logEvent("3_PAYMENT_INSTRUMENT_CREATED", { identityId, instrumentId });
     // 2. Perform Fee Calculation
-    const feeStrategy = resolveWgcTransferFeeStrategy({
-      donationAmountCents,
-      paymentMethod: method === "bank" ? "ACH" : "CARD",
-      cardBrand,
-      donorCoversFee: link.feeCoverEnabled && coverFees,
-    });
+    logEvent("4_FEE_STRATEGY_CALCULATED", { cardBrand });
+    let feeStrategy;
+    try {
+      logEvent("5_FEE_PROFILE_CONFIGURATION_LOADED", {});
+      feeStrategy = resolveWgcTransferFeeStrategy({
+        donationAmountCents,
+        paymentMethod: method === "bank" ? "ACH" : "CARD",
+        cardBrand,
+        donorCoversFee: link.feeCoverEnabled && coverFees,
+      });
+      logEvent("6_FEE_PROFILE_VALIDATION_PASSED", {
+        feeProfileCategory: feeStrategy.feePaidBy === "DONOR" ? "ZERO" : "ORGANIZATION_PAID",
+        calculatedFee: feeStrategy.expectedFeeCents
+      });
+    } catch (err: any) {
+      if (err.message?.includes("Missing fee profile")) {
+        return NextResponse.json({
+          success: false,
+          code: "PAYMENT_CONFIGURATION_ERROR",
+          message: "Payments are temporarily unavailable. No charge was made.",
+          reference: correlationId
+        }, { status: 503 });
+      }
+      throw err;
+    }
     
     const totalCents = feeStrategy.amountToChargeCents;
     const feeCoveredCents = feeStrategy.supplementalFeeCents;
@@ -352,7 +389,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       transferPayload.supplemental_fee = feeStrategy.supplementalFeeCents;
     }
 
+    logEvent("7_FINIX_TRANSFER_REQUEST_START", {
+      amount: transferPayload.amount,
+      fee_profile: transferPayload.fee_profile,
+      supplemental_fee: transferPayload.supplemental_fee,
+      feePaidBy: feeStrategy.feePaidBy
+    });
     const transfer = await finixClient.createTransfer(transferPayload);
+    logEvent("8_FINIX_TRANSFER_RESPONSE_RECEIVED", { transferId: transfer.id, state: transfer.state });
 
     await prisma.finixTransfer.upsert({
       where: { finixTransferId: transfer.id },
@@ -373,6 +417,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       update: { state: transfer.state ?? undefined, lastSyncedAt: new Date() },
     });
 
+    logEvent("9_PAYMENT_DATABASE_SAVE_COMPLETED", { transferId: transfer.id });
     const newPayment = await prisma.payment.create({
       data: {
         churchId: church.id,
