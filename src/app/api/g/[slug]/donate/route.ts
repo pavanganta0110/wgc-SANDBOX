@@ -226,16 +226,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
       let instrument;
       try {
-        instrument = isWallet
-          ? await finixClient.createPaymentInstrument({
-              identity: identityId,
-              type: paymentMethod === "apple_pay" ? "APPLE_PAY" : "GOOGLE_PAY",
-              third_party_token: walletToken,
-              merchant_identity: process.env.FINIX_APPLICATION_OWNER_ID,
-              name: walletBillingContact.name,
-              address: walletBillingContact.address,
-            })
-          : await finixClient.createPaymentInstrument({ identity: identityId, token, type: "TOKEN" });
+        instrument = await finixClient.createPaymentInstrument({ identity: identityId, token, type: "TOKEN" });
       } catch (err) {
         return toSafePaymentErrorResponse(err, "PAYMENT_FAILED", "Could not verify payment instrument with processor. No charge was made.", true, { action: "createPaymentInstrument" });
       }
