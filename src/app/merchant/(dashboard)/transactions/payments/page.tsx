@@ -11,6 +11,7 @@ import { resolveDateRange } from "@/lib/dateRangePresets";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
+import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -41,6 +42,16 @@ export default async function PaymentsListPage({
   // SUCCEEDED even after a full refund. Those get filtered in-memory below
   // instead of at the DB level.
   const isRefundDerivedFilter = state ? REFUND_DERIVED_STATES.has(state) : false;
+
+  // Self-healing fallback for missed/delayed transfer.updated webhooks —
+  // bounded and throttled (see paymentReconciliation.ts), so a payment
+  // stuck showing PENDING is corrected on the next page view instead of
+  // needing a redeploy or manual intervention.
+  try {
+    await reconcilePendingPayments(churchId);
+  } catch (err) {
+    console.error("Pending-payment reconciliation pass failed:", err);
+  }
 
   const transfers = await prisma.finixTransfer.findMany({
     where: {

@@ -173,6 +173,13 @@ export async function syncFinixDataFromWebhookEvent(
       select: { state: true },
     });
 
+    // Out-of-order/duplicate-delivery protection: a terminal state
+    // (SUCCEEDED/FAILED/CANCELED) already recorded locally must never be
+    // regressed by a stale or re-delivered PENDING event arriving late —
+    // see shouldApplyTransferState for the exact rule.
+    const { shouldApplyTransferState } = await import("@/lib/finix/sync/paymentReconciliation");
+    const applyState = shouldApplyTransferState(priorTransfer?.state ?? null, data.state ?? null);
+
     await prisma.finixTransfer.upsert({
       where: { finixTransferId: data.id },
       create: {
@@ -202,16 +209,17 @@ export async function syncFinixDataFromWebhookEvent(
       },
       update: {
         churchId: churchId ?? undefined,
-        state: data.state ?? null,
-        failureCode: data.failure_code ?? null,
-        failureMessage: data.failure_message ?? null,
+        state: applyState ? data.state ?? undefined : undefined,
+        failureCode: data.failure_code ?? undefined,
+        failureMessage: data.failure_message ?? undefined,
         rawJsonRedacted: redactFinixPayload(data),
         updatedAtFinix: data.updated_at ? new Date(data.updated_at) : occurredAt,
         lastSyncedAt: new Date(),
+        lastReconciledAt: new Date(),
       },
     });
 
-    if (churchId && data.id) {
+    if (churchId && data.id && applyState) {
       const priorPayment = await prisma.payment.findFirst({
         where: { finixTransferId: data.id },
       });

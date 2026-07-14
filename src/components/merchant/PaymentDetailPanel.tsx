@@ -31,10 +31,25 @@ export default async function PaymentDetailPanel({
   transferId: string;
   churchId: string;
 }) {
-  const transfer = await prisma.finixTransfer.findFirst({
+  let transfer = await prisma.finixTransfer.findFirst({
     where: { finixTransferId: transferId, churchId },
   });
 
+  // Self-healing fallback — opening a payment's own detail view is a strong
+  // signal a merchant cares about its current status right now, so a
+  // PENDING payment gets reconciled directly against Finix here too, not
+  // just on the list page.
+  if (transfer && transfer.state === "PENDING") {
+    try {
+      const { reconcilePendingTransfer } = await import("@/lib/finix/sync/paymentReconciliation");
+      const result = await reconcilePendingTransfer(transferId);
+      if (result.changed) {
+        transfer = await prisma.finixTransfer.findFirst({ where: { finixTransferId: transferId, churchId } });
+      }
+    } catch (err) {
+      console.error("Payment detail reconciliation failed:", err);
+    }
+  }
   if (!transfer) {
     return (
       <div className="w-full lg:w-[420px] shrink-0 border-l border-slate-100 bg-white rounded-2xl lg:rounded-none p-6">

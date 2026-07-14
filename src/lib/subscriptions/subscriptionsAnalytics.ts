@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { loadSubscriptionCandidates } from "@/lib/subscriptions/subscriptionAggregates";
-import { frequencyLabel, normalizeToMonthlyValueCents } from "@/lib/subscriptions/subscriptionStatus";
+import { frequencyLabel, normalizeToMonthlyValueCents, isUpcomingCharge } from "@/lib/subscriptions/subscriptionStatus";
 
 export interface SubscriptionsAnalytics {
   summary: {
@@ -47,7 +47,7 @@ export async function loadSubscriptionsAnalytics(churchId: string, rangeDays = 3
 
   const now = Date.now();
   const in30Days = now + 30 * 24 * 60 * 60 * 1000;
-  const upcoming = active.filter((s) => s.nextBillingDate && s.nextBillingDate.getTime() <= in30Days);
+  const upcoming = active.filter((s) => isUpcomingCharge(s.nextBillingDate, now, in30Days));
 
   const failedThisMonth = subscriptions.filter((s) => s.lastFailure && s.lastFailure.date >= periodStart).length;
   const lifetimeRecurringCollectedCents = subscriptions.reduce((sum, s) => sum + s.lifetimeCollectedCents, 0);

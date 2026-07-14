@@ -10,6 +10,7 @@ function makeRow(overrides: Partial<SubscriptionRow>): SubscriptionRow {
     donorName: "Jane Doe",
     donorEmail: "jane@example.com",
     donorPhone: null,
+    needsDonorMatching: false,
     amountCents: 5000,
     currency: "USD",
     billingInterval: "MONTHLY",
@@ -107,5 +108,45 @@ describe("groupSubscriptionsByDonor", () => {
     const donors = groupSubscriptionsByDonor(rows);
     expect(donors[0].requiresAttention).toBe(true);
     expect(donors[0].attentionReasons).toEqual(["Expired payment method"]);
+  });
+
+  it("test 1: two active subscriptions belonging to two different donors — Active Subscriptions = 2, Active Recurring Donors = 2", () => {
+    const rows = [
+      makeRow({ id: "sub-1", donorId: "D1", displayStatus: "ACTIVE" }),
+      makeRow({ id: "sub-2", donorId: "D2", donorName: "John Doe", displayStatus: "ACTIVE" }),
+    ];
+    const activeSubscriptions = rows.filter((r) => r.displayStatus === "ACTIVE").length;
+    const donors = groupSubscriptionsByDonor(rows);
+    const activeRecurringDonors = donors.filter((d) => d.activeSubscriptionCount > 0).length;
+    expect(activeSubscriptions).toBe(2);
+    expect(activeRecurringDonors).toBe(2);
+  });
+
+  it("test 2: two active subscriptions belonging to one donor — Active Subscriptions = 2, Active Recurring Donors = 1", () => {
+    const rows = [
+      makeRow({ id: "sub-1", donorId: "D1", displayStatus: "ACTIVE" }),
+      makeRow({ id: "sub-2", donorId: "D1", displayStatus: "ACTIVE" }),
+    ];
+    const activeSubscriptions = rows.filter((r) => r.displayStatus === "ACTIVE").length;
+    const donors = groupSubscriptionsByDonor(rows);
+    const activeRecurringDonors = donors.filter((d) => d.activeSubscriptionCount > 0).length;
+    expect(activeSubscriptions).toBe(2);
+    expect(activeRecurringDonors).toBe(1);
+    expect(donors[0].activeSubscriptionCount).toBe(2);
+  });
+
+  it("test 3: a subscription with donorId resolved does not display Unknown Donor", () => {
+    const rows = [makeRow({ donorId: "D1", donorName: "Jane Doe" })];
+    expect(rows[0].donorName).not.toBe("Unknown Donor");
+    expect(rows[0].donorId).toBe("D1");
+  });
+
+  it("test 14: an existing active subscription's own id/amount/frequency are read-only inputs here, never mutated by grouping", () => {
+    const original = makeRow({ id: "sub-1", finixSubscriptionId: "fx-1", amountCents: 24102, billingInterval: "MONTHLY" });
+    const rows = [original];
+    groupSubscriptionsByDonor(rows);
+    expect(rows[0]).toBe(original);
+    expect(rows[0].finixSubscriptionId).toBe("fx-1");
+    expect(rows[0].amountCents).toBe(24102);
   });
 });

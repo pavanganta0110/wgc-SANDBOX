@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { loadSubscriptionCandidates, groupSubscriptionsByDonor } from "@/lib/subscriptions/subscriptionAggregates";
-import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
+import { frequencyLabel, isUpcomingCharge } from "@/lib/subscriptions/subscriptionStatus";
 
 export interface RecurringDonorsAnalytics {
   summary: {
@@ -16,6 +16,11 @@ export interface RecurringDonorsAnalytics {
     upcomingCharges7Days: { count: number; amountCents: number };
     upcomingCharges30Days: { count: number; amountCents: number };
     lifetimeRecurringDonatedCents: number;
+    // Active subscriptions with no resolvable donorId — excluded from every
+    // donor-grouped figure above (see groupSubscriptionsByDonor), never
+    // silently represented as zero recurring donors. Surfaced separately so
+    // real active subscriptions are never invisible in this report.
+    unlinkedActiveSubscriptions: number;
   };
   frequencyMix: { frequency: string; subscriptionCount: number; donorCount: number; monthlyValueCents: number }[];
   statusBreakdown: Record<string, number>;
@@ -53,8 +58,13 @@ export async function loadRecurringDonorsAnalytics(churchId: string, rangeDays =
   const now = Date.now();
   const in7Days = now + 7 * 24 * 60 * 60 * 1000;
   const in30Days = now + 30 * 24 * 60 * 60 * 1000;
-  const upcoming7 = subscriptions.filter((s) => s.displayStatus === "ACTIVE" && s.nextBillingDate && s.nextBillingDate.getTime() <= in7Days);
-  const upcoming30 = subscriptions.filter((s) => s.displayStatus === "ACTIVE" && s.nextBillingDate && s.nextBillingDate.getTime() <= in30Days);
+  // A nextBillingDate already in the past is stale, not "upcoming" — see
+  // isUpcomingCharge in subscriptionStatus.ts. Reconciliation (see
+  // subscriptionReconciliation.ts) is what actually corrects a stale date;
+  // this is defense-in-depth so a not-yet-reconciled row is never counted
+  // as upcoming in the meantime.
+  const upcoming7 = subscriptions.filter((s) => s.displayStatus === "ACTIVE" && isUpcomingCharge(s.nextBillingDate, now, in7Days));
+  const upcoming30 = subscriptions.filter((s) => s.displayStatus === "ACTIVE" && isUpcomingCharge(s.nextBillingDate, now, in30Days));
 
   const activeSubs = subscriptions.filter((s) => s.displayStatus === "ACTIVE");
   const frequencyMix = new Map<string, { subscriptionCount: number; monthlyValueCents: number; donorIds: Set<string> }>();
@@ -121,6 +131,7 @@ export async function loadRecurringDonorsAnalytics(churchId: string, rangeDays =
       upcomingCharges7Days: { count: upcoming7.length, amountCents: upcoming7.reduce((s, x) => s + (x.amountCents ?? 0), 0) },
       upcomingCharges30Days: { count: upcoming30.length, amountCents: upcoming30.reduce((s, x) => s + (x.amountCents ?? 0), 0) },
       lifetimeRecurringDonatedCents,
+      unlinkedActiveSubscriptions: activeSubs.filter((s) => !s.donorId).length,
     },
     frequencyMix: [...frequencyMix.entries()].map(([label, v]) => ({
       frequency: label,

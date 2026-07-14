@@ -7,6 +7,7 @@ import {
   annualizedValueCents,
   type SubscriptionDisplayStatus,
 } from "@/lib/subscriptions/subscriptionStatus";
+import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 
 /**
  * Same bounded-candidate-then-aggregate-in-memory tradeoff as
@@ -36,6 +37,10 @@ export interface SubscriptionRow {
   donorName: string;
   donorEmail: string | null;
   donorPhone: string | null;
+  // True when donorId could not be resolved (directly or via the linked
+  // instrument) and an authorized admin needs to pick the correct donor —
+  // never auto-matched by name alone. See subscriptionReconciliation.ts.
+  needsDonorMatching: boolean;
   amountCents: number;
   currency: string;
   billingInterval: string | null;
@@ -110,6 +115,16 @@ export interface SubscriptionCandidateFilters {
 
 /** Fetches a bounded set of subscriptions + their instrument/donor/givingLink/fund joins in a fixed number of batch queries, then shapes each into a fully-attributed SubscriptionRow. This is the single shared source both the Subscriptions (schedule-centric) and Recurring Donors (donor-centric, grouped by donorId) list loaders build on. */
 export async function loadSubscriptionCandidates(churchId: string, filters: SubscriptionCandidateFilters = {}): Promise<SubscriptionRow[]> {
+  // Self-healing fallback for missed/delayed subscription.updated webhooks —
+  // bounded and throttled (see subscriptionReconciliation.ts), so opening
+  // either the Subscriptions or Recurring Donors page never permanently
+  // shows a stale nextBillingDate/state/donor linkage.
+  try {
+    await reconcileStaleActiveSubscriptions(churchId);
+  } catch (err) {
+    console.error("Stale-subscription reconciliation pass failed:", err);
+  }
+
   const subscriptions = await prisma.finixSubscription.findMany({
     where: {
       churchId,
@@ -161,6 +176,7 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
     if (displayStatus === "ACTIVE" && paymentMethodDisabled) attentionReasons.push("Disabled payment method");
     if (displayStatus === "ACTIVE" && paymentMethodExpired) attentionReasons.push("Expired payment method");
     if (displayStatus === "ACTIVE" && donor && !donor.email) attentionReasons.push("Missing donor email");
+    if (displayStatus === "ACTIVE" && !donor && s.needsDonorMatching) attentionReasons.push("Needs donor matching");
 
     const fundId = s.fundId ?? givingLink?.fundId ?? null;
 
@@ -169,9 +185,16 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
       finixSubscriptionId: s.finixSubscriptionId,
       churchId,
       donorId: s.donorId,
-      donorName: donor ? (donor.anonymousPreference ? "Anonymous Donor" : formatPersonName(donor.name)) : "Unknown Donor",
+      donorName: donor
+        ? donor.anonymousPreference
+          ? "Anonymous Donor"
+          : formatPersonName(donor.name)
+        : s.needsDonorMatching
+          ? "Needs Donor Matching"
+          : "Unknown Donor",
       donorEmail: donor?.email ?? null,
       donorPhone: donor?.phone ?? null,
+      needsDonorMatching: !donor && s.needsDonorMatching,
       amountCents: s.amountCents ?? 0,
       currency: s.currency ?? "USD",
       billingInterval: s.billingInterval,

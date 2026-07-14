@@ -949,6 +949,10 @@ model FinixTransfer {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
   lastSyncedAt             DateTime?
+  // Set by the payment-reconciliation fallback (see paymentReconciliation.ts)
+  // whenever it re-fetches this transfer from Finix directly — distinct from
+  // lastSyncedAt, which is also touched by ordinary webhook processing.
+  lastReconciledAt         DateTime?
 
   @@index([churchId, finixSubscriptionId])
 }
@@ -1288,6 +1292,19 @@ model FinixSubscription {
   donationAmountCents        Int?
   donorCoversFee             Boolean?
   feeCalculationVersion      String?
+
+  // Reconciliation/date-sync fields — see subscriptionReconciliation.ts.
+  // lastBillingAt/lastSuccessfulChargeAt are set from an actually-observed
+  // recurring charge (webhook or reconciled transfer), never inferred by
+  // adding one interval to the previous date. nextBillingDate is only ever
+  // trusted from Finix's own schedule response, never computed locally.
+  lastBillingAt          DateTime?
+  lastSuccessfulChargeAt DateTime?
+  lastReconciledAt       DateTime?
+  // True when donorId could not be resolved (directly or via the linked
+  // payment instrument) and needs an authorized admin to manually pick the
+  // correct donor — never auto-matched by name alone.
+  needsDonorMatching     Boolean   @default(false)
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

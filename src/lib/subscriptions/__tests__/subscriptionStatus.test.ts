@@ -5,6 +5,7 @@ import {
   normalizeToMonthlyValueCents,
   annualizedValueCents,
   frequencyLabel,
+  isUpcomingCharge,
 } from "@/lib/subscriptions/subscriptionStatus";
 
 describe("resolveSubscriptionDisplayStatus", () => {
@@ -77,6 +78,41 @@ describe("normalizeToMonthlyValueCents", () => {
 describe("annualizedValueCents", () => {
   it("multiplies the monthly value by 12", () => {
     expect(annualizedValueCents(1000)).toBe(12000);
+  });
+
+  it("test 7: two monthly subscriptions of $241.02 and $125.00 sum to $366.02/mo and $4,392.24/yr", () => {
+    const monthlyRecurringValueCents = normalizeToMonthlyValueCents(24102, "MONTHLY") + normalizeToMonthlyValueCents(12500, "MONTHLY");
+    expect(monthlyRecurringValueCents).toBe(36602);
+    expect(annualizedValueCents(monthlyRecurringValueCents)).toBe(439224);
+  });
+});
+
+describe("isUpcomingCharge", () => {
+  const now = Date.parse("2026-07-14T00:00:00Z");
+  const in7Days = now + 7 * 24 * 60 * 60 * 1000;
+
+  it("test 8: a nextBillingAt already in the past is never upcoming", () => {
+    expect(isUpcomingCharge(new Date(now - 24 * 60 * 60 * 1000), now, in7Days)).toBe(false);
+  });
+
+  it("a nextBillingAt exactly now is not upcoming (must be strictly greater than now)", () => {
+    expect(isUpcomingCharge(new Date(now), now, in7Days)).toBe(false);
+  });
+
+  it("a nextBillingAt within the window is upcoming", () => {
+    expect(isUpcomingCharge(new Date(now + 3 * 24 * 60 * 60 * 1000), now, in7Days)).toBe(true);
+  });
+
+  it("a nextBillingAt exactly at the window boundary is included", () => {
+    expect(isUpcomingCharge(new Date(in7Days), now, in7Days)).toBe(true);
+  });
+
+  it("a nextBillingAt beyond the window is not upcoming", () => {
+    expect(isUpcomingCharge(new Date(now + 30 * 24 * 60 * 60 * 1000), now, in7Days)).toBe(false);
+  });
+
+  it("no nextBillingAt at all is never upcoming", () => {
+    expect(isUpcomingCharge(null, now, in7Days)).toBe(false);
   });
 });
 

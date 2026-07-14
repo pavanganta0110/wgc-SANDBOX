@@ -68,6 +68,13 @@ export function annualizedValueCents(monthlyValueCents: number): number {
   return monthlyValueCents * 12;
 }
 
+/** now < nextBillingAt <= windowEndMs — a date already in the past (stale or genuinely overdue) is never "upcoming", only a real future charge within the window counts. */
+export function isUpcomingCharge(nextBillingDate: Date | null, nowMs: number, windowEndMs: number): boolean {
+  if (!nextBillingDate) return false;
+  const t = nextBillingDate.getTime();
+  return t > nowMs && t <= windowEndMs;
+}
+
 export const FREQUENCY_LABELS: Record<string, string> = {
   WEEKLY: "Weekly",
   EVERY_TWO_WEEKS: "Every Two Weeks",

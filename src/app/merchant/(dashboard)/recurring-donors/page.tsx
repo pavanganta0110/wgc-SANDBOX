@@ -98,6 +98,13 @@ export default async function RecurringDonorsPage({
         <SummaryCard label="Upcoming Charges (7 Days)" value={String(summary.upcomingCharges7Days.count)} sublabel={formatCents(summary.upcomingCharges7Days.amountCents)} />
         <SummaryCard label="Upcoming Charges (30 Days)" value={String(summary.upcomingCharges30Days.count)} sublabel={formatCents(summary.upcomingCharges30Days.amountCents)} />
         <SummaryCard label="Lifetime Recurring Donations" value={formatCents(summary.lifetimeRecurringDonatedCents)} />
+        {summary.unlinkedActiveSubscriptions > 0 && (
+          <SummaryCard
+            label="Unlinked Subscriptions"
+            value={String(summary.unlinkedActiveSubscriptions)}
+            sublabel="Active subscriptions needing donor matching"
+          />
+        )}
       </div>
 
       {/* Analytics */}
@@ -108,14 +115,29 @@ export default async function RecurringDonorsPage({
             <p className="text-sm text-slate-400">No active recurring donations for this period.</p>
           ) : (
             <div className="space-y-2">
-              {frequencyMix.map((f) => (
-                <div key={f.frequency} className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">{f.frequency}</span>
-                  <span className="text-slate-800 font-semibold">
-                    {f.donorCount} donor{f.donorCount === 1 ? "" : "s"} · {f.subscriptionCount} sub{f.subscriptionCount === 1 ? "" : "s"} · {formatCents(f.monthlyValueCents)}/mo
-                  </span>
-                </div>
-              ))}
+              {frequencyMix.map((f) => {
+                // Real active subscriptions must never be represented as
+                // "0 donors" without explanation — if none of this
+                // frequency's subscriptions resolved to a donor, say so
+                // explicitly instead of implying nothing exists.
+                const allUnlinked = f.donorCount === 0 && f.subscriptionCount > 0;
+                return (
+                  <div key={f.frequency} className="text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600">{f.frequency}</span>
+                      <span className="text-slate-800 font-semibold">
+                        {allUnlinked ? "0 linked donors" : `${f.donorCount} donor${f.donorCount === 1 ? "" : "s"}`} · {f.subscriptionCount} sub
+                        {f.subscriptionCount === 1 ? "" : "s"} · {formatCents(f.monthlyValueCents)}/mo
+                      </span>
+                    </div>
+                    {allUnlinked && (
+                      <p className="text-xs text-amber-600 text-right mt-0.5">
+                        {f.subscriptionCount} subscription{f.subscriptionCount === 1 ? "" : "s"} need{f.subscriptionCount === 1 ? "s" : ""} donor matching
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -152,8 +174,20 @@ export default async function RecurringDonorsPage({
               <div className="mx-auto w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center mb-3">
                 <Users className="w-6 h-6 text-slate-300" />
               </div>
-              <h3 className="text-sm font-bold text-slate-900 mb-1">No recurring donors</h3>
-              <p className="text-sm text-slate-500 max-w-sm mx-auto">Donors with recurring donation schedules will appear here.</p>
+              {summary.unlinkedActiveSubscriptions > 0 ? (
+                <>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1">Some subscriptions need donor matching</h3>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto">
+                    {summary.unlinkedActiveSubscriptions} active subscription{summary.unlinkedActiveSubscriptions === 1 ? "" : "s"} could not
+                    be resolved to a donor yet — check the Subscriptions page to review or manually match them.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1">No recurring subscriptions yet</h3>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto">Donors with recurring donation schedules will appear here.</p>
+                </>
+              )}
             </div>
           ) : (
             <table className="w-full text-sm min-w-[1400px]">

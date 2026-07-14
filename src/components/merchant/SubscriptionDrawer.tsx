@@ -71,7 +71,16 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
         <Row label="Amount" value={formatCents(s.amountCents)} />
         <Row label="Frequency" value={frequencyLabel(s.billingInterval)} />
         <Row label="Monthly Value" value={formatCents(s.monthlyValueCents)} />
-        <Row label="Donor" value={<Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">{s.donorName}</Link>} />
+        <Row
+          label="Donor"
+          value={
+            s.donorId ? (
+              <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">{s.donorName}</Link>
+            ) : (
+              <span className="text-amber-600">{s.donorName}</span>
+            )
+          }
+        />
         <Row label="Next Billing Date" value={s.nextBillingDate ? formatDateCDT(s.nextBillingDate) : "—"} />
         <Row label="Lifetime Collected" value={formatCents(s.lifetimeCollectedCents)} />
       </Section>
@@ -86,7 +95,7 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
 
       <Section title="Related Resources" last>
         <div className="flex flex-col gap-1.5 text-sm">
-          <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">Donor</Link>
+          {s.donorId && <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">Donor</Link>}
           {s.donorId && <Link href={`/merchant/recurring-donors/${s.donorId}`} className="text-blue-600 hover:underline">Recurring Donor</Link>}
           <Link href={`/merchant/subscriptions/${s.id}?tab=payments`} className="text-blue-600 hover:underline">Payments</Link>
           {s.givingLinkId && <Link href={`/merchant/giving-links/${s.givingLinkId}`} className="text-blue-600 hover:underline">Giving Link</Link>}

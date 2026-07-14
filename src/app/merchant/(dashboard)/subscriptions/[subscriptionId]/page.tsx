@@ -14,6 +14,7 @@ import { loadPaymentsForSubscription } from "@/lib/subscriptions/subscriptionPay
 import { loadSubscriptionActivity } from "@/lib/subscriptions/subscriptionActivity";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import SubscriptionActions from "@/components/merchant/SubscriptionActions";
+import SubscriptionDonorMatcher from "@/components/merchant/SubscriptionDonorMatcher";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -88,7 +89,14 @@ export default async function SubscriptionDetailPage({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
           <div>
             <p className="text-xs text-slate-500">Donor</p>
-            <Link href={`/merchant/donors/${s.donorId}`} className="text-sm font-bold text-blue-600 hover:underline">{s.donorName}</Link>
+            {s.donorId ? (
+              <Link href={`/merchant/donors/${s.donorId}`} className="text-sm font-bold text-blue-600 hover:underline">
+                {s.donorName}
+              </Link>
+            ) : (
+              <p className="text-sm font-bold text-amber-600">{s.donorName}</p>
+            )}
+            {s.needsDonorMatching && permissions.canUpdateAmount && <SubscriptionDonorMatcher subscriptionId={s.id} />}
           </div>
           <div>
             <p className="text-xs text-slate-500">Amount</p>

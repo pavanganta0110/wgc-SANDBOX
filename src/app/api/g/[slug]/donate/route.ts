@@ -343,6 +343,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         create: {
           finixSubscriptionId: subscription.id,
           churchId: church.id,
+          // The donor record was already resolved (created or matched by
+          // Finix identity) earlier in this request — this is the same
+          // donorRecord used for the one-time-transfer path below, never
+          // re-derived from the processor's subscription response.
+          donorId: donorRecord.id,
           givingLinkId: link.id,
           finixMerchantId: church.finixMerchantId,
           finixBuyerIdentityId: identityId,

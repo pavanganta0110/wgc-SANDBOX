@@ -32,9 +32,21 @@ export default async function PaymentFullDetailPage({
   const churchId = session!.churchId!;
   const { transferId } = await params;
 
-  const transfer = await prisma.finixTransfer.findFirst({
+  let transfer = await prisma.finixTransfer.findFirst({
     where: { finixTransferId: transferId, churchId },
   });
+
+  if (transfer && transfer.state === "PENDING") {
+    try {
+      const { reconcilePendingTransfer } = await import("@/lib/finix/sync/paymentReconciliation");
+      const result = await reconcilePendingTransfer(transferId);
+      if (result.changed) {
+        transfer = await prisma.finixTransfer.findFirst({ where: { finixTransferId: transferId, churchId } });
+      }
+    } catch (err) {
+      console.error("Payment detail reconciliation failed:", err);
+    }
+  }
 
   if (!transfer) {
     return (
