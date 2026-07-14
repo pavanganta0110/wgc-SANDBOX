@@ -1020,6 +1020,9 @@ export async function POST(req: Request) {
     const signatureHeader = headerList.get("finix-signature");
     const authHeader = headerList.get("authorization") || "";
     const rawBody = await req.text();
+    if (!rawBody || rawBody.trim() === "") {
+      return NextResponse.json({ message: "Verification ping successful" }, { status: 200 });
+    }
     const authConfigured = Boolean(BEARER_TOKEN || BASIC_AUTH_USERNAME || BASIC_AUTH_PASSWORD);
 
     if (!authConfigured && !WEBHOOK_SECRET) {
@@ -1126,10 +1129,6 @@ export async function POST(req: Request) {
           { status: 401 }
         );
       }
-    }
-
-    if (!rawBody || rawBody.trim() === "") {
-      return NextResponse.json({ message: "Verification ping successful" }, { status: 200 });
     }
 
     const payload = JSON.parse(rawBody);
