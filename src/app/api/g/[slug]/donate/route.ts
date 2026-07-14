@@ -112,7 +112,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         ? allowedMethods.includes("APPLE_PAY")
         : paymentMethod === "google_pay"
           ? allowedMethods.includes("GOOGLE_PAY")
-          : method === "card"
+          : paymentMethod === "card"
             ? allowedMethods.includes("CARD")
             : allowedMethods.includes("BANK");
     if (!methodCheck) {
@@ -258,7 +258,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       logEvent("5_FEE_PROFILE_CONFIGURATION_LOADED", {});
       feeStrategy = resolveWgcTransferFeeStrategy({
         donationAmountCents,
-        paymentMethod: method === "bank" ? "ACH" : "CARD",
+        paymentMethod: paymentMethod === "bank" ? "ACH" : "CARD",
         cardBrand,
         donorCoversFee: link.feeCoverEnabled && coverFees,
       });
@@ -456,7 +456,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
             ? "APPLE_PAY"
             : paymentMethod === "google_pay"
               ? "GOOGLE_PAY"
-              : method === "card"
+              : paymentMethod === "card"
                 ? "PAYMENT_CARD"
                 : "BANK_ACCOUNT",
         status: transfer.state ?? "PENDING",
