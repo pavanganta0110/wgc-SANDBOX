@@ -192,8 +192,8 @@ export async function POST(req: Request) {
           wgcTermsVersion: "1.0",
           wgcFeesVersion: "1.0",
           wgcPrivacyVersion: "1.0",
-          finixTermsUrl: process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix.com/terms",
-          finixPrivacyUrl: process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/privacy",
+          finixTermsUrl: process.env.NEXT_PUBLIC_FINIX_TERMS_URL || "https://finix-hosted-content.s3.amazonaws.com/flex/v3/finix-terms-of-service.html",
+          finixPrivacyUrl: process.env.NEXT_PUBLIC_FINIX_PRIVACY_URL || "https://finix.com/terms-and-policies",
           source: "API_ONBOARDING",
         },
       });
