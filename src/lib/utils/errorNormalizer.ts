@@ -283,7 +283,7 @@ export function toSafePaymentErrorResponse(
     {
       success: false,
       code,
-      message: defaultMessage,
+      message: `${defaultMessage} (DEBUG: ${error instanceof Error ? error.message : (error?.details?._embedded?.errors?.[0]?.message || JSON.stringify(error))})`,
       reference: supportRef,
       retryable,
     },
