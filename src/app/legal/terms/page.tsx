@@ -47,7 +47,8 @@ export default function TermsPage() {
 
             <section>
               <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">3. Acceptance of WGC and Finix Terms</h2>
-              <p className="mb-4">By continuing with onboarding and utilizing the platform, the Church agrees to:</p>
+              <p className="mb-4 font-semibold text-slate-800">By continuing, you agree to our Terms of Service and the Finix Terms of Service.</p>
+              <p className="mb-4">Specifically, the Church agrees to the following agreements and policies:</p>
               <ul className="list-disc pl-6 space-y-2 mb-4">
                 <li><Link href="/legal/terms" className="text-wgc-navy-600 font-medium hover:underline">WGC Payments Terms of Service</Link></li>
                 <li><Link href="/legal/fees" className="text-wgc-navy-600 font-medium hover:underline">WGC Fee Schedule</Link></li>
