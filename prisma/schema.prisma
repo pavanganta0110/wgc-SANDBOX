@@ -743,8 +743,15 @@ model Payment {
   merchantExpectedNetCents          Int?
   actualFinixFeesCents              Int?
   finixSubscriptionId               String?
-  createdAt                         DateTime  @default(now())
-  updatedAt                         DateTime  @updatedAt
+
+  givingPageType              String?
+  designationType             String?
+  selectedPersonId            String?
+  selectedPersonNameSnapshot  String?
+  selectedPersonTitleSnapshot String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   receipts DonationReceipt[]
 }
@@ -1287,9 +1294,16 @@ model FinixSubscription {
   donationAmountCents        Int?
   donorCoversFee             Boolean?
   feeCalculationVersion      String?
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
-  lastSyncedAt               DateTime?
+
+  givingPageType              String?
+  designationType             String?
+  selectedPersonId            String?
+  selectedPersonNameSnapshot  String?
+  selectedPersonTitleSnapshot String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastSyncedAt DateTime?
 
   @@index([churchId, donorId])
   @@index([churchId, state])
@@ -1759,6 +1773,7 @@ model AnnualDonationStatementLine {
 model GivingPage {
   id                   String   @id @default(cuid())
   churchId             String
+  givingPageType       String   @default("ORGANIZATION") // ORGANIZATION | PERSON
   slug                 String   @unique
   name                 String
   isDefault            Boolean  @default(false)
@@ -1772,4 +1787,41 @@ model GivingPage {
   allowFeeCoverage     Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+
+  givingPagePersons GivingPagePerson[]
+}
+
+model OrganizationPerson {
+  id                   String   @id @default(cuid())
+  churchId             String
+  displayName          String
+  firstName            String?
+  lastName             String?
+  title                String?
+  ministryOrDepartment String?
+  publicDescription    String?
+  profileImageUrl      String?
+  isActive             Boolean  @default(true)
+  displayOrder         Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  givingPagePersons GivingPagePerson[]
+
+  @@index([churchId])
+}
+
+model GivingPagePerson {
+  id           String   @id @default(cuid())
+  givingPageId String
+  personId     String
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  givingPage GivingPage         @relation(fields: [givingPageId], references: [id])
+  person     OrganizationPerson @relation(fields: [personId], references: [id])
+
+  @@unique([givingPageId, personId])
+  @@index([givingPageId])
+  @@index([personId])
 }

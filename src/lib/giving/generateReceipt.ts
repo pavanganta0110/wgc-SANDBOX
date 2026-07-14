@@ -70,6 +70,9 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     (goodsServicesProvided ? computeRecordedContributionAmountCents(paymentAmountCents, goodsServicesFairMarketValueCents ?? 0) : paymentAmountCents);
 
   const acknowledgmentText = resolveAcknowledgmentText(church, goodsServicesDescription, goodsServicesFairMarketValueCents);
+  const designationText = payment.designationType === "PERSON" && payment.selectedPersonNameSnapshot
+    ? `Support for ${payment.selectedPersonNameSnapshot}`
+    : null;
 
   const pdfProps: DonationReceiptPdfProps = {
     organizationName: orgName,
@@ -87,6 +90,7 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     donationDate: payment.createdAt,
     amountCents: paymentAmountCents,
     fundName: settings.showFund ? payment.fundName : null,
+    designationText,
     paymentMethodLabel: settings.showPaymentMethodLastFour ? paymentMethodLabel : describeInstrumentType(payment.paymentMethodType),
     isRecurring: false,
     recurringInterval: null,
@@ -107,6 +111,7 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
   if (settings.header) lines.push(`<p>${settings.header}</p>`);
   lines.push(`<p>Thank you for your gift of <strong>${formatCents(paymentAmountCents)}</strong> to <strong>${orgName}</strong>.</p>`);
   if (settings.showFund && payment.fundName) lines.push(`<p>Fund/Campaign: ${payment.fundName}</p>`);
+  if (designationText) lines.push(`<p>Gift Purpose: ${designationText}</p>`);
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
   lines.push(`<p>${settings.thankYouMessage}</p>`);
   lines.push(`<p>${acknowledgmentText}</p>`);

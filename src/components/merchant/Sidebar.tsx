@@ -45,11 +45,28 @@ const NAV_ITEMS: NavItem[] = [
       { name: "Bank Returns", href: "/merchant/transactions/bank-returns" },
     ],
   },
+  {
+    name: "Reports",
+    href: "/merchant/reports",
+    icon: LineChart,
+    children: [
+      { name: "Person Giving", href: "/merchant/reports/person-giving" },
+    ],
+  },
   { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert },
   { name: "Settlements", href: "/merchant/settlements", icon: Landmark },
   { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank },
   { name: "Donors", href: "/merchant/donors", icon: Users },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
+  {
+    name: "Giving Pages",
+    href: "/merchant/giving-page",
+    icon: HeartHandshake, // Need to import an icon or reuse
+    children: [
+      { name: "Pages", href: "/merchant/giving-page" },
+      { name: "People", href: "/merchant/giving-page/people" },
+    ],
+  },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
   { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard },

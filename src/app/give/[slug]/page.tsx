@@ -9,7 +9,15 @@ export default async function GivingPagePublic({
 }) {
   const { slug } = await params;
 
-  const givingPage = await prisma.givingPage.findUnique({ where: { slug } });
+  const givingPage = await prisma.givingPage.findUnique({
+    where: { slug },
+    include: {
+      givingPagePersons: {
+        include: { person: true },
+        orderBy: { displayOrder: "asc" }
+      }
+    }
+  });
   if (!givingPage) notFound();
 
   const church = await prisma.church.findUnique({ where: { id: givingPage.churchId } });
@@ -68,6 +76,16 @@ export default async function GivingPagePublic({
             cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
             achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
           }}
+          givingPageType={givingPage.givingPageType}
+          people={givingPage.givingPagePersons.map(p => ({
+            id: p.person.id,
+            displayName: p.person.displayName,
+            profileImageUrl: p.person.profileImageUrl,
+            title: p.person.title,
+            ministryOrDepartment: p.person.ministryOrDepartment,
+            publicDescription: p.person.publicDescription,
+            isActive: p.person.isActive,
+          })).filter(p => p.isActive)}
         />
       </div>
     </div>

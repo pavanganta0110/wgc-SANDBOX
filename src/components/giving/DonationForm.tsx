@@ -26,6 +26,15 @@ export default function DonationForm({
   allowRecurring: boolean;
   allowFeeCoverage: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
+  givingPageType: string;
+  people: {
+    id: string;
+    displayName: string;
+    profileImageUrl: string | null;
+    title: string | null;
+    ministryOrDepartment: string | null;
+    publicDescription: string | null;
+  }[];
 }) {
   const [amountCents, setAmountCents] = useState<number>(suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
@@ -38,6 +47,9 @@ export default function DonationForm({
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formReady, setFormReady] = useState(false);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(
+    givingPageType === "PERSON" && people.length === 1 ? people[0].id : null
+  );
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
 
@@ -103,6 +115,10 @@ export default function DonationForm({
       toast.error("Payment form is still loading — please wait a moment");
       return;
     }
+    if (givingPageType === "PERSON" && !selectedPersonId) {
+      toast.error("Please select a person to support");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -150,6 +166,7 @@ export default function DonationForm({
                 paymentMethod,
                 fraudSessionId,
                 donor: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
+                selectedPersonId: givingPageType === "PERSON" ? selectedPersonId : undefined,
               }),
             });
 
@@ -176,6 +193,57 @@ export default function DonationForm({
 
   return (
     <div className="space-y-6">
+      {givingPageType === "PERSON" && (
+        <div className="space-y-3">
+          <label className="block text-xs font-semibold text-slate-500">Designation</label>
+          {people.length === 1 ? (
+            <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
+              {people[0].profileImageUrl && (
+                <img src={people[0].profileImageUrl} alt={people[0].displayName} className="w-12 h-12 rounded-full object-cover" />
+              )}
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Support {people[0].displayName}</p>
+                {(people[0].title || people[0].ministryOrDepartment) && (
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {people[0].title} {people[0].title && people[0].ministryOrDepartment && "•"} {people[0].ministryOrDepartment}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+              {people.map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() => setSelectedPersonId(person.id)}
+                  className={`flex flex-col text-left p-3 rounded-xl border transition-colors ${
+                    selectedPersonId === person.id
+                      ? "border-2 border-slate-900 bg-slate-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {person.profileImageUrl && (
+                      <img src={person.profileImageUrl} alt={person.displayName} className="w-10 h-10 rounded-full object-cover bg-slate-100 shrink-0" />
+                    )}
+                    <div>
+                      <p className={`text-sm font-semibold ${selectedPersonId === person.id ? "text-slate-900" : "text-slate-700"}`}>
+                        {person.displayName}
+                      </p>
+                      {(person.title || person.ministryOrDepartment) && (
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                          {person.title} {person.title && person.ministryOrDepartment && "•"} {person.ministryOrDepartment}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {allowRecurring && (
         <div className="flex rounded-xl border border-slate-200 p-1">
           <button

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { Share2, Plus, ChevronDown } from "lucide-react";
 
@@ -17,6 +17,14 @@ interface GivingPage {
   suggestedAmountsJson: unknown;
   allowRecurring: boolean;
   allowFeeCoverage: boolean;
+  givingPageType: string;
+  givingPagePersons?: { person: { id: string; displayName: string } }[];
+}
+
+interface Person {
+  id: string;
+  displayName: string;
+  isActive: boolean;
 }
 
 const DEFAULT_AMOUNTS = "25, 50, 100, 250, 500, 1000";
@@ -116,6 +124,11 @@ export default function GivingPagesManager({
                       Default
                     </span>
                   )}
+                  {page.givingPageType === "PERSON" && (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-600">
+                      Person Page
+                    </span>
+                  )}
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                       page.enabled ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"
@@ -197,7 +210,26 @@ function GivingPageForm({
   const [amounts, setAmounts] = useState(centsToAmountsInput(page?.suggestedAmountsJson));
   const [allowRecurring, setAllowRecurring] = useState(page?.allowRecurring ?? true);
   const [allowFeeCoverage, setAllowFeeCoverage] = useState(page?.allowFeeCoverage ?? true);
+  const [givingPageType, setGivingPageType] = useState(page?.givingPageType || "ORGANIZATION");
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>(
+    page?.givingPagePersons?.map((gp) => gp.person.id) || []
+  );
   const [saving, setSaving] = useState(false);
+  const [people, setPeople] = useState<Person[]>([]);
+
+  useEffect(() => {
+    fetch("/api/merchant/giving-pages/people")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.people) setPeople(data.people);
+      });
+  }, []);
+
+  const togglePerson = (id: string) => {
+    setSelectedPersonIds((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -214,6 +246,8 @@ function GivingPageForm({
       suggestedAmountsCents: amountsToCents(amounts),
       allowRecurring,
       allowFeeCoverage,
+      givingPageType,
+      personIds: givingPageType === "PERSON" ? selectedPersonIds : [],
     };
 
     const res = await fetch(page ? `/api/merchant/giving-pages/${page.id}` : "/api/merchant/giving-pages", {
@@ -236,6 +270,17 @@ function GivingPageForm({
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
       <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5">Page Type</label>
+          <select
+            value={givingPageType}
+            onChange={(e) => setGivingPageType(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#eab308]"
+          >
+            <option value="ORGANIZATION">Organization Giving</option>
+            <option value="PERSON">Person Giving</option>
+          </select>
+        </div>
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1.5">Page Name</label>
           <input
@@ -302,7 +347,36 @@ function GivingPageForm({
           Allow donor to cover fees
         </label>
       </div>
-      <div className="flex items-center justify-end gap-2">
+
+      {givingPageType === "PERSON" && (
+        <div className="border-t border-slate-100 pt-4">
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5">Attach People to this Page</label>
+          {people.length === 0 ? (
+            <p className="text-sm text-slate-500">No active people found. Create people in the People directory first.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {people.map((person) => (
+                <button
+                  key={person.id}
+                  onClick={() => togglePerson(person.id)}
+                  className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
+                    selectedPersonIds.includes(person.id)
+                      ? "bg-purple-100 text-purple-700 border-2 border-purple-200"
+                      : "bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  {person.displayName}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-slate-400 mt-2">
+            Donors will choose which person they are supporting.
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
         <button onClick={onCancel} className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-900">
           Cancel
         </button>

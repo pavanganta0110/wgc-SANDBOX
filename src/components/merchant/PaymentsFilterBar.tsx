@@ -24,7 +24,10 @@ export default function PaymentsFilterBar() {
   const state = searchParams.get("state") || "";
   const last4 = searchParams.get("last4") || "";
   const donorName = searchParams.get("buyer") || "";
+  const pageType = searchParams.get("pageType") || "";
+  const designatedPerson = searchParams.get("designatedPerson") || "";
   const [isStateOpen, setIsStateOpen] = useState(false);
+  const [isPageTypeOpen, setIsPageTypeOpen] = useState(false);
 
   const setParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -101,6 +104,62 @@ export default function PaymentsFilterBar() {
         width="w-56"
         placeholder="Donor or payment instrument name"
         onApply={(v) => setParam("buyer", v)}
+      />
+
+      <div className="relative">
+        <button
+          onClick={() => setIsPageTypeOpen((o) => !o)}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 ${
+            isPageTypeOpen ? "border-slate-900" : "border-slate-200"
+          }`}
+        >
+          {pageType === "PERSON" ? "Person Giving" : pageType === "ORGANIZATION" ? "Organization Giving" : "Page Type"}
+          <ChevronDown
+            className={`w-4 h-4 text-slate-400 transition-transform ${isPageTypeOpen ? "rotate-180" : ""}`}
+          />
+        </button>
+        {isPageTypeOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsPageTypeOpen(false)} />
+            <div className="absolute left-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 w-52">
+              <button
+                onClick={() => {
+                  setParam("pageType", "");
+                  setIsPageTypeOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                All Types
+              </button>
+              <button
+                onClick={() => {
+                  setParam("pageType", "ORGANIZATION");
+                  setIsPageTypeOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Organization Giving
+              </button>
+              <button
+                onClick={() => {
+                  setParam("pageType", "PERSON");
+                  setIsPageTypeOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Person Giving
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <PillFilterInput
+        label="Designated Person"
+        value={designatedPerson}
+        width="w-48"
+        placeholder="Person name"
+        onApply={(v) => setParam("designatedPerson", v)}
       />
 
       <div className="h-6 w-px bg-slate-200" />

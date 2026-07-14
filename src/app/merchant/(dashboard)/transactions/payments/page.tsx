@@ -25,11 +25,13 @@ export default async function PaymentsListPage({
     from?: string;
     to?: string;
     id?: string;
+    pageType?: string;
+    designatedPerson?: string;
   }>;
 }) {
   const session = await getSession();
   const churchId = session!.churchId!;
-  const { state, last4, buyer, range, from, to, id } = await searchParams;
+  const { state, last4, buyer, range, from, to, id, pageType, designatedPerson } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
@@ -108,6 +110,23 @@ export default async function PaymentsListPage({
       return true;
     });
 
+  // For the new fields stored on the Payment model, we need to fetch the associated payments
+  const payments = await prisma.payment.findMany({
+    where: { finixTransferId: { in: rows.map(r => r.transfer.finixTransferId) }, churchId }
+  });
+  const paymentMap = new Map(payments.map(p => [p.finixTransferId, p]));
+
+  // Apply final filtering on Payment fields
+  const filteredRows = rows.filter(({ transfer }) => {
+    const payment = paymentMap.get(transfer.finixTransferId);
+    if (pageType && payment?.givingPageType !== pageType) return false;
+    if (designatedPerson) {
+      if (payment?.designationType !== "PERSON") return false;
+      if (!payment?.selectedPersonNameSnapshot?.toLowerCase().includes(designatedPerson.toLowerCase())) return false;
+    }
+    return true;
+  });
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -127,7 +146,7 @@ export default async function PaymentsListPage({
 
       <div className="flex items-start gap-6">
       <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
-        {rows.length === 0 ? (
+        {filteredRows.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-slate-500">
             No payments match these filters.
           </p>
@@ -145,7 +164,7 @@ export default async function PaymentsListPage({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ transfer: t, instrument, donor, refund, displayStatus }) => {
+              {filteredRows.map(({ transfer: t, instrument, donor, refund, displayStatus }) => {
                 const last4Value = instrument?.cardLast4 || instrument?.bankLast4;
                 const instrumentLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : null);
                 const isFailed = (t.state || "").toUpperCase() === "FAILED";

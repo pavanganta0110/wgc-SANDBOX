@@ -37,6 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       preview = false,
       expectedTotalCents,
       clientAttemptId,
+      selectedPersonId,
     } = body;
 
     if (!token && !paymentInstrumentId) {
@@ -62,9 +63,45 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       donor.phone = normalized;
     }
 
-    const givingPage = await prisma.givingPage.findUnique({ where: { slug } });
+    const givingPage = await prisma.givingPage.findUnique({
+      where: { slug },
+      include: { givingPagePersons: true }
+    });
     if (!givingPage || !givingPage.enabled) {
       return NextResponse.json({ error: "This giving page is not accepting gifts" }, { status: 404 });
+    }
+
+    let personSnapshot: { id: string; name: string; title: string | null } | null = null;
+    let designationType = "ORGANIZATION";
+
+    if (givingPage.givingPageType === "PERSON") {
+      if (givingPage.givingPagePersons.length === 1) {
+        // Auto-resolve if only 1 person
+        const person = await prisma.organizationPerson.findUnique({
+          where: { id: givingPage.givingPagePersons[0].personId }
+        });
+        if (person && person.isActive) {
+          personSnapshot = { id: person.id, name: person.displayName, title: person.title };
+          designationType = "PERSON";
+        } else {
+          return NextResponse.json({ error: "The designated person is no longer active." }, { status: 400 });
+        }
+      } else {
+        if (!selectedPersonId) {
+          return NextResponse.json({ error: "Please select a person to support." }, { status: 400 });
+        }
+        const isValid = givingPage.givingPagePersons.some(p => p.personId === selectedPersonId);
+        if (!isValid) {
+          return NextResponse.json({ error: "Invalid person selection." }, { status: 400 });
+        }
+        const person = await prisma.organizationPerson.findUnique({ where: { id: selectedPersonId } });
+        if (person && person.isActive) {
+          personSnapshot = { id: person.id, name: person.displayName, title: person.title };
+          designationType = "PERSON";
+        } else {
+          return NextResponse.json({ error: "The designated person is no longer active." }, { status: 400 });
+        }
+      }
     }
 
     const church = await prisma.church.findUnique({ where: { id: givingPage.churchId } });
@@ -247,7 +284,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         linked_to: church.finixMerchantId,
         linked_type: "MERCHANT",
         buyer_details: { identity_id: identityId, instrument_id: instrumentId },
-        tags: { source: "wgc_giving_page", merchantId: church.finixMerchantId, churchId: church.id, givingPageId: givingPage.id },
+        tags: {
+          source: "wgc_giving_page",
+          merchantId: church.finixMerchantId,
+          churchId: church.id,
+          givingPageId: givingPage.id,
+          ...(personSnapshot && {
+            designation_type: "PERSON",
+            selected_person_id: personSnapshot.id,
+            selected_person_name: personSnapshot.name
+          })
+        },
       });
 
       await prisma.finixSubscription.upsert({
@@ -268,6 +315,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
           donationAmountCents,
           donorCoversFee: coverFees,
           feeCalculationVersion: dynamicFeesEnabled ? "v1" : null,
+          givingPageType: givingPage.givingPageType,
+          designationType,
+          selectedPersonId: personSnapshot?.id || null,
+          selectedPersonNameSnapshot: personSnapshot?.name || null,
+          selectedPersonTitleSnapshot: personSnapshot?.title || null,
           lastSyncedAt: new Date(),
         },
         update: {
@@ -296,6 +348,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         merchantId: church.finixMerchantId,
         churchId: church.id,
         givingPageId: givingPage.id,
+        ...(personSnapshot && {
+          designation_type: "PERSON",
+          selected_person_id: personSnapshot.id,
+          selected_person_name: personSnapshot.name
+        })
       },
     };
 
@@ -364,6 +421,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         fixedFeeCents: dynamicFeesEnabled ? feeRes.fixedFeeCents : null,
         feeCalculationVersion: dynamicFeesEnabled ? FEE_CALCULATION_VERSION : null,
         merchantExpectedNetCents: dynamicFeesEnabled ? feeRes.merchantExpectedNetCents : (totalCents - feeCoveredCents),
+        givingPageType: givingPage.givingPageType,
+        designationType,
+        selectedPersonId: personSnapshot?.id || null,
+        selectedPersonNameSnapshot: personSnapshot?.name || null,
+        selectedPersonTitleSnapshot: personSnapshot?.title || null,
       },
     });
 

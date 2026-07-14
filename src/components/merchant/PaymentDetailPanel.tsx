@@ -358,6 +358,12 @@ export default async function PaymentDetailPanel({
 
       <Section title="Payment Details">
         <Row label="Created Via" value={sourceLabel(transfer.source)} />
+        {payment?.givingPageType && (
+          <Row label="Giving Page Type" value={payment.givingPageType === "PERSON" ? "Person Giving" : "Organization Giving"} />
+        )}
+        {payment?.designationType === "PERSON" && payment?.selectedPersonNameSnapshot && (
+          <Row label="Designated Person" value={payment.selectedPersonNameSnapshot} />
+        )}
         <Row label="Statement Descriptor" value={transfer.statementDescriptor || "—"} />
         {transfer.failureCode && <Row label="Failure Code" value={transfer.failureCode} />}
         {transfer.failureMessage && <Row label="Failure Reason" value={transfer.failureMessage} />}
