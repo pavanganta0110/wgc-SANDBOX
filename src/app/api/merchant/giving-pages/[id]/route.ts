@@ -64,7 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     // Check if new additions are inactive
     const existingPersonIds = page.givingPagePersons.map(p => p.personId);
-    const newPersonIds = personIds.filter(id => !existingPersonIds.includes(id));
+    const newPersonIds = personIds.filter((id: string) => !existingPersonIds.includes(id));
     const inactiveNew = validPeople.some(p => newPersonIds.includes(p.id) && !p.isActive);
     if (inactiveNew) {
       return NextResponse.json({ error: "Only active people may be newly added to a Giving Page." }, { status: 400 });
