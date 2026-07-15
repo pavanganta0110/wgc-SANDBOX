@@ -623,6 +623,13 @@ export class FinixClient {
   }
 }
 
-// Export a singleton instance for ease of use
-export const finixClient = new FinixClient();
 
+// Lazy singleton — constructed on first use so env vars are always
+// read at request time, not at module-load / build time on Vercel.
+let _finixClient: FinixClient | null = null;
+export const finixClient = new Proxy({} as FinixClient, {
+  get(_target, prop) {
+    if (!_finixClient) _finixClient = new FinixClient();
+    return (_finixClient as any)[prop];
+  }
+});
