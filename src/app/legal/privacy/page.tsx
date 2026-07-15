@@ -16,7 +16,6 @@ export default function PrivacyPage() {
               </div>
            </Link>
            <h1 className="text-4xl font-bold text-wgc-navy-900 tracking-tight">Privacy Policy</h1>
-           <p className="text-slate-500 font-medium tracking-tight mt-2 opacity-80">Last updated July 2026.</p>
         </div>
 
         {/* Content */}
@@ -101,6 +100,8 @@ export default function PrivacyPage() {
           {/* Background branding */}
           <div className="absolute -right-20 -bottom-20 opacity-[0.02] pointer-events-none select-none text-[12rem] font-black text-wgc-navy-900 leading-none">PRIVACY</div>
         </div>
+
+        <p className="text-slate-500 font-medium tracking-tight mt-8 opacity-80 text-center text-sm">Last updated July 2026.</p>
         
         <div className="mt-12 text-center">
           <Link href="/" className="inline-flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-wgc-navy-900 transition-colors uppercase tracking-widest font-mono">
