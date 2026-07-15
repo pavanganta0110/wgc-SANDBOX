@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowRight, ArrowLeft, UploadCloud } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 
@@ -421,12 +421,21 @@ export default function StartOnboardingPage() {
                         </button>
                       </div>
                     ) : (
-                      <input
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png"
-                        onChange={(e) => handleIrsLetterChange(e.target.files?.[0] || null)}
-                        className="w-full text-sm"
-                      />
+                      <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors">
+                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                            <UploadCloud className="w-8 h-8 mb-3 text-slate-400" />
+                            <p className="mb-1 text-sm text-slate-600"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p className="text-xs text-slate-500">PDF, PNG, or JPG (max. 10MB)</p>
+                          </div>
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="application/pdf,image/jpeg,image/png"
+                            onChange={(e) => handleIrsLetterChange(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      </div>
                     )}
                     {irsLetterError && <p className="text-xs text-red-600 mt-1">{irsLetterError}</p>}
                     <p className="text-[11px] text-slate-400 mt-1">Optional. PDF, JPG, JPEG, or PNG, up to 10MB.</p>
