@@ -1,0 +1,9 @@
+{
+  "regions": ["pdx1"],
+  "crons": [
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}
