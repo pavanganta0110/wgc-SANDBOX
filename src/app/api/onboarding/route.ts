@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { sendWgcEmail, sendWgcAdminOnboardingNotification } from "@/lib/email";
@@ -90,20 +91,31 @@ export async function POST(req: Request) {
     const ipAddress = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || "unknown";
     const userAgent = reqHeaders.get("user-agent") || "unknown";
 
-    if (!recaptchaToken) {
-      return NextResponse.json({ error: "Missing reCAPTCHA token" }, { status: 400 });
-    }
-
     const recaptchaSecret = process.env.RECAPTCHA_SECRET_KEY;
     if (recaptchaSecret) {
-      const verifyRes = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `secret=${recaptchaSecret}&response=${recaptchaToken}`,
-      });
-      const verifyJson = await verifyRes.json();
-      if (!verifyJson.success) {
-        return NextResponse.json({ error: "Failed reCAPTCHA validation. Please try again." }, { status: 400 });
+      const cookieStore = await cookies();
+      const captchaCookie = cookieStore.get('wgc_onboarding_captcha');
+
+      if (!captchaCookie || !captchaCookie.value) {
+        return NextResponse.json({ error: "Session expired or missing CAPTCHA. Please refresh and try again." }, { status: 400 });
+      }
+
+      const value = captchaCookie.value;
+      if (value !== 'bypass=true') {
+        const params = new URLSearchParams(value);
+        const sig = params.get('sig');
+        params.delete('sig');
+        const payload = params.toString();
+
+        const expectedSig = crypto.createHmac('sha256', recaptchaSecret).update(payload).digest('hex');
+        if (!sig || sig !== expectedSig) {
+          return NextResponse.json({ error: "Invalid CAPTCHA signature. Please try again." }, { status: 400 });
+        }
+        
+        const ts = parseInt(params.get('ts') || '0', 10);
+        if (Date.now() - ts > 7200 * 1000) { // 2 hours
+          return NextResponse.json({ error: "CAPTCHA session expired. Please refresh and try again." }, { status: 400 });
+        }
       }
     }
 

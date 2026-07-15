@@ -196,6 +196,34 @@ export default function StartOnboardingPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (step === 1) {
+      if (!recaptchaToken) {
+        toast.error("Please verify that you are not a robot.");
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        const res = await fetch("/api/onboarding/verify-captcha", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recaptchaToken })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Captcha validation failed");
+        
+        setIsSubmitting(false);
+        nextStep();
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err.message || "Failed to verify captcha");
+        setIsSubmitting(false);
+        recaptchaRef.current?.reset();
+        setRecaptchaToken(null);
+      }
+      return;
+    }
+
     if (step < 6) {
       nextStep();
       return;
@@ -216,7 +244,6 @@ export default function StartOnboardingPage() {
     try {
       const payload = {
         ...formData,
-        recaptchaToken,
         website: normalizeWebsiteUrl(formData.website),
         annualCardVolume: Number(formData.annualCardVolume || 0),
         annualAchVolume: Number(formData.annualAchVolume || 0),
@@ -448,6 +475,14 @@ export default function StartOnboardingPage() {
                     <p className="text-[11px] text-slate-400 mt-1">Optional. PDF, JPG, JPEG, or PNG, up to 10MB.</p>
                   </div>
                 </div>
+
+                <div className="mt-8 flex justify-end">
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
+                    onChange={(val) => setRecaptchaToken(val)}
+                  />
+                </div>
               </div>
             )}
 
@@ -646,17 +681,12 @@ export default function StartOnboardingPage() {
               ) : <div></div>}
 
               {step < 6 ? (
-                <button type="submit" onClick={() => setAttemptedNext(true)} disabled={step === 4 && hasBeneficialOwners === null} className="px-8 py-3 rounded-xl font-bold text-slate-900 metallic-gold shadow-lg transition-all flex items-center gap-2 disabled:opacity-50">
-                  Next <ArrowRight className="w-4 h-4" />
+                <button type="submit" onClick={() => setAttemptedNext(true)} disabled={(step === 4 && hasBeneficialOwners === null) || isSubmitting} className="px-8 py-3 rounded-xl font-bold text-slate-900 metallic-gold shadow-lg transition-all flex items-center gap-2 disabled:opacity-50">
+                  {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Next <ArrowRight className="w-4 h-4" /></>}
                 </button>
               ) : (
                 <div className="flex flex-col items-end gap-4">
-                  <ReCAPTCHA
-                    ref={recaptchaRef}
-                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
-                    onChange={(val) => setRecaptchaToken(val)}
-                  />
-                  <button type="submit" onClick={() => setAttemptedNext(true)} disabled={isSubmitting || !Object.values(legal).every(Boolean) || !recaptchaToken} className="px-8 py-3 rounded-xl font-bold text-slate-900 metallic-gold shadow-lg transition-all flex items-center gap-2 disabled:opacity-50">
+                  <button type="submit" onClick={() => setAttemptedNext(true)} disabled={isSubmitting || !Object.values(legal).every(Boolean)} className="px-8 py-3 rounded-xl font-bold text-slate-900 metallic-gold shadow-lg transition-all flex items-center gap-2 disabled:opacity-50">
                     {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : "Submit Secure Onboarding"}
                   </button>
                 </div>

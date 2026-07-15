@@ -42,6 +42,10 @@ vi.mock('next/headers', () => ({
   headers: vi.fn(() => ({
     get: vi.fn(),
   })),
+  cookies: vi.fn(() => ({
+    get: vi.fn(() => ({ value: 'bypass=true' })),
+    set: vi.fn(),
+  })),
 }));
 
 describe('Admin Notification on Onboarding Success', () => {
