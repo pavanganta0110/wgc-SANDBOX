@@ -7,6 +7,7 @@ export default function InquiryForm() {
     firstName: "",
     lastName: "",
     email: "",
+    phone: "",
     company: "",
     role: "Software Partner (ISV)",
     message: "",
@@ -32,7 +33,7 @@ export default function InquiryForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send inquiry");
       setStatus("success");
-      setValues({ firstName: "", lastName: "", email: "", company: "", role: "Software Partner (ISV)", message: "" });
+      setValues({ firstName: "", lastName: "", email: "", phone: "", company: "", role: "Software Partner (ISV)", message: "" });
     } catch (err: any) {
       setStatus("error");
       setErrorMessage(err.message || "Failed to send inquiry. Please try again.");
@@ -91,18 +92,33 @@ export default function InquiryForm() {
         </div>
       </div>
 
-      <div>
-        <label htmlFor="email" className="block text-[10px] font-bold text-wgc-navy-400 uppercase tracking-widest mb-2 ml-1 font-mono">Email</label>
-        <div className="mt-1">
-          <input
-            type="email"
-            name="email"
-            id="email"
-            required
-            value={values.email}
-            onChange={(e) => updateField("email", e.target.value)}
-            className="block w-full bg-wgc-navy-50/50 border-wgc-navy-100/50 focus:ring-wgc-gold-500 focus:border-wgc-gold-500 rounded-xl p-4 border sm:text-sm transition-all font-bold text-wgc-navy-900"
-          />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+        <div>
+          <label htmlFor="email" className="block text-[10px] font-bold text-wgc-navy-400 uppercase tracking-widest mb-2 ml-1 font-mono">Email</label>
+          <div className="mt-1">
+            <input
+              type="email"
+              name="email"
+              id="email"
+              required
+              value={values.email}
+              onChange={(e) => updateField("email", e.target.value)}
+              className="block w-full bg-wgc-navy-50/50 border-wgc-navy-100/50 focus:ring-wgc-gold-500 focus:border-wgc-gold-500 rounded-xl p-4 border sm:text-sm transition-all font-bold text-wgc-navy-900"
+            />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="phone" className="block text-[10px] font-bold text-wgc-navy-400 uppercase tracking-widest mb-2 ml-1 font-mono">Phone Number</label>
+          <div className="mt-1">
+            <input
+              type="tel"
+              name="phone"
+              id="phone"
+              value={values.phone}
+              onChange={(e) => updateField("phone", e.target.value)}
+              className="block w-full bg-wgc-navy-50/50 border-wgc-navy-100/50 focus:ring-wgc-gold-500 focus:border-wgc-gold-500 rounded-xl p-4 border sm:text-sm transition-all font-bold text-wgc-navy-900"
+            />
+          </div>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ export async function POST(req: Request) {
   const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
   const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
   const email = typeof body.email === "string" ? body.email.trim() : "";
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   const company = typeof body.company === "string" ? body.company.trim() : "";
   const role = typeof body.role === "string" ? body.role.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   // from the database even if Resend is down/misconfigured, not lost like
   // every prior submission was when this form had no backend at all.
   const inquiry = await prisma.contactInquiry.create({
-    data: { firstName, lastName, email, company: company || null, role: role || null, message },
+    data: { firstName, lastName, email, phone: phone || null, company: company || null, role: role || null, message },
   });
 
   const notifyTo = process.env.SUPPORT_EMAIL || "support@wgcpayments.com";
@@ -36,6 +37,7 @@ export async function POST(req: Request) {
     bodyHtml: `
       <p><strong>Name:</strong> ${firstName} ${lastName}</p>
       <p><strong>Email:</strong> ${email}</p>
+      ${phone ? `<p><strong>Phone:</strong> ${phone}</p>` : ""}
       ${company ? `<p><strong>Software Organization:</strong> ${company}</p>` : ""}
       ${role ? `<p><strong>Partnership Role:</strong> ${role}</p>` : ""}
       <div style="margin-top: 20px; padding: 15px; background-color: #F0F4F8; border-radius: 8px;">

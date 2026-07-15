@@ -7,6 +7,7 @@ interface Inquiry {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string | null;
   company: string | null;
   role: string | null;
   message: string;
@@ -48,7 +49,10 @@ export default function InquiriesPage() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="font-bold text-slate-900">{inq.firstName} {inq.lastName}</p>
-                  <a href={`mailto:${inq.email}`} className="text-sm text-blue-600 hover:underline">{inq.email}</a>
+                  <div className="flex gap-4 items-center">
+                    <a href={`mailto:${inq.email}`} className="text-sm text-blue-600 hover:underline">{inq.email}</a>
+                    {inq.phone && <span className="text-xs text-slate-500 font-medium font-mono">{inq.phone}</span>}
+                  </div>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-400">{new Date(inq.createdAt).toLocaleString()}</p>

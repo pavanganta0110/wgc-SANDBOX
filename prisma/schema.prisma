@@ -262,6 +262,7 @@ model ContactInquiry {
   firstName      String
   lastName       String
   email          String
+  phone          String?
   company        String?
   role           String?
   message        String
