@@ -20,8 +20,13 @@ export async function GET() {
     return NextResponse.json({ error: "Church not found" }, { status: 404 });
   }
 
-  const [transactions, recentTransfers, disputeCount] = await Promise.all([
-    prisma.finixTransfer.findMany({ where: { churchId: session.churchId } }),
+  const [grossVolumeAgg, recentTransfers, transactionCount, disputeCount] = await Promise.all([
+    // Aggregate in DB — never load all transfers into memory
+    prisma.finixTransfer.aggregate({
+      where: { churchId: session.churchId, state: "SUCCEEDED" },
+      _sum: { amountCents: true },
+      _count: { _all: true },
+    }),
     prisma.finixTransfer.findMany({
       where: { churchId: session.churchId },
       orderBy: { createdAtFinix: "desc" },
@@ -35,18 +40,19 @@ export async function GET() {
         createdAtFinix: true,
       },
     }),
+    prisma.finixTransfer.count({ where: { churchId: session.churchId } }),
     prisma.finixDispute.count({ where: { churchId: session.churchId } }),
   ]);
 
-  const succeeded = transactions.filter((t) => (t.state || "").toUpperCase() === "SUCCEEDED");
-  const grossVolumeCents = succeeded.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+  const grossVolumeCents = grossVolumeAgg._sum.amountCents ?? 0;
+  const succeededCount = grossVolumeAgg._count._all;
 
   return NextResponse.json({
     church: { name: church.name, status: church.status },
     stats: {
       grossVolumeCents,
-      transactionCount: transactions.length,
-      succeededCount: succeeded.length,
+      transactionCount,
+      succeededCount,
       disputeCount,
     },
     recentTransactions: recentTransfers,

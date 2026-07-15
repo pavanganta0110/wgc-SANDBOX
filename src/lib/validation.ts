@@ -8,9 +8,6 @@ export function normalizeUSPhone(raw: string): string | null {
   return null;
 }
 
-export function isValidUSPhone(raw: string): boolean {
-  return normalizeUSPhone(raw) !== null;
-}
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

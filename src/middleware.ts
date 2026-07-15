@@ -20,8 +20,18 @@ export function middleware(request: NextRequest) {
       const authValue = basicAuth.split(' ')[1];
       const [user, pwd] = atob(authValue).split(':');
 
-      const validUser = process.env.ADMIN_USERNAME || 'admin';
-      const validPwd = process.env.ADMIN_PASSWORD || 'password123'; // Make sure to set this in prod!
+      const validUser = process.env.ADMIN_USERNAME;
+      const validPwd = process.env.ADMIN_PASSWORD;
+
+      // Reject authentication if admin credentials are not configured.
+      // There is no fallback — leaving these unset must result in a hard
+      // lockout, not a known default that could be guessed in production.
+      if (!validUser || !validPwd) {
+        return new NextResponse('Auth Required — Admin credentials not configured', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"' },
+        });
+      }
 
       if (user === validUser && pwd === validPwd) {
         return NextResponse.next();

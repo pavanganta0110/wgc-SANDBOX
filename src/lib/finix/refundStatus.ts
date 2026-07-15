@@ -1,6 +1,6 @@
-export type RefundStatus = "NONE" | "PENDING" | "PARTIAL" | "FULL";
+type RefundStatus = "NONE" | "PENDING" | "PARTIAL" | "FULL";
 
-export interface RefundStatusResult {
+interface RefundStatusResult {
   refundedCents: number;
   refundStatus: RefundStatus;
   netAmountCents: number;

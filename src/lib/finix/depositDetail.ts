@@ -51,4 +51,4 @@ export async function loadDepositDetail(depositId: string, churchId: string) {
   return { deposit, church, settlements, payments, affectingRefunds, affectingReturns };
 }
 
-export type DepositDetail = NonNullable<Awaited<ReturnType<typeof loadDepositDetail>>>;
+type DepositDetail = NonNullable<Awaited<ReturnType<typeof loadDepositDetail>>>;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 
 function mask(val: string | undefined): string {
   if (!val) return "❌ MISSING";
@@ -6,7 +7,33 @@ function mask(val: string | undefined): string {
   return `✅ ${val.slice(0, 4)}...${val.slice(-4)}`;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  // This endpoint reveals environment variable presence — protect it
+  // with the same admin Basic Auth as the admin panel.
+  const headerList = await headers();
+  const authHeader = headerList.get("authorization") || "";
+  const match = authHeader.match(/^Basic\s+(.*)$/i);
+  let authed = false;
+  if (match) {
+    try {
+      const decoded = Buffer.from(match[1], "base64").toString("utf8");
+      const [u, p] = decoded.split(":");
+      const validUser = process.env.ADMIN_USERNAME;
+      const validPwd = process.env.ADMIN_PASSWORD;
+      if (validUser && validPwd && u === validUser && p === validPwd) {
+        authed = true;
+      }
+    } catch {
+      // invalid base64 — fall through to 401
+    }
+  }
+  if (!authed) {
+    return new NextResponse("Auth Required", {
+      status: 401,
+      headers: { "WWW-Authenticate": "Basic realm=\"Secure Area\"" },
+    });
+  }
+
   return NextResponse.json({
     finix: {
       env:            process.env.FINIX_ENV            || "❌ MISSING",

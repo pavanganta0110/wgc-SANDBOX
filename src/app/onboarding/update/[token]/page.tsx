@@ -78,7 +78,7 @@ export default async function SecureUpdatePage({
 
         <div className="bg-orange-50 border border-orange-100 rounded-xl p-5 mb-8">
           <h3 className="font-bold text-orange-900 mb-2">Requested Items:</h3>
-          <div className="text-orange-800 text-sm space-y-2" dangerouslySetInnerHTML={{ __html: app.updateRequestedItems || "Additional documentation is required." }} />
+          <div className="text-orange-800 text-sm space-y-2 whitespace-pre-wrap">{app.updateRequestedItems || "Additional documentation is required."}</div>
         </div>
 
         <UpdateForm token={token} />

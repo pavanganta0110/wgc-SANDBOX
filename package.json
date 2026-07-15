@@ -11,7 +11,6 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@hookform/resolvers": "^5.4.0",
     "@prisma/client": "^5.16.1",
     "@react-pdf/renderer": "^4.5.1",
     "@supabase/supabase-js": "^2.109.0",
@@ -22,11 +21,9 @@
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-hook-form": "^7.81.0",
     "react-hot-toast": "^2.6.0",
     "resend": "^6.17.1",
-    "tailwind-merge": "^3.6.0",
-    "zod": "^4.4.3"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

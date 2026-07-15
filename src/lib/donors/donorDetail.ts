@@ -48,4 +48,4 @@ export async function loadDonorDetail(donorId: string, churchId: string) {
   return { donor, instruments, aggregates, status, needsAttentionReasons, recentTransfers, activeSubscriptions, notes };
 }
 
-export type DonorDetail = NonNullable<Awaited<ReturnType<typeof loadDonorDetail>>>;
+type DonorDetail = NonNullable<Awaited<ReturnType<typeof loadDonorDetail>>>;

@@ -1,6 +1,6 @@
 import { formatCents } from "@/lib/format";
 
-export interface MetricInputs {
+interface MetricInputs {
   transfers: { state: string | null; amountCents: number | null }[];
   disputes: { state: string | null; amountCents: number | null }[];
   refunds: { state: string | null; amountCents: number | null }[];

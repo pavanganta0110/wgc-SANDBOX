@@ -48,4 +48,4 @@ export async function loadBankReturnDetail(bankReturnId: string, churchId: strin
   return { bankReturn, church, transfer, instrument, donor, settlement, payment, payout };
 }
 
-export type BankReturnDetail = NonNullable<Awaited<ReturnType<typeof loadBankReturnDetail>>>;
+type BankReturnDetail = NonNullable<Awaited<ReturnType<typeof loadBankReturnDetail>>>;

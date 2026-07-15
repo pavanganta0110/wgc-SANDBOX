@@ -19,7 +19,15 @@ import { syncFinixDataFromWebhookEvent } from "@/app/api/webhooks/finix/route";
  */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.CRON_SECRET) {
+      console.error("CRON_SECRET is not configured in production");
+      return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
+    }
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  } else if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

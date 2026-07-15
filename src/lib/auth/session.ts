@@ -17,6 +17,9 @@ function getSecret(): string {
   if (!secret) {
     throw new Error("AUTH_SESSION_SECRET is not set — required to sign session cookies.");
   }
+  if (process.env.NODE_ENV === "production" && secret.length < 32) {
+    throw new Error("AUTH_SESSION_SECRET must be at least 32 characters in production.");
+  }
   return secret;
 }
 

@@ -32,8 +32,10 @@ export async function POST(req: Request) {
       data: { setPasswordTokenHash: tokenHash, setPasswordTokenExpiresAt: expiresAt },
     });
 
-    const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
-    const resetLink = `${origin}/merchant/set-password/${rawToken}`;
+    // Always use the canonical app URL — never trust the Origin request header
+    // (an attacker could send Origin: https://evil.com to craft a phishing link).
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+    const resetLink = `${appUrl}/merchant/set-password/${rawToken}`;
 
     await sendWgcEmail({
       to: user.email,

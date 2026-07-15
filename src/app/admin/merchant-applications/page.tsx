@@ -182,7 +182,7 @@ export default function MerchantApplicationsPage() {
                 <td className="px-6 py-4">
                   <div className="text-xs text-red-600">
                     {app.updateRequestedItems ? (
-                      <div dangerouslySetInnerHTML={{ __html: app.updateRequestedItems }} />
+                      <div className="whitespace-pre-wrap">{app.updateRequestedItems}</div>
                     ) : app.updateRequestedCodes ? (
                       <div className="truncate max-w-[200px]" title={JSON.stringify(app.updateRequestedCodes)}>
                         {JSON.stringify(app.updateRequestedCodes)}

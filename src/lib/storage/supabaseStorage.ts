@@ -39,7 +39,4 @@ export async function createSignedDownloadUrl(storageKey: string, expiresInSecon
   return data.signedUrl;
 }
 
-export async function deletePrivateFile(storageKey: string): Promise<void> {
-  const { error } = await getClient().storage.from(BUCKET).remove([storageKey]);
-  if (error) throw new Error(`Storage delete failed: ${error.message}`);
-}
+

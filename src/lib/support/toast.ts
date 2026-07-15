@@ -11,25 +11,7 @@ export const toastSuccess = (title: string, message?: string) => {
   );
 };
 
-export const toastWarning = (title: string, message?: string) => {
-  toast(
-    React.createElement("div", { className: "flex flex-col text-sm border-l-4 border-yellow-500 pl-2" },
-      React.createElement("span", { className: "font-bold text-slate-900" }, title),
-      message && React.createElement("span", { className: "text-xs text-slate-500 mt-0.5" }, message)
-    ),
-    { icon: "⚠️" }
-  );
-};
 
-export const toastInfo = (title: string, message?: string) => {
-  toast(
-    React.createElement("div", { className: "flex flex-col text-sm border-l-4 border-blue-500 pl-2" },
-      React.createElement("span", { className: "font-bold text-slate-900" }, title),
-      message && React.createElement("span", { className: "text-xs text-slate-500 mt-0.5" }, message)
-    ),
-    { icon: "ℹ️" }
-  );
-};
 
 export const toastError = (title: string, message?: string, options?: { actions?: string[] }) => {
   toast.error(
