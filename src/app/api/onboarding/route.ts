@@ -239,7 +239,7 @@ export async function POST(req: Request) {
       },
       additional_underwriting_data: {
         annual_ach_volume: annualAchVolumeCents, average_ach_transfer_amount: averageAchTransferAmountCents, average_card_transfer_amount: averageCardTransferAmountCents,
-        business_description: businessDescription,
+        business_description: businessDescription ? businessDescription.substring(0, 250) : "",
         card_volume_distribution: { 
           card_present_percentage: Number(cardPresentPercentage || 0), 
           mail_order_telephone_order_percentage: Number(mailOrderTelephoneOrderPercentage || 0), 
