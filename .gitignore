@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# scratch scripts and local debug files — never commit these
+/scratch/
+/server.log
