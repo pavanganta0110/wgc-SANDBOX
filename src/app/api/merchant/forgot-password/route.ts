@@ -14,7 +14,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email is required." }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     // Always respond the same way whether or not the account exists, so
     // this endpoint can't be used to enumerate registered emails.
@@ -34,7 +35,11 @@ export async function POST(req: Request) {
 
     // Always use the canonical app URL — never trust the Origin request header
     // (an attacker could send Origin: https://evil.com to craft a phishing link).
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+    let appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl && process.env.VERCEL_URL) {
+      appUrl = `https://${process.env.VERCEL_URL}`;
+    }
+    appUrl = appUrl || "http://localhost:3000";
     const resetLink = `${appUrl}/merchant/set-password/${rawToken}`;
 
     await sendWgcEmail({
