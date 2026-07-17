@@ -1,5 +1,5 @@
 /** Mirrors src/lib/donors/donorPermissions.ts — same two real roles, church_admin always labeled "Organization Admin" in UI. */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface SupportPermissions {
   canView: boolean;
@@ -13,7 +13,7 @@ export interface SupportPermissions {
 }
 
 export function getSupportPermissions(role: SessionRole | null | undefined): SupportPermissions {
-  if (role === "wgc_admin") {
+  if (role === "wgc_admin" || role === "wgc_super_admin") {
     return {
       canView: true,
       canCreateTicket: false,

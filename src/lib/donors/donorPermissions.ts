@@ -5,7 +5,7 @@
  * keeps the backend role string for compatibility with the session model,
  * per the standing instruction not to rename it.
  */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface DonorPermissions {
   canView: boolean;
@@ -21,7 +21,7 @@ export interface DonorPermissions {
 }
 
 export function getDonorPermissions(role: SessionRole | null | undefined): DonorPermissions {
-  if (role === "wgc_admin") {
+  if (role === "wgc_admin" || role === "wgc_super_admin") {
     return {
       canView: true,
       canExport: true,

@@ -1,5 +1,5 @@
 /** Mirrors src/lib/donors/donorPermissions.ts — same two real roles, church_admin always labeled "Organization Admin" in UI. */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface SettingsPermissions {
   canView: boolean;
@@ -15,7 +15,7 @@ export interface SettingsPermissions {
 }
 
 export function getSettingsPermissions(role: SessionRole | null | undefined): SettingsPermissions {
-  if (role === "wgc_admin") {
+  if (role === "wgc_admin" || role === "wgc_super_admin") {
     return {
       canView: true,
       canEdit: false, // wgc_admin can inspect but must not silently change organization-owned business settings

@@ -6,7 +6,7 @@
  * per-role split is a one-place change whenever that RBAC work lands,
  * rather than a grep-and-replace across every Disputes file.
  */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface DisputePermissions {
   canView: boolean;
@@ -17,7 +17,7 @@ export interface DisputePermissions {
 }
 
 export function getDisputePermissions(role: SessionRole | null | undefined): DisputePermissions {
-  if (role === "church_admin" || role === "wgc_admin") {
+  if (role === "church_admin" || role === "wgc_admin" || role === "wgc_super_admin") {
     return { canView: true, canUpload: true, canDelete: true, canSubmit: true, canExport: true };
   }
   return { canView: false, canUpload: false, canDelete: false, canSubmit: false, canExport: false };

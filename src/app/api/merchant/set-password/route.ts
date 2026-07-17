@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     }
 
     const passwordHash = await hashPassword(password);
+    const passwordChangedAt = new Date();
 
     await prisma.user.update({
       where: { id: user.id },
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
         setPasswordTokenHash: null,
         setPasswordTokenExpiresAt: null,
         lastLoginAt: new Date(),
+        passwordChangedAt,
       },
     });
 
@@ -50,8 +52,9 @@ export async function POST(req: Request) {
       await setSessionCookie({
         userId: user.id,
         email: user.email,
-        role: user.role as "wgc_admin" | "church_admin",
+        role: user.role as "wgc_super_admin" | "wgc_admin" | "church_admin",
         churchId: user.churchId,
+        passwordChangedAt: passwordChangedAt.getTime(),
       });
     } catch (sessionError) {
       console.error("Password set but auto-login session failed:", sessionError);

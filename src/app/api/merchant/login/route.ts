@@ -25,8 +25,9 @@ export async function POST(req: Request) {
     await setSessionCookie({
       userId: user.id,
       email: user.email,
-      role: user.role as "wgc_admin" | "church_admin",
+      role: user.role as "wgc_super_admin" | "wgc_admin" | "church_admin",
       churchId: user.churchId,
+      passwordChangedAt: user.passwordChangedAt ? user.passwordChangedAt.getTime() : null,
     });
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

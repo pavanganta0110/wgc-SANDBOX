@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE_NAME = "wgc_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
@@ -7,8 +8,14 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 export interface SessionPayload {
   userId: string;
   email: string;
-  role: "wgc_admin" | "church_admin";
+  role: "wgc_super_admin" | "wgc_admin" | "church_admin";
   churchId: string | null;
+  // Epoch ms of User.passwordChangedAt at the moment this token was
+  // issued, or null if the password has never been reset. Compared
+  // against the current DB value by getAdminSession() to invalidate
+  // every token issued before a password reset — the only way to revoke
+  // our stateless HMAC-signed cookies without a server-side session store.
+  passwordChangedAt: number | null;
   exp: number; // unix seconds
 }
 
@@ -87,4 +94,37 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
   return verifySessionToken(token);
+}
+
+export interface AdminSession {
+  userId: string;
+  email: string;
+  name: string | null;
+  role: "wgc_super_admin" | "wgc_admin";
+}
+
+/**
+ * Admin-only session check with real DB-backed invalidation — every call
+ * re-checks the account isn't disabled and that the token's embedded
+ * passwordChangedAt still matches the DB, so a password reset immediately
+ * revokes every other session even though the cookie itself is stateless.
+ * Costs one query per protected admin request, same tradeoff the rest of
+ * this codebase already makes for role checks.
+ */
+export async function getAdminSession(): Promise<AdminSession | null> {
+  const payload = await getSession();
+  if (!payload) return null;
+  if (payload.role !== "wgc_admin" && payload.role !== "wgc_super_admin") return null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { id: true, email: true, name: true, role: true, disabledAt: true, passwordChangedAt: true },
+  });
+  if (!user || user.disabledAt) return null;
+  if (user.role !== "wgc_admin" && user.role !== "wgc_super_admin") return null;
+
+  const dbChangedAt = user.passwordChangedAt ? user.passwordChangedAt.getTime() : null;
+  if (dbChangedAt !== payload.passwordChangedAt) return null;
+
+  return { userId: user.id, email: user.email, name: user.name, role: user.role as "wgc_super_admin" | "wgc_admin" };
 }

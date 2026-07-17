@@ -1,5 +1,5 @@
 /** Mirrors src/lib/donors/donorPermissions.ts — same two real roles, church_admin always labeled "Organization Admin" in UI. */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface OrganizationPermissions {
   canView: boolean;
@@ -12,7 +12,7 @@ export interface OrganizationPermissions {
 }
 
 export function getOrganizationPermissions(role: SessionRole | null | undefined): OrganizationPermissions {
-  if (role === "wgc_admin") {
+  if (role === "wgc_admin" || role === "wgc_super_admin") {
     return {
       canView: true,
       canEditProfile: false,

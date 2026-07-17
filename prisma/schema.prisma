@@ -265,10 +265,18 @@ model ContactInquiry {
   phone          String?
   company        String?
   role           String?
+  subject        String?
   message        String
   emailSent      Boolean   @default(false)
   emailError     String?
+  // NEW | REVIEWED | CONTACTED | CLOSED
+  status         String    @default("NEW")
+  internalNote   String?
+  reviewedBy     String?
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
 }
 
 model AuditLog {
@@ -1603,8 +1611,9 @@ model FinixPayoutProfileSnapshot {
 model User {
   id                        String    @id @default(cuid())
   email                     String    @unique
+  name                      String?
   passwordHash              String?
-  role                      String // "wgc_admin" | "church_admin"
+  role                      String // "wgc_super_admin" | "wgc_admin" | "church_admin"
   churchId                  String?
   setPasswordTokenHash      String?
   setPasswordTokenExpiresAt DateTime?
@@ -1612,10 +1621,17 @@ model User {
   // Team & Access (Settings -> Team). A User with passwordHash null and a
   // live setPasswordTokenHash is "invited, pending" — the exact same
   // pattern already used by forgot-password, reused here rather than
-  // inventing a separate invitation concept.
+  // inventing a separate invitation concept. Also reused for wgc-side
+  // admin invites (Admin Dashboard -> Settings -> Admins).
   invitedByUserId           String?
   disabledAt                DateTime?
   disabledByUserId          String?
+  // Bumped (set to now) on every completed password reset. Session tokens
+  // carry the value that was current at sign-in time; a mismatch means the
+  // password changed since and the session is rejected — the only way to
+  // invalidate our stateless HMAC-signed cookies without a server-side
+  // session store.
+  passwordChangedAt         DateTime?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 }

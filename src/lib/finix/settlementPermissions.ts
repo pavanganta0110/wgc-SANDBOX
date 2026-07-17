@@ -5,7 +5,7 @@
  * excludes. church_admin can view and export their own church's data but
  * cannot confirm deposit links or reconciliation; only wgc_admin can.
  */
-export type SessionRole = "wgc_admin" | "church_admin";
+export type SessionRole = "wgc_super_admin" | "wgc_admin" | "church_admin";
 
 export interface SettlementPermissions {
   canView: boolean;
@@ -16,7 +16,7 @@ export interface SettlementPermissions {
 }
 
 export function getSettlementPermissions(role: SessionRole | null | undefined): SettlementPermissions {
-  if (role === "wgc_admin") {
+  if (role === "wgc_admin" || role === "wgc_super_admin") {
     return {
       canView: true,
       canExport: true,
