@@ -92,7 +92,7 @@ export default function CompliancePage() {
                   <section>
                     <h3 className="text-[13px] font-bold text-wgc-gold-600 uppercase tracking-[0.2em] mb-4 font-mono">02. AML/KYC Orchestration</h3>
                     <p className="leading-relaxed">
-                      Our platform features built-in Anti-Money Laundering (AML) and Know Your Customer (KYC) protocols tailored for the nonprofit sector. We verify identities and monitor for fraudulent activity while maintaining the white-label experience of your software.
+                      Our platform features built-in Anti-Money Laundering (AML) and Know Your Customer (KYC) protocols tailored for the nonprofit and 501(c) organization sector. We verify identities and monitor for fraudulent activity while maintaining the white-label experience of your software.
                     </p>
                   </section>
 

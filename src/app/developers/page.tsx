@@ -62,7 +62,7 @@ export default function DevelopersPage() {
                   WGC API<br /><span className="text-wgc-gold-500">Documentation</span>
                 </h1>
                 <p className="text-xl font-medium leading-relaxed mb-10 text-wgc-navy-500 tracking-tight">
-                  The ministry infrastructure for church payments. Build embedded giving experiences directly into your platform — fully white-labeled.
+                  The ministry infrastructure for church and 501(c) organization payments. Build embedded giving experiences directly into your platform — fully white-labeled.
                 </p>
                 <div className="flex flex-wrap gap-4">
                   {["REST API", "Live Webhooks", "Sandbox Ready"].map((tag) => (
@@ -101,7 +101,7 @@ export default function DevelopersPage() {
                       
                       <div className="border-t border-white/10 pt-6">
                         <p className="text-[14px] font-medium leading-relaxed text-white/70 tracking-tight">
-                          Every line of code directly enables the mission of the Church.
+                          Every line of code directly enables the mission of the Church and other 501(c) organizations.
                         </p>
                       </div>
                     </div>
@@ -213,7 +213,7 @@ export default function DevelopersPage() {
                   </div>
                   <h2 className="text-4xl font-bold text-wgc-navy-900 mb-8 tracking-tight">Onboard a Merchant</h2>
                   <p className="text-lg text-wgc-navy-500 font-medium mb-10 leading-relaxed tracking-tight opacity-90">
-                    Creates a new merchant (Church or Nonprofit) identity within the WGC ecosystem. This step is required before you can process payments for a client.
+                    Creates a new merchant (Church, Nonprofit, or other 501(c) organization) identity within the WGC ecosystem. This step is required before you can process payments for a client.
                   </p>
                   <div className="grid lg:grid-cols-2 gap-8 mb-10">
                     <div className="bg-wgc-navy-950 rounded-[2rem] p-8 font-mono text-[13px] text-white border border-wgc-navy-800 shadow-xl overflow-auto">

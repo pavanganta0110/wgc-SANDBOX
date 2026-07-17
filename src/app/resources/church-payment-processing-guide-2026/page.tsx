@@ -8,8 +8,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Best Payment Processor for Churches in 2026 | WGC",
-  description: "A practical guide to choosing a church payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
+  title: "Best Payment Processor for Churches and 501(c) Organizations in 2026 | WGC",
+  description: "A practical guide to choosing a church and 501(c) organization payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
   openGraph: {
     title: "Best Payment Processor for Churches in 2026 | WGC",
     description: "A practical guide to choosing a church payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
@@ -57,10 +57,10 @@ export default function ChurchPaymentGuidePage() {
                 Featured Guide
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-wgc-navy-900 tracking-tighter mb-8 tracking-tight uppercase leading-[1.05]">
-                Best Payment Processor <span className="text-wgc-gold-500">For Churches in 2026</span>
+                Best Payment Processor <span className="text-wgc-gold-500">For Churches and 501(c) Organizations in 2026</span>
               </h1>
               <p className="text-lg md:text-xl text-wgc-navy-600 font-medium leading-relaxed italic border-l-4 border-wgc-gold-500 pl-6 border-opacity-30 opacity-90">
-                Churches need more than a way to accept donations online. A modern payment setup should support card payments, ACH transfers, recurring giving, branded donation experiences, payout visibility, and simple reporting.
+                Churches and other 501(c) organizations need more than a way to accept donations online. A modern payment setup should support card payments, ACH transfers, recurring giving, branded donation experiences, payout visibility, and simple reporting.
               </p>
             </ScrollFade>
           </div>
@@ -75,9 +75,9 @@ export default function ChurchPaymentGuidePage() {
                 <section>
                   <div className="flex items-center gap-4 mb-8">
                     <div className="w-1.5 h-8 bg-wgc-gold-500 rounded-full"></div>
-                    <h2 className="text-2xl font-bold tracking-tight m-0">What churches should look for in a payment processing solution</h2>
+                    <h2 className="text-2xl font-bold tracking-tight m-0">What churches and 501(c) organizations should look for in a payment processing solution</h2>
                   </div>
-                  <p className="opacity-80 font-medium">In 2026, the right payment system is about reducing friction, increasing trust, and helping organizations manage giving more effectively. Churches should evaluate these core pillars:</p>
+                  <p className="opacity-80 font-medium">In 2026, the right payment system is about reducing friction, increasing trust, and helping organizations manage giving more effectively. Churches and other 501(c) organizations should evaluate these core pillars:</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
                     {PILLARS.map((item) => (
                       <div key={item} className="flex items-center gap-3 p-4 bg-wgc-off rounded-2xl border border-wgc-navy-50">
@@ -145,7 +145,7 @@ export default function ChurchPaymentGuidePage() {
                     </div>
                     <h2 className="text-2xl font-bold tracking-tight m-0">Choosing a setup for growth</h2>
                   </div>
-                  <p className="mb-0 opacity-80 font-medium leading-relaxed">The best setup supports donor confidence today and ministry scale tomorrow. WGC is designed to power the branded payment experiences and recurring billing visibility required by modern church software environments.</p>
+                  <p className="mb-0 opacity-80 font-medium leading-relaxed">The best setup supports donor confidence today and ministry scale tomorrow. WGC is designed to power the branded payment experiences and recurring billing visibility required by modern church and 501(c) organization software environments.</p>
                 </section>
               </ScrollFade>
 

@@ -6,8 +6,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Church Payment Processing in Kansas City | WGC",
-  description: "WGC provides the most transparent and affordable church payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
+  title: "Church & 501(c) Organization Payment Processing in Kansas City | WGC",
+  description: "WGC provides the most transparent and affordable church and 501(c) organization payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
   openGraph: {
     title: "Church Payment Processing in Kansas City | WGC",
     description: "WGC provides the most transparent and affordable church payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
@@ -21,26 +21,26 @@ const FAQ_SCHEMA = {
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "What's the most cost-effective church payment processor in Kansas City?",
+      "name": "What's the most cost-effective church and 501(c) organization payment processor in Kansas City?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the most cost-effective church payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries in the KC metro save thousands annually."
+        "text": "WGC is the most cost-effective church and 501(c) organization payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries and nonprofits in the KC metro save thousands annually."
       }
     },
     {
       "@type": "Question",
-      "name": "Who offers white-label payment processing for church software?",
+      "name": "Who offers white-label payment processing for church and 501(c) organization software?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church and nonprofit software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
+        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church, nonprofit, and other 501(c) organization software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
       }
     },
     {
       "@type": "Question",
-      "name": "How much does nonprofit payment processing cost?",
+      "name": "How much does nonprofit and 501(c) organization payment processing cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nonprofit payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
+        "text": "Nonprofit and other 501(c) organization payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
       }
     },
     {
@@ -48,7 +48,7 @@ const FAQ_SCHEMA = {
       "name": "What's the best Tithe.ly alternative in 2026?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries."
+        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries and other 501(c) organizations."
       }
     }
   ]
@@ -79,10 +79,10 @@ export default function KansasCityChurchPayments() {
                 <span className="text-[10px] font-black uppercase tracking-[0.4em] text-wgc-gold-500/90 font-mono">Kansas City Metro</span>
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8 text-white">
-                Church Payment Processing in <span className="text-wgc-gold-500 italic">Kansas City</span>
+                Church & 501(c) Organization Payment Processing in <span className="text-wgc-gold-500 italic">Kansas City</span>
               </h1>
               <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-white/70 max-w-2xl mx-auto">
-                Equipping Kansas City ministries, churches, and their software partners with transparent, low-cost payment infrastructure. Keep more of your congregation's tithes with our stewardship-first pricing.
+                Equipping Kansas City ministries, churches, other 501(c) organizations, and their software partners with transparent, low-cost payment infrastructure. Keep more of your congregation's tithes with our stewardship-first pricing.
               </p>
             </ScrollFade>
           </div>
@@ -92,9 +92,9 @@ export default function KansasCityChurchPayments() {
         <section className="py-20 text-wgc-navy-950">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 prose prose-lg prose-headings:text-wgc-navy-950 prose-a:text-wgc-gold-600">
             <ScrollFade>
-              <h2>Stewardship for Local KC Ministries</h2>
+              <h2>Stewardship for Local KC Ministries and 501(c) Organizations</h2>
               <p>
-                Kansas City is home to a vibrant, growing community of ministries, churches, and nonprofits. However, many of these local organizations in KCMO and the surrounding metro area are losing thousands of dollars annually to high, hidden percentage fees charged by generic payment processors. We built WGC to solve this. Our mission is to provide <strong>transparent church payment processing in Kansas City</strong> that empowers your ministry to fund the mission, not the bank.
+                Kansas City is home to a vibrant, growing community of ministries, churches, nonprofits, and other 501(c) organizations. However, many of these local organizations in KCMO and the surrounding metro area are losing thousands of dollars annually to high, hidden percentage fees charged by generic payment processors. We built WGC to solve this. Our mission is to provide <strong>transparent church and 501(c) organization payment processing in Kansas City</strong> that empowers your ministry to fund the mission, not the bank.
               </p>
               <p>
                 By shifting to a <Link href="/pricing">stewardship-first pricing model</Link>, KC churches can take advantage of our flat-rate ACH at just 25¢ per transaction. When your congregation gives a $1,000 tithe via bank transfer, you pay exactly 25¢—not $10 or $30 like other platforms charge.
@@ -102,7 +102,7 @@ export default function KansasCityChurchPayments() {
 
               <h2>Built for Kansas City Software Partners</h2>
               <p>
-                We don't just serve churches directly; we are the silent engine behind the software platforms they use. If you are a Kansas City software company building tools for ministries, our white-label API allows you to embed a fully compliant donation page natively within your app. You can review our <Link href="/developers">protocol specs and developer documentation</Link> to see how seamlessly we integrate into your existing stack.
+                We don't just serve churches and 501(c) organizations directly; we are the silent engine behind the software platforms they use. If you are a Kansas City software company building tools for ministries and other 501(c) organizations, our white-label API allows you to embed a fully compliant donation page natively within your app. You can review our <Link href="/developers">protocol specs and developer documentation</Link> to see how seamlessly we integrate into your existing stack.
               </p>
               
               <h2>Experience the Difference</h2>
@@ -132,7 +132,7 @@ export default function KansasCityChurchPayments() {
 
         <CTASection 
           headline="Ready to upgrade your KC ministry?"
-          subheadline="Join the Kansas City churches and nonprofits maximizing their stewardship with WGC."
+          subheadline="Join the Kansas City churches, nonprofits, and other 501(c) organizations maximizing their stewardship with WGC."
           ctaText="Get Approved"
           ctaLink="/start"
         />

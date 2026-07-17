@@ -23,7 +23,7 @@ export default function FeesPage() {
           
           <div className="relative z-10 text-slate-600 leading-relaxed space-y-8">
             <p className="text-lg">
-              WGC Payments offers church, nonprofit, or client-specific pricing for donation processing and platform access.
+              WGC Payments offers church, nonprofit, other 501(c) organization, or client-specific pricing for donation processing and platform access.
             </p>
             <p>
               Unless otherwise agreed in writing, standard pricing may be:
@@ -61,7 +61,7 @@ export default function FeesPage() {
             </div>
 
             <p>
-              These rates may vary by church/nonprofit/client agreement, transaction type, payment method, processing configuration, and volume. As volume and processing efficiency increase, pricing may be reduced. Fees are not increased without prior notice or agreement.
+              These rates may vary by church/nonprofit/501(c) organization/client agreement, transaction type, payment method, processing configuration, and volume. As volume and processing efficiency increase, pricing may be reduced. Fees are not increased without prior notice or agreement.
             </p>
             
             <p>
@@ -73,7 +73,7 @@ export default function FeesPage() {
             </p>
             
             <p className="font-bold text-wgc-navy-900">
-              Final pricing for each church/nonprofit/client is provided during onboarding or in their WGC Payments agreement.
+              Final pricing for each church/nonprofit/501(c) organization/client is provided during onboarding or in their WGC Payments agreement.
             </p>
             
             <hr className="my-10 border-slate-100" />

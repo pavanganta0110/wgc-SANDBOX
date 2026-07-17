@@ -6,8 +6,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "About WGC | Why We Built Payments for Ministries",
-  description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
+  title: "About WGC | Why We Built Payments for Ministries and 501(c) Organizations",
+  description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries, other 501(c) organizations, and the software that serves them steward resources better.",
   openGraph: {
     title: "About WGC | Why We Built Payments for Ministries",
     description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
@@ -20,7 +20,7 @@ const PILLARS = [
   {
     emoji: "🙏",
     title: "Kingdom alignment",
-    description: "We exist to serve the church, not to extract profit from it. Every policy and fee is designed with the mission in mind.",
+    description: "We exist to serve the church and other 501(c) organizations, not to extract profit from them. Every policy and fee is designed with the mission in mind.",
   },
   {
     emoji: "🔒",
@@ -61,7 +61,7 @@ export default function AboutPage() {
                 Why WGC <span className="text-wgc-gold-500">exists</span>
               </h1>
               <p className="text-xl font-medium leading-relaxed max-w-2xl mx-auto text-wgc-navy-500 tracking-tight">
-                Empowering churches, nonprofits, and their software with faith-aligned, white-label payment infrastructure.
+                Empowering churches, nonprofits, other 501(c) organizations, and their software with faith-aligned, white-label payment infrastructure.
               </p>
             </ScrollFade>
           </div>
@@ -73,10 +73,10 @@ export default function AboutPage() {
             <ScrollFade>
               <h2 className="text-4xl sm:text-5xl font-bold text-wgc-navy-900 tracking-tight mb-8">Purpose-Built Infrastructure</h2>
               <p className="text-xl leading-relaxed text-wgc-navy-500 font-medium mb-6 tracking-tight opacity-90">
-                Way Point Gateway Collective was founded on a simple belief: the software tools that serve the Church deserve payment infrastructure that shares their mission and preserves their values.
+                Way Point Gateway Collective was founded on a simple belief: the software tools that serve the Church and other 501(c) organizations deserve payment infrastructure that shares their mission and preserves their values.
               </p>
               <p className="text-lg leading-relaxed text-wgc-navy-500 font-medium mb-10 tracking-tight opacity-80">
-                We&apos;re building WGC to empower software companies that already love and serve churches — giving them the tools to process donations, manage merchants, and scale securely without being distracted by technical debt or regulatory complexity.
+                We&apos;re building WGC to empower software companies that already love and serve churches, nonprofits, and other 501(c) organizations — giving them the tools to process donations, manage merchants, and scale securely without being distracted by technical debt or regulatory complexity.
               </p>
               <div className="bg-wgc-off rounded-3xl p-10 text-left relative overflow-hidden border border-wgc-gold-500/20">
                 <div className="absolute -bottom-4 -right-4 opacity-[0.05] pointer-events-none select-none text-[10rem] font-bold text-wgc-gold-500 leading-none">✝</div>

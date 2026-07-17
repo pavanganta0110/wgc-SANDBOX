@@ -6,8 +6,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Nonprofit Payment Processing in Kansas City, MO | WGC",
-  description: "Secure, low-cost nonprofit payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
+  title: "Nonprofit & 501(c) Organization Payment Processing in Kansas City, MO | WGC",
+  description: "Secure, low-cost nonprofit and 501(c) organization payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
   openGraph: {
     title: "Nonprofit Payment Processing in Kansas City, MO | WGC",
     description: "Secure, low-cost nonprofit payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
@@ -21,26 +21,26 @@ const FAQ_SCHEMA = {
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "What's the most cost-effective church payment processor in Kansas City?",
+      "name": "What's the most cost-effective church and 501(c) organization payment processor in Kansas City?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the most cost-effective church payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries in the KC metro save thousands annually."
+        "text": "WGC is the most cost-effective church and 501(c) organization payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries and nonprofits in the KC metro save thousands annually."
       }
     },
     {
       "@type": "Question",
-      "name": "Who offers white-label payment processing for church software?",
+      "name": "Who offers white-label payment processing for church and 501(c) organization software?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church and nonprofit software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
+        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church, nonprofit, and other 501(c) organization software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
       }
     },
     {
       "@type": "Question",
-      "name": "How much does nonprofit payment processing cost?",
+      "name": "How much does nonprofit and 501(c) organization payment processing cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nonprofit payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
+        "text": "Nonprofit and other 501(c) organization payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
       }
     },
     {
@@ -48,7 +48,7 @@ const FAQ_SCHEMA = {
       "name": "What's the best Tithe.ly alternative in 2026?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries."
+        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries and other 501(c) organizations."
       }
     }
   ]
@@ -79,10 +79,10 @@ export default function KansasCityNonprofitPayments() {
                 <span className="text-[10px] font-black uppercase tracking-[0.4em] text-wgc-gold-500/90 font-mono">Kansas City, MO</span>
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8 text-white">
-                Nonprofit Payment Processing in <span className="text-wgc-gold-500 italic">Kansas City, MO</span>
+                Nonprofit & 501(c) Organization Payment Processing in <span className="text-wgc-gold-500 italic">Kansas City, MO</span>
               </h1>
               <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-white/70 max-w-2xl mx-auto">
-                Secure, reliable, and deeply integrated payment processing for Kansas City's nonprofit sector. Increase charitable donations with seamless giving experiences.
+                Secure, reliable, and deeply integrated payment processing for Kansas City's nonprofit and 501(c) organization sector. Increase charitable donations with seamless giving experiences.
               </p>
             </ScrollFade>
           </div>
@@ -92,9 +92,9 @@ export default function KansasCityNonprofitPayments() {
         <section className="py-20 text-wgc-navy-950">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 prose prose-lg prose-headings:text-wgc-navy-950 prose-a:text-wgc-gold-600">
             <ScrollFade>
-              <h2>Empowering Kansas City's Nonprofits</h2>
+              <h2>Empowering Kansas City's Nonprofits and 501(c) Organizations</h2>
               <p>
-                From grassroots charities in KCMO to established regional foundations, nonprofit organizations in Kansas City need a payment processing partner they can trust. WGC delivers <strong>nonprofit payment processing in Kansas City, MO</strong> that is designed to minimize overhead and maximize the impact of every donation.
+                From grassroots charities in KCMO to established regional foundations, nonprofit organizations and other 501(c) organizations in Kansas City need a payment processing partner they can trust. WGC delivers <strong>nonprofit and 501(c) organization payment processing in Kansas City, MO</strong> that is designed to minimize overhead and maximize the impact of every donation.
               </p>
               <p>
                 Whether you're processing monthly recurring donations or one-time large gifts, our <Link href="/pricing">transparent pricing structure</Link> ensures that your hard-earned funds are spent on your mission. With flat-rate ACH transfers and highly competitive card rates, your KC nonprofit can confidently manage operations without fear of hidden transaction fees.
@@ -102,12 +102,12 @@ export default function KansasCityNonprofitPayments() {
 
               <h2>Seamless Software Integration</h2>
               <p>
-                Are you a software provider based in the KC metro serving the nonprofit sector? WGC's white-label infrastructure allows you to embed a fully branded donation page directly into your application. Explore our <Link href="/developers">developer API documentation</Link> to see how our PCI Level 1 compliant gateway keeps your donors' data secure while maintaining your software's unique look and feel.
+                Are you a software provider based in the KC metro serving the nonprofit and 501(c) organization sector? WGC's white-label infrastructure allows you to embed a fully branded donation page directly into your application. Explore our <Link href="/developers">developer API documentation</Link> to see how our PCI Level 1 compliant gateway keeps your donors' data secure while maintaining your software's unique look and feel.
               </p>
               
               <h2>Optimize Your Charitable Giving</h2>
               <p>
-                We make it easy for donors to give. Our platform supports highly customized, secure giving portals. See how it looks by exploring our <Link href="/start">donation page demo</Link>. If your Kansas City nonprofit or software platform is ready to upgrade its payment rails, <Link href="/start">register today to get started</Link>.
+                We make it easy for donors to give. Our platform supports highly customized, secure giving portals. See how it looks by exploring our <Link href="/start">donation page demo</Link>. If your Kansas City nonprofit, 501(c) organization, or software platform is ready to upgrade its payment rails, <Link href="/start">register today to get started</Link>.
               </p>
             </ScrollFade>
           </div>

@@ -23,7 +23,7 @@ const PAYMENT_STEPS = [
   { label: 'WGC authenticates the partner request', description: 'The request is validated against your Partner API key. Merchant routing and fee calculations happen in milliseconds.' },
   { label: 'Network processes the payment', description: 'WGC sends the tokenized transaction to the secure core. Card or ACH is authorized through the banking rail with full PCI compliance.' },
   { label: 'WGC fires your webhook', description: 'Your application receives a real-time event notification — payment.succeeded, payment.failed — so your UI updates instantly.' },
-  { label: 'Funds settle to the church', description: 'Net proceeds move to the merchant\'s verified bank account. Settlement windows vary by rail — ACH: 1-2 days, Card: 2-3 days.' },
+  { label: 'Funds settle to the organization', description: 'Net proceeds move to the merchant\'s verified bank account. Settlement windows vary by rail — ACH: 1-2 days, Card: 2-3 days.' },
 ];
 
 export default function HowItWorksPage() {
@@ -150,7 +150,7 @@ export default function HowItWorksPage() {
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-widest text-wgc-gold-500 mb-1 font-mono">Layer 1 — Your Platform</div>
                       <h3 className="text-xl font-bold text-wgc-navy-900 tracking-tight mb-1">Partner Software</h3>
-                      <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed tracking-tight opacity-80">Your ChMS, giving app, or ministry suite. WGC integrates through a clean REST API — completely white-labeled under your brand.</p>
+                      <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed tracking-tight opacity-80">Your ChMS, giving app, or ministry / 501(c) organization suite. WGC integrates through a clean REST API — completely white-labeled under your brand.</p>
                     </div>
                   </div>
                 </div>

@@ -6,8 +6,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Tithe.ly Alternative for Kansas City Churches | WGC",
-  description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration.",
+  title: "Tithe.ly Alternative for Kansas City Churches & 501(c) Organizations | WGC",
+  description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration for churches and other 501(c) organizations.",
   openGraph: {
     title: "Tithe.ly Alternative for Kansas City Churches | WGC",
     description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration.",
@@ -21,26 +21,26 @@ const FAQ_SCHEMA = {
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "What's the most cost-effective church payment processor in Kansas City?",
+      "name": "What's the most cost-effective church and 501(c) organization payment processor in Kansas City?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the most cost-effective church payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries in the KC metro save thousands annually."
+        "text": "WGC is the most cost-effective church and 501(c) organization payment processor in Kansas City with a flat 25¢ ACH rate and capped card processing fees at 2.3% + 25¢. By avoiding standard percentage-based ACH markups, local ministries and nonprofits in the KC metro save thousands annually."
       }
     },
     {
       "@type": "Question",
-      "name": "Who offers white-label payment processing for church software?",
+      "name": "Who offers white-label payment processing for church and 501(c) organization software?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church and nonprofit software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
+        "text": "Way Point Gateway Collective (WGC) offers fully white-label payment processing infrastructure designed specifically for church, nonprofit, and other 501(c) organization software platforms. This means your software brand stays front and center while WGC manages the compliance and orchestration in the background."
       }
     },
     {
       "@type": "Question",
-      "name": "How much does nonprofit payment processing cost?",
+      "name": "How much does nonprofit and 501(c) organization payment processing cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nonprofit payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
+        "text": "Nonprofit and other 501(c) organization payment processing with WGC costs a maximum of 2.3% + 25¢ per card transaction, 25¢ per ACH transaction, and a simple $10 monthly platform fee per organization. We prioritize transparency over hidden fees."
       }
     },
     {
@@ -48,7 +48,7 @@ const FAQ_SCHEMA = {
       "name": "What's the best Tithe.ly alternative in 2026?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries."
+        "text": "WGC is the best Tithe.ly alternative in 2026 for organizations seeking lower flat-rate ACH fees, deeper white-label integration, and strict PCI Level 1 compliance without hidden costs. It provides superior orchestration for software platforms that serve ministries and other 501(c) organizations."
       }
     }
   ]
@@ -79,10 +79,10 @@ export default function KansasCityTithelyAlternative() {
                 <span className="text-[10px] font-black uppercase tracking-[0.4em] text-wgc-gold-500/90 font-mono">Kansas City</span>
               </div>
               <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight mb-8 text-white">
-                Tithe.ly Alternative for <span className="text-wgc-gold-500 italic">Kansas City Churches</span>
+                Tithe.ly Alternative for <span className="text-wgc-gold-500 italic">Kansas City Churches & 501(c) Organizations</span>
               </h1>
               <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-white/70 max-w-2xl mx-auto">
-                Discover why growing KC ministries and church software platforms are choosing WGC's transparent infrastructure over traditional giving platforms.
+                Discover why growing KC ministries, other 501(c) organizations, and church software platforms are choosing WGC's transparent infrastructure over traditional giving platforms.
               </p>
             </ScrollFade>
           </div>
@@ -94,7 +94,7 @@ export default function KansasCityTithelyAlternative() {
             <ScrollFade>
               <h2>The Premier Tithe.ly Alternative for the KC Metro</h2>
               <p>
-                Many Kansas City churches and nonprofits begin their online giving journey with platforms like Tithe.ly. While these tools offer a quick start, growing ministries often outgrow them due to higher effective fees, percentage-based ACH markups, and rigid, heavily branded donor experiences. If you're seeking a <strong>Tithe.ly alternative for Kansas City churches</strong>, WGC provides the exact infrastructure you need to regain control of your giving pipeline.
+                Many Kansas City churches, nonprofits, and other 501(c) organizations begin their online giving journey with platforms like Tithe.ly. While these tools offer a quick start, growing ministries often outgrow them due to higher effective fees, percentage-based ACH markups, and rigid, heavily branded donor experiences. If you're seeking a <strong>Tithe.ly alternative for Kansas City churches and 501(c) organizations</strong>, WGC provides the exact infrastructure you need to regain control of your giving pipeline.
               </p>
               <p>
                 Our core advantage lies in our <Link href="/pricing">transparent fee structure</Link>. Unlike competitors that take a significant percentage of every large bank transfer, WGC provides flat-rate ACH at 25¢. For a growing KCMO congregation receiving substantial tithes, this single change can save tens of thousands of dollars annually.
@@ -107,7 +107,7 @@ export default function KansasCityTithelyAlternative() {
               
               <h2>Transition With Confidence</h2>
               <p>
-                Upgrading your payment infrastructure is a significant step, but it doesn't have to be disruptive. Experience our donor-centric interface by trying out our <Link href="/start">live donation page demo</Link>. Take the next step toward better stewardship and <Link href="/start">register your church or software platform</Link> with WGC today.
+                Upgrading your payment infrastructure is a significant step, but it doesn't have to be disruptive. Experience our donor-centric interface by trying out our <Link href="/start">live donation page demo</Link>. Take the next step toward better stewardship and <Link href="/start">register your church, 501(c) organization, or software platform</Link> with WGC today.
               </p>
             </ScrollFade>
           </div>
@@ -132,7 +132,7 @@ export default function KansasCityTithelyAlternative() {
 
         <CTASection 
           headline="Looking for a better giving platform?"
-          subheadline="Switch to WGC and keep more of every dollar for your Kansas City ministry."
+          subheadline="Switch to WGC and keep more of every dollar for your Kansas City ministry or 501(c) organization."
           ctaText="Get Approved"
           ctaLink="/start"
         />

@@ -9,8 +9,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Pricing | Transparent Church & Nonprofit Payment Rates",
-  description: "Clear, competitive payment pricing built for ministries, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
+  title: "Pricing | Transparent Church, Nonprofit & 501(c) Organization Payment Rates",
+  description: "Clear, competitive payment pricing built for ministries and other 501(c) organizations, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
   openGraph: {
     title: "Pricing | Transparent Church & Nonprofit Payment Rates",
     description: "Clear, competitive payment pricing built for ministries, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
@@ -32,6 +32,7 @@ const TARGET_GROUPS = [
   "Churches of all sizes",
   "Global faith networks",
   "Nonprofit organizations",
+  "Other 501(c) organizations",
   "Software platforms serving ministries",
 ];
 
@@ -62,7 +63,7 @@ export default function PricingPage() {
                   Transparent, <span className="text-wgc-gold-600 italic">competitive</span> rates.
                 </h1>
                 <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-wgc-navy-500 max-w-2xl tracking-tight opacity-80">
-                  WGC offers highly competitive pricing for churches and nonprofits. Flat-rate ACH and a simple platform fee — so you can fund the mission, not the bank.
+                  WGC offers highly competitive pricing for churches, nonprofits, and other 501(c) organizations. Flat-rate ACH and a simple platform fee — so you can fund the mission, not the bank.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-6">
                   <a href="#calculator" className="bg-wgc-gold-500 text-wgc-navy-950 inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl shadow-[0_20px_40px_rgba(234,179,8,0.2)] transform transition-all hover:scale-105 hover:bg-wgc-navy-950 hover:text-white uppercase tracking-widest">
@@ -137,7 +138,7 @@ export default function PricingPage() {
                 <div className="bg-wgc-navy-950 text-white rounded-[2.5rem] shadow-2xl p-12 relative overflow-hidden group hover:-translate-y-2 transition-all duration-500">
                   <div className="text-[10px] font-black text-wgc-gold-500 uppercase tracking-[0.3em] mb-8 font-mono">Infrastructure</div>
                   <h3 className="text-2xl font-bold !text-white mb-4 tracking-tight">Base protocol</h3>
-                  <p className="text-sm font-medium text-white/50 mb-10 leading-relaxed">Predictable monthly platform fee per church account.</p>
+                  <p className="text-sm font-medium text-white/50 mb-10 leading-relaxed">Predictable monthly platform fee per church or 501(c) organization account.</p>
                   <div className="flex items-baseline gap-2 mb-2">
                     <span className="text-6xl font-bold text-white tracking-tighter">$10</span>
                     <span className="text-2xl font-bold text-white/30">/mo</span>
@@ -176,7 +177,7 @@ export default function PricingPage() {
                     </div>
                     <div>
                       <h4 className="text-lg font-bold text-wgc-navy-900 mb-2">Capped card processing rates</h4>
-                      <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed opacity-80">We utilize ministry-grade rails to cap our card fees, ensuring your larger ministry gifts aren&apos;t drained by standard retail margins.</p>
+                      <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed opacity-80">We utilize ministry-grade rails to cap our card fees, ensuring your larger ministry and 501(c) organization gifts aren&apos;t drained by standard retail margins.</p>
                     </div>
                   </div>
                 </div>
@@ -249,7 +250,7 @@ export default function PricingPage() {
                   WGC is purpose-built for recurring giving and donation workflows. We don&apos;t have the overhead of retail processors or the margins of Silicon Valley.
                 </p>
                 <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed tracking-tight opacity-80">
-                  By pairing a predictable monthly platform fee with transparent rates and robust ACH support, churches can finally stop losing ground to transaction friction.
+                  By pairing a predictable monthly platform fee with transparent rates and robust ACH support, churches and other 501(c) organizations can finally stop losing ground to transaction friction.
                 </p>
               </ScrollFade>
  
@@ -258,7 +259,7 @@ export default function PricingPage() {
                 <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-wgc-navy-50 text-wgc-gold-600 text-[9px] font-bold tracking-[0.2em] uppercase mb-8 border border-wgc-navy-100 font-mono">Built For</div>
                 <h3 className="text-xl font-bold text-wgc-navy-900 mb-6 tracking-tight underline underline-offset-8 decoration-wgc-gold-500 decoration-2">Who this is for</h3>
                 <p className="text-[15px] font-medium text-wgc-navy-500 leading-relaxed mb-8 tracking-tight opacity-80">
-                  WGC provides ministry donation costs for specific ecosystem partners:
+                  WGC provides ministry and 501(c) organization donation costs for specific ecosystem partners:
                 </p>
                 <div className="space-y-4">
                   {TARGET_GROUPS.map((group) => (

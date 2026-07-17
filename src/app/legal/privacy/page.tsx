@@ -29,7 +29,7 @@ export default function PrivacyPage() {
                 To provide our payment platform and onboarding services, WGC Payments may collect:
               </p>
               <ul className="list-disc pl-6 space-y-2 mt-4">
-                <li>Church or Organization name</li>
+                <li>Church, 501(c) organization, or organization name</li>
                 <li>Admin name, email, and phone number</li>
                 <li>Business details (address, EIN, tax status)</li>
                 <li>Onboarding status and progress</li>

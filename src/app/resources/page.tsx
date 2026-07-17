@@ -6,22 +6,22 @@ import { BookOpen, Newspaper, Shield, CreditCard, ArrowRight } from "lucide-reac
 
 const RESOURCES = [
   {
-    title: "Best Payment Processor for Churches in 2026",
-    description: "Learn how church payment processing works in 2026, including card fees, ACH transfers, and recurring giving.",
+    title: "Best Payment Processor for Churches and 501(c) Organizations in 2026",
+    description: "Learn how church and 501(c) organization payment processing works in 2026, including card fees, ACH transfers, and recurring giving.",
     href: "/resources/church-payment-processing-guide-2026",
     icon: CreditCard,
     tag: "Market Research"
   },
   {
-    title: "How to White-Label Payments for Nonprofit Software",
-    description: "Explore how white-label payment processing helps nonprofit and church software platforms offer branded onboarding.",
+    title: "How to White-Label Payments for Nonprofit & 501(c) Organization Software",
+    description: "Explore how white-label payment processing helps nonprofit, church, and other 501(c) organization software platforms offer branded onboarding.",
     href: "/resources/white-label-payment-processing-nonprofit-church-software",
     icon: Shield,
     tag: "Architecture"
   },
   {
     title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown",
-    description: "Understand church payment processing pricing, including card transactions, ACH support, and monthly costs.",
+    description: "Understand church and 501(c) organization payment processing pricing, including card transactions, ACH support, and monthly costs.",
     href: "/resources/church-payment-processing-pricing-guide",
     icon: Newspaper,
     tag: "Finance"
@@ -54,7 +54,7 @@ export default function ResourcesPage() {
                 Stewardship <span className="text-wgc-gold-500">Resources</span>
               </h1>
               <p className="text-xl font-medium leading-relaxed max-w-2xl mx-auto text-wgc-navy-200 tracking-tight opacity-90">
-                Insights, guides, and technical briefings for church software partners and ministry leaders.
+                Insights, guides, and technical briefings for church and 501(c) organization software partners and ministry leaders.
               </p>
             </ScrollFade>
           </div>

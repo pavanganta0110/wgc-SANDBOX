@@ -8,10 +8,10 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Contact WGC | Talk to Our Payments Team",
-  description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church or nonprofit software platform.",
+  description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church, nonprofit, or other 501(c) organization software platform.",
   openGraph: {
     title: "Contact WGC | Talk to Our Payments Team",
-    description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church or nonprofit software platform.",
+    description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church, nonprofit, or other 501(c) organization software platform.",
     url: "https://www.wgcpayments.com/contact",
   },
 };
@@ -44,7 +44,7 @@ export default function ContactPage() {
                 Let&apos;s <span className="text-wgc-gold-500">talk.</span>
               </h1>
               <p className="text-xl font-medium leading-relaxed max-w-2xl mx-auto text-wgc-navy-500 tracking-tight">
-                See how WGC can serve your software and the churches you support with a standard of excellence.
+                See how WGC can serve your software and the churches and other 501(c) organizations you support with a standard of excellence.
               </p>
             </ScrollFade>
           </div>

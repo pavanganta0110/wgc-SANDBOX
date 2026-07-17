@@ -9,7 +9,7 @@ export default function ResourceCTA() {
           Launch branded payments <span className="text-wgc-gold-500">with WGC</span>
         </h2>
         <p className="text-lg text-wgc-navy-600 mb-10 max-w-2xl mx-auto font-bold uppercase tracking-tight opacity-90 leading-relaxed">
-          Give churches and nonprofit organizations a seamless payment experience under your own brand.
+          Give churches, nonprofit organizations, and other 501(c) organizations a seamless payment experience under your own brand.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link href="/register" 

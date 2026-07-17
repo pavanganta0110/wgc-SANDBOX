@@ -8,8 +8,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Embedded Payments for Ministry SaaS | WGC for Partners",
-  description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches and nonprofits, with developer-ready APIs.",
+  title: "Embedded Payments for Ministry & 501(c) Organization SaaS | WGC for Partners",
+  description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches, nonprofits, and other 501(c) organizations, with developer-ready APIs.",
   openGraph: {
     title: "Embedded Payments for Ministry SaaS | WGC for Partners",
     description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches and nonprofits, with developer-ready APIs.",
@@ -141,12 +141,12 @@ export default function SoftwarePartnersPage() {
               <div className="text-center mb-16">
                 <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-wgc-navy-50 text-wgc-navy-600 text-[10px] font-bold tracking-[0.2em] uppercase mb-6 border border-wgc-navy-100 font-mono">Partnership focus</div>
                 <h2 className="text-4xl font-bold text-wgc-navy-900 tracking-tight">Built for the platforms you trust</h2>
-                <p className="text-lg text-wgc-navy-500 font-medium max-w-2xl mx-auto mt-4 tracking-tight opacity-90">Providing ministry-grade payment rails beneath the software that ministries use every day.</p>
+                <p className="text-lg text-wgc-navy-500 font-medium max-w-2xl mx-auto mt-4 tracking-tight opacity-90">Providing ministry-grade payment rails beneath the software that ministries and other 501(c) organizations use every day.</p>
               </div>
             </ScrollFade>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {['Church Management (ChMS)', 'Donation Platforms', 'Nonprofit CRMs', 'Faith-based SaaS'].map((platform, i) => (
+              {['Church Management (ChMS)', 'Donation Platforms', 'Nonprofit CRMs', '501(c) Organization Software', 'Faith-based SaaS'].map((platform, i) => (
                 <ScrollFade key={platform} delay={i * 100}>
                   <div className="p-8 rounded-2xl bg-white border border-wgc-navy-100 shadow-sm hover:shadow-md transition-all group hover:-translate-y-1">
                      <div className="text-lg font-bold text-wgc-navy-900 group-hover:text-wgc-gold-600 transition-colors">{platform}</div>
@@ -242,10 +242,10 @@ export default function SoftwarePartnersPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <ScrollFade>
               <div className="w-12 h-1.5 metallic-gold mx-auto mb-10 rounded-full"></div>
-              <h2 className="text-4xl font-bold text-wgc-navy-900 mb-10 tracking-tight leading-tight">Embedded Payments for Church and Nonprofit Software</h2>
+              <h2 className="text-4xl font-bold text-wgc-navy-900 mb-10 tracking-tight leading-tight">Embedded Payments for Church, Nonprofit, and 501(c) Organization Software</h2>
               <div className="max-w-3xl mx-auto text-wgc-navy-500 space-y-8">
                 <p className="text-2xl italic font-bold text-wgc-navy-900 leading-snug">
-                  &quot;We exist to make software companies that serve churches more successful. We&apos;re not building a direct-to-church product. We&apos;re your silent infrastructure.&quot;
+                  &quot;We exist to make software companies that serve churches and other 501(c) organizations more successful. We&apos;re not building a direct-to-church product. We&apos;re your silent infrastructure.&quot;
                 </p>
                 <p className="text-lg font-medium leading-relaxed tracking-tight opacity-90">
                   WGC is the ministry infrastructure under your software — aligned with your growth and your mission. By using a transferable vault and providing flat-rate ACH, we ensure that your platform scales efficiently while honoring the donors&apos; generosity.

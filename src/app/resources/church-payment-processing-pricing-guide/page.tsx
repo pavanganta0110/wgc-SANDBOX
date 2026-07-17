@@ -9,10 +9,10 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
-  description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches and nonprofits, with a clear breakdown of costs and ACH rates.",
+  description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
   openGraph: {
     title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
-    description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches and nonprofits, with a clear breakdown of costs and ACH rates.",
+    description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
     url: "https://www.wgcpayments.com/resources/church-payment-processing-pricing-guide",
   },
 };
@@ -123,7 +123,7 @@ export default function PricingGuidePage() {
                     <div className="w-1.5 h-8 bg-wgc-gold-500 rounded-full"></div>
                     <h2 className="text-2xl font-bold tracking-tight m-0">Card processing fees</h2>
                   </div>
-                  <p className="opacity-80">The card processing rate is 2.3% + $0.25 per transaction as the maximum card rate. The monthly software subscription of $10 per organization ensures that the platform infrastructure remains mission-ready, providing the security and scale required by modern nonprofits.</p>
+                  <p className="opacity-80">The card processing rate is 2.3% + $0.25 per transaction as the maximum card rate. The monthly software subscription of $10 per organization ensures that the platform infrastructure remains mission-ready, providing the security and scale required by modern nonprofits and other 501(c) organizations.</p>
                 </section>
               </ScrollFade>
 
@@ -226,7 +226,7 @@ export default function PricingGuidePage() {
                       </Link>
                       <Link href="/resources/white-label-payment-processing-nonprofit-church-software" className="p-6 bg-white border border-wgc-navy-100 rounded-3xl hover:border-wgc-gold-300 transition-all group">
                          <p className="text-xs font-bold text-wgc-navy-900 uppercase tracking-widest mb-2 group-hover:text-wgc-gold-600 transition-colors">White-Label Guide</p>
-                         <p className="text-[10px] text-wgc-navy-400 font-medium opacity-80 leading-relaxed">Infrastructure and branding for nonprofit software platforms.</p>
+                         <p className="text-[10px] text-wgc-navy-400 font-medium opacity-80 leading-relaxed">Infrastructure and branding for nonprofit and 501(c) organization software platforms.</p>
                       </Link>
                    </div>
                 </section>

@@ -330,9 +330,9 @@ export default function StartOnboardingPage() {
       <Header />
       <main className="flex-grow max-w-4xl w-full mx-auto py-16 px-6">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-slate-900 mb-4">Payment rails for churches and nonprofits</h1>
+          <h1 className="text-3xl font-bold text-slate-900 mb-4">Payment rails for churches, nonprofits, and other 501(c) organizations</h1>
           <p className="text-slate-600 max-w-2xl mx-auto mb-6 text-base">
-            WGC Payments helps churches and nonprofits accept digital donations through our secure onboarding and payment infrastructure.
+            WGC Payments helps churches, nonprofits, and other 501(c) organizations accept digital donations through our secure onboarding and payment infrastructure.
           </p>
           <div className="max-w-2xl mx-auto space-y-4">
             <p className="text-slate-600 bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm block">
@@ -393,6 +393,7 @@ export default function StartOnboardingPage() {
                     <select required value={formData.organizationType} onChange={(e) => updateField("organizationType", e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308] bg-white">
                       <option value="Church">Church</option>
                       <option value="Nonprofit">Nonprofit</option>
+                      <option value="501(c) Organization">501(c) Organization (Other)</option>
                     </select>
                   </div>
                   <div><label className="block text-sm font-semibold mb-2">Business Tax ID (EIN)</label><input required value={formData.businessTaxId} onChange={(e) => updateField("businessTaxId", e.target.value.replace(/\D/g, ""))} pattern="\d{9}" maxLength={9} title="Tax ID must be exactly 9 digits" className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>

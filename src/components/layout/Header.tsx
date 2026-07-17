@@ -9,7 +9,7 @@ import GatewayIcon from "@/components/ui/GatewayIcon";
 
 const NAV_LINKS = [
   { name: "Home", href: "/" },
-  { name: "Churches & Nonprofits", href: "/churches" },
+  { name: "Churches, Nonprofits & 501(c) Orgs", href: "/churches" },
   { name: "Partners", href: "/software-partners" },
   { name: "Pricing", href: "/pricing" },
   { name: "Developers", href: "/developers" },

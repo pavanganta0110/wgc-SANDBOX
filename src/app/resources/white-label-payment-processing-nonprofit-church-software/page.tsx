@@ -8,8 +8,8 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "How to White-Label Payments for Nonprofit Software | WGC",
-  description: "A step-by-step look at white-labeling payments inside nonprofit and church software, from gateway setup to settlement and compliance.",
+  title: "How to White-Label Payments for Nonprofit & 501(c) Organization Software | WGC",
+  description: "A step-by-step look at white-labeling payments inside nonprofit, church, and other 501(c) organization software, from gateway setup to settlement and compliance.",
   openGraph: {
     title: "How to White-Label Payments for Nonprofit Software | WGC",
     description: "A step-by-step look at white-labeling payments inside nonprofit and church software, from gateway setup to settlement and compliance.",
@@ -74,10 +74,10 @@ export default function WhiteLabelGuidePage() {
                 Software Vertical Guide
               </div>
               <h1 className="text-4xl md:text-5xl font-bold text-wgc-navy-900 tracking-tighter mb-8 tracking-tight leading-[0.95]">
-                How to White-Label Payments for <span className="text-wgc-gold-500">Nonprofit Software</span>
+                How to White-Label Payments for <span className="text-wgc-gold-500">Nonprofit & 501(c) Organization Software</span>
               </h1>
               <p className="text-lg md:text-xl text-wgc-navy-600 font-medium leading-relaxed italic border-l-4 border-wgc-gold-500 pl-6 border-opacity-30 opacity-90">
-                For nonprofit and church software platforms, payments should feel native to the product. White-label payment processing makes it possible to offer branded onboarding, embedded donation forms, and payout visibility without a disconnected experience.
+                For nonprofit, church, and other 501(c) organization software platforms, payments should feel native to the product. White-label payment processing makes it possible to offer branded onboarding, embedded donation forms, and payout visibility without a disconnected experience.
               </p>
             </ScrollFade>
           </div>
@@ -110,9 +110,9 @@ export default function WhiteLabelGuidePage() {
                 <section>
                   <div className="flex items-center gap-4 mb-8">
                     <div className="w-1.5 h-8 bg-wgc-gold-500 rounded-full"></div>
-                    <h2 className="text-2xl font-bold tracking-tight m-0">Why nonprofit and church software platforms need embedded payments</h2>
+                    <h2 className="text-2xl font-bold tracking-tight m-0">Why nonprofit, church, and other 501(c) organization software platforms need embedded payments</h2>
                   </div>
-                  <p className="opacity-80">The core advantage of white-labeling is **brand continuity**. Churches and nonprofits value trust above all else. When a donor is redirected to a generic third-party site, trust is diluted. Embedded payments provide:</p>
+                  <p className="opacity-80">The core advantage of white-labeling is **brand continuity**. Churches, nonprofits, and other 501(c) organizations value trust above all else. When a donor is redirected to a generic third-party site, trust is diluted. Embedded payments provide:</p>
                   <ul className="list-none p-0 space-y-4">
                      {BENEFITS.map((benefit) => (
                         <li key={benefit} className="flex items-start gap-3">
@@ -165,7 +165,7 @@ export default function WhiteLabelGuidePage() {
                        <Cpu className="w-8 h-8 text-wgc-gold-500" />
                        <h2 className="text-2xl font-bold tracking-tight m-0">How WGC powers branded experiences</h2>
                      </div>
-                     <p className="text-wgc-navy-300 mb-8 font-medium tracking-tight opacity-90 leading-relaxed">WGC is built for embedded, branded payment experiences. We support card payments, ACH, recurring donation tools, and dashboard reporting—all designed specifically for church and nonprofit software use cases.</p>
+                     <p className="text-wgc-navy-300 mb-8 font-medium tracking-tight opacity-90 leading-relaxed">WGC is built for embedded, branded payment experiences. We support card payments, ACH, recurring donation tools, and dashboard reporting—all designed specifically for church, nonprofit, and other 501(c) organization software use cases.</p>
                      <div className="flex flex-wrap gap-3">
                         {WGC_FEATURES.map((tag) => (
                           <span key={tag} className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-bold uppercase tracking-widest text-wgc-gold-500 border border-wgc-navy-100 font-mono">{tag}</span>
