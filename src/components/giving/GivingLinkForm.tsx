@@ -23,7 +23,7 @@ const FREQUENCY_LABELS: Record<FrequencyKey, string> = {
   YEARLY: "Yearly",
 };
 
-type ResultState =
+export type ResultState =
   | { step: "form" }
   | { step: "processing" }
   | { step: "success"; totalCents: number; feeCoveredCents: number; donationAmountCents: number; transferId?: string; recurring?: boolean; frequency?: string }
@@ -55,6 +55,7 @@ export default function GivingLinkForm({
   previewMode = false,
   serverAvailability,
   onFormError,
+  onResult,
 }: {
   slug: string;
   finixMerchantId: string;
@@ -84,6 +85,8 @@ export default function GivingLinkForm({
   serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
+  /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
+  onResult?: (result: ResultState) => void;
 }) {
   const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
@@ -102,6 +105,11 @@ export default function GivingLinkForm({
   const [submitting, setSubmitting] = useState(false);
   const [formReady, setFormReady] = useState(false);
   const [result, setResult] = useState<ResultState>({ step: "form" });
+
+  useEffect(() => {
+    onResult?.(result);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const cardBankMethods = allowedPaymentMethods.filter((m) => m === "CARD" || m === "BANK");

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WGC Giving Embed — Test Page</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: content-box; }
+    body { font-family: Georgia, serif; background: #f0f0e8; color: #222; line-height: 1.9; padding: 40px 20px; }
+    h1, h2 { font-family: Impact, sans-serif; color: purple; text-transform: uppercase; }
+    button { all: unset; }
+    section { max-width: 640px; margin: 0 auto 60px; padding: 24px; background: #fff; border: 3px dashed #999; }
+  </style>
+</head>
+<body>
+  <h1>Fake Church Website (Embed Test Harness)</h1>
+  <p>Simulates a third-party site with hostile CSS, to verify the embed loader is resilient to it.</p>
+
+  <section>
+    <h2>1. Donate Button (opens secure popup)</h2>
+    <script src="/embed/wgc-giving.js" data-wgc-slug="embed-test-link" data-wgc-mode="button" data-wgc-button-text="Give Now" data-wgc-button-size="large" data-wgc-button-color="gold" data-wgc-button-radius="rounded"></script>
+  </section>
+
+  <section>
+    <h2>2. Second Button (multiple buttons on one page)</h2>
+    <script src="/embed/wgc-giving.js" data-wgc-slug="embed-test-link" data-wgc-mode="button" data-wgc-button-text="Donate" data-wgc-button-size="small" data-wgc-button-color="navy" data-wgc-button-radius="square"></script>
+  </section>
+
+  <section>
+    <h2>3. Script Loaded Twice (dedupe guard)</h2>
+    <script src="/embed/wgc-giving.js"></script>
+    <script src="/embed/wgc-giving.js" data-wgc-slug="embed-test-link" data-wgc-mode="button" data-wgc-button-text="Give (dedup test)" data-wgc-button-color="black"></script>
+  </section>
+
+  <section>
+    <h2>4. Inline Embed (renders a Give button directly in the page)</h2>
+    <div data-wgc-giving data-wgc-slug="embed-test-link" data-wgc-mode="inline"></div>
+    <script async src="/embed/wgc-giving.js"></script>
+  </section>
+
+  <section>
+    <h2>5. Invalid Slug (popup shows a friendly error)</h2>
+    <div data-wgc-giving data-wgc-slug="this-slug-does-not-exist-12345" data-wgc-mode="inline"></div>
+    <script async src="/embed/wgc-giving.js"></script>
+  </section>
+</body>
+</html>

@@ -46,6 +46,32 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      {
+        // /embed/* must be iframe-able from arbitrary third-party sites —
+        // that's the entire point of the website-embed feature. Per-org
+        // domain restriction (when an admin opts in) is enforced at the
+        // application layer instead (see src/lib/giving/embedDomainCheck.ts),
+        // since Next's headers() here is static and can't vary per-org.
+        // Next merges header entries by key in array order, so this later,
+        // more specific match overrides X-Frame-Options/CSP for this path.
+        source: "/embed/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "" },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' https://js.finix.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "img-src 'self' data: https:",
+              "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com",
+              "frame-ancestors *",
+            ].join("; "),
+          },
+          { key: "Cache-Control", value: "public, max-age=300, must-revalidate" },
+        ],
+      },
     ];
   },
 };

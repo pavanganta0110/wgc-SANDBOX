@@ -399,6 +399,14 @@ model Church {
   secondaryColor String?
   accentColor    String?
 
+  // Website Embed (Settings -> Website Embed). Domain restriction is
+  // opt-in and off by default so embeds work on any site with zero setup;
+  // when enabled, embedAllowedDomainsJson (string[] of hostnames, e.g.
+  // ["church.org","www.church.org"]) is checked server-side against the
+  // embedding page's Referer in src/lib/giving/embedDomainCheck.ts.
+  embedDomainRestrictionEnabled Boolean @default(false)
+  embedAllowedDomainsJson       Json?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

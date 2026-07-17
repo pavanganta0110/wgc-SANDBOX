@@ -16,6 +16,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { key: "security", label: "Security", href: "/merchant/settings/security" },
   { key: "branding", label: "Branding", href: "/merchant/settings/branding" },
   { key: "integrations", label: "Integrations", href: "/merchant/settings/integrations" },
+  { key: "embed", label: "Website Embed", href: "/merchant/settings/embed" },
   { key: "sync", label: "Webhooks & Sync", href: "/merchant/settings/sync" },
   { key: "data-privacy", label: "Data & Privacy", href: "/merchant/settings/data-privacy" },
   { key: "audit", label: "Audit History", href: "/merchant/settings/audit" },
