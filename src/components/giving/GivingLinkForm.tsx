@@ -15,6 +15,16 @@ import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 const APPLE_PAY_ENABLED = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
 
+// Sandbox-only diagnostic logging for wallet button render decisions — both
+// effects below bail out silently (by design, so a donor never sees a
+// half-broken button), which made the original "buttons just don't show up"
+// report impossible to diagnose from the browser alone. Never logs when
+// NEXT_PUBLIC_FINIX_ENV is "live".
+const WALLET_DEBUG = typeof window !== "undefined" && process.env.NEXT_PUBLIC_FINIX_ENV !== "live";
+function walletLog(...args: unknown[]) {
+  if (WALLET_DEBUG) console.log("[Wallets:sandbox]", ...args);
+}
+
 const FREQUENCY_LABELS: Record<FrequencyKey, string> = {
   WEEKLY: "Weekly",
   BIWEEKLY: "Every Two Weeks",
@@ -252,24 +262,51 @@ export default function GivingLinkForm({
         walletTotalCents
       );
       await submitWalletPayment("google_pay", walletResult);
-    } catch {
+    } catch (err) {
       // Donor closed the Google Pay sheet or it failed before authorization —
-      // not an error state, just return to the form.
+      // not an error state shown to the donor, just return to the form.
+      walletLog("Google Pay: loadPaymentData did not complete (cancel or error)", err);
       setWalletProcessing(null);
     }
   };
 
   useEffect(() => {
-    if (!APPLE_PAY_ENABLED || !allowedPaymentMethods.includes("APPLE_PAY")) return;
-    if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) return;
-    if (!isApplePayAvailable()) return;
+    if (!APPLE_PAY_ENABLED) {
+      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID is unset");
+      return;
+    }
+    if (!allowedPaymentMethods.includes("APPLE_PAY")) {
+      walletLog("Apple Pay: not rendering — APPLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) {
+      walletLog("Apple Pay: not rendering — server-side availability check failed", serverAvailability.APPLE_PAY);
+      return;
+    }
+    if (!isApplePayAvailable()) {
+      walletLog(
+        "Apple Pay: not rendering — ApplePaySession unsupported on this browser/device (Safari on macOS/iOS with a card in Wallet required)"
+      );
+      return;
+    }
+    walletLog("Apple Pay: all checks passed — rendering button");
     setAppleAvailable(true);
-    loadApplePayButtonScript().catch(() => {});
+    loadApplePayButtonScript().catch((err) => walletLog("Apple Pay: button SDK failed to load", err));
   }, [allowedPaymentMethods, serverAvailability]);
 
   useEffect(() => {
-    if (!googlePayGatewayMerchantId || !allowedPaymentMethods.includes("GOOGLE_PAY")) return;
-    if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) return;
+    if (!googlePayGatewayMerchantId) {
+      walletLog("Google Pay: not rendering — googlePayGatewayMerchantId is null (FINIX_APPLICATION_OWNER_ID unset server-side)");
+      return;
+    }
+    if (!allowedPaymentMethods.includes("GOOGLE_PAY")) {
+      walletLog("Google Pay: not rendering — GOOGLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) {
+      walletLog("Google Pay: not rendering — server-side availability check failed", serverAvailability.GOOGLE_PAY);
+      return;
+    }
     let cancelled = false;
     const config = {
       environment: googlePayEnvironment,
@@ -277,9 +314,15 @@ export default function GivingLinkForm({
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
     };
+    walletLog("Google Pay: checking isReadyToPay with environment:", googlePayEnvironment);
     isGooglePayAvailable(config)
       .then((available) => {
-        if (cancelled || !available) return;
+        if (cancelled) return;
+        if (!available) {
+          walletLog("Google Pay: not rendering — isReadyToPay returned false/unavailable");
+          return;
+        }
+        walletLog("Google Pay: isReadyToPay confirmed support — rendering official button");
         setGoogleAvailable(true);
         return createGooglePayButton(config, () => handleGooglePayClickRef.current());
       })
@@ -288,7 +331,7 @@ export default function GivingLinkForm({
         googlePayButtonRef.current.innerHTML = "";
         googlePayButtonRef.current.appendChild(button);
       })
-      .catch(() => {});
+      .catch((err) => walletLog("Google Pay: setup threw", err));
     return () => {
       cancelled = true;
     };

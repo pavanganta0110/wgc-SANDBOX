@@ -17,12 +17,22 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Finix.js tokenization lib + inline scripts needed by Next.js hydration
-      "script-src 'self' 'unsafe-inline' https://js.finix.com",
+      // Finix.js tokenization lib + inline scripts needed by Next.js hydration.
+      // pay.google.com serves the Google Pay JS API (pay.js) and applepay.cdn-apple.com
+      // serves Apple's official <apple-pay-button> web component — without
+      // these, both wallet scripts fail to load and the buttons never
+      // appear, regardless of any env var configuration. This was the
+      // second (independent) root cause of Google/Apple Pay not showing up,
+      // alongside the missing wallet env vars — see loadPublicGivingPageData.ts.
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
-      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com",
+      // pay.google.com: Google Pay's client makes XHR calls to its own
+      // origin during isReadyToPay/loadPaymentData.
+      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com",
+      // Google Pay's payment sheet renders inside an iframe from pay.google.com.
+      "frame-src 'self' https://pay.google.com",
       // Prevent this page from being embedded anywhere
       "frame-ancestors 'none'",
     ].join("; "),
