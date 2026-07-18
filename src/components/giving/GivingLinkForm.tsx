@@ -142,6 +142,46 @@ export default function GivingLinkForm({
   const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
 
+  // Donor Information now sits above the wallet buttons (Apple Pay/Google
+  // Pay) so a donor can't reach a wallet sheet without WGC first having
+  // their name/email/phone — Apple/Google's own wallet flow only ever
+  // returns a billing name/email (sometimes not even that), never a phone
+  // number, so without this the phone field could never be collected for
+  // a wallet donation at all.
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+
+  const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const phoneDigitCount = (value: string) => value.replace(/\D/g, "").length;
+
+  const donorInfoValid = Boolean(
+    firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneDigitCount(phone) >= 10
+  );
+
+  function focusFirstMissingDonorField() {
+    if (!firstName.trim()) {
+      firstNameRef.current?.focus();
+      firstNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!lastName.trim()) {
+      lastNameRef.current?.focus();
+      lastNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!isValidEmailFormat(email)) {
+      emailRef.current?.focus();
+      emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (phoneDigitCount(phone) < 10) {
+      phoneRef.current?.focus();
+      phoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
+
   useEffect(() => {
     setAttemptId(crypto.randomUUID());
   }, []);
@@ -188,9 +228,17 @@ export default function GivingLinkForm({
           isRecurring: false,
           fraudSessionId,
           clientAttemptId: attemptId,
+          // Donor Information is now required and collected before any
+          // wallet button is reachable (see donorInfoValid gating below),
+          // so the entered fields — not the wallet's own billing contact,
+          // which never includes a phone number and sometimes omits name/
+          // email — are the source of truth here, matching exactly what
+          // the card/bank submit path below sends.
           donor: {
-            name: walletResult.billingContact.name,
-            email: walletResult.billingContact.email || email.trim(),
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            name: `${firstName} ${lastName}`.trim() || walletResult.billingContact.name,
+            email: email.trim() || walletResult.billingContact.email,
             phone: phone.trim() || undefined,
             note: note.trim() || undefined,
             isAnonymous,
@@ -252,6 +300,11 @@ export default function GivingLinkForm({
       toast("This is a preview — no real payment session is started.");
       return;
     }
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
+      return;
+    }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
@@ -300,8 +353,14 @@ export default function GivingLinkForm({
 
   const handleGooglePayClickRef = useRef<() => void>(() => {});
   handleGooglePayClickRef.current = async () => {
+    walletLog("Google Pay button clicked");
     if (previewMode) {
       toast("This is a preview — no real payment session is started.");
+      return;
+    }
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -469,8 +528,10 @@ export default function GivingLinkForm({
   const totalCents = (feeCoverEnabled && coverFees) ? feeResult.amountToChargeCents : (effectiveAmountCents || 0);
   const feeCoveredCents = donorCoveredFeeResult.supplementalFeeCents;
 
+  // firstName/lastName/email/phone are now always required, above the
+  // payment options, for every method (see donorInfoValid) — only
+  // donorNote/anonymousDonation still consult per-org visibility settings.
   const isFieldVisible = (key: keyof DonorFieldSettings) => donorFieldSettings[key] !== "HIDDEN";
-  const isFieldRequired = (key: keyof DonorFieldSettings) => donorFieldSettings[key] === "REQUIRED";
 
   const handleSubmit = async () => {
     if (previewMode) {
@@ -492,16 +553,13 @@ export default function GivingLinkForm({
       return;
     }
     const fullName = `${firstName} ${lastName}`.trim();
-    if ((isFieldRequired("firstName") || isFieldRequired("lastName")) && !fullName) {
-      toast.error("Please enter your name");
-      return;
-    }
-    if (isFieldRequired("email") && !email) {
-      toast.error("Please enter your email");
-      return;
-    }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error("Please enter a valid email address");
+    // Donor Information (first/last name, email, phone) is one shared,
+    // required section above the payment options for every method —
+    // card/bank/Apple Pay/Google Pay all enforce the same donorInfoValid
+    // rule rather than each having its own partial check.
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
       return;
     }
     if (!formInstanceRef.current || !formReady) {
@@ -763,14 +821,130 @@ export default function GivingLinkForm({
         )}
       </div>
 
+      {/* Donor Information — one shared, required section for every payment
+          method (card, bank, Apple Pay, Google Pay). Moved above the
+          payment options so a donor can never reach a wallet sheet without
+          WGC first having name/email/phone; Apple/Google's own wallet
+          flow only ever returns a billing name/email (and never a phone
+          number), so this was previously uncollectable for wallet gifts. */}
+      <div>
+        <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
+          Donor Information
+        </h3>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label htmlFor="donor-first-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              First name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="donor-first-name"
+              ref={firstNameRef}
+              required
+              aria-required="true"
+              placeholder="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+          <div>
+            <label htmlFor="donor-last-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              Last name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="donor-last-name"
+              ref={lastNameRef}
+              required
+              aria-required="true"
+              placeholder="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+        </div>
+        <div className="mb-3">
+          <label htmlFor="donor-email" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+            Email <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="donor-email"
+            ref={emailRef}
+            type="email"
+            required
+            aria-required="true"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        </div>
+        <div>
+          <label htmlFor="donor-phone" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+            Phone <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="donor-phone"
+            ref={phoneRef}
+            type="tel"
+            required
+            aria-required="true"
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        </div>
+        {isFieldVisible("donorNote") && (
+          <input
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full mt-3 px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        )}
+        {isFieldVisible("anonymousDonation") && (
+          <label className="flex items-center gap-2 text-sm mt-3" style={{ color: light.bodyTextColor }}>
+            <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
+            Give anonymously
+          </label>
+        )}
+      </div>
+
+      {feeCoverEnabled && effectiveAmountCents > 0 && (
+        <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
+          <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
+          <span>
+            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
+            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
+          </span>
+        </label>
+      )}
+
       {!isRecurring && (appleAvailable || googleAvailable) && (
         <div className="space-y-2">
+          <h3 className="text-xs font-semibold" style={{ color: light.bodyTextColor }}>
+            Express checkout
+          </h3>
+          {!donorInfoValid && (
+            <p className="text-xs" style={{ color: light.bodyTextColor }}>
+              Enter your name, email, and phone number to continue.
+            </p>
+          )}
           {appleAvailable && (
-            <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : undefined}>
+            <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : !donorInfoValid ? "opacity-50" : undefined}>
               {/* Apple's official button web component — never hand-styled, per Apple's HIG.
                   Click is bound natively via applePayButtonRef in a useEffect above, not
                   a React onClick on this element or an ancestor — it doesn't reliably
-                  deliver through React's synthetic event system in Safari. */}
+                  deliver through React's synthetic event system in Safari. Deliberately
+                  NOT pointer-events-none when donor info is incomplete — the click must
+                  still reach handleApplePayClickRef so it can focus/scroll to the first
+                  missing field instead of being silently blocked by CSS. */}
               {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
               <apple-pay-button
                 ref={applePayButtonRef}
@@ -785,7 +959,7 @@ export default function GivingLinkForm({
             </div>
           )}
           {googleAvailable && (
-            <div>
+            <div className={!donorInfoValid && walletProcessing === null ? "opacity-50" : undefined}>
               <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
               {walletProcessing === "google_pay" && (
                 <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
@@ -808,6 +982,7 @@ export default function GivingLinkForm({
           <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
             {cardBankMethods.includes("CARD") && (
               <button
+                type="button"
                 onClick={() => setPaymentMethod("card")}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold"
                 style={paymentMethod === "card" ? { backgroundColor: light.buttonBackground, color: light.buttonText } : { color: light.bodyTextColor }}
@@ -817,6 +992,7 @@ export default function GivingLinkForm({
             )}
             {cardBankMethods.includes("BANK") && (
               <button
+                type="button"
                 onClick={() => setPaymentMethod("bank")}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold"
                 style={paymentMethod === "bank" ? { backgroundColor: light.buttonBackground, color: light.buttonText } : { color: light.bodyTextColor }}
@@ -829,72 +1005,6 @@ export default function GivingLinkForm({
       )}
 
       <div id="giving-link-finix-form" className="min-h-[120px]" />
-
-      {feeCoverEnabled && effectiveAmountCents > 0 && (
-        <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
-          <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
-          <span>
-            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
-            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
-          </span>
-        </label>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        {isFieldVisible("firstName") && (
-          <input
-            placeholder={isFieldRequired("firstName") ? "First name *" : "First name"}
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="px-3 py-2 rounded-lg border text-sm outline-none"
-            style={{ borderColor: light.borderColor }}
-          />
-        )}
-        {isFieldVisible("lastName") && (
-          <input
-            placeholder={isFieldRequired("lastName") ? "Last name *" : "Last name"}
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="px-3 py-2 rounded-lg border text-sm outline-none"
-            style={{ borderColor: light.borderColor }}
-          />
-        )}
-      </div>
-      {isFieldVisible("email") && (
-        <input
-          type="email"
-          placeholder={isFieldRequired("email") ? "Email *" : "Email"}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("phone") && (
-        <input
-          type="tel"
-          placeholder={isFieldRequired("phone") ? "Phone *" : "Phone (optional)"}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("donorNote") && (
-        <input
-          placeholder="Note (optional)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("anonymousDonation") && (
-        <label className="flex items-center gap-2 text-sm" style={{ color: light.bodyTextColor }}>
-          <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
-          Give anonymously
-        </label>
-      )}
 
       <button
         onClick={handleSubmit}
