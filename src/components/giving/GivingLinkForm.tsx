@@ -308,47 +308,61 @@ export default function GivingLinkForm({
       return;
     }
     let cancelled = false;
-    const config = {
+    walletLog("Google Pay: checking isReadyToPay with environment:", googlePayEnvironment);
+    isGooglePayAvailable({
       environment: googlePayEnvironment,
       gatewayMerchantId: googlePayGatewayMerchantId,
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
-    };
-    walletLog("Google Pay: checking isReadyToPay with environment:", googlePayEnvironment);
-    isGooglePayAvailable(config)
+    })
       .then((available) => {
         if (cancelled) return;
         if (!available) {
           walletLog("Google Pay: not rendering — isReadyToPay returned false/unavailable");
           return;
         }
-        walletLog("Google Pay: isReadyToPay confirmed support — rendering official button");
+        walletLog("Google Pay: isReadyToPay confirmed support — will render official button");
+        // Only flips a flag here — the actual button is created and
+        // appended in the effect below, which runs after React has
+        // committed the re-render this triggers. Doing both in this same
+        // async chain raced the DOM: googlePayButtonRef's <div> doesn't
+        // exist until googleAvailable is true, but this chain could (and
+        // did, in testing) resolve createGooglePayButton() before that
+        // re-render committed, leaving the ref null when appendChild ran.
         setGoogleAvailable(true);
-        return createGooglePayButton(config, () => handleGooglePayClickRef.current());
       })
+      .catch((err) => walletLog("Google Pay: isReadyToPay threw", err));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
+
+  useEffect(() => {
+    if (!googleAvailable || !googlePayGatewayMerchantId) return;
+    let cancelled = false;
+    const config = {
+      environment: googlePayEnvironment,
+      gatewayMerchantId: googlePayGatewayMerchantId,
+      merchantId: googlePayMerchantId || undefined,
+      merchantName: churchName,
+    };
+    createGooglePayButton(config, () => handleGooglePayClickRef.current())
       .then((button) => {
-        if (cancelled) {
-          walletLog("Google Pay: button created but effect was cancelled before append (re-render raced it) — discarding");
-          return;
-        }
-        if (!button) {
-          walletLog("Google Pay: createGooglePayButton resolved with no button (isReadyToPay must have returned false)");
-          return;
-        }
-        if (!googlePayButtonRef.current) {
-          walletLog("Google Pay: button created but the container ref is gone — component unmounted mid-flight");
+        if (cancelled || !googlePayButtonRef.current) {
+          walletLog("Google Pay: button created but discarded (cancelled or ref gone)");
           return;
         }
         googlePayButtonRef.current.innerHTML = "";
         googlePayButtonRef.current.appendChild(button);
         walletLog("Google Pay: button appended to DOM");
       })
-      .catch((err) => walletLog("Google Pay: setup threw", err));
+      .catch((err) => walletLog("Google Pay: createGooglePayButton threw", err));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
+  }, [googleAvailable, googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId]);
 
   useEffect(() => {
     if (!APPLICATION_ID) return;
