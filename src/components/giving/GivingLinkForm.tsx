@@ -389,12 +389,27 @@ export default function GivingLinkForm({
   };
 
   useEffect(() => {
-    if (!APPLE_PAY_ENABLED) {
-      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER (or legacy NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID) is unset");
-      return;
-    }
     if (!allowedPaymentMethods.includes("APPLE_PAY")) {
       walletLog("Apple Pay: not rendering — APPLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    // Preview visibility is settings-only, deliberately decoupled from
+    // every runtime capability check below — the admin preview must show
+    // whenever Apple Pay is enabled for the link, regardless of the
+    // admin's own browser/device/OS, and it never calls Apple's real
+    // ApplePaySession API at all (setAppleAvailable alone doesn't invoke
+    // anything real; the actual custom element + SDK script load are also
+    // skipped in preview — see the JSX below, which renders a static
+    // non-interactive mock instead of Apple's real <apple-pay-button> in
+    // previewMode, since Apple's own -apple-pay-button CSS appearance
+    // frequently renders blank outside Safari/WebKit).
+    if (previewMode) {
+      walletLog("Apple Pay: preview mode — rendering static preview button (no capability check)");
+      setAppleAvailable(true);
+      return;
+    }
+    if (!APPLE_PAY_ENABLED) {
+      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER (or legacy NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID) is unset");
       return;
     }
     if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) {
@@ -410,15 +425,22 @@ export default function GivingLinkForm({
     walletLog("Apple Pay: all checks passed — rendering button");
     setAppleAvailable(true);
     loadApplePayButtonScript().catch((err) => walletLog("Apple Pay: button SDK failed to load", err));
-  }, [allowedPaymentMethods, serverAvailability]);
+  }, [allowedPaymentMethods, serverAvailability, previewMode]);
 
   useEffect(() => {
-    if (!googlePayGatewayMerchantId) {
-      walletLog("Google Pay: not rendering — googlePayGatewayMerchantId is null (FINIX_APPLICATION_OWNER_ID unset server-side)");
-      return;
-    }
     if (!allowedPaymentMethods.includes("GOOGLE_PAY")) {
       walletLog("Google Pay: not rendering — GOOGLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    // Same preview/runtime split as Apple Pay above — settings-only in
+    // preview, real isReadyToPay() capability check on the live page.
+    if (previewMode) {
+      walletLog("Google Pay: preview mode — rendering static preview button (no isReadyToPay call)");
+      setGoogleAvailable(true);
+      return;
+    }
+    if (!googlePayGatewayMerchantId) {
+      walletLog("Google Pay: not rendering — googlePayGatewayMerchantId is null (FINIX_APPLICATION_OWNER_ID unset server-side)");
       return;
     }
     if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) {
@@ -457,7 +479,11 @@ export default function GivingLinkForm({
   }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
 
   useEffect(() => {
-    if (!googleAvailable || !googlePayGatewayMerchantId) return;
+    // previewMode never reaches here with a real googlePayGatewayMerchantId
+    // (the preview panel passes null), but guarded explicitly too — this
+    // effect must never call Google's real createButton()/API from an
+    // admin preview; the static mockup below (JSX) covers preview instead.
+    if (previewMode || !googleAvailable || !googlePayGatewayMerchantId) return;
     let cancelled = false;
     const config = {
       environment: googlePayEnvironment,
@@ -480,7 +506,7 @@ export default function GivingLinkForm({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleAvailable, googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId]);
+  }, [googleAvailable, googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, previewMode]);
 
   useEffect(() => {
     if (!APPLICATION_ID) return;
@@ -926,51 +952,111 @@ export default function GivingLinkForm({
         </label>
       )}
 
-      {!isRecurring && (appleAvailable || googleAvailable) && (
+      {(appleAvailable || googleAvailable) && (
         <div className="space-y-2">
-          <h3 className="text-xs font-semibold" style={{ color: light.bodyTextColor }}>
+          <h3 className="text-xs font-semibold flex items-center gap-1.5" style={{ color: light.bodyTextColor }}>
             Express checkout
+            {previewMode && (
+              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                Preview
+              </span>
+            )}
           </h3>
-          {!donorInfoValid && (
+          {isRecurring ? (
+            // Finix's own Subscriptions API only supports recurring card
+            // and bank-account (ACH) payments — confirmed directly against
+            // docs.finix.com/api/subscriptions ("Subscriptions currently
+            // support recurring card payments and recurring bank account
+            // payments (ACH in the USA)"), no GOOGLE_PAY/APPLE_PAY mention
+            // anywhere in that capability list. Rather than build a wallet
+            // "subscription" flow Finix can't actually bill on an ongoing
+            // basis, wallets stay one-time-only and this note explains why
+            // they're gone instead of just silently vanishing.
             <p className="text-xs" style={{ color: light.bodyTextColor }}>
-              Enter your name, email, and phone number to continue.
+              Apple Pay and Google Pay are currently available for one-time gifts. Use card or bank account for
+              recurring gifts.
             </p>
-          )}
-          {appleAvailable && (
-            <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : !donorInfoValid ? "opacity-50" : undefined}>
-              {/* Apple's official button web component — never hand-styled, per Apple's HIG.
-                  Click is bound natively via applePayButtonRef in a useEffect above, not
-                  a React onClick on this element or an ancestor — it doesn't reliably
-                  deliver through React's synthetic event system in Safari. Deliberately
-                  NOT pointer-events-none when donor info is incomplete — the click must
-                  still reach handleApplePayClickRef so it can focus/scroll to the first
-                  missing field instead of being silently blocked by CSS. */}
-              {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
-              <apple-pay-button
-                ref={applePayButtonRef}
-                buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
-                type="donate"
-                locale="en-US"
-                style={{ width: "100%", height: "44px", display: "block" }}
-              />
-              {walletProcessing === "apple_pay" && (
-                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+          ) : (
+            <>
+              {!donorInfoValid && (
+                <p className="text-xs" style={{ color: light.bodyTextColor }}>
+                  Enter your name, email, and phone number to continue.
+                </p>
               )}
-            </div>
-          )}
-          {googleAvailable && (
-            <div className={!donorInfoValid && walletProcessing === null ? "opacity-50" : undefined}>
-              <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
-              {walletProcessing === "google_pay" && (
-                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+              {appleAvailable && (
+                <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : !donorInfoValid ? "opacity-50" : undefined}>
+                  {previewMode ? (
+                    // Static, non-interactive mock — Apple's real
+                    // <apple-pay-button> depends on apple-pay-sdk.js and
+                    // WebKit's -apple-pay-button CSS appearance, neither of
+                    // which reliably render outside real Safari (frequently
+                    // blank in Chromium/other browsers, and the SDK isn't
+                    // even loaded in preview — see the effect above). This
+                    // preview intentionally never touches ApplePaySession.
+                    <div
+                      aria-hidden="true"
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg select-none"
+                      style={{ height: 44, backgroundColor: "#000", color: "#fff", cursor: "default" }}
+                    >
+                      <span className="text-base"></span>
+                      <span className="text-sm font-semibold">Pay</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Apple's official button web component — never hand-styled, per Apple's HIG.
+                          Click is bound natively via applePayButtonRef in a useEffect above, not
+                          a React onClick on this element or an ancestor — it doesn't reliably
+                          deliver through React's synthetic event system in Safari. Deliberately
+                          NOT pointer-events-none when donor info is incomplete — the click must
+                          still reach handleApplePayClickRef so it can focus/scroll to the first
+                          missing field instead of being silently blocked by CSS. */}
+                      {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
+                      <apple-pay-button
+                        ref={applePayButtonRef}
+                        buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
+                        type="donate"
+                        locale="en-US"
+                        style={{ width: "100%", height: "44px", display: "block" }}
+                      />
+                    </>
+                  )}
+                  {walletProcessing === "apple_pay" && (
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                  )}
+                </div>
               )}
-            </div>
+              {googleAvailable && (
+                <div className={!donorInfoValid && walletProcessing === null ? "opacity-50" : undefined}>
+                  {previewMode ? (
+                    // Static, non-interactive mock. Google's real button
+                    // generally does render fine in any Chromium browser
+                    // (unlike Apple's), but preview visibility is meant to
+                    // be settings-only and never depend on a live
+                    // isReadyToPay() network call to Google from inside the
+                    // admin dashboard — see the effect above.
+                    <div
+                      aria-hidden="true"
+                      className="w-full flex items-center justify-center gap-2 rounded-lg select-none"
+                      style={{ height: 44, backgroundColor: "#000", color: "#fff", cursor: "default" }}
+                    >
+                      <span className="text-sm font-semibold">Donate with</span>
+                      <span className="text-sm font-bold">G Pay</span>
+                    </div>
+                  ) : (
+                    <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
+                  )}
+                  {walletProcessing === "google_pay" && (
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs" style={{ color: light.bodyTextColor }}>
+                <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+                <span>or pay with card / bank</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+              </div>
+            </>
           )}
-          <div className="flex items-center gap-2 text-xs" style={{ color: light.bodyTextColor }}>
-            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
-            <span>or pay with card / bank</span>
-            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
-          </div>
         </div>
       )}
 
