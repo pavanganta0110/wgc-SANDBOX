@@ -87,7 +87,12 @@ export async function getPaymentMethodAvailability(churchId: string): Promise<Pa
   const bankVerified = bankAccount?.displayStatus === "ACTIVE" || bankAccount?.displayStatus === "APPROVED";
   const achEnabled = Boolean(bankVerified && onboarding?.processingEnabled);
 
-  const applePayConfigured = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
+  // See GivingLinkForm.tsx for why this holds a Finix Identity ID, not an
+  // Apple-issued merchant.com.xxx ID. NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+  // read as a fallback for the pre-rename Vercel env var name.
+  const applePayConfigured = Boolean(
+    process.env.NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER || process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+  );
   // FINIX_APPLICATION_OWNER_ID is what's actually required to build a valid
   // Google Pay request (it's the gatewayMerchantId — see loadPublicGivingPageData.ts
   // and googlePay.ts). GOOGLE_PAY_MERCHANT_ID (Google's own merchantInfo.merchantId)

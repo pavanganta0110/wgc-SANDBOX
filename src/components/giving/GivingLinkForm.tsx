@@ -13,7 +13,18 @@ import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, ty
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
-const APPLE_PAY_ENABLED = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
+// This holds the Finix Identity ID (starts "ID...") that Apple Pay's
+// merchant validation is actually performed against server-side — see
+// FINIX_APPLICATION_OWNER_ID in validate-merchant/route.ts, which must
+// match this value. It is NOT an Apple-issued "merchant.com.xxx" merchant
+// ID; despite the older env var's name, Finix's own Apple Pay integration
+// never uses one — merchant identification happens via Finix's Identity +
+// domain verification, not a client-side Apple merchantIdentifier field.
+// Renamed for clarity; NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID is read as a
+// fallback so existing Vercel env config keeps working during rollover.
+const APPLE_PAY_ENABLED = Boolean(
+  process.env.NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER || process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+);
 
 // Sandbox-only diagnostic logging for wallet button render decisions — both
 // effects below bail out silently (by design, so a donor never sees a
@@ -272,7 +283,7 @@ export default function GivingLinkForm({
 
   useEffect(() => {
     if (!APPLE_PAY_ENABLED) {
-      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID is unset");
+      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER (or legacy NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID) is unset");
       return;
     }
     if (!allowedPaymentMethods.includes("APPLE_PAY")) {
