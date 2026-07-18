@@ -22,7 +22,7 @@ export const DEFAULT_DONOR_FIELD_SETTINGS: DonorFieldSettings = {
   firstName: "REQUIRED",
   lastName: "REQUIRED",
   email: "REQUIRED",
-  phone: "OPTIONAL",
+  phone: "REQUIRED",
   street: "HIDDEN",
   apartment: "HIDDEN",
   city: "HIDDEN",

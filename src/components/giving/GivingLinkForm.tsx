@@ -117,6 +117,22 @@ export default function GivingLinkForm({
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank">(
     allowedPaymentMethods.includes("CARD") ? "card" : "bank"
   );
+  // The useState initializer above only runs once, at mount — it doesn't
+  // re-run when allowedPaymentMethods changes afterward. In the admin
+  // preview, the same GivingLinkForm instance stays mounted while the
+  // merchant toggles Allowed Payment Methods checkboxes live, so without
+  // this resync, unchecking Card after the form already picked "card"
+  // left paymentMethod stuck on "card" — the Finix form below is mounted
+  // with paymentMethods: [paymentMethod], so it kept rendering card fields
+  // (number/expiration/CVV) even with Card disabled and only Bank enabled.
+  useEffect(() => {
+    if (paymentMethod === "card" && !allowedPaymentMethods.includes("CARD")) {
+      setPaymentMethod("bank");
+    } else if (paymentMethod === "bank" && !allowedPaymentMethods.includes("BANK")) {
+      setPaymentMethod(allowedPaymentMethods.includes("CARD") ? "card" : "bank");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedPaymentMethods]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -389,6 +405,13 @@ export default function GivingLinkForm({
   };
 
   useEffect(() => {
+    // Reset first, every run — this effect only ever set the flag to
+    // true, never back to false, so once Apple Pay became available it
+    // stayed visible even after being disabled in Allowed Payment Methods
+    // (the admin preview keeps the same GivingLinkForm instance mounted
+    // while toggling checkboxes live, so this genuinely regressed the
+    // preview until fixed).
+    setAppleAvailable(false);
     if (!allowedPaymentMethods.includes("APPLE_PAY")) {
       walletLog("Apple Pay: not rendering — APPLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
       return;
@@ -428,6 +451,10 @@ export default function GivingLinkForm({
   }, [allowedPaymentMethods, serverAvailability, previewMode]);
 
   useEffect(() => {
+    // Same one-way-flag issue as Apple Pay above — reset every run so
+    // disabling Google Pay actually hides it again instead of leaving it
+    // stuck visible from before it was disabled.
+    setGoogleAvailable(false);
     if (!allowedPaymentMethods.includes("GOOGLE_PAY")) {
       walletLog("Google Pay: not rendering — GOOGLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
       return;
