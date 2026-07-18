@@ -238,13 +238,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         // sends walletToken. Finix's gateway-tokenized payment methods use
         // a completely different payload shape: type "GOOGLE_PAY"/"APPLE_PAY",
         // the token under third_party_token (unmodified, per Finix's docs),
-        // plus merchant_identity (the church's own Finix identity — distinct
-        // from the Application Owner Identity used as gatewayMerchantId on
-        // the client side) and the billing name/address from the wallet
-        // sheet, neither of which this branch previously passed either.
+        // plus merchant_identity and the billing name/address from the
+        // wallet sheet, neither of which this branch previously passed.
+        //
+        // merchant_identity MUST equal whatever identity was set as
+        // gatewayMerchantId when the token was generated client-side
+        // (FINIX_APPLICATION_OWNER_ID — see googlePay.ts/loadPublicGivingPageData.ts),
+        // not the individual church's own Finix identity. Confirmed via
+        // Finix's own rejection when this was first tried with the church's
+        // identity: 422 INVALID_FIELD, "Google Pay token must be associated
+        // with the merchant_identity provided" — the token is scoped to the
+        // identity it was tokenized against and can't be reassigned to a
+        // different one at instrument-creation time. Actual per-church
+        // settlement routing happens separately, via `merchant:
+        // church.finixMerchantId` on the /transfers call further below.
         instrumentPayload = {
           identity: identityId,
-          merchant_identity: church.finixIdentityId,
+          merchant_identity: process.env.FINIX_APPLICATION_OWNER_ID,
           type: paymentMethod === "google_pay" ? "GOOGLE_PAY" : "APPLE_PAY",
           third_party_token: walletToken,
           name: walletBillingContact?.name,
@@ -261,7 +271,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
           logEvent("WALLET_INSTRUMENT_PAYLOAD_DEBUG", {
             type: instrumentPayload.type,
             hasIdentity: Boolean(identityId),
-            merchantIdentityPrefix: church.finixIdentityId ? `${church.finixIdentityId.slice(0, 2)}...${church.finixIdentityId.slice(-4)}` : null,
+            merchantIdentityPrefix: process.env.FINIX_APPLICATION_OWNER_ID
+              ? `${process.env.FINIX_APPLICATION_OWNER_ID.slice(0, 2)}...${process.env.FINIX_APPLICATION_OWNER_ID.slice(-4)}`
+              : null,
             thirdPartyTokenLength: typeof walletToken === "string" ? walletToken.length : null,
             thirdPartyTokenPrefix: typeof walletToken === "string" ? walletToken.slice(0, 12) : null,
             hasAddress: Boolean(walletBillingContact?.address),
