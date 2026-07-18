@@ -87,8 +87,20 @@ export async function getPaymentMethodAvailability(churchId: string): Promise<Pa
   const bankVerified = bankAccount?.displayStatus === "ACTIVE" || bankAccount?.displayStatus === "APPROVED";
   const achEnabled = Boolean(bankVerified && onboarding?.processingEnabled);
 
-  const applePayConfigured = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
-  const googlePayConfigured = Boolean(process.env.NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID || process.env.GOOGLE_PAY_MERCHANT_ID);
+  // See GivingLinkForm.tsx for why this holds a Finix Identity ID, not an
+  // Apple-issued merchant.com.xxx ID. NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+  // read as a fallback for the pre-rename Vercel env var name.
+  const applePayConfigured = Boolean(
+    process.env.NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER || process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+  );
+  // FINIX_APPLICATION_OWNER_ID is what's actually required to build a valid
+  // Google Pay request (it's the gatewayMerchantId — see loadPublicGivingPageData.ts
+  // and googlePay.ts). GOOGLE_PAY_MERCHANT_ID (Google's own merchantInfo.merchantId)
+  // is real but per Google's own docs is "Required when PaymentsClient is
+  // initialized with an environment property of PRODUCTION" — optional in
+  // TEST. Gating "configured" on it unconditionally meant Google Pay could
+  // never render in sandbox/TEST even with everything else correctly set up.
+  const googlePayConfigured = Boolean(process.env.FINIX_APPLICATION_OWNER_ID);
   const domainVerified = applePayConfigured ? await checkApplePayDomainAssociation() : null;
 
   const card: PaymentMethodAvailability = {

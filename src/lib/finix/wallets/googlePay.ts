@@ -10,25 +10,51 @@
 
 const GOOGLE_PAY_SCRIPT_URL = "https://pay.google.com/gp/p/js/pay.js";
 
+// Sandbox-only diagnostic logging for the Google Pay integration — never
+// logs in the live environment. Added while diagnosing why the button
+// wasn't appearing; kept because the whole flow (script load -> isReadyToPay
+// -> button render) is otherwise silent-by-design (see the `catch { return
+// false }` in isGooglePayAvailable below), which made the original problem
+// hard to see from the browser console alone.
+const GOOGLE_PAY_DEBUG = typeof window !== "undefined" && process.env.NEXT_PUBLIC_FINIX_ENV !== "live";
+function gpayLog(...args: unknown[]) {
+  if (GOOGLE_PAY_DEBUG) console.log("[GooglePay:sandbox]", ...args);
+}
+
 let scriptPromise: Promise<void> | null = null;
 
 export function loadGooglePayScript(): Promise<void> {
   if (typeof window === "undefined") return Promise.reject(new Error("Google Pay can only load in the browser"));
-  if (window.google?.payments?.api) return Promise.resolve();
+  if (window.google?.payments?.api) {
+    gpayLog("script already loaded");
+    return Promise.resolve();
+  }
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[src="${GOOGLE_PAY_SCRIPT_URL}"]`);
     if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Failed to load Google Pay")));
+      existing.addEventListener("load", () => {
+        gpayLog("script loaded (existing tag)");
+        resolve();
+      });
+      existing.addEventListener("error", (e) => {
+        gpayLog("script FAILED to load (existing tag) — likely blocked by CSP script-src", e);
+        reject(new Error("Failed to load Google Pay"));
+      });
       return;
     }
     const script = document.createElement("script");
     script.src = GOOGLE_PAY_SCRIPT_URL;
     script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Pay"));
+    script.onload = () => {
+      gpayLog("script loaded");
+      resolve();
+    };
+    script.onerror = (e) => {
+      gpayLog("script FAILED to load — likely blocked by CSP script-src or network", e);
+      reject(new Error("Failed to load Google Pay"));
+    };
     document.head.appendChild(script);
   });
 
@@ -63,6 +89,7 @@ export interface GooglePayConfig {
 }
 
 export async function getGooglePaymentsClient(environment: "TEST" | "PRODUCTION") {
+  gpayLog("creating PaymentsClient with environment:", environment);
   await loadGooglePayScript();
   return new window.google!.payments.api.PaymentsClient({ environment });
 }
@@ -75,8 +102,10 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
       apiVersionMinor: 0,
       allowedPaymentMethods: [paymentMethodWithGateway(config.gatewayMerchantId)],
     });
+    gpayLog("isReadyToPay response:", response);
     return Boolean(response?.result);
-  } catch {
+  } catch (err) {
+    gpayLog("isReadyToPay threw — treating as not available:", err);
     return false;
   }
 }

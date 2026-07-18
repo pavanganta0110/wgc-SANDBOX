@@ -224,10 +224,82 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         return toSafePaymentErrorResponse(new Error("Failed to create buyer identity"), "PAYMENT_FAILED", "Could not process identity. No charge was made.", true, { action: "createBuyerIdentity" });
       }
 
+      // sandboxDebug never logs in production — only NEXT_PUBLIC_FINIX_ENV
+      // !== "live" (mirrors the client-side wallet diagnostics). Payment
+      // tokens/credentials are never logged in full.
+      const sandboxDebug = process.env.NEXT_PUBLIC_FINIX_ENV !== "live";
+
+      let instrumentPayload: Record<string, unknown>;
+      if (isWallet) {
+        // Wallet tokens (Google/Apple Pay) were previously silently dropped
+        // here — this whole branch always called createPaymentInstrument
+        // with `token` (the Finix.js card-tokenization field), which is
+        // undefined for a wallet submission since the frontend only ever
+        // sends walletToken. Finix's gateway-tokenized payment methods use
+        // a completely different payload shape: type "GOOGLE_PAY"/"APPLE_PAY",
+        // the token under third_party_token (unmodified, per Finix's docs),
+        // plus merchant_identity and the billing name/address from the
+        // wallet sheet, neither of which this branch previously passed.
+        //
+        // merchant_identity MUST equal whatever identity was set as
+        // gatewayMerchantId when the token was generated client-side
+        // (FINIX_APPLICATION_OWNER_ID — see googlePay.ts/loadPublicGivingPageData.ts),
+        // not the individual church's own Finix identity — confirmed via
+        // Finix's own rejection when this was first tried with the church's
+        // identity: 422 INVALID_FIELD, "Google Pay token must be associated
+        // with the merchant_identity provided". Per-church settlement
+        // routing happens separately, via `merchant: church.finixMerchantId`
+        // on the /transfers call further below.
+        instrumentPayload = {
+          identity: identityId,
+          merchant_identity: process.env.FINIX_APPLICATION_OWNER_ID,
+          type: paymentMethod === "google_pay" ? "GOOGLE_PAY" : "APPLE_PAY",
+          third_party_token: walletToken,
+          name: walletBillingContact?.name,
+          address: {
+            line1: walletBillingContact?.address?.line1,
+            line2: walletBillingContact?.address?.line2,
+            city: walletBillingContact?.address?.city,
+            region: walletBillingContact?.address?.region,
+            postal_code: walletBillingContact?.address?.postal_code,
+            country: walletBillingContact?.address?.country,
+          },
+        };
+        if (sandboxDebug) {
+          logEvent("WALLET_INSTRUMENT_PAYLOAD_DEBUG", {
+            type: instrumentPayload.type,
+            hasIdentity: Boolean(identityId),
+            merchantIdentityPrefix: process.env.FINIX_APPLICATION_OWNER_ID
+              ? `${process.env.FINIX_APPLICATION_OWNER_ID.slice(0, 2)}...${process.env.FINIX_APPLICATION_OWNER_ID.slice(-4)}`
+              : null,
+            thirdPartyTokenLength: typeof walletToken === "string" ? walletToken.length : null,
+            thirdPartyTokenPrefix: typeof walletToken === "string" ? walletToken.slice(0, 12) : null,
+            hasAddress: Boolean(walletBillingContact?.address),
+            hasName: Boolean(walletBillingContact?.name),
+          });
+        }
+      } else {
+        instrumentPayload = { identity: identityId, token, type: "TOKEN" };
+      }
+
       let instrument;
       try {
-        instrument = await finixClient.createPaymentInstrument({ identity: identityId, token, type: "TOKEN" });
-      } catch (err) {
+        instrument = await finixClient.createPaymentInstrument(instrumentPayload);
+      } catch (err: any) {
+        // finixClient's fetchApi throws a plain Error with .status (HTTP
+        // status) and .details (parsed Finix response body) — not an axios
+        // error shape. .details is the real Finix error payload (code,
+        // message, failing field) that toSafePaymentErrorResponse below
+        // deliberately hides behind the generic donor-facing message; this
+        // is the only place that payload is visible for debugging.
+        if (sandboxDebug) {
+          logEvent("WALLET_INSTRUMENT_CREATE_FAILED_DEBUG", {
+            endpoint: "/payment_instruments",
+            status: err?.status ?? null,
+            finixErrorDetails: err?.details ?? null,
+            message: err?.message ?? null,
+          });
+        }
         return toSafePaymentErrorResponse(err, "PAYMENT_FAILED", "Could not verify payment instrument with processor. No charge was made.", true, { action: "createPaymentInstrument" });
       }
       instrumentId = instrument?.id;

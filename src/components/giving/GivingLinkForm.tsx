@@ -13,7 +13,28 @@ import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, ty
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
-const APPLE_PAY_ENABLED = Boolean(process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID);
+// This holds the Finix Identity ID (starts "ID...") that Apple Pay's
+// merchant validation is actually performed against server-side — see
+// FINIX_APPLICATION_OWNER_ID in validate-merchant/route.ts, which must
+// match this value. It is NOT an Apple-issued "merchant.com.xxx" merchant
+// ID; despite the older env var's name, Finix's own Apple Pay integration
+// never uses one — merchant identification happens via Finix's Identity +
+// domain verification, not a client-side Apple merchantIdentifier field.
+// Renamed for clarity; NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID is read as a
+// fallback so existing Vercel env config keeps working during rollover.
+const APPLE_PAY_ENABLED = Boolean(
+  process.env.NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER || process.env.NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID
+);
+
+// Sandbox-only diagnostic logging for wallet button render decisions — both
+// effects below bail out silently (by design, so a donor never sees a
+// half-broken button), which made the original "buttons just don't show up"
+// report impossible to diagnose from the browser alone. Never logs when
+// NEXT_PUBLIC_FINIX_ENV is "live".
+const WALLET_DEBUG = typeof window !== "undefined" && process.env.NEXT_PUBLIC_FINIX_ENV !== "live";
+function walletLog(...args: unknown[]) {
+  if (WALLET_DEBUG) console.log("[Wallets:sandbox]", ...args);
+}
 
 const FREQUENCY_LABELS: Record<FrequencyKey, string> = {
   WEEKLY: "Weekly",
@@ -118,7 +139,48 @@ export default function GivingLinkForm({
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
   const googlePayButtonRef = useRef<HTMLDivElement>(null);
+  const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
+
+  // Donor Information now sits above the wallet buttons (Apple Pay/Google
+  // Pay) so a donor can't reach a wallet sheet without WGC first having
+  // their name/email/phone — Apple/Google's own wallet flow only ever
+  // returns a billing name/email (sometimes not even that), never a phone
+  // number, so without this the phone field could never be collected for
+  // a wallet donation at all.
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+
+  const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  const phoneDigitCount = (value: string) => value.replace(/\D/g, "").length;
+
+  const donorInfoValid = Boolean(
+    firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneDigitCount(phone) >= 10
+  );
+
+  function focusFirstMissingDonorField() {
+    if (!firstName.trim()) {
+      firstNameRef.current?.focus();
+      firstNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!lastName.trim()) {
+      lastNameRef.current?.focus();
+      lastNameRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!isValidEmailFormat(email)) {
+      emailRef.current?.focus();
+      emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (phoneDigitCount(phone) < 10) {
+      phoneRef.current?.focus();
+      phoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
 
   useEffect(() => {
     setAttemptId(crypto.randomUUID());
@@ -129,7 +191,7 @@ export default function GivingLinkForm({
   // happens to be selected — kept separate from the card/bank form's own
   // paymentMethod-driven totalCents/feeCoveredCents declared further below.
   const effectiveAmountCents = amountType === "FIXED" ? (fixedAmountCents ?? 0) : customAmount ? Math.round(parseFloat(customAmount) * 100) : amountCents;
-  
+
   const walletFeeResult = calculateWgcFeeAmounts({
     donationAmountCents: effectiveAmountCents || 0,
     paymentMethod: "CARD",
@@ -143,7 +205,17 @@ export default function GivingLinkForm({
     walletResult: ApplePayResult | GooglePayResult
   ): Promise<{ success: boolean }> => {
     try {
-      const fraudSessionId = await getFraudSessionId(finixMerchantId);
+      walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
+      // getFraudSessionId has no internal timeout — on a slow mobile
+      // connection (or if cdn.sift.com is blocked/slow) it can hang
+      // indefinitely with the wallet sheet stuck open and nothing ever
+      // reaching /donate, no error to debug from. Race it against a
+      // timeout so a stall becomes a visible, retryable failure instead.
+      const fraudSessionId = await Promise.race([
+        getFraudSessionId(finixMerchantId),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Fraud session request timed out after 10s")), 10000)),
+      ]);
+      walletLog(`${method}: fraud session obtained, submitting donation`);
       const res = await fetch(`/api/g/${slug}/donate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -156,9 +228,17 @@ export default function GivingLinkForm({
           isRecurring: false,
           fraudSessionId,
           clientAttemptId: attemptId,
+          // Donor Information is now required and collected before any
+          // wallet button is reachable (see donorInfoValid gating below),
+          // so the entered fields — not the wallet's own billing contact,
+          // which never includes a phone number and sometimes omits name/
+          // email — are the source of truth here, matching exactly what
+          // the card/bank submit path below sends.
           donor: {
-            name: walletResult.billingContact.name,
-            email: walletResult.billingContact.email || email.trim(),
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            name: `${firstName} ${lastName}`.trim() || walletResult.billingContact.name,
+            email: email.trim() || walletResult.billingContact.email,
             phone: phone.trim() || undefined,
             note: note.trim() || undefined,
             isAnonymous,
@@ -166,7 +246,8 @@ export default function GivingLinkForm({
         }),
       });
       const data = await res.json().catch(() => null);
-      
+      walletLog(`${method}: /donate response`, { status: res.status, ok: res.ok, success: data?.success, code: data?.code });
+
       if (!res.ok || !data?.success) {
         setWalletProcessing(null);
         const errMsg = data?.message || (typeof data?.error === 'string' ? data.error : data?.error?.message) || "We couldn’t complete your donation. Please try again.";
@@ -194,22 +275,41 @@ export default function GivingLinkForm({
         });
       }
       return { success: true };
-    } catch {
+    } catch (err) {
+      // Previously a bare `catch {}` — swallowed the real error (e.g. a
+      // fraud-session timeout, network failure, or thrown exception)
+      // completely, with nothing to debug from. The donor-facing message
+      // stays generic; this is only visible in sandbox.
+      walletLog(`${method}: submitWalletPayment threw`, err);
       setWalletProcessing(null);
       setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
       return { success: false };
     }
   };
 
-  const handleApplePayClick = () => {
+  // Stored in a ref (mirrors handleGooglePayClickRef below) because the
+  // click is bound via a native addEventListener in the effect further
+  // down, not React's onClick — a plain function reference captured once
+  // in that effect would close over stale state (walletProcessing,
+  // effectiveAmountCents, etc. at mount time). The ref is reassigned every
+  // render so the native listener always calls the current version.
+  const handleApplePayClickRef = useRef<() => void>(() => {});
+  handleApplePayClickRef.current = () => {
+    walletLog("Apple Pay button clicked");
     if (previewMode) {
       toast("This is a preview — no real payment session is started.");
+      return;
+    }
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
       return;
     }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
     }
+    if (walletProcessing !== null) return;
     setWalletProcessing("apple_pay");
     beginApplePaySession({
       amountCents: walletTotalCents,
@@ -225,14 +325,42 @@ export default function GivingLinkForm({
         return data.merchantSession;
       },
       onAuthorized: (walletResult) => submitWalletPayment("apple_pay", walletResult),
-      onCancel: () => setWalletProcessing(null),
+      onCancel: () => {
+        walletLog("Apple Pay: session cancelled");
+        setWalletProcessing(null);
+      },
     });
   };
 
+  // Apple's official <apple-pay-button> custom element (rendered via
+  // Apple's own apple-pay-sdk.js, styled with the -apple-pay-button CSS
+  // appearance per Apple's HIG — never hand-rolled) does not reliably
+  // deliver its click through React's synthetic event system when wrapped
+  // in a plain onClick handler on an ancestor element; in practice the
+  // wrapping div's onClick never fired in Safari. Binding a real, native
+  // addEventListener directly to the custom element itself is the
+  // documented-safe approach and bypasses React's event delegation
+  // entirely, so it works regardless of how this particular Shadow-DOM
+  // element dispatches its click.
+  useEffect(() => {
+    if (!appleAvailable) return;
+    const el = applePayButtonRef.current;
+    if (!el) return;
+    const onClick = () => handleApplePayClickRef.current();
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, [appleAvailable]);
+
   const handleGooglePayClickRef = useRef<() => void>(() => {});
   handleGooglePayClickRef.current = async () => {
+    walletLog("Google Pay button clicked");
     if (previewMode) {
       toast("This is a preview — no real payment session is started.");
+      return;
+    }
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -252,24 +380,110 @@ export default function GivingLinkForm({
         walletTotalCents
       );
       await submitWalletPayment("google_pay", walletResult);
-    } catch {
+    } catch (err) {
       // Donor closed the Google Pay sheet or it failed before authorization —
-      // not an error state, just return to the form.
+      // not an error state shown to the donor, just return to the form.
+      walletLog("Google Pay: loadPaymentData did not complete (cancel or error)", err);
       setWalletProcessing(null);
     }
   };
 
   useEffect(() => {
-    if (!APPLE_PAY_ENABLED || !allowedPaymentMethods.includes("APPLE_PAY")) return;
-    if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) return;
-    if (!isApplePayAvailable()) return;
+    if (!allowedPaymentMethods.includes("APPLE_PAY")) {
+      walletLog("Apple Pay: not rendering — APPLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    // Preview visibility is settings-only, deliberately decoupled from
+    // every runtime capability check below — the admin preview must show
+    // whenever Apple Pay is enabled for the link, regardless of the
+    // admin's own browser/device/OS, and it never calls Apple's real
+    // ApplePaySession API at all (setAppleAvailable alone doesn't invoke
+    // anything real; the actual custom element + SDK script load are also
+    // skipped in preview — see the JSX below, which renders a static
+    // non-interactive mock instead of Apple's real <apple-pay-button> in
+    // previewMode, since Apple's own -apple-pay-button CSS appearance
+    // frequently renders blank outside Safari/WebKit).
+    if (previewMode) {
+      walletLog("Apple Pay: preview mode — rendering static preview button (no capability check)");
+      setAppleAvailable(true);
+      return;
+    }
+    if (!APPLE_PAY_ENABLED) {
+      walletLog("Apple Pay: not rendering — NEXT_PUBLIC_FINIX_APPLE_PAY_MERCHANT_IDENTIFIER (or legacy NEXT_PUBLIC_APPLE_PAY_MERCHANT_ID) is unset");
+      return;
+    }
+    if (serverAvailability?.APPLE_PAY && !serverAvailability.APPLE_PAY.enabledForOrganization) {
+      walletLog("Apple Pay: not rendering — server-side availability check failed", serverAvailability.APPLE_PAY);
+      return;
+    }
+    if (!isApplePayAvailable()) {
+      walletLog(
+        "Apple Pay: not rendering — ApplePaySession unsupported on this browser/device (Safari on macOS/iOS with a card in Wallet required)"
+      );
+      return;
+    }
+    walletLog("Apple Pay: all checks passed — rendering button");
     setAppleAvailable(true);
-    loadApplePayButtonScript().catch(() => {});
-  }, [allowedPaymentMethods, serverAvailability]);
+    loadApplePayButtonScript().catch((err) => walletLog("Apple Pay: button SDK failed to load", err));
+  }, [allowedPaymentMethods, serverAvailability, previewMode]);
 
   useEffect(() => {
-    if (!googlePayGatewayMerchantId || !allowedPaymentMethods.includes("GOOGLE_PAY")) return;
-    if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) return;
+    if (!allowedPaymentMethods.includes("GOOGLE_PAY")) {
+      walletLog("Google Pay: not rendering — GOOGLE_PAY not in this giving link's allowedPaymentMethods", allowedPaymentMethods);
+      return;
+    }
+    // Same preview/runtime split as Apple Pay above — settings-only in
+    // preview, real isReadyToPay() capability check on the live page.
+    if (previewMode) {
+      walletLog("Google Pay: preview mode — rendering static preview button (no isReadyToPay call)");
+      setGoogleAvailable(true);
+      return;
+    }
+    if (!googlePayGatewayMerchantId) {
+      walletLog("Google Pay: not rendering — googlePayGatewayMerchantId is null (FINIX_APPLICATION_OWNER_ID unset server-side)");
+      return;
+    }
+    if (serverAvailability?.GOOGLE_PAY && !serverAvailability.GOOGLE_PAY.enabledForOrganization) {
+      walletLog("Google Pay: not rendering — server-side availability check failed", serverAvailability.GOOGLE_PAY);
+      return;
+    }
+    let cancelled = false;
+    walletLog("Google Pay: checking isReadyToPay with environment:", googlePayEnvironment);
+    isGooglePayAvailable({
+      environment: googlePayEnvironment,
+      gatewayMerchantId: googlePayGatewayMerchantId,
+      merchantId: googlePayMerchantId || undefined,
+      merchantName: churchName,
+    })
+      .then((available) => {
+        if (cancelled) return;
+        if (!available) {
+          walletLog("Google Pay: not rendering — isReadyToPay returned false/unavailable");
+          return;
+        }
+        walletLog("Google Pay: isReadyToPay confirmed support — will render official button");
+        // Only flips a flag here — the actual button is created and
+        // appended in the effect below, which runs after React has
+        // committed the re-render this triggers. Doing both in this same
+        // async chain raced the DOM: googlePayButtonRef's <div> doesn't
+        // exist until googleAvailable is true, but this chain could (and
+        // did, in testing) resolve createGooglePayButton() before that
+        // re-render committed, leaving the ref null when appendChild ran.
+        setGoogleAvailable(true);
+      })
+      .catch((err) => walletLog("Google Pay: isReadyToPay threw", err));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
+
+  useEffect(() => {
+    // previewMode never reaches here with a real googlePayGatewayMerchantId
+    // (the preview panel passes null), but guarded explicitly too — this
+    // effect must never call Google's real createButton()/API from an
+    // admin preview; the static mockup below (JSX) covers preview instead.
+    if (previewMode || !googleAvailable || !googlePayGatewayMerchantId) return;
     let cancelled = false;
     const config = {
       environment: googlePayEnvironment,
@@ -277,23 +491,22 @@ export default function GivingLinkForm({
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
     };
-    isGooglePayAvailable(config)
-      .then((available) => {
-        if (cancelled || !available) return;
-        setGoogleAvailable(true);
-        return createGooglePayButton(config, () => handleGooglePayClickRef.current());
-      })
+    createGooglePayButton(config, () => handleGooglePayClickRef.current())
       .then((button) => {
-        if (cancelled || !button || !googlePayButtonRef.current) return;
+        if (cancelled || !googlePayButtonRef.current) {
+          walletLog("Google Pay: button created but discarded (cancelled or ref gone)");
+          return;
+        }
         googlePayButtonRef.current.innerHTML = "";
         googlePayButtonRef.current.appendChild(button);
+        walletLog("Google Pay: button appended to DOM");
       })
-      .catch(() => {});
+      .catch((err) => walletLog("Google Pay: createGooglePayButton threw", err));
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, allowedPaymentMethods]);
+  }, [googleAvailable, googlePayGatewayMerchantId, googlePayEnvironment, googlePayMerchantId, previewMode]);
 
   useEffect(() => {
     if (!APPLICATION_ID) return;
@@ -330,19 +543,21 @@ export default function GivingLinkForm({
     cardBrand: null,
     donorCoversFee: feeCoverEnabled ? coverFees : false,
   });
-  
+
   const donorCoveredFeeResult = calculateWgcFeeAmounts({
     donationAmountCents: effectiveAmountCents || 0,
     paymentMethod: paymentMethod === "bank" ? "ACH" : "CARD",
     cardBrand: null,
     donorCoversFee: true,
   });
-  
+
   const totalCents = (feeCoverEnabled && coverFees) ? feeResult.amountToChargeCents : (effectiveAmountCents || 0);
   const feeCoveredCents = donorCoveredFeeResult.supplementalFeeCents;
 
+  // firstName/lastName/email/phone are now always required, above the
+  // payment options, for every method (see donorInfoValid) — only
+  // donorNote/anonymousDonation still consult per-org visibility settings.
   const isFieldVisible = (key: keyof DonorFieldSettings) => donorFieldSettings[key] !== "HIDDEN";
-  const isFieldRequired = (key: keyof DonorFieldSettings) => donorFieldSettings[key] === "REQUIRED";
 
   const handleSubmit = async () => {
     if (previewMode) {
@@ -364,16 +579,13 @@ export default function GivingLinkForm({
       return;
     }
     const fullName = `${firstName} ${lastName}`.trim();
-    if ((isFieldRequired("firstName") || isFieldRequired("lastName")) && !fullName) {
-      toast.error("Please enter your name");
-      return;
-    }
-    if (isFieldRequired("email") && !email) {
-      toast.error("Please enter your email");
-      return;
-    }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      toast.error("Please enter a valid email address");
+    // Donor Information (first/last name, email, phone) is one shared,
+    // required section above the payment options for every method —
+    // card/bank/Apple Pay/Google Pay all enforce the same donorInfoValid
+    // rule rather than each having its own partial check.
+    if (!donorInfoValid) {
+      toast.error("Enter your name, email, and phone number to continue.");
+      focusFirstMissingDonorField();
       return;
     }
     if (!formInstanceRef.current || !formReady) {
@@ -635,43 +847,216 @@ export default function GivingLinkForm({
         )}
       </div>
 
-      {!isRecurring && (appleAvailable || googleAvailable) && (
-        <div className="space-y-2">
-          {appleAvailable && (
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Donate with Apple Pay"
-              onClick={() => walletProcessing === null && handleApplePayClick()}
-              onKeyDown={(e) => e.key === "Enter" && walletProcessing === null && handleApplePayClick()}
-              className={walletProcessing !== null ? "opacity-50 pointer-events-none" : "cursor-pointer"}
-            >
-              {/* Apple's official button web component — never hand-styled, per Apple's HIG. */}
-              {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
-              <apple-pay-button
-                buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
-                type="donate"
-                locale="en-US"
-                style={{ width: "100%", height: "44px", display: "block" }}
-              />
-              {walletProcessing === "apple_pay" && (
-                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
-              )}
-            </div>
-          )}
-          {googleAvailable && (
-            <div>
-              <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
-              {walletProcessing === "google_pay" && (
-                <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-xs" style={{ color: light.bodyTextColor }}>
-            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
-            <span>or pay with card / bank</span>
-            <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+      {/* Donor Information — one shared, required section for every payment
+          method (card, bank, Apple Pay, Google Pay). Moved above the
+          payment options so a donor can never reach a wallet sheet without
+          WGC first having name/email/phone; Apple/Google's own wallet
+          flow only ever returns a billing name/email (and never a phone
+          number), so this was previously uncollectable for wallet gifts. */}
+      <div>
+        <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
+          Donor Information
+        </h3>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div>
+            <label htmlFor="donor-first-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              First name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="donor-first-name"
+              ref={firstNameRef}
+              required
+              aria-required="true"
+              placeholder="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
           </div>
+          <div>
+            <label htmlFor="donor-last-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              Last name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="donor-last-name"
+              ref={lastNameRef}
+              required
+              aria-required="true"
+              placeholder="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+        </div>
+        <div className="mb-3">
+          <label htmlFor="donor-email" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+            Email <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="donor-email"
+            ref={emailRef}
+            type="email"
+            required
+            aria-required="true"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        </div>
+        <div>
+          <label htmlFor="donor-phone" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+            Phone <span aria-hidden="true">*</span>
+          </label>
+          <input
+            id="donor-phone"
+            ref={phoneRef}
+            type="tel"
+            required
+            aria-required="true"
+            placeholder="Phone"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        </div>
+        {isFieldVisible("donorNote") && (
+          <input
+            placeholder="Note (optional)"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full mt-3 px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          />
+        )}
+        {isFieldVisible("anonymousDonation") && (
+          <label className="flex items-center gap-2 text-sm mt-3" style={{ color: light.bodyTextColor }}>
+            <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
+            Give anonymously
+          </label>
+        )}
+      </div>
+
+      {feeCoverEnabled && effectiveAmountCents > 0 && (
+        <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
+          <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
+          <span>
+            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
+            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
+          </span>
+        </label>
+      )}
+
+      {(appleAvailable || googleAvailable) && (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold flex items-center gap-1.5" style={{ color: light.bodyTextColor }}>
+            Express checkout
+            {previewMode && (
+              <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+                Preview
+              </span>
+            )}
+          </h3>
+          {isRecurring ? (
+            // Finix's own Subscriptions API only supports recurring card
+            // and bank-account (ACH) payments — confirmed directly against
+            // docs.finix.com/api/subscriptions ("Subscriptions currently
+            // support recurring card payments and recurring bank account
+            // payments (ACH in the USA)"), no GOOGLE_PAY/APPLE_PAY mention
+            // anywhere in that capability list. Rather than build a wallet
+            // "subscription" flow Finix can't actually bill on an ongoing
+            // basis, wallets stay one-time-only and this note explains why
+            // they're gone instead of just silently vanishing.
+            <p className="text-xs" style={{ color: light.bodyTextColor }}>
+              Apple Pay and Google Pay are currently available for one-time gifts. Use card or bank account for
+              recurring gifts.
+            </p>
+          ) : (
+            <>
+              {!donorInfoValid && (
+                <p className="text-xs" style={{ color: light.bodyTextColor }}>
+                  Enter your name, email, and phone number to continue.
+                </p>
+              )}
+              {appleAvailable && (
+                <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : !donorInfoValid ? "opacity-50" : undefined}>
+                  {previewMode ? (
+                    // Static, non-interactive mock — Apple's real
+                    // <apple-pay-button> depends on apple-pay-sdk.js and
+                    // WebKit's -apple-pay-button CSS appearance, neither of
+                    // which reliably render outside real Safari (frequently
+                    // blank in Chromium/other browsers, and the SDK isn't
+                    // even loaded in preview — see the effect above). This
+                    // preview intentionally never touches ApplePaySession.
+                    <div
+                      aria-hidden="true"
+                      className="w-full flex items-center justify-center gap-1.5 rounded-lg select-none"
+                      style={{ height: 44, backgroundColor: "#000", color: "#fff", cursor: "default" }}
+                    >
+                      <span className="text-base"></span>
+                      <span className="text-sm font-semibold">Pay</span>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Apple's official button web component — never hand-styled, per Apple's HIG.
+                          Click is bound natively via applePayButtonRef in a useEffect above, not
+                          a React onClick on this element or an ancestor — it doesn't reliably
+                          deliver through React's synthetic event system in Safari. Deliberately
+                          NOT pointer-events-none when donor info is incomplete — the click must
+                          still reach handleApplePayClickRef so it can focus/scroll to the first
+                          missing field instead of being silently blocked by CSS. */}
+                      {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
+                      <apple-pay-button
+                        ref={applePayButtonRef}
+                        buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
+                        type="donate"
+                        locale="en-US"
+                        style={{ width: "100%", height: "44px", display: "block" }}
+                      />
+                    </>
+                  )}
+                  {walletProcessing === "apple_pay" && (
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                  )}
+                </div>
+              )}
+              {googleAvailable && (
+                <div className={!donorInfoValid && walletProcessing === null ? "opacity-50" : undefined}>
+                  {previewMode ? (
+                    // Static, non-interactive mock. Google's real button
+                    // generally does render fine in any Chromium browser
+                    // (unlike Apple's), but preview visibility is meant to
+                    // be settings-only and never depend on a live
+                    // isReadyToPay() network call to Google from inside the
+                    // admin dashboard — see the effect above.
+                    <div
+                      aria-hidden="true"
+                      className="w-full flex items-center justify-center gap-2 rounded-lg select-none"
+                      style={{ height: 44, backgroundColor: "#000", color: "#fff", cursor: "default" }}
+                    >
+                      <span className="text-sm font-semibold">Donate with</span>
+                      <span className="text-sm font-bold">G Pay</span>
+                    </div>
+                  ) : (
+                    <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
+                  )}
+                  {walletProcessing === "google_pay" && (
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-xs" style={{ color: light.bodyTextColor }}>
+                <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+                <span>or pay with card / bank</span>
+                <div className="flex-1 h-px" style={{ backgroundColor: light.borderColor }} />
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -683,6 +1068,7 @@ export default function GivingLinkForm({
           <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
             {cardBankMethods.includes("CARD") && (
               <button
+                type="button"
                 onClick={() => setPaymentMethod("card")}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold"
                 style={paymentMethod === "card" ? { backgroundColor: light.buttonBackground, color: light.buttonText } : { color: light.bodyTextColor }}
@@ -692,6 +1078,7 @@ export default function GivingLinkForm({
             )}
             {cardBankMethods.includes("BANK") && (
               <button
+                type="button"
                 onClick={() => setPaymentMethod("bank")}
                 className="flex-1 py-2 rounded-lg text-sm font-semibold"
                 style={paymentMethod === "bank" ? { backgroundColor: light.buttonBackground, color: light.buttonText } : { color: light.bodyTextColor }}
@@ -704,72 +1091,6 @@ export default function GivingLinkForm({
       )}
 
       <div id="giving-link-finix-form" className="min-h-[120px]" />
-
-      {feeCoverEnabled && effectiveAmountCents > 0 && (
-        <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
-          <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
-          <span>
-            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
-            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
-          </span>
-        </label>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        {isFieldVisible("firstName") && (
-          <input
-            placeholder={isFieldRequired("firstName") ? "First name *" : "First name"}
-            value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
-            className="px-3 py-2 rounded-lg border text-sm outline-none"
-            style={{ borderColor: light.borderColor }}
-          />
-        )}
-        {isFieldVisible("lastName") && (
-          <input
-            placeholder={isFieldRequired("lastName") ? "Last name *" : "Last name"}
-            value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
-            className="px-3 py-2 rounded-lg border text-sm outline-none"
-            style={{ borderColor: light.borderColor }}
-          />
-        )}
-      </div>
-      {isFieldVisible("email") && (
-        <input
-          type="email"
-          placeholder={isFieldRequired("email") ? "Email *" : "Email"}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("phone") && (
-        <input
-          type="tel"
-          placeholder={isFieldRequired("phone") ? "Phone *" : "Phone (optional)"}
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("donorNote") && (
-        <input
-          placeholder="Note (optional)"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
-          style={{ borderColor: light.borderColor }}
-        />
-      )}
-      {isFieldVisible("anonymousDonation") && (
-        <label className="flex items-center gap-2 text-sm" style={{ color: light.bodyTextColor }}>
-          <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
-          Give anonymously
-        </label>
-      )}
 
       <button
         onClick={handleSubmit}
