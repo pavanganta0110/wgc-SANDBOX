@@ -14,6 +14,13 @@
 
 const APPLE_PAY_BUTTON_SDK_URL = "https://applepay.cdn-apple.com/jsapi/v1/apple-pay-sdk.js";
 
+// Sandbox-only diagnostic logging (mirrors googlePay.ts's gpayLog) — never
+// logs when NEXT_PUBLIC_FINIX_ENV is "live".
+const APPLE_PAY_DEBUG = typeof window !== "undefined" && process.env.NEXT_PUBLIC_FINIX_ENV !== "live";
+function apayLog(...args: unknown[]) {
+  if (APPLE_PAY_DEBUG) console.log("[ApplePay:sandbox]", ...args);
+}
+
 let buttonScriptPromise: Promise<void> | null = null;
 
 export function loadApplePayButtonScript(): Promise<void> {
@@ -44,12 +51,19 @@ export function loadApplePayButtonScript(): Promise<void> {
  * actually supports Apple Pay and the donor has a card set up.
  */
 export function isApplePayAvailable(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    "ApplePaySession" in window &&
-    typeof window.ApplePaySession?.canMakePayments === "function" &&
-    window.ApplePaySession.canMakePayments()
-  );
+  const hasSession = typeof window !== "undefined" && "ApplePaySession" in window;
+  apayLog("ApplePaySession present:", hasSession);
+  if (!hasSession) return false;
+
+  const canCheck = typeof window.ApplePaySession?.canMakePayments === "function";
+  if (!canCheck) {
+    apayLog("ApplePaySession.canMakePayments is not a function");
+    return false;
+  }
+
+  const canMake = window.ApplePaySession!.canMakePayments();
+  apayLog("canMakePayments():", canMake);
+  return canMake;
 }
 
 export interface ApplePayBillingContact {
@@ -101,7 +115,10 @@ export function beginApplePaySession(opts: {
   onAuthorized: (result: ApplePayResult) => Promise<{ success: boolean }>;
   onCancel: () => void;
 }): void {
-  if (!isApplePayAvailable()) return;
+  if (!isApplePayAvailable()) {
+    apayLog("beginApplePaySession: bailing — isApplePayAvailable() is false");
+    return;
+  }
 
   const request: ApplePayJS.ApplePayPaymentRequest = {
     countryCode: opts.countryCode || "US",
@@ -118,19 +135,25 @@ export function beginApplePaySession(opts: {
     },
   };
 
+  apayLog("creating ApplePaySession(3, request)", { amount: request.total.amount });
   const session = new window.ApplePaySession!(3, request);
+  apayLog("ApplePaySession created");
 
   session.onvalidatemerchant = async (event) => {
+    apayLog("onvalidatemerchant fired");
     try {
       const merchantSession = await opts.onValidateMerchant(event.validationURL);
       session.completeMerchantValidation(merchantSession);
-    } catch {
+      apayLog("merchant validation completed");
+    } catch (err) {
+      apayLog("merchant validation failed", err);
       session.abort();
       opts.onCancel();
     }
   };
 
   session.onpaymentauthorized = async (event) => {
+    apayLog("onpaymentauthorized fired");
     try {
       // Finix expects third_party_token as the stringified form of
       // { token: <the full Apple Pay token object> } — not just the inner
@@ -147,8 +170,11 @@ export function beginApplePaySession(opts: {
   };
 
   session.oncancel = () => {
+    apayLog("session.oncancel fired");
     opts.onCancel();
   };
 
+  apayLog("calling session.begin()");
   session.begin();
+  apayLog("session.begin() returned");
 }

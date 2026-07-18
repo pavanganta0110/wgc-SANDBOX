@@ -139,6 +139,7 @@ export default function GivingLinkForm({
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
   const googlePayButtonRef = useRef<HTMLDivElement>(null);
+  const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
 
   useEffect(() => {
@@ -222,7 +223,15 @@ export default function GivingLinkForm({
     }
   };
 
-  const handleApplePayClick = () => {
+  // Stored in a ref (mirrors handleGooglePayClickRef below) because the
+  // click is bound via a native addEventListener in the effect further
+  // down, not React's onClick — a plain function reference captured once
+  // in that effect would close over stale state (walletProcessing,
+  // effectiveAmountCents, etc. at mount time). The ref is reassigned every
+  // render so the native listener always calls the current version.
+  const handleApplePayClickRef = useRef<() => void>(() => {});
+  handleApplePayClickRef.current = () => {
+    walletLog("Apple Pay button clicked");
     if (previewMode) {
       toast("This is a preview — no real payment session is started.");
       return;
@@ -231,6 +240,7 @@ export default function GivingLinkForm({
       toast.error("Please enter an amount of at least $1.00");
       return;
     }
+    if (walletProcessing !== null) return;
     setWalletProcessing("apple_pay");
     beginApplePaySession({
       amountCents: walletTotalCents,
@@ -246,9 +256,31 @@ export default function GivingLinkForm({
         return data.merchantSession;
       },
       onAuthorized: (walletResult) => submitWalletPayment("apple_pay", walletResult),
-      onCancel: () => setWalletProcessing(null),
+      onCancel: () => {
+        walletLog("Apple Pay: session cancelled");
+        setWalletProcessing(null);
+      },
     });
   };
+
+  // Apple's official <apple-pay-button> custom element (rendered via
+  // Apple's own apple-pay-sdk.js, styled with the -apple-pay-button CSS
+  // appearance per Apple's HIG — never hand-rolled) does not reliably
+  // deliver its click through React's synthetic event system when wrapped
+  // in a plain onClick handler on an ancestor element; in practice the
+  // wrapping div's onClick never fired in Safari. Binding a real, native
+  // addEventListener directly to the custom element itself is the
+  // documented-safe approach and bypasses React's event delegation
+  // entirely, so it works regardless of how this particular Shadow-DOM
+  // element dispatches its click.
+  useEffect(() => {
+    if (!appleAvailable) return;
+    const el = applePayButtonRef.current;
+    if (!el) return;
+    const onClick = () => handleApplePayClickRef.current();
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, [appleAvailable]);
 
   const handleGooglePayClickRef = useRef<() => void>(() => {});
   handleGooglePayClickRef.current = async () => {
@@ -718,17 +750,14 @@ export default function GivingLinkForm({
       {!isRecurring && (appleAvailable || googleAvailable) && (
         <div className="space-y-2">
           {appleAvailable && (
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Donate with Apple Pay"
-              onClick={() => walletProcessing === null && handleApplePayClick()}
-              onKeyDown={(e) => e.key === "Enter" && walletProcessing === null && handleApplePayClick()}
-              className={walletProcessing !== null ? "opacity-50 pointer-events-none" : "cursor-pointer"}
-            >
-              {/* Apple's official button web component — never hand-styled, per Apple's HIG. */}
+            <div className={walletProcessing !== null ? "opacity-50 pointer-events-none" : undefined}>
+              {/* Apple's official button web component — never hand-styled, per Apple's HIG.
+                  Click is bound natively via applePayButtonRef in a useEffect above, not
+                  a React onClick on this element or an ancestor — it doesn't reliably
+                  deliver through React's synthetic event system in Safari. */}
               {/* @ts-expect-error -- custom element from Apple's Apple Pay button SDK */}
               <apple-pay-button
+                ref={applePayButtonRef}
                 buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
                 type="donate"
                 locale="en-US"
