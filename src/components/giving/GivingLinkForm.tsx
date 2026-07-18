@@ -327,9 +327,21 @@ export default function GivingLinkForm({
         return createGooglePayButton(config, () => handleGooglePayClickRef.current());
       })
       .then((button) => {
-        if (cancelled || !button || !googlePayButtonRef.current) return;
+        if (cancelled) {
+          walletLog("Google Pay: button created but effect was cancelled before append (re-render raced it) — discarding");
+          return;
+        }
+        if (!button) {
+          walletLog("Google Pay: createGooglePayButton resolved with no button (isReadyToPay must have returned false)");
+          return;
+        }
+        if (!googlePayButtonRef.current) {
+          walletLog("Google Pay: button created but the container ref is gone — component unmounted mid-flight");
+          return;
+        }
         googlePayButtonRef.current.innerHTML = "";
         googlePayButtonRef.current.appendChild(button);
+        walletLog("Google Pay: button appended to DOM");
       })
       .catch((err) => walletLog("Google Pay: setup threw", err));
     return () => {
