@@ -32,7 +32,14 @@ const securityHeaders = [
       // origin during isReadyToPay/loadPaymentData.
       "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com",
       // Google Pay's payment sheet renders inside an iframe from pay.google.com.
-      "frame-src 'self' https://pay.google.com",
+      // js.finix.com: the Finix card-tokenization form itself is mounted as
+      // an iframe (application/index.html) — adding an explicit frame-src
+      // above for Google Pay without also listing this domain silently
+      // broke card payments (frame-src has no "inherit the rest from
+      // script-src" behavior; an explicit frame-src fully replaces the
+      // default-src fallback for iframes, so every framed origin needs its
+      // own entry here).
+      "frame-src 'self' https://pay.google.com https://js.finix.com",
       // Prevent this page from being embedded anywhere
       "frame-ancestors 'none'",
     ].join("; "),
@@ -71,11 +78,18 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://js.finix.com",
+              // /embed/[slug] renders the same GivingLinkForm as /g/[slug] —
+              // including its own Google/Apple Pay buttons and Finix card
+              // iframe — so it needs the identical wallet allowances as the
+              // main CSP block above, kept in sync deliberately rather than
+              // shared via a helper since these two blocks already diverge
+              // on X-Frame-Options/frame-ancestors for the embed use case.
+              "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
-              "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com",
+              "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com",
+              "frame-src 'self' https://pay.google.com https://js.finix.com",
               "frame-ancestors *",
             ].join("; "),
           },
