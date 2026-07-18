@@ -165,7 +165,17 @@ export default function GivingLinkForm({
     walletResult: ApplePayResult | GooglePayResult
   ): Promise<{ success: boolean }> => {
     try {
-      const fraudSessionId = await getFraudSessionId(finixMerchantId);
+      walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
+      // getFraudSessionId has no internal timeout — on a slow mobile
+      // connection (or if cdn.sift.com is blocked/slow) it can hang
+      // indefinitely with the wallet sheet stuck open and nothing ever
+      // reaching /donate, no error to debug from. Race it against a
+      // timeout so a stall becomes a visible, retryable failure instead.
+      const fraudSessionId = await Promise.race([
+        getFraudSessionId(finixMerchantId),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Fraud session request timed out after 10s")), 10000)),
+      ]);
+      walletLog(`${method}: fraud session obtained, submitting donation`);
       const res = await fetch(`/api/g/${slug}/donate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -188,7 +198,8 @@ export default function GivingLinkForm({
         }),
       });
       const data = await res.json().catch(() => null);
-      
+      walletLog(`${method}: /donate response`, { status: res.status, ok: res.ok, success: data?.success, code: data?.code });
+
       if (!res.ok || !data?.success) {
         setWalletProcessing(null);
         const errMsg = data?.message || (typeof data?.error === 'string' ? data.error : data?.error?.message) || "We couldn’t complete your donation. Please try again.";
@@ -216,7 +227,12 @@ export default function GivingLinkForm({
         });
       }
       return { success: true };
-    } catch {
+    } catch (err) {
+      // Previously a bare `catch {}` — swallowed the real error (e.g. a
+      // fraud-session timeout, network failure, or thrown exception)
+      // completely, with nothing to debug from. The donor-facing message
+      // stays generic; this is only visible in sandbox.
+      walletLog(`${method}: submitWalletPayment threw`, err);
       setWalletProcessing(null);
       setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
       return { success: false };
