@@ -24,13 +24,16 @@ const securityHeaders = [
       // appear, regardless of any env var configuration. This was the
       // second (independent) root cause of Google/Apple Pay not showing up,
       // alongside the missing wallet env vars — see loadPublicGivingPageData.ts.
-      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com",
+      // cdn.sift.com: Finix's own fraud-detection SDK (Finix.Auth, wraps
+      // Sift Science), loaded by finix.js itself to produce fraud_session_id
+      // — required for every donation, wallet or card, not wallet-specific.
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
       // pay.google.com: Google Pay's client makes XHR calls to its own
       // origin during isReadyToPay/loadPaymentData.
-      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com",
+      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
       // Google Pay's payment sheet renders inside an iframe from pay.google.com.
       // js.finix.com: the Finix card-tokenization form itself is mounted as
       // an iframe (application/index.html) — adding an explicit frame-src
@@ -84,11 +87,12 @@ const nextConfig: NextConfig = {
               // main CSP block above, kept in sync deliberately rather than
               // shared via a helper since these two blocks already diverge
               // on X-Frame-Options/frame-ancestors for the embed use case.
-              "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com",
+              // cdn.sift.com: Finix's own fraud-detection SDK, required by finix.js.
+              "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
-              "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com",
+              "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
               "frame-src 'self' https://pay.google.com https://js.finix.com",
               "frame-ancestors *",
             ].join("; "),

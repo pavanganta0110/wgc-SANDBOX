@@ -132,7 +132,10 @@ export function beginApplePaySession(opts: {
 
   session.onpaymentauthorized = async (event) => {
     try {
-      const walletToken = JSON.stringify(event.payment.token.paymentData);
+      // Finix expects third_party_token as the stringified form of
+      // { token: <the full Apple Pay token object> } — not just the inner
+      // paymentData — per docs.finix.com's Apple Pay guide.
+      const walletToken = JSON.stringify({ token: event.payment.token });
       const billingContact = contactToBillingContact(event.payment.billingContact);
       const result = await opts.onAuthorized({ walletToken, billingContact });
       session.completePayment({
