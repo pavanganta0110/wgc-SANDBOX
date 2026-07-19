@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
 import { isValidEmail } from "@/lib/donors/donorContact";
@@ -352,6 +353,8 @@ export default function TeamSettingsPanel({
                 <thead>
                   <tr className="text-left text-xs font-semibold text-slate-500 border-b border-slate-100">
                     <th className="py-2 pr-4">Member</th>
+                    <th className="py-2 pr-4">Role</th>
+                    <th className="py-2 pr-4">Status</th>
                     <th className="py-2 pr-4 text-right">Active Links</th>
                     <th className="py-2 pr-4 text-right">Transactions</th>
                     <th className="py-2 pr-4 text-right">Gross</th>
@@ -359,23 +362,44 @@ export default function TeamSettingsPanel({
                     <th className="py-2 pr-4 text-right">Net</th>
                     <th className="py-2 pr-4 text-right">Recurring Donors</th>
                     <th className="py-2 pr-4">Last Activity</th>
+                    <th className="py-2 pr-4" />
                   </tr>
                 </thead>
                 <tbody>
-                  {metrics.map((m) => (
-                    <tr key={m.userId} className="border-b border-slate-50">
-                      <td className="py-2 pr-4 font-medium text-slate-900">{m.email}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700">{m.activeGivingLinkCount}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700">{m.transactionCount}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700">{formatCents(m.grossAttributedCents)}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700">{formatCents(m.refundAmountCents)}</td>
-                      <td className="py-2 pr-4 text-right font-semibold text-slate-900">{formatCents(m.netAttributedCents)}</td>
-                      <td className="py-2 pr-4 text-right text-slate-700">{m.recurringDonorCount}</td>
-                      <td className="py-2 pr-4 text-slate-500">
-                        {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : "Never"}
-                      </td>
-                    </tr>
-                  ))}
+                  {metrics.map((m) => {
+                    const member = members.find((mm) => mm.id === m.userId);
+                    return (
+                      <tr
+                        key={m.userId}
+                        className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer"
+                        onClick={() => {
+                          window.location.href = `/merchant/settings/team/${m.userId}`;
+                        }}
+                      >
+                        <td className="py-2 pr-4 font-medium text-slate-900">{m.email}</td>
+                        <td className="py-2 pr-4 text-slate-600">{member ? ROLE_LABELS[member.role] || member.role : "—"}</td>
+                        <td className="py-2 pr-4">{member ? <StateBadge state={memberStatus(member)} /> : "—"}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{m.activeGivingLinkCount}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{m.transactionCount}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{formatCents(m.grossAttributedCents)}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{formatCents(m.refundAmountCents)}</td>
+                        <td className="py-2 pr-4 text-right font-semibold text-slate-900">{formatCents(m.netAttributedCents)}</td>
+                        <td className="py-2 pr-4 text-right text-slate-700">{m.recurringDonorCount}</td>
+                        <td className="py-2 pr-4 text-slate-500">
+                          {m.lastActivity ? new Date(m.lastActivity).toLocaleDateString() : "Never"}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Link
+                            href={`/merchant/settings/team/${m.userId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-600 hover:underline text-xs font-semibold whitespace-nowrap"
+                          >
+                            View Details
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
