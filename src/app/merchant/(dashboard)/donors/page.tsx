@@ -92,13 +92,12 @@ export default async function DonorsPage({
   const permissions = getDonorPermissions(auth.rawRole);
   const sp = await searchParams;
 
-  // Team-access: donor list scoped to donors with attributed activity for
-  // the selected user (resolveScopedDonorIds, same helper used by the
-  // donor-export and donor-detail routes). Summary/trend/growth analytics
-  // cards above the table remain organization-wide — those loaders don't
-  // yet accept a scope filter.
+  // Team-access: donor list and every summary/trend/growth analytics card
+  // are scoped to donors with attributed activity for the selected user
+  // (resolveScopedDonorIds, same helper used by the donor-export and
+  // donor-detail routes).
   const viewScope = await resolveViewScope(auth);
-  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
+  const scopedDonorIds = (await resolveScopedDonorIds(auth, viewScope)) ?? undefined;
 
   const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -117,19 +116,19 @@ export default async function DonorsPage({
   // limit (session-mode pool_size: 15) on a single page load, confirmed by
   // a real 500 against the live pooler. Trading a bit of latency for not
   // blowing the connection budget.
-  const summary = await loadDonorSummary(churchId, dateFilter);
-  const trend = await loadDonationTrend(churchId, dateFilter, "weekly");
-  const topDonors = await loadTopDonors(churchId, dateFilter, topMetric, 10);
+  const summary = await loadDonorSummary(churchId, dateFilter, scopedDonorIds);
+  const trend = await loadDonationTrend(churchId, dateFilter, "weekly", scopedDonorIds);
+  const topDonors = await loadTopDonors(churchId, dateFilter, topMetric, 10, scopedDonorIds);
 
   let previousPeriodFilter: { gte: Date; lte?: Date } | undefined;
   if (dateFilter?.lte) {
     const spanMs = dateFilter.lte.getTime() - dateFilter.gte.getTime();
     previousPeriodFilter = { gte: new Date(dateFilter.gte.getTime() - spanMs), lte: new Date(dateFilter.gte.getTime() - 1) };
   }
-  const extended = await loadDonorAnalyticsExtended(churchId, dateFilter, previousPeriodFilter);
-  const growth = await loadDonorGrowth(churchId, dateFilter, "weekly");
+  const extended = await loadDonorAnalyticsExtended(churchId, dateFilter, previousPeriodFilter, scopedDonorIds);
+  const growth = await loadDonorGrowth(churchId, dateFilter, "weekly", scopedDonorIds);
   const orgInstruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: { not: null } },
+    where: { churchId, donorId: scopedDonorIds ? { in: scopedDonorIds } : { not: null } },
     select: { finixPaymentInstrumentId: true },
   });
   const paymentMethodMix = await loadDonorPaymentMethodMix(

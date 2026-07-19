@@ -29,11 +29,11 @@ export interface DonorSummary {
  * "no loading all donors into the browser" rule is actually protecting
  * against.
  */
-export async function loadDonorSummary(churchId: string, dateFilter?: DateRangeFilter): Promise<DonorSummary> {
-  const totalDonors = await prisma.donor.count({ where: { churchId, archivedAt: null } });
+export async function loadDonorSummary(churchId: string, dateFilter?: DateRangeFilter, donorIdIn?: string[]): Promise<DonorSummary> {
+  const totalDonors = await prisma.donor.count({ where: { churchId, archivedAt: null, ...(donorIdIn ? { id: { in: donorIdIn } } : {}) } });
 
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: { not: null } },
+    where: { churchId, donorId: donorIdIn ? { in: donorIdIn } : { not: null } },
     select: { finixPaymentInstrumentId: true },
   });
   const instrumentIds = instruments.map((i) => i.finixPaymentInstrumentId);
@@ -56,7 +56,7 @@ export async function loadDonorSummary(churchId: string, dateFilter?: DateRangeF
   const averageDonationCents = donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0;
 
   const candidates = await prisma.donor.findMany({
-    where: { churchId, archivedAt: null },
+    where: { churchId, archivedAt: null, ...(donorIdIn ? { id: { in: donorIdIn } } : {}) },
     select: { id: true, createdAt: true },
     take: DONOR_CANDIDATE_CAP,
   });

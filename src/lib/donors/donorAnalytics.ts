@@ -27,9 +27,10 @@ export async function loadDonationTrend(
   churchId: string,
   dateFilter: DateRangeFilter | undefined,
   granularity: "daily" | "weekly" | "monthly",
+  donorIdIn?: string[],
 ): Promise<TrendPoint[]> {
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: { not: null } },
+    where: { churchId, donorId: donorIdIn ? { in: donorIdIn } : { not: null } },
     select: { finixPaymentInstrumentId: true, donorId: true },
   });
   const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));
@@ -131,9 +132,10 @@ export async function loadTopDonors(
   dateFilter: DateRangeFilter | undefined,
   metric: TopDonorMetric,
   limit: number,
+  donorIdIn?: string[],
 ): Promise<{ rows: TopDonorRow[]; totalForMetricCents: number }> {
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: { not: null } },
+    where: { churchId, donorId: donorIdIn ? { in: donorIdIn } : { not: null } },
     select: { finixPaymentInstrumentId: true, donorId: true },
   });
   const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));

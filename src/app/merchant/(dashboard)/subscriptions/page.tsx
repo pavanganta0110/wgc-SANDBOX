@@ -81,7 +81,7 @@ export default async function SubscriptionsPage({
       page,
       PAGE_SIZE,
     ),
-    loadSubscriptionsAnalytics(churchId),
+    loadSubscriptionsAnalytics(churchId, 30, scopedUserId),
   ]);
 
   const { rows, totalCount } = list;

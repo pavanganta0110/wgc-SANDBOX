@@ -79,7 +79,7 @@ export default async function RecurringDonorsPage({
       page,
       PAGE_SIZE,
     ),
-    loadRecurringDonorsAnalytics(churchId),
+    loadRecurringDonorsAnalytics(churchId, 30, scopedUserId),
   ]);
 
   const { rows, totalCount } = list;
