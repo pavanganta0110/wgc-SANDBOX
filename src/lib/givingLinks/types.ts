@@ -107,6 +107,7 @@ export interface BrandingSettings {
   hideContactInfo: boolean;
   thankYouMessage: string;
   supportEmail: string;
+  showPoweredByWgc?: boolean;
 }
 
 export const DEFAULT_LIGHT_BRANDING: BrandingModeSettings = {
@@ -142,16 +143,21 @@ export const DEFAULT_BRANDING_SETTINGS: BrandingSettings = {
   hideContactInfo: false,
   thankYouMessage: "",
   supportEmail: "",
+  showPoweredByWgc: true,
 };
 
 export function parseBrandingSettings(json: unknown): BrandingSettings {
   if (!json || typeof json !== "object") return DEFAULT_BRANDING_SETTINGS;
   const parsed = json as Partial<BrandingSettings>;
+  const showPoweredByWgc = typeof parsed.showPoweredByWgc === "boolean" 
+    ? parsed.showPoweredByWgc 
+    : !(parsed.hideFooter ?? false);
   return {
     ...DEFAULT_BRANDING_SETTINGS,
     ...parsed,
     light: { ...DEFAULT_LIGHT_BRANDING, ...(parsed.light ?? {}) },
     dark: { ...DEFAULT_DARK_BRANDING, ...(parsed.dark ?? {}) },
+    showPoweredByWgc,
   };
 }
 export function resolveGivingPageLogo({

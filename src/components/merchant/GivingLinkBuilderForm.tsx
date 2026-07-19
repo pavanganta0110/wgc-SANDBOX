@@ -438,6 +438,24 @@ export default function GivingLinkBuilderForm({
             </Section>
           )}
           <Section title="Basic Link Information">
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 mb-4">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={state.branding.showPoweredByWgc !== false}
+                  onChange={(e) => update("branding", { 
+                    ...state.branding, 
+                    showPoweredByWgc: e.target.checked,
+                    hideFooter: !e.target.checked
+                  })}
+                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Show “Powered by WGC”
+              </label>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                Display a small ‘Powered by WGC’ link on your giving page or embedded form. You can turn this off for a fully white-labeled experience.
+              </p>
+            </div>
             <div>
               <FieldLabel>Internal Name *</FieldLabel>
               <input
@@ -827,10 +845,6 @@ export default function GivingLinkBuilderForm({
             </div>
             <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={state.branding.hideFooter} onChange={(e) => update("branding", { ...state.branding, hideFooter: e.target.checked })} />
-                Hide WGC footer
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={state.branding.hideChurchAddress} onChange={(e) => update("branding", { ...state.branding, hideChurchAddress: e.target.checked })} />
                 Hide church address
               </label>
@@ -866,6 +880,7 @@ export default function GivingLinkBuilderForm({
             publicTitle={state.publicTitle}
             description={state.description}
             hideFooter={state.branding.hideFooter}
+            showPoweredByWgc={state.branding.showPoweredByWgc}
           />
         </div>
       </div>

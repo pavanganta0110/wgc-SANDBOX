@@ -82,9 +82,29 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           serverAvailability={serverAvailability}
         />
 
-        {!branding.hideFooter && (
-          <p className="text-center text-xs text-slate-300 mt-6">Powered by WGC Payments</p>
-        )}
+        {(() => {
+          const wgcUrl = (() => {
+            const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+            if (url.includes("vercel.app") || url.includes("localhost") || url.includes("sandbox")) {
+              return "https://wgcpayments.com";
+            }
+            return url;
+          })();
+          return (
+            branding.showPoweredByWgc !== false && (
+              <div className="text-center mt-6">
+                <a
+                  href={wgcUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Powered by WGC
+                </a>
+              </div>
+            )
+          );
+        })()}
       </div>
     </div>
   );

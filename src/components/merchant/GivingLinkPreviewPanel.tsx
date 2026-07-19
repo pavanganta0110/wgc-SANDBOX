@@ -28,6 +28,7 @@ export default function GivingLinkPreviewPanel({
   publicTitle,
   description,
   hideFooter,
+  showPoweredByWgc,
 }: {
   churchName: string;
   light: BrandingModeSettings;
@@ -50,6 +51,7 @@ export default function GivingLinkPreviewPanel({
   publicTitle: string;
   description: string;
   hideFooter: boolean;
+  showPoweredByWgc?: boolean;
 }) {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
@@ -180,7 +182,18 @@ export default function GivingLinkPreviewPanel({
                 onFormError={() => setFormError(true)}
               />
 
-              {!hideFooter && <p className="text-center text-xs text-slate-300 mt-6">Powered by WGC Payments</p>}
+              {showPoweredByWgc !== false && (
+                <div className="text-center mt-6">
+                  <a
+                    href="https://wgcpayments.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    Powered by WGC
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>
