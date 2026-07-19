@@ -228,7 +228,7 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
   }
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
-      <table className="w-full text-sm min-w-[1000px]">
+      <table className="w-full text-sm min-w-[1200px]">
         <thead>
           <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
             <th className="px-6 py-3">Date</th>
@@ -236,9 +236,11 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
             <th className="px-6 py-3">Giving Link</th>
             <th className="px-6 py-3">Payment Method</th>
             <th className="px-6 py-3 text-right">Gross</th>
+            <th className="px-6 py-3 text-right">Fee</th>
             <th className="px-6 py-3 text-right">Refunded</th>
             <th className="px-6 py-3 text-right">Net</th>
             <th className="px-6 py-3">Status</th>
+            <th className="px-6 py-3">Settlement</th>
           </tr>
         </thead>
         <tbody>
@@ -249,9 +251,19 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
               <td className="px-6 py-3 text-slate-600">{t.givingLinkName || "—"}</td>
               <td className="px-6 py-3 text-slate-600">{t.paymentMethodType}</td>
               <td className="px-6 py-3 text-right text-slate-700">{formatCents(t.amountCents)}</td>
+              <td className="px-6 py-3 text-right text-slate-600">{t.feeCents > 0 ? formatCents(t.feeCents) : "—"}</td>
               <td className="px-6 py-3 text-right text-slate-600">{t.refundedCents > 0 ? formatCents(t.refundedCents) : "—"}</td>
               <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(t.netCents)}</td>
               <td className="px-6 py-3"><StateBadge state={t.status} /></td>
+              <td className="px-6 py-3">
+                {t.settlementId ? (
+                  <Link href={`/merchant/settlements?id=${t.settlementId}`} className="text-blue-600 hover:underline text-xs font-semibold">
+                    {t.settlementState === "SETTLED" || t.settledAt ? "Settled" : t.settlementState || "View"}
+                  </Link>
+                ) : (
+                  <span className="text-slate-400 text-xs">Not yet settled</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

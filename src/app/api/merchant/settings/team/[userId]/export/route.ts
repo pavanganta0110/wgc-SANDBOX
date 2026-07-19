@@ -15,9 +15,12 @@ interface ExportRow {
   donorName: string;
   paymentMethodType: string;
   amountCents: number;
+  feeCents: number;
   refundedCents: number;
   netCents: number;
   status: string;
+  settlementId: string;
+  settlementStatus: string;
 }
 
 const COLUMNS: CsvColumn<ExportRow>[] = [
@@ -29,9 +32,12 @@ const COLUMNS: CsvColumn<ExportRow>[] = [
   { header: "Donor Name", value: (r) => r.donorName },
   { header: "Payment Method", value: (r) => r.paymentMethodType },
   { header: "Gross Amount", value: (r) => formatCents(r.amountCents) },
+  { header: "Fee Amount", value: (r) => formatCents(r.feeCents) },
   { header: "Refund Amount", value: (r) => formatCents(r.refundedCents) },
   { header: "Net Amount", value: (r) => formatCents(r.netCents) },
   { header: "Status", value: (r) => r.status },
+  { header: "Settlement ID", value: (r) => r.settlementId },
+  { header: "Settlement Status", value: (r) => r.settlementStatus },
 ];
 
 /**
@@ -68,9 +74,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ userId: 
     donorName: t.donorName,
     paymentMethodType: t.paymentMethodType,
     amountCents: t.amountCents,
+    feeCents: t.feeCents,
     refundedCents: t.refundedCents,
     netCents: t.netCents,
     status: t.status,
+    settlementId: t.settlementId || "",
+    settlementStatus: t.settlementId ? t.settlementState || (t.settledAt ? "SETTLED" : "PENDING") : "",
   }));
 
   const csv = buildCsvExport(rows, COLUMNS);

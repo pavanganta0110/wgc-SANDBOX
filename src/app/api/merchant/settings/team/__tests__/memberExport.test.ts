@@ -38,9 +38,13 @@ describe("GET /api/merchant/settings/team/[userId]/export", () => {
         givingLinkName: "Spring Drive",
         paymentMethodType: "CARD",
         amountCents: 5000,
+        feeCents: 175,
         refundedCents: 0,
         netCents: 5000,
         status: "SUCCEEDED",
+        settlementId: "stl-1",
+        settlementState: "SETTLED",
+        settledAt: new Date("2026-01-03"),
       },
     ]);
 
@@ -85,9 +89,13 @@ describe("GET /api/merchant/settings/team/[userId]/export", () => {
         givingLinkName: "Spring Drive",
         paymentMethodType: "CARD",
         amountCents: 5000,
+        feeCents: 175,
         refundedCents: 0,
         netCents: 5000,
         status: "SUCCEEDED",
+        settlementId: "stl-1",
+        settlementState: "SETTLED",
+        settledAt: new Date("2026-01-03"),
       },
     ]);
 
@@ -96,7 +104,37 @@ describe("GET /api/merchant/settings/team/[userId]/export", () => {
     const csv = await res.text();
     const header = csv.split("\n")[0];
     expect(header).toBe(
-      "Member Email,Giving Link,Transaction ID,Finix Transfer ID,Donation Date,Donor Name,Payment Method,Gross Amount,Refund Amount,Net Amount,Status"
+      "Member Email,Giving Link,Transaction ID,Finix Transfer ID,Donation Date,Donor Name,Payment Method,Gross Amount,Fee Amount,Refund Amount,Net Amount,Status,Settlement ID,Settlement Status"
     );
+  });
+
+  it("includes the processing fee and the settlement the money was deposited in", async () => {
+    mockAuth.mockResolvedValue({ userId: "owner-1", churchId: "church-a", rawRole: "owner", role: "owner" });
+    mockSummary.mockResolvedValue({ userId: "user-2", email: "fund@church-a.com" });
+    mockTransactions.mockResolvedValue([
+      {
+        paymentId: "p1",
+        finixTransferId: "tr-1",
+        createdAt: new Date("2026-01-01"),
+        donorName: "Jane Doe",
+        givingLinkName: "Spring Drive",
+        paymentMethodType: "CARD",
+        amountCents: 5000,
+        feeCents: 175,
+        refundedCents: 0,
+        netCents: 5000,
+        status: "SUCCEEDED",
+        settlementId: "stl-1",
+        settlementState: "SETTLED",
+        settledAt: new Date("2026-01-03"),
+      },
+    ]);
+
+    const { GET } = await loadModule();
+    const res = await GET(req(), { params: Promise.resolve({ userId: "user-2" }) });
+    const csv = await res.text();
+    expect(csv).toContain("$1.75"); // fee
+    expect(csv).toContain("stl-1"); // settlement id
+    expect(csv).toContain("SETTLED");
   });
 });

@@ -128,15 +128,23 @@ export interface TeamMemberTransactionRow {
   givingLinkName: string | null;
   paymentMethodType: string;
   amountCents: number;
+  feeCents: number;
   refundedCents: number;
   netCents: number;
   status: string;
+  settlementId: string | null;
+  settlementState: string | null;
+  settledAt: Date | null;
 }
 
 /** Payment.attributedUserId = userId is the only filter — the same
  * attribution field every other scoped surface in this app bridges
  * through. Refund lookups join by finixTransferId, same pattern as
- * loadTeamMemberSummary above. */
+ * loadTeamMemberSummary above. Fee and settlement come from FinixTransfer
+ * (feeCents, finixSettlementId) — the same authoritative processing-fee
+ * field the Payment Detail panel reads (see PaymentDetailPanel.tsx's Fee
+ * Section: transfer.feeCents, not a Payment-model field), then
+ * FinixSettlement for the batch that transfer was actually deposited in. */
 export async function loadTeamMemberTransactions(churchId: string, userId: string): Promise<TeamMemberTransactionRow[]> {
   const payments = await prisma.payment.findMany({
     where: { churchId, attributedUserId: userId },
@@ -158,7 +166,7 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
   const givingLinkIds = payments.map((p) => p.givingLinkId).filter((id): id is string => Boolean(id));
   const transferIds = payments.map((p) => p.finixTransferId).filter((id): id is string => Boolean(id));
 
-  const [donors, givingLinks, refunds] = await Promise.all([
+  const [donors, givingLinks, refunds, transfers] = await Promise.all([
     donorIds.length ? prisma.donor.findMany({ where: { id: { in: donorIds } }, select: { id: true, name: true } }) : Promise.resolve([]),
     givingLinkIds.length
       ? prisma.givingLink.findMany({ where: { id: { in: givingLinkIds } }, select: { id: true, internalName: true } })
@@ -169,6 +177,12 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
           select: { finixOriginalTransferId: true, amountCents: true },
         })
       : Promise.resolve([]),
+    transferIds.length
+      ? prisma.finixTransfer.findMany({
+          where: { churchId, finixTransferId: { in: transferIds } },
+          select: { finixTransferId: true, feeCents: true, finixSettlementId: true },
+        })
+      : Promise.resolve([]),
   ]);
   const donorMap = new Map(donors.map((d) => [d.id, d.name]));
   const linkMap = new Map(givingLinks.map((l) => [l.id, l.internalName]));
@@ -177,9 +191,21 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
     if (!r.finixOriginalTransferId) continue;
     refundByTransfer.set(r.finixOriginalTransferId, (refundByTransfer.get(r.finixOriginalTransferId) || 0) + (r.amountCents || 0));
   }
+  const transferMap = new Map(transfers.map((t) => [t.finixTransferId, t]));
+
+  const settlementIds = transfers.map((t) => t.finixSettlementId).filter((id): id is string => Boolean(id));
+  const settlements = settlementIds.length
+    ? await prisma.finixSettlement.findMany({
+        where: { finixSettlementId: { in: settlementIds } },
+        select: { finixSettlementId: true, state: true, settledAt: true },
+      })
+    : [];
+  const settlementMap = new Map(settlements.map((s) => [s.finixSettlementId, s]));
 
   return payments.map((p) => {
     const refundedCents = p.finixTransferId ? refundByTransfer.get(p.finixTransferId) || 0 : 0;
+    const transfer = p.finixTransferId ? transferMap.get(p.finixTransferId) : undefined;
+    const settlement = transfer?.finixSettlementId ? settlementMap.get(transfer.finixSettlementId) : undefined;
     return {
       paymentId: p.id,
       finixTransferId: p.finixTransferId,
@@ -188,9 +214,13 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
       givingLinkName: p.givingLinkId ? linkMap.get(p.givingLinkId) || null : null,
       paymentMethodType: p.paymentMethodType,
       amountCents: p.amountCents,
+      feeCents: transfer?.feeCents || 0,
       refundedCents,
       netCents: p.amountCents - refundedCents,
       status: p.status,
+      settlementId: settlement?.finixSettlementId || null,
+      settlementState: settlement?.state || null,
+      settledAt: settlement?.settledAt || null,
     };
   });
 }

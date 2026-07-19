@@ -6,6 +6,8 @@ const mockPrisma = {
   payment: { findMany: vi.fn() },
   finixRefundOrReversal: { findMany: vi.fn() },
   finixSubscription: { findMany: vi.fn() },
+  finixTransfer: { findMany: vi.fn() },
+  finixSettlement: { findMany: vi.fn() },
   donor: { findMany: vi.fn() },
 };
 
@@ -107,6 +109,34 @@ describe("loadTeamMemberTransactions", () => {
     expect(mockPrisma.payment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ churchId: "church-a", attributedUserId: "user-1" }) })
     );
+  });
+
+  it("includes the processing fee and the settlement the payment was deposited in", async () => {
+    mockPrisma.payment.findMany.mockResolvedValue([
+      {
+        id: "p1",
+        finixTransferId: "tr-1",
+        donorId: null,
+        givingLinkId: null,
+        paymentMethodType: "CARD",
+        amountCents: 5000,
+        status: "SUCCEEDED",
+        createdAt: new Date("2026-01-01"),
+      },
+    ]);
+    mockPrisma.finixRefundOrReversal.findMany.mockResolvedValue([]);
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 175, finixSettlementId: "stl-1" }]);
+    mockPrisma.finixSettlement.findMany.mockResolvedValue([{ finixSettlementId: "stl-1", state: "SETTLED", settledAt: new Date("2026-01-03") }]);
+
+    const { loadTeamMemberTransactions } = await loadModule();
+    const rows = await loadTeamMemberTransactions("church-a", "user-1");
+
+    expect(mockPrisma.finixTransfer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ churchId: "church-a", finixTransferId: { in: ["tr-1"] } }) })
+    );
+    expect(rows[0].feeCents).toBe(175);
+    expect(rows[0].settlementId).toBe("stl-1");
+    expect(rows[0].settlementState).toBe("SETTLED");
   });
 });
 
