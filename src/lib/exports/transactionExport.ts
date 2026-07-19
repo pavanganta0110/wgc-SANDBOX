@@ -215,7 +215,7 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Giving Link Name", value: (r) => r.givingLinkName },
   { header: "Giving Link ID", value: (r) => r.givingLinkId },
   { header: "WGC Payment ID", value: (r) => r.wgcPaymentId },
-  { header: "Finix Transfer ID", value: (r) => r.finixTransferId },
+  { header: "Processor Transaction ID", value: (r) => r.finixTransferId },
   { header: "Created At", value: (r) => formatIsoOrEmpty(r.createdAt) },
   { header: "Currency", value: (r) => r.currency },
   { header: "Donor Name", value: (r) => r.donorName },
@@ -232,7 +232,7 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Donation Amount", value: (r) => formatMoneyOrEmpty(r.donationAmountCents) },
   { header: "Donor Processing Fee", value: (r) => formatMoneyOrEmpty(r.donorProcessingFeeCents) },
   { header: "Total Charged to Donor", value: (r) => formatMoneyOrEmpty(r.totalChargedToDonorCents) },
-  { header: "Finix Processing Fee", value: (r) => formatMoneyOrEmpty(r.finixProcessingFeeCents) },
+  { header: "Processor Fee", value: (r) => formatMoneyOrEmpty(r.finixProcessingFeeCents) },
   { header: "WGC Supplemental Fee", value: (r) => formatMoneyOrEmpty(r.wgcSupplementalFeeCents) },
   { header: "Other Processor Fees", value: (r) => formatMoneyOrEmpty(r.otherProcessorFeesCents) },
   { header: "Total Fees", value: (r) => formatMoneyOrEmpty(r.totalFeesCents) },
@@ -456,10 +456,10 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
     let dataNotes = "";
     if (!p.finixTransferId) {
       reconciliationStatus = "NOT_SETTLED";
-      dataNotes = "No Finix transfer linked to this payment yet";
+      dataNotes = "No processor transaction linked to this payment yet";
     } else if (!settlement) {
       reconciliationStatus = "NOT_SETTLED";
-      dataNotes = "Payment has not yet been included in a Finix settlement";
+      dataNotes = "Payment has not yet been included in a settlement";
     } else if (!deposit) {
       reconciliationStatus = "PENDING_SETTLEMENT";
       dataNotes = "Settlement created; deposit/funding transfer not yet available";
@@ -477,7 +477,7 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
       dataNotes = dataNotes ? `${dataNotes}; historical transaction has no giving link` : "Historical transaction has no giving link";
     }
     if (finixProcessingFeeCents === null) {
-      dataNotes = dataNotes ? `${dataNotes}; fee data pending from Finix` : "Fee data pending from Finix";
+      dataNotes = dataNotes ? `${dataNotes}; processor fee data pending confirmation` : "Processor fee data pending confirmation";
     }
 
     return {
