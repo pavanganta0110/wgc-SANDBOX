@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { getDisputePermissions } from "@/lib/finix/disputePermissions";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
 /**
@@ -34,6 +36,20 @@ export async function GET(
   });
   if (!dispute) {
     return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
+  }
+
+  // Team-access: canView no longer implies "every dispute in the church" —
+  // FUNDRAISER/VIEWER are scoped to disputes whose originating payment is
+  // attributed to them (see getDisputePermissions).
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope);
+  if (scopedUserId) {
+    const payment = dispute.finixTransferId
+      ? await prisma.payment.findFirst({ where: { finixTransferId: dispute.finixTransferId, churchId: auth.churchId } })
+      : null;
+    if (payment?.attributedUserId !== scopedUserId) {
+      return NextResponse.json({ error: "Dispute not found" }, { status: 404 });
+    }
   }
 
   const evidence = await prisma.disputeEvidence.findFirst({

@@ -11,16 +11,16 @@ export interface DisputePermissions {
 }
 
 /**
- * Team-access Checkpoint 4A correction: dispute reads have no row-level
- * attribution wired yet (that would mean scoping dispute list/detail/notes
- * through their related payment's attribution field — not implemented this
- * checkpoint). Per the approved fallback policy ("if safe row-level scoping
- * cannot be implemented immediately, deny FUNDRAISER and VIEWER entirely —
- * this is a data-exposure issue, not low-severity"), canView is now
- * owner/admin-only via canManageOrgSettings, not the previous
- * canViewAllTransactions/canViewOwnTransactions composition (which
- * incorrectly let FUNDRAISER/VIEWER see every dispute in the church).
- * Revisit once dispute reads are actually scoped through their payment.
+ * Team-access Checkpoint 4A correction (revisited): dispute reads are now
+ * scoped through their related payment's attribution field — see
+ * resolveScopedTransferIds in insightsData.ts, used by the disputes list/
+ * detail pages and the evidence-download route to filter to only disputes
+ * whose originating payment is attributed to the requester. With that
+ * scoping in place, FUNDRAISER/VIEWER can see their own disputes
+ * (canViewOwnTransactions) instead of being denied entirely; OWNER/ADMIN
+ * keep unscoped organization-wide access (canManageOrgSettings). Upload/
+ * delete/submit remain owner/admin-only — responding to a dispute is a
+ * financial action, not a visibility question.
  */
 export function getDisputePermissions(role: SessionRole | null | undefined): DisputePermissions {
   if (role === "wgc_admin") {
@@ -34,7 +34,7 @@ export function getDisputePermissions(role: SessionRole | null | undefined): Dis
 
   const base = ROLE_PERMISSIONS[normalized];
   return {
-    canView: base.canManageOrgSettings,
+    canView: base.canManageOrgSettings || base.canViewOwnTransactions,
     canUpload: base.canManageOrgSettings,
     canDelete: base.canManageOrgSettings,
     canSubmit: base.canManageOrgSettings,

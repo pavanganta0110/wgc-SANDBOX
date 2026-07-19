@@ -2,7 +2,10 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
@@ -27,19 +30,31 @@ export default async function DisputeFullDetailPage({
 }: {
   params: Promise<{ disputeId: string }>;
 }) {
-  const session = await getSession();
-
-  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
-  // matching API-route guard comment for why this back door exists
-  // otherwise.
-  if (session?.role === "wgc_admin") {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/dashboard");
+    throw err;
+  }
+  const churchId = auth.churchId;
+  const { disputeId } = await params;
+  const permissions = getDisputePermissions(auth.rawRole);
+  if (!permissions.canView) {
     redirect("/merchant/dashboard");
   }
-  const churchId = session!.churchId!;
-  const { disputeId } = await params;
-  const permissions = getDisputePermissions(session?.role);
 
   const detail = await loadDisputeDetail(disputeId, churchId);
+
+  // Team-access: FUNDRAISER/VIEWER may only open a dispute whose
+  // originating payment is attributed to them — canView being true does
+  // not mean every dispute in the church is visible to them, only their
+  // own (see resolveScopedTransferIds/getDisputePermissions).
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope);
+  if (scopedUserId && detail?.payment?.attributedUserId !== scopedUserId) {
+    redirect("/merchant/disputes");
+  }
 
   if (!detail) {
     return (

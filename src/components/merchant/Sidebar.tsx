@@ -50,7 +50,7 @@ const NAV_ITEMS: NavItem[] = [
       { name: "Bank Returns", href: "/merchant/transactions/bank-returns" },
     ],
   },
-  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert, organizationOnly: true },
+  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert },
   { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true },
   { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true },
   { name: "Donors", href: "/merchant/donors", icon: Users },

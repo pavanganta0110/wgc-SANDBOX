@@ -24,12 +24,18 @@ function makeAuth(overrides: Partial<MerchantAuthContext> = {}): MerchantAuthCon
   };
 }
 
-describe("CP4A behavioral test 11: dispute access is denied for FUNDRAISER and VIEWER", () => {
-  it("FUNDRAISER cannot view disputes", () => {
-    expect(getDisputePermissions("fundraiser").canView).toBe(false);
+describe("CP4A behavioral test 11 (revised): dispute access is scoped for FUNDRAISER and VIEWER, not denied", () => {
+  it("FUNDRAISER can view disputes (scoped to their own attributed payments via resolveScopedTransferIds)", () => {
+    expect(getDisputePermissions("fundraiser").canView).toBe(true);
   });
-  it("VIEWER cannot view disputes", () => {
-    expect(getDisputePermissions("viewer").canView).toBe(false);
+  it("VIEWER can view disputes (scoped to their own attributed payments)", () => {
+    expect(getDisputePermissions("viewer").canView).toBe(true);
+  });
+  it("FUNDRAISER and VIEWER still cannot upload, delete, or submit dispute responses", () => {
+    expect(getDisputePermissions("fundraiser").canUpload).toBe(false);
+    expect(getDisputePermissions("fundraiser").canSubmit).toBe(false);
+    expect(getDisputePermissions("viewer").canUpload).toBe(false);
+    expect(getDisputePermissions("viewer").canSubmit).toBe(false);
   });
   it("OWNER and ADMIN can still view disputes (same-church enforced at the route/query level)", () => {
     expect(getDisputePermissions("owner").canView).toBe(true);
