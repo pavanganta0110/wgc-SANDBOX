@@ -56,6 +56,22 @@ async function getInstrumentMap(churchId: string) {
   return new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
 }
 
+/**
+ * Team-access: FinixTransfer/FinixRefundOrReversal/FinixDispute/BankReturn
+ * carry no attribution of their own — bridged through
+ * Payment.attributedUserId via finixTransferId, same pattern used
+ * elsewhere (buildFinixTransferScope, donorTabs.ts resolveScopedTransferIds).
+ * undefined = organization scope, no filter applied.
+ */
+export async function resolveScopedTransferIds(churchId: string, attributedUserId: string | undefined): Promise<string[] | undefined> {
+  if (!attributedUserId) return undefined;
+  const ownPayments = await prisma.payment.findMany({
+    where: { churchId, attributedUserId, finixTransferId: { not: null } },
+    select: { finixTransferId: true },
+  });
+  return ownPayments.map((p) => p.finixTransferId!).filter(Boolean);
+}
+
 // "Card Type" and "Card Issuer Country" aren't captured anywhere in our
 // synced Finix data yet (FinixPaymentInstrumentSnapshot has no such
 // fields) — grouping by them will show everything under UNKNOWN until
@@ -89,10 +105,16 @@ export async function getPaymentsInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
   trend: string,
-  dimension: PaymentDimensionKey = "cardBrand"
+  dimension: PaymentDimensionKey = "cardBrand",
+  attributedUserId?: string
 ) {
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const instrumentMap = await getInstrumentMap(churchId);
 
@@ -164,10 +186,19 @@ export async function getAuthorizationsInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
   trend: string,
-  dimension: PaymentDimensionKey = "cardBrand"
+  dimension: PaymentDimensionKey = "cardBrand",
+  attributedUserId?: string
 ) {
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const authorizations = await prisma.finixAuthorization.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      // Only captured authorizations (finixTransferId set) can ever be
+      // bridged to an attributed Payment — a scoped view excludes
+      // voided/expired ones rather than guess who they belong to.
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const transferIds = authorizations.map((a) => a.finixTransferId).filter((id): id is string => Boolean(id));
   const transfers = transferIds.length
@@ -239,13 +270,23 @@ export async function getRefundsInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
   trend: string,
-  dimension: PaymentDimensionKey = "cardBrand"
+  dimension: PaymentDimensionKey = "cardBrand",
+  attributedUserId?: string
 ) {
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const refunds = await prisma.finixRefundOrReversal.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixOriginalTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const transferMap = new Map(transfers.map((t) => [t.finixTransferId, t]));
   const instrumentMap = await getInstrumentMap(churchId);
@@ -307,13 +348,23 @@ export async function getDisputesInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
   trend: string,
-  dimension: PaymentDimensionKey = "cardBrand"
+  dimension: PaymentDimensionKey = "cardBrand",
+  attributedUserId?: string
 ) {
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const disputes = await prisma.finixDispute.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
   const transferMap = new Map(transfers.map((t) => [t.finixTransferId, t]));
   const instrumentMap = await getInstrumentMap(churchId);
@@ -368,20 +419,31 @@ export async function getDisputesInsights(
   return { summary, byReason, byBrandTable, hasData: disputes.length > 0 };
 }
 
-export async function getBankReturnsInsights(churchId: string, dateFilter: { gte: Date; lte?: Date } | undefined, trend: string) {
+export async function getBankReturnsInsights(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  trend: string,
+  attributedUserId?: string
+) {
   // ACH volume is every card-less (bank) transfer in the period; returns are
   // sourced from the dedicated BankReturn table (real NACHA return records,
   // synced from Finix's return-subtype Transfer webhooks) rather than the
   // old heuristic of scanning FinixTransfer.subtype at read time.
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const achTransfers = await prisma.finixTransfer.findMany({
     where: {
       churchId,
       finixPaymentInstrumentId: { not: null },
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
     },
   });
   const returns = await prisma.bankReturn.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { originalTransferId: { in: scopedTransferIds } } : {}),
+    },
   });
 
   const grossAchVolumeCents = achTransfers.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);

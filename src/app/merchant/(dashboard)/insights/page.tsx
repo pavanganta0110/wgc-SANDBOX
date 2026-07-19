@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import InsightsTabs from "@/components/merchant/InsightsTabs";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import TrendFilter from "@/components/merchant/TrendFilter";
@@ -19,6 +19,10 @@ import {
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 function SummaryCards({ items }: { items: { label: string; value: string }[] }) {
   return (
@@ -66,8 +70,16 @@ export default async function InsightsPage({
     dim?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
   const {
     tab: tabParam,
     range: rangeParam,
@@ -100,7 +112,7 @@ export default async function InsightsPage({
       </div>
 
       {tab === "payments" && (
-        <PaymentsTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} />
+        <PaymentsTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} scopedUserId={scopedUserId} />
       )}
       {tab === "authorizations" && (
         <AuthorizationsTab
@@ -108,19 +120,20 @@ export default async function InsightsPage({
           dateFilter={dateFilter}
           trend={trend}
           dimension={dimension}
+          scopedUserId={scopedUserId}
         />
       )}
       {tab === "refunds" && (
-        <RefundsTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} />
+        <RefundsTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} scopedUserId={scopedUserId} />
       )}
       {tab === "disputes" && (
-        <DisputesTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} />
+        <DisputesTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} scopedUserId={scopedUserId} />
       )}
       {tab === "bank-returns" && (
-        <BankReturnsTab churchId={churchId} dateFilter={dateFilter} trend={trend} />
+        <BankReturnsTab churchId={churchId} dateFilter={dateFilter} trend={trend} scopedUserId={scopedUserId} />
       )}
       {tab === "deposits" && (
-        <DepositsTab churchId={churchId} dateFilter={dateFilter} trend={trend} />
+        <DepositsTab churchId={churchId} dateFilter={dateFilter} trend={trend} scopedUserId={scopedUserId} />
       )}
     </div>
   );
@@ -131,14 +144,16 @@ async function PaymentsTab({
   dateFilter,
   trend,
   dimension,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
   dimension: PaymentDimensionKey;
+  scopedUserId?: string;
 }) {
   const { summary, byMethod, byMethodCount, byBrand, byBrandCount, byBrandTable, hasData } =
-    await getPaymentsInsights(churchId, dateFilter, trend, dimension);
+    await getPaymentsInsights(churchId, dateFilter, trend, dimension, scopedUserId);
   const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
 
   return (
@@ -216,17 +231,20 @@ async function AuthorizationsTab({
   dateFilter,
   trend,
   dimension,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
   dimension: PaymentDimensionKey;
+  scopedUserId?: string;
 }) {
   const { summary, byBrand, byBrandTable, hasData } = await getAuthorizationsInsights(
     churchId,
     dateFilter,
     trend,
-    dimension
+    dimension,
+    scopedUserId
   );
   const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
 
@@ -283,17 +301,20 @@ async function RefundsTab({
   dateFilter,
   trend,
   dimension,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
   dimension: PaymentDimensionKey;
+  scopedUserId?: string;
 }) {
   const { summary, byStatus, byBrandTable, hasData } = await getRefundsInsights(
     churchId,
     dateFilter,
     trend,
-    dimension
+    dimension,
+    scopedUserId
   );
   const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
 
@@ -352,17 +373,20 @@ async function DisputesTab({
   dateFilter,
   trend,
   dimension,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
   dimension: PaymentDimensionKey;
+  scopedUserId?: string;
 }) {
   const { summary, byReason, byBrandTable, hasData } = await getDisputesInsights(
     churchId,
     dateFilter,
     trend,
-    dimension
+    dimension,
+    scopedUserId
   );
   const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
 
@@ -414,15 +438,18 @@ async function BankReturnsTab({
   churchId,
   dateFilter,
   trend,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
+  scopedUserId?: string;
 }) {
   const { summary, trendData, byReasonTable, hasData } = await getBankReturnsInsights(
     churchId,
     dateFilter,
-    trend
+    trend,
+    scopedUserId
   );
 
   return (
@@ -468,15 +495,22 @@ async function DepositsTab({
   churchId,
   dateFilter,
   trend,
+  scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
+  scopedUserId?: string;
 }) {
   const { summary, trendData, hasData } = await getDepositsInsights(churchId, dateFilter, trend);
 
   return (
     <>
+      {scopedUserId && (
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+          Deposits bundle transactions from the entire organization and can't be broken down by team member — showing organization-wide totals.
+        </div>
+      )}
       <SummaryCards items={summary} />
 
       <div className="flex items-center justify-between">

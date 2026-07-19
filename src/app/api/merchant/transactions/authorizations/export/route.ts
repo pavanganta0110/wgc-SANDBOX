@@ -6,6 +6,9 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveAuthorizationEffectiveStatus, isAuthorizationCaptured } from "@/lib/finix/authorizationStatus";
 import { getAuthorizationPermissions } from "@/lib/finix/authorizationPermissions";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { resolveScopedTransferIds } from "@/lib/reports/insightsData";
 import { isAuthError } from "@/lib/auth/errors";
 
 function csvEscape(value: string) {
@@ -49,6 +52,14 @@ export async function GET(req: Request) {
   const isExpiredFilter = state === "EXPIRED";
   const isRawStateFilter = state && !isCapturedFilter && !isVoidedFilter && !isExpiredFilter;
 
+  // Team-access: "view as" a specific team member narrows this export to
+  // captured authorizations bridged to their attributed Payments —
+  // voided/expired authorizations have no transfer to bridge through and
+  // are excluded from a scoped export rather than guessed at.
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const scopedTransferIds = await resolveScopedTransferIds(auth.churchId, scopedUserId);
+
   const authorizations = await prisma.finixAuthorization.findMany({
     where: {
       churchId: auth.churchId,
@@ -59,6 +70,7 @@ export async function GET(req: Request) {
       ...(captured === "true" && !isCapturedFilter ? { finixTransferId: { not: null } } : {}),
       ...(captured === "false" && !isCapturedFilter ? { finixTransferId: null } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
   });

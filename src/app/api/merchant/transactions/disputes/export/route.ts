@@ -8,6 +8,9 @@ import { loadDisputesList, type DisputeListRow } from "@/lib/finix/disputesList"
 import { resolveDisputeDisplayStatus, DISPUTE_DISPLAY_STATUS_LABELS } from "@/lib/finix/disputeStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { getDisputePermissions } from "@/lib/finix/disputePermissions";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { resolveScopedTransferIds } from "@/lib/reports/insightsData";
 
 const COLUMNS: CsvColumn<DisputeListRow>[] = [
   { header: "ID", value: (r) => r.dispute.finixDisputeId },
@@ -48,7 +51,13 @@ export async function GET(req: Request) {
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
-  const rows = await loadDisputesList(auth.churchId, dateFilter);
+  // Team-access: narrow to a specific team member's attributed disputes
+  // when viewing as them — org-wide otherwise, unchanged.
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const scopedTransferIds = await resolveScopedTransferIds(auth.churchId, scopedUserId);
+
+  const rows = await loadDisputesList(auth.churchId, dateFilter, scopedTransferIds);
 
   const csv = buildCsvExport(rows, COLUMNS);
   return csvResponse(csv, "disputes.csv");

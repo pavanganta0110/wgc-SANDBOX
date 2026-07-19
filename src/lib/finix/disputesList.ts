@@ -6,9 +6,13 @@ import { prisma } from "@/lib/prisma";
  * per table, not one per dispute) — the same batch-join pattern used by
  * the Payments/Refunds/Bank-Returns list pages, avoiding N+1 lookups.
  */
-export async function loadDisputesList(churchId: string, dateFilter?: { gte: Date; lte?: Date }) {
+export async function loadDisputesList(churchId: string, dateFilter?: { gte: Date; lte?: Date }, transferIdIn?: string[]) {
   const disputes = await prisma.finixDispute.findMany({
-    where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+    where: {
+      churchId,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(transferIdIn ? { finixTransferId: { in: transferIdIn } } : {}),
+    },
     orderBy: { createdAtFinix: "desc" },
     take: 300,
   });
