@@ -1,6 +1,8 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
@@ -41,7 +43,15 @@ export default async function BankReturnsPage({
   }>;
 }) {
   const session = await getSession();
-  const churchId = session!.churchId!;
+  // Team-access Checkpoint 4A: ACH returns are organization-level financial
+  // data with no row-level attribution today. Per the approved fallback
+  // ("if safe row-level scoping cannot be implemented immediately, deny
+  // FUNDRAISER and VIEWER entirely"), gated the same as settlements/deposits
+  // rather than left open to every authenticated org member as it was.
+  if (!session?.churchId || !getSettlementPermissions(session.role).canView) {
+    redirect("/merchant/dashboard");
+  }
+  const churchId = session.churchId;
   const { range, from, to, last4, amount, buyer: buyerFilter, org, cols, id } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;

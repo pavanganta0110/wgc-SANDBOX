@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
 import { loadDonorsList, type DonorsListFilters, type DonorListRow } from "@/lib/donors/donorsList";
@@ -37,11 +40,20 @@ const COLUMNS: CsvColumn<DonorListRow>[] = [
 ];
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canExport) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const viewScope = await resolveViewScope(auth);
+  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
 
   const { searchParams } = new URL(req.url);
   const singleDonorId = searchParams.get("donorId");
@@ -49,11 +61,16 @@ export async function GET(req: Request) {
   let rows: DonorListRow[];
 
   if (singleDonorId) {
-    const donor = await prisma.donor.findFirst({ where: { id: singleDonorId, churchId: session.churchId } });
+    // Team-access Checkpoint 4A: a user-scoped export of a donor outside
+    // their attributed set must 404 exactly like a nonexistent donor would.
+    if (scopedDonorIds !== null && !scopedDonorIds.includes(singleDonorId)) {
+      return NextResponse.json({ error: "Donor not found" }, { status: 404 });
+    }
+    const donor = await prisma.donor.findFirst({ where: { id: singleDonorId, churchId: auth.churchId } });
     if (!donor) return NextResponse.json({ error: "Donor not found" }, { status: 404 });
     const [aggregates, riskInput] = await Promise.all([
-      loadDonorAggregates(donor.id, session.churchId),
-      loadDonorRiskSignals([donor.id], session.churchId).then((m) => m.get(donor.id)!),
+      loadDonorAggregates(donor.id, auth.churchId),
+      loadDonorRiskSignals([donor.id], auth.churchId).then((m) => m.get(donor.id)!),
     ]);
     rows = [
       {
@@ -76,16 +93,17 @@ export async function GET(req: Request) {
       search: searchParams.get("q") || undefined,
       createdDateFilter,
       archivedStatus: (searchParams.get("archived") as DonorsListFilters["archivedStatus"]) || "active",
+      donorIdIn: scopedDonorIds,
     };
-    const result = await loadDonorsList(session.churchId, filters, { key: "createdAt", dir: "desc" }, 1, 5000);
+    const result = await loadDonorsList(auth.churchId, filters, { key: "createdAt", dir: "desc" }, 1, 5000);
     rows = result.rows;
   }
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.exported",
     entityType: "donor",
     metadata: { rowCount: rows.length, singleDonorId: singleDonorId || undefined },

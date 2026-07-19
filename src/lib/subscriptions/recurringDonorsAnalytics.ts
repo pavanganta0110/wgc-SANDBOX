@@ -37,10 +37,14 @@ export interface RecurringDonorsAnalytics {
   candidateCapReached: boolean;
 }
 
-export async function loadRecurringDonorsAnalytics(churchId: string, rangeDays = 30): Promise<RecurringDonorsAnalytics> {
+export async function loadRecurringDonorsAnalytics(
+  churchId: string,
+  rangeDays = 30,
+  attributedUserId?: string
+): Promise<RecurringDonorsAnalytics> {
   const periodStart = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
 
-  const subscriptions = await loadSubscriptionCandidates(churchId);
+  const subscriptions = await loadSubscriptionCandidates(churchId, { attributedUserId });
   const donors = groupSubscriptionsByDonor(subscriptions);
 
   const activeDonors = donors.filter((d) => d.activeSubscriptionCount > 0);

@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { buildImportPreview, IMPORT_ROW_CAP } from "@/lib/donors/csvImport";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canEdit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -18,7 +25,7 @@ export async function POST(req: Request) {
   }
 
   const existingDonors = await prisma.donor.findMany({
-    where: { churchId: session.churchId, archivedAt: null, normalizedEmail: { not: null } },
+    where: { churchId: auth.churchId, archivedAt: null, normalizedEmail: { not: null } },
     select: { normalizedEmail: true },
   });
   const existingNormalizedEmails = new Set(existingDonors.map((d) => d.normalizedEmail!));

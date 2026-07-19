@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -11,6 +11,9 @@ import AuthorizationFilterBar from "@/components/merchant/AuthorizationFilterBar
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
 import { resolveAuthorizationEffectiveStatus, isAuthorizationCaptured } from "@/lib/finix/authorizationStatus";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
+import { getAuthorizationPermissions } from "@/lib/finix/authorizationPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const STATES = ["CAPTURED", "SUCCEEDED", "VOIDED", "EXPIRED", "PENDING", "FAILED"];
 
@@ -29,8 +32,21 @@ export default async function AuthorizationsListPage({
     id?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  // Team-access Checkpoint 4C: this page previously ran on getSession()
+  // with no role check at all — any authenticated merchant user, including
+  // FUNDRAISER/VIEWER, could view every organization-wide authorization.
+  // FinixAuthorization has no attribution field of its own, so per the
+  // approved fallback policy this is organization-scope only.
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/dashboard");
+    throw err;
+  }
+  const permissions = getAuthorizationPermissions(auth.rawRole);
+  if (!permissions.canView) redirect("/merchant/dashboard");
+  const churchId = auth.churchId;
   const { state, range, from, to, buyer, last4, org, captured, id } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;

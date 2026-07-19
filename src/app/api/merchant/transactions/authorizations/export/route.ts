@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveAuthorizationEffectiveStatus, isAuthorizationCaptured } from "@/lib/finix/authorizationStatus";
+import { getAuthorizationPermissions } from "@/lib/finix/authorizationPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 function csvEscape(value: string) {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -14,9 +16,20 @@ function csvEscape(value: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  // Team-access Checkpoint 4C: FinixAuthorization has no attribution field
+  // and voided/expired authorizations can't be bridged to a Payment at
+  // all — per the approved fallback policy, this stays organization-scope
+  // only (OWNER always, ADMIN per canViewSettlements), FUNDRAISER/VIEWER
+  // denied entirely rather than exposing unscoped organization-wide data.
+  const permissions = getAuthorizationPermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -38,7 +51,7 @@ export async function GET(req: Request) {
 
   const authorizations = await prisma.finixAuthorization.findMany({
     where: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       ...(isRawStateFilter ? { state } : {}),
       ...(isVoidedFilter ? { isVoid: true, finixTransferId: null } : {}),
       ...(isExpiredFilter ? { expiresAt: { lt: new Date() }, isVoid: { not: true }, finixTransferId: null } : {}),
@@ -50,7 +63,7 @@ export async function GET(req: Request) {
     orderBy: { createdAtFinix: "desc" },
   });
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 
   const directInstrumentIds = authorizations
     .map((a) => a.finixPaymentInstrumentId)

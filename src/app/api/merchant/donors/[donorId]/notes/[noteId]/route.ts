@@ -1,22 +1,29 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 async function loadOwnedNote(donorId: string, noteId: string, churchId: string) {
   return prisma.donorNote.findFirst({ where: { id: noteId, donorId, churchId, deletedAt: null } });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ donorId: string; noteId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canAddNote) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canAddNote) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { donorId, noteId } = await params;
-  const note = await loadOwnedNote(donorId, noteId, session.churchId);
+  const note = await loadOwnedNote(donorId, noteId, auth.churchId);
   if (!note) {
     return NextResponse.json({ error: "Note not found" }, { status: 404 });
   }
@@ -30,10 +37,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
   await prisma.donorNote.update({ where: { id: note.id }, data: { body: noteBody } });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.note_edited",
     entityType: "donor",
     entityId: donorId,
@@ -45,14 +52,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ donorId: string; noteId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canAddNote) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canAddNote) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { donorId, noteId } = await params;
-  const note = await loadOwnedNote(donorId, noteId, session.churchId);
+  const note = await loadOwnedNote(donorId, noteId, auth.churchId);
   if (!note) {
     return NextResponse.json({ error: "Note not found" }, { status: 404 });
   }
@@ -60,10 +73,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ donor
   await prisma.donorNote.update({ where: { id: note.id }, data: { deletedAt: new Date() } });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.note_deleted",
     entityType: "donor",
     entityId: donorId,

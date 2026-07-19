@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { resolveSubscriptionDisplayStatus, frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
@@ -7,17 +6,25 @@ import { generateSetupLinkToken } from "@/lib/subscriptions/setupLinkToken";
 import { sendWgcEmail } from "@/lib/email";
 import { formatCents } from "@/lib/format";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const DEFAULT_EXPIRY_DAYS = 7;
 
 /** Sends a secure, expiring, single-use link the donor uses to provide a new payment method for this exact subscription — never exposes donor/org/subscription IDs in the URL, and completion (see /api/setup/[token]/complete) cancels this subscription and creates a replacement rather than mutating the existing Finix subscription in place. */
 export async function POST(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canSendPaymentUpdateLink) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canSendPaymentUpdateLink) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
   const { subscriptionId } = await params;
 
   const subscription = await prisma.finixSubscription.findFirst({ where: { id: subscriptionId, churchId } });
@@ -52,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
       fundId: subscription.fundId,
       status: "PENDING",
       expiresAt,
-      createdByUserId: session.userId,
+      createdByUserId: auth.userId,
       updateTargetFinixSubscriptionId: subscription.finixSubscriptionId,
     },
   });
@@ -80,9 +87,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
 
   await logDashboardAction({
     churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "subscription.payment_update_link_sent",
     entityType: "subscription",
     entityId: subscription.id,

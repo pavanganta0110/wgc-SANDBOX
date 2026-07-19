@@ -1,27 +1,40 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { normalizeWhitespace } from "@/lib/settings/settingsValidation";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const VALID_ROLES = ["PRIMARY", "FINANCE", "TECHNICAL", "SUPPORT", "AUTHORIZED_SIGNER", "STATEMENT", "SECURITY"];
 
 export async function GET() {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const contacts = await prisma.organizationContact.findMany({ where: { churchId: session.churchId }, orderBy: { createdAt: "asc" } });
+  const contacts = await prisma.organizationContact.findMany({ where: { churchId: auth.churchId }, orderBy: { createdAt: "asc" } });
   return NextResponse.json({ contacts });
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canManageContacts) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canManageContacts) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -35,7 +48,7 @@ export async function POST(req: Request) {
 
   const contact = await prisma.organizationContact.create({
     data: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       name,
       role,
       email: normalizeWhitespace(body.email),
@@ -45,10 +58,10 @@ export async function POST(req: Request) {
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.contact_added",
     entityType: "organization_contact",
     entityId: contact.id,

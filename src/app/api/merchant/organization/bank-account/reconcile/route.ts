@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { reconcilePendingPayoutAccountsForChurch } from "@/lib/organization/payoutAccountReconciliation";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * On-demand reconciliation fallback — webhooks are the primary update
@@ -12,12 +13,18 @@ import { reconcilePendingPayoutAccountsForChurch } from "@/lib/organization/payo
  * infrastructure exists here yet) — see the completion report.
  */
 export async function POST() {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const results = await reconcilePendingPayoutAccountsForChurch(session.churchId);
+  const results = await reconcilePendingPayoutAccountsForChurch(auth.churchId);
   return NextResponse.json({ results });
 }

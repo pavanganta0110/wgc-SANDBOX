@@ -1,8 +1,46 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants'
+
+// Team-access Checkpoint 2: routes under /merchant and /api/merchant that
+// must stay reachable without a session — the pre-auth flows (login,
+// invite/reset password) and their supporting API routes. Every other path
+// under those two prefixes requires the session cookie to be present.
+// This is a COARSE backstop only (cookie-presence check — middleware runs
+// on the Edge runtime and cannot do the DB-backed authVersion/disabled
+// check that getSession()/requireMerchantSession() do). Every sensitive
+// route must still call one of those centralized helpers itself; this
+// middleware existing does not remove that requirement.
+const MERCHANT_PUBLIC_PREFIXES = [
+  '/merchant/login',
+  '/merchant/forgot-password',
+  '/merchant/set-password',
+  '/api/merchant/login',
+  '/api/merchant/logout',
+  '/api/merchant/forgot-password',
+  '/api/merchant/set-password',
+  '/api/merchant/validate-reset-token',
+];
+
+function isMerchantPublicPath(pathname: string): boolean {
+  return MERCHANT_PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  const isMerchantPath = pathname.startsWith('/merchant') || pathname.startsWith('/api/merchant');
+  if (isMerchantPath && !isMerchantPublicPath(pathname)) {
+    const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+    if (!hasSession) {
+      if (pathname.startsWith('/api/merchant')) {
+        return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+      }
+      const loginUrl = new URL('/merchant/login', request.url);
+      loginUrl.searchParams.set('redirectTo', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
 
   // Paths to protect
   const isProtectedPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin');
@@ -50,5 +88,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/test/:path*'],
+  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/test/:path*', '/merchant/:path*', '/api/merchant/:path*'],
 }

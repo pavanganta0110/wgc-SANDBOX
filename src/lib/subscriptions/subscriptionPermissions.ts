@@ -1,5 +1,6 @@
-/** Mirrors src/lib/donors/donorPermissions.ts — same two real roles, church_admin always labeled "Organization Admin" in UI. */
-export type SessionRole = "wgc_admin" | "church_admin";
+import { normalizeMerchantRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
+
+export type SessionRole = "wgc_admin" | "church_admin" | "owner" | "admin" | "fundraiser" | "viewer";
 
 export interface SubscriptionPermissions {
   canView: boolean;
@@ -13,6 +14,16 @@ export interface SubscriptionPermissions {
   canReconcileUnattributed: boolean;
 }
 
+/**
+ * Team-access Checkpoint 4: composed from the centralized role-permission
+ * matrix, directly per the approved policy — "OWNER: may manage all.
+ * ADMIN: may manage according to canManageRecurring. FUNDRAISER: read-only
+ * own subscriptions initially, no cancellation or amount/frequency
+ * mutation. VIEWER: read-only according to permitted scope." canView uses
+ * canViewAllTransactions OR canViewOwnTransactions so FUNDRAISER/VIEWER
+ * still see their own list (scoped further by buildSubscriptionScope, not
+ * this function) even though they can't mutate.
+ */
 export function getSubscriptionPermissions(role: SessionRole | null | undefined): SubscriptionPermissions {
   if (role === "wgc_admin") {
     return {
@@ -27,28 +38,32 @@ export function getSubscriptionPermissions(role: SessionRole | null | undefined)
       canReconcileUnattributed: true, // only wgc_admin may reconcile historical unattributed recurring candidates
     };
   }
-  if (role === "church_admin") {
+
+  const normalized = normalizeMerchantRole(role);
+  if (!normalized) {
     return {
-      canView: true,
-      canExport: true,
-      canCreate: true,
-      canCancel: true,
-      canUpdateAmount: true,
-      canUpdateFrequency: true,
-      canSendPaymentUpdateLink: true,
+      canView: false,
+      canExport: false,
+      canCreate: false,
+      canCancel: false,
+      canUpdateAmount: false,
+      canUpdateFrequency: false,
+      canSendPaymentUpdateLink: false,
       canTriggerSync: false,
       canReconcileUnattributed: false,
     };
   }
+
+  const base = ROLE_PERMISSIONS[normalized];
   return {
-    canView: false,
-    canExport: false,
-    canCreate: false,
-    canCancel: false,
-    canUpdateAmount: false,
-    canUpdateFrequency: false,
-    canSendPaymentUpdateLink: false,
-    canTriggerSync: false,
-    canReconcileUnattributed: false,
+    canView: base.canViewAllTransactions || base.canViewOwnTransactions,
+    canExport: base.canExportReports,
+    canCreate: base.canManageRecurring,
+    canCancel: base.canManageRecurring,
+    canUpdateAmount: base.canManageRecurring,
+    canUpdateFrequency: base.canManageRecurring,
+    canSendPaymentUpdateLink: base.canManageRecurring,
+    canTriggerSync: false, // wgc_admin-only, handled above
+    canReconcileUnattributed: false, // wgc_admin-only, handled above
   };
 }

@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { SUPPORTED_SUBSCRIPTION_FREQUENCIES, resolveSubscriptionDisplayStatus } from "@/lib/subscriptions/subscriptionStatus";
 import { recreateSubscriptionWithChange } from "@/lib/subscriptions/subscriptionRecreate";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /** Same cancel+recreate mechanism as update-amount — Finix has no in-place update endpoint for billing_interval either. */
 export async function POST(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUpdateFrequency) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canUpdateFrequency) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
   const { subscriptionId } = await params;
 
   const body = await req.json();
@@ -52,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
       finixSubscriptionId: subscription.finixSubscriptionId,
       actionType: "UPDATE_FREQUENCY",
       idempotencyKey,
-      requestedByUserId: session.userId,
+      requestedByUserId: auth.userId,
       oldValue: { billingInterval: subscription.billingInterval },
       newValue: { billingInterval: newBillingInterval },
       state: "PENDING",
@@ -62,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
   try {
     const { newSubscription } = await recreateSubscriptionWithChange({
       churchId,
-      actorUserId: session.userId!,
+      actorUserId: auth.userId!,
       oldSubscription: subscription,
       newBillingInterval,
     });
@@ -76,9 +83,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
 
     await logDashboardAction({
       churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "subscription.frequency_updated",
       entityType: "subscription",
       entityId: subscription.id,

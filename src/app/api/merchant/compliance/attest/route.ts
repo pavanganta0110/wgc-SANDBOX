@@ -1,18 +1,32 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSettingsPermissions } from "@/lib/settings/settingsPermissions";
 import { finixClient } from "@/lib/finix/client";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth";
+import { isAuthError } from "@/lib/auth/errors";
 
 // Only the merchant's own admin may legally attest to their PCI SAQ — never
 // wgc_admin, who can view but must not sign on a merchant's behalf.
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getSettingsPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canEdit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSettingsPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const body = await req.json().catch(() => ({}));
@@ -28,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   const form = await prisma.complianceForm.findFirst({
-    where: { churchId: session.churchId },
+    where: { churchId: auth.churchId },
     orderBy: { createdAt: "desc" },
   });
   if (!form) {
@@ -52,13 +66,13 @@ export async function POST(req: Request) {
       signed_at: signedAt,
     });
 
-    const saved = await upsertComplianceFormFromFinix(session.churchId, form.finixMerchantId, updated);
+    const saved = await upsertComplianceFormFromFinix(auth.churchId, form.finixMerchantId, updated);
 
     await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "COMPLIANCE_FORM_ATTESTED",
       entityType: "ComplianceForm",
       entityId: saved.id,

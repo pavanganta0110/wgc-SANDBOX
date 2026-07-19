@@ -17,6 +17,9 @@ export interface SubscriptionsListFilters {
   createdDateFilter?: { gte: Date; lte?: Date };
   startDateFilter?: { gte: Date; lte?: Date };
   nextBillingDateFilter?: { gte: Date; lte?: Date };
+  /** Team-access Checkpoint 4A: undefined = organization scope. Set from
+   * buildSubscriptionScope, not read from view-scope state directly. */
+  attributedUserId?: string;
 }
 
 export type SubscriptionsSortKey = "amount" | "monthlyValue" | "nextBillingDate" | "startDate" | "createdAt" | "donorName" | "lifetimeCollected";
@@ -35,7 +38,7 @@ export async function loadSubscriptionsList(
   page: number,
   pageSize: number,
 ): Promise<SubscriptionsListResult> {
-  const all = await loadSubscriptionCandidates(churchId);
+  const all = await loadSubscriptionCandidates(churchId, { attributedUserId: filters.attributedUserId });
   let rows = all;
 
   if (filters.search) {

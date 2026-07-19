@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { computeRefundStatus } from "@/lib/finix/refundStatus";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildRefundScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 function csvEscape(value: string) {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -14,10 +17,19 @@ function csvEscape(value: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Team-access Checkpoint 4B: was gated on the legacy church_admin-only
+  // check (broken since Checkpoint 2) and exported every refund in the
+  // church unconditionally — a FUNDRAISER hitting this endpoint directly
+  // would have gotten every other team member's refunds too. Now uses
+  // requireMerchantSession + resolveViewScope + buildRefundScope, so
+  // export scope always matches whatever the requester can see in the
+  // dashboard (same pattern as payments/donors/subscriptions).
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const { searchParams } = new URL(req.url);
@@ -30,16 +42,19 @@ export async function GET(req: Request) {
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
+  const viewScope = await resolveViewScope(auth);
+  const refundScope = await buildRefundScope(auth, viewScope);
+
   const refunds = await prisma.finixRefundOrReversal.findMany({
     where: {
-      churchId: session.churchId,
+      ...refundScope,
       ...(state ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
   });
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 
   const originalTransferIds = refunds
     .map((r) => r.finixOriginalTransferId)

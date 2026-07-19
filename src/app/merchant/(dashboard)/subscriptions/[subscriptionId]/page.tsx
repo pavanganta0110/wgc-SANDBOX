@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -45,6 +45,13 @@ export default async function SubscriptionDetailPage({
   searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
+  // matching API-route guard comment for why this back door exists
+  // otherwise.
+  if (session?.role === "wgc_admin") {
+    redirect("/merchant/dashboard");
+  }
   const churchId = session!.churchId!;
   const permissions = getSubscriptionPermissions(session?.role);
   const { subscriptionId } = await params;

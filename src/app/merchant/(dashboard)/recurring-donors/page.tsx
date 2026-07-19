@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { Users, Send } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
@@ -41,12 +45,21 @@ export default async function RecurringDonorsPage({
     id?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
   const sp = await searchParams;
 
   const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
   const [sortKey, sortDir] = (sp.sort || "monthlyValue:desc").split(":") as [RecurringDonorsSortKey, "asc" | "desc"];
+
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
 
   const [list, analytics] = await Promise.all([
     loadRecurringDonorsList(
@@ -60,6 +73,7 @@ export default async function RecurringDonorsPage({
         hasFailedPayment: sp.hasFailedPayment === "1",
         hasPastDue: sp.hasPastDue === "1",
         requiresAttention: sp.requiresAttention === "1",
+        attributedUserId: scopedUserId,
       },
       { key: sortKey, dir: sortDir },
       page,

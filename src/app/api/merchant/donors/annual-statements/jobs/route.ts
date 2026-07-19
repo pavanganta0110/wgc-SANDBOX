@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { createBulkStatementJob } from "@/lib/donors/bulkStatementJobs";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
+  const permissions = getDonorPermissions(auth.rawRole);
 
   const body = await req.json();
   const taxYear = parseInt(body.taxYear, 10);
@@ -26,13 +30,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const job = await createBulkStatementJob(session.churchId, taxYear, jobType, targetIds, session.userId);
+  const job = await createBulkStatementJob(auth.churchId, taxYear, jobType, targetIds, auth.userId);
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: jobType === "GENERATE" ? "statement.bulk_generation_started" : "statement.bulk_sending_started",
     entityType: "donor",
     metadata: { taxYear, count: targetIds.length, jobId: job.id },

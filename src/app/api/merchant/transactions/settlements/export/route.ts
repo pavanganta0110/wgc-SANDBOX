@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -7,6 +6,8 @@ import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
 import { resolveSettlementDisplayStatus, getSettlementStatusLabel } from "@/lib/finix/settlementStatus";
 import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 type SettlementExportRow = {
   settlement: Awaited<ReturnType<typeof prisma.finixSettlement.findMany>>[number];
@@ -50,10 +51,16 @@ function adminOnlyColumns(): CsvColumn<SettlementExportRow>[] {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getSettlementPermissions(session?.role as "wgc_admin" | "church_admin" | undefined);
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSettlementPermissions(auth.rawRole);
 
-  if (!session || !session.churchId || !permissions.canExport) {
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -71,7 +78,7 @@ export async function GET(req: Request) {
   let linkedSettlementIds: string[] | null = null;
   if (depositStatusParam === "linked" || depositStatusParam === "unlinked") {
     const linked = await prisma.finixFundingTransferAttempt.findMany({
-      where: { churchId: session.churchId, finixSettlementId: { not: null } },
+      where: { churchId: auth.churchId, finixSettlementId: { not: null } },
       select: { finixSettlementId: true },
       distinct: ["finixSettlementId"],
     });
@@ -80,7 +87,7 @@ export async function GET(req: Request) {
 
   const settlements = await prisma.finixSettlement.findMany({
     where: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       ...(status ? { processorState: status } : {}),
       ...(reconciliationStatus ? { reconciliationStatus } : {}),
       ...(traceId ? { traceId } : {}),
@@ -105,10 +112,10 @@ export async function GET(req: Request) {
   const columns = permissions.canManageReconciliation ? [...baseColumns(), ...adminOnlyColumns()] : baseColumns();
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "settlement.export_performed",
     entityType: "settlement",
     metadata: { rowCount: rows.length },

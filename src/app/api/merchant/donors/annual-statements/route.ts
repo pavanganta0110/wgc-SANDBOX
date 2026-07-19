@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { findEligibleDonorsForYear, hasMissingStatementInfo } from "@/lib/donors/yearEndStatements";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { isValidEmail } from "@/lib/donors/donorContact";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
   const { searchParams } = new URL(req.url);
   const taxYear = parseInt(searchParams.get("year") || String(new Date().getFullYear() - 1), 10);
   const statementStatus = searchParams.get("statementStatus") || undefined;
@@ -21,14 +27,14 @@ export async function GET(req: Request) {
   const missingOnly = searchParams.get("missing") === "1";
   const minAmount = searchParams.get("minAmount") ? Math.round(parseFloat(searchParams.get("minAmount")!) * 100) : undefined;
 
-  const eligible = await findEligibleDonorsForYear(session.churchId, taxYear);
+  const eligible = await findEligibleDonorsForYear(auth.churchId, taxYear);
   const donorIds = eligible.map((e) => e.donorId);
   const eligibleByDonor = new Map(eligible.map((e) => [e.donorId, e]));
 
   const [donors, statements] = await Promise.all([
-    donorIds.length ? prisma.donor.findMany({ where: { id: { in: donorIds }, churchId: session.churchId } }) : Promise.resolve([]),
+    donorIds.length ? prisma.donor.findMany({ where: { id: { in: donorIds }, churchId: auth.churchId } }) : Promise.resolve([]),
     donorIds.length
-      ? prisma.annualDonationStatement.findMany({ where: { donorId: { in: donorIds }, churchId: session.churchId, taxYear, supersededAt: null } })
+      ? prisma.annualDonationStatement.findMany({ where: { donorId: { in: donorIds }, churchId: auth.churchId, taxYear, supersededAt: null } })
       : Promise.resolve([]),
   ]);
   const statementByDonor = new Map(statements.map((s) => [s.donorId, s]));

@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildFinixTransferScope } from "@/lib/auth/scopes";
 import { formatCents } from "@/lib/format";
 import { reconcilePaymentFees } from "@/lib/payments/backfill";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -28,12 +30,21 @@ export default async function PaymentFullDetailPage({
 }: {
   params: Promise<{ transferId: string }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  const auth = await requireMerchantSession();
+  const churchId = auth.churchId;
   const { transferId } = await params;
 
+  // Team-access Checkpoint 4A: id + scope combined via AND (not
+  // fetch-then-check) — FinixTransfer has no attribution column of its
+  // own, so scope is bridged through Payment.attributedUserId (see
+  // buildFinixTransferScope). AND, not a merged object, because both the
+  // literal transferId and the scope's `finixTransferId: {in:[...]}` (for a
+  // user-scoped view) target the same field.
+  const viewScope = await resolveViewScope(auth);
+  const transferScope = await buildFinixTransferScope(auth, viewScope);
+
   let transfer = await prisma.finixTransfer.findFirst({
-    where: { finixTransferId: transferId, churchId },
+    where: { AND: [{ finixTransferId: transferId }, transferScope] },
   });
 
   if (transfer && transfer.state === "PENDING") {
@@ -41,7 +52,7 @@ export default async function PaymentFullDetailPage({
       const { reconcilePendingTransfer } = await import("@/lib/finix/sync/paymentReconciliation");
       const result = await reconcilePendingTransfer(transferId);
       if (result.changed) {
-        transfer = await prisma.finixTransfer.findFirst({ where: { finixTransferId: transferId, churchId } });
+        transfer = await prisma.finixTransfer.findFirst({ where: { AND: [{ finixTransferId: transferId }, transferScope] } });
       }
     } catch (err) {
       console.error("Payment detail reconciliation failed:", err);

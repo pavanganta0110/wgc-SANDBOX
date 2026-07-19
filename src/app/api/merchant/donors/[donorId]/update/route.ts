@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { normalizeEmail, normalizePhone, isValidEmail, isValidPhone } from "@/lib/donors/donorContact";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 function cleanString(value: unknown, maxLength = 200): string | null {
   if (typeof value !== "string") return null;
@@ -14,14 +15,20 @@ function cleanString(value: unknown, maxLength = 200): string | null {
 // Only safe profile fields are editable here — never raw financial history,
 // and never a processor-authoritative field (finixIdentityId is untouched).
 export async function PATCH(req: Request, { params }: { params: Promise<{ donorId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canEdit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { donorId } = await params;
-  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: session.churchId } });
+  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: auth.churchId } });
   if (!donor) {
     return NextResponse.json({ error: "Donor not found" }, { status: 404 });
   }
@@ -92,10 +99,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
   const updated = await prisma.donor.update({ where: { id: donor.id }, data });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.updated",
     entityType: "donor",
     entityId: donor.id,

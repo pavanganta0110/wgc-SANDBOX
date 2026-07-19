@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
 import { isTerminalPayoutAccountStatus, resolvePaymentInstrumentState, resolveVerificationState } from "@/lib/organization/bankAccountStatus";
 import { PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS } from "@/lib/organization/payoutAccountLimits";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Creates the new bank instrument in Finix directly from the client-side
@@ -30,16 +32,30 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * duplicate rather than creating a redundant account row.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUpdateBankAccount) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canUpdateBankAccount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Team-access Checkpoint 4B: bank-account mutations are blocked while
+  // viewing another user's scope.
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const body = await req.json().catch(() => ({}));
   const finixToken = typeof body.finixToken === "string" ? body.finixToken : "";
   const changeReason = typeof body.changeReason === "string" ? body.changeReason.trim() : "";
-  const idempotencyKey = typeof body.idempotencyKey === "string" && body.idempotencyKey ? body.idempotencyKey : `payout-change-${session.churchId}-${Date.now()}`;
+  const idempotencyKey = typeof body.idempotencyKey === "string" && body.idempotencyKey ? body.idempotencyKey : `payout-change-${auth.churchId}-${Date.now()}`;
   const consentSnapshot = typeof body.consentSnapshot === "string" ? body.consentSnapshot : "";
   if (!finixToken) {
     return NextResponse.json({ error: "Missing tokenized bank details" }, { status: 400 });
@@ -64,7 +80,7 @@ export async function POST(req: Request) {
   // PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS change(s) in SUBMITTED,
   // PENDING_VERIFICATION, UNDER_REVIEW, or REQUIRES_ACTION at a time.
   const allNonTerminal = await prisma.organizationBankAccount.findMany({
-    where: { churchId: session.churchId, isActiveDestination: false },
+    where: { churchId: auth.churchId, isActiveDestination: false },
     select: { id: true, status: true, last4: true },
   });
   const pendingAccounts = allNonTerminal.filter((a) => !isTerminalPayoutAccountStatus(a.status));
@@ -76,18 +92,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { finixIdentityId: true, name: true } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { finixIdentityId: true, name: true } });
   if (!church?.finixIdentityId) {
     return NextResponse.json({ error: "This organization does not have a processor identity configured yet" }, { status: 400 });
   }
 
-  const current = await resolveActiveBankAccount(session.churchId);
+  const current = await resolveActiveBankAccount(auth.churchId);
 
   const changeRequest = await prisma.payoutAccountChangeRequest.upsert({
     where: { idempotencyKey },
     create: {
-      churchId: session.churchId,
-      requestedByUserId: session.userId,
+      churchId: auth.churchId,
+      requestedByUserId: auth.userId,
       state: "SUBMITTED",
       idempotencyKey,
       consentSnapshot: consentSnapshot || null,
@@ -116,7 +132,7 @@ export async function POST(req: Request) {
   // undo that), but we don't compound the duplication locally.
   if (instrument.fingerprint) {
     const duplicate = await prisma.organizationBankAccount.findFirst({
-      where: { churchId: session.churchId, fingerprint: instrument.fingerprint },
+      where: { churchId: auth.churchId, fingerprint: instrument.fingerprint },
     });
     if (duplicate) {
       await prisma.payoutAccountChangeRequest.update({ where: { id: changeRequest.id }, data: { state: "FAILED", failedAt: new Date() } });
@@ -130,7 +146,7 @@ export async function POST(req: Request) {
   const newStatus = "SUBMITTED";
   const newAccount = await prisma.organizationBankAccount.create({
     data: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       finixPaymentInstrumentId: instrument.id,
       sellerIdentityId: church.finixIdentityId,
       fingerprint: instrument.fingerprint ?? null,
@@ -141,7 +157,7 @@ export async function POST(req: Request) {
       paymentInstrumentState: resolvePaymentInstrumentState(instrument),
       verificationState: resolveVerificationState(instrument, newStatus),
       isActiveDestination: false,
-      createdByUserId: session.userId,
+      createdByUserId: auth.userId,
       changeReason: changeReason || null,
       verificationMethod: "PROCESSOR_REVIEW",
     },
@@ -158,10 +174,10 @@ export async function POST(req: Request) {
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.payout_account_change_submitted",
     entityType: "organization_bank_account",
     entityId: newAccount.id,
@@ -175,7 +191,7 @@ export async function POST(req: Request) {
 
   const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
   await notifyEvent({
-    churchId: session.churchId,
+    churchId: auth.churchId,
     eventKey: "PAYOUT_ACCOUNT_SUBMITTED",
     subject: "Payout bank account change submitted",
     title: "Payout Bank Account Submitted",

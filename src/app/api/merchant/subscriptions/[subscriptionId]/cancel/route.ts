@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { resolveSubscriptionDisplayStatus } from "@/lib/subscriptions/subscriptionStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /** Cancel is the one Finix subscriptions API mutation genuinely supported (DELETE). Only ACTIVE/PAST_DUE/UNKNOWN schedules can be canceled — already-canceled or completed ones are rejected rather than silently re-processed. */
 export async function POST(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canCancel) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canCancel) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
   const { subscriptionId } = await params;
 
   const body = await req.json().catch(() => ({}));
@@ -41,7 +48,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
       finixSubscriptionId: subscription.finixSubscriptionId,
       actionType: "CANCEL",
       idempotencyKey,
-      requestedByUserId: session.userId,
+      requestedByUserId: auth.userId,
       oldValue: { state: subscription.state },
       state: "PENDING",
     },
@@ -52,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
 
     const updated = await prisma.finixSubscription.update({
       where: { id: subscription.id },
-      data: { canceledAt: new Date(), cancelReason: reason || null, canceledByUserId: session.userId, state: "CANCELED", lastSyncedAt: new Date() },
+      data: { canceledAt: new Date(), cancelReason: reason || null, canceledByUserId: auth.userId, state: "CANCELED", lastSyncedAt: new Date() },
     });
 
     await prisma.subscriptionAction.update({
@@ -62,9 +69,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
 
     await logDashboardAction({
       churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "subscription.canceled",
       entityType: "subscription",
       entityId: subscription.id,

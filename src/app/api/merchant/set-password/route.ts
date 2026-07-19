@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/auth/password";
-import { setSessionCookie } from "@/lib/auth/session";
+import { setSessionCookie, type SessionPayload } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
   try {
@@ -29,6 +29,13 @@ export async function POST(req: Request) {
       );
     }
 
+    if (user.disabledAt) {
+      return NextResponse.json(
+        { error: "This account has been disabled. Contact WGC Payments Support." },
+        { status: 403 }
+      );
+    }
+
     const passwordHash = await hashPassword(password);
 
     await prisma.user.update({
@@ -50,8 +57,9 @@ export async function POST(req: Request) {
       await setSessionCookie({
         userId: user.id,
         email: user.email,
-        role: user.role as "wgc_admin" | "church_admin",
+        role: user.role as SessionPayload["role"],
         churchId: user.churchId,
+        authVersion: user.authVersion,
       });
     } catch (sessionError) {
       console.error("Password set but auto-login session failed:", sessionError);

@@ -1,8 +1,10 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, AlertTriangle } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import { Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
@@ -58,14 +60,24 @@ export default async function DonorProfilePage({
   params: Promise<{ donorId: string }>;
   searchParams: Promise<{ tab?: string; page?: string; edit?: string }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
-  const permissions = getDonorPermissions(session?.role);
+  const auth = await requireMerchantSession();
+  const churchId = auth.churchId;
+  const permissions = getDonorPermissions(auth.rawRole);
   const { donorId } = await params;
   const sp = await searchParams;
   const tab: TabKey = (TABS.find((t) => t.key === sp.tab)?.key ?? "overview") as TabKey;
 
-  const detail = await loadDonorDetail(donorId, churchId);
+  // Team-access Checkpoint 4A/4B: a user-scoped view denies detail access
+  // entirely when the donor has no payment/subscription attributed to that
+  // user (donorNotFound), AND — fixed in 4B — every history tab below is
+  // now filtered to just that user's attributed activity via scopedUserId,
+  // not the donor's full organization-wide history.
+  const viewScope = await resolveViewScope(auth);
+  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
+  const donorNotFound = scopedDonorIds !== null && !scopedDonorIds.includes(donorId);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+
+  const detail = donorNotFound ? null : await loadDonorDetail(donorId, churchId, scopedUserId);
 
   if (!detail) {
     return (
@@ -200,20 +212,20 @@ export default async function DonorProfilePage({
         />
       )}
       {tab === "donations" && (
-        <DonationsTab instrumentIds={instrumentIds} churchId={churchId} page={Math.max(1, parseInt(sp.page || "1", 10) || 1)} />
+        <DonationsTab instrumentIds={instrumentIds} churchId={churchId} page={Math.max(1, parseInt(sp.page || "1", 10) || 1)} scopedUserId={scopedUserId} />
       )}
-      {tab === "recurring" && <RecurringTab instrumentIds={instrumentIds} churchId={churchId} />}
+      {tab === "recurring" && <RecurringTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "payment-methods" && <PaymentMethodsTab instruments={instruments} instrumentIds={instrumentIds} churchId={churchId} />}
-      {tab === "giving-links" && <GivingLinksTab instrumentIds={instrumentIds} churchId={churchId} />}
-      {tab === "refunds" && <RefundsTab instrumentIds={instrumentIds} churchId={churchId} />}
-      {tab === "bank-returns" && <BankReturnsTab instrumentIds={instrumentIds} churchId={churchId} />}
-      {tab === "disputes" && <DisputesTab instrumentIds={instrumentIds} churchId={churchId} />}
+      {tab === "giving-links" && <GivingLinksTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "refunds" && <RefundsTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "bank-returns" && <BankReturnsTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "disputes" && <DisputesTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "notes" && (
         <Card title="Internal Notes">
           <DonorNotesList donorId={donor.id} initialNotes={notes} editable={permissions.canAddNote} />
         </Card>
       )}
-      {tab === "activity" && <ActivityTab donor={donor} instrumentIds={instrumentIds} churchId={churchId} />}
+      {tab === "activity" && <ActivityTab donor={donor} instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
     </div>
   );
 }
@@ -338,8 +350,8 @@ async function OverviewTab({ churchId, donor, aggregates, instruments, notes, ca
   );
 }
 
-async function DonationsTab({ instrumentIds, churchId, page }: { instrumentIds: string[]; churchId: string; page: number }) {
-  const { rows, totalCount } = await loadDonorDonationsTab(instrumentIds, churchId, {}, page, DONATIONS_PAGE_SIZE);
+async function DonationsTab({ instrumentIds, churchId, page, scopedUserId }: { instrumentIds: string[]; churchId: string; page: number; scopedUserId?: string }) {
+  const { rows, totalCount } = await loadDonorDonationsTab(instrumentIds, churchId, {}, page, DONATIONS_PAGE_SIZE, scopedUserId);
   const pageCount = Math.max(1, Math.ceil(totalCount / DONATIONS_PAGE_SIZE));
 
   return (
@@ -399,8 +411,8 @@ async function DonationsTab({ instrumentIds, churchId, page }: { instrumentIds: 
   );
 }
 
-async function RecurringTab({ instrumentIds, churchId }: { instrumentIds: string[]; churchId: string }) {
-  const subs = await loadDonorRecurringTab(instrumentIds, churchId);
+async function RecurringTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const subs = await loadDonorRecurringTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Recurring Donations">
       {subs.length === 0 ? (
@@ -478,8 +490,8 @@ async function PaymentMethodsTab({ instruments }: { instruments: any[]; instrume
   );
 }
 
-async function GivingLinksTab({ instrumentIds, churchId }: { instrumentIds: string[]; churchId: string }) {
-  const rows = await loadDonorGivingLinksTab(instrumentIds, churchId);
+async function GivingLinksTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const rows = await loadDonorGivingLinksTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Giving Links">
       {rows.length === 0 ? (
@@ -522,8 +534,8 @@ async function GivingLinksTab({ instrumentIds, churchId }: { instrumentIds: stri
   );
 }
 
-async function RefundsTab({ instrumentIds, churchId }: { instrumentIds: string[]; churchId: string }) {
-  const refunds = await loadDonorRefundsTab(instrumentIds, churchId);
+async function RefundsTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const refunds = await loadDonorRefundsTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Refunds">
       {refunds.length === 0 ? (
@@ -570,8 +582,8 @@ async function RefundsTab({ instrumentIds, churchId }: { instrumentIds: string[]
   );
 }
 
-async function BankReturnsTab({ instrumentIds, churchId }: { instrumentIds: string[]; churchId: string }) {
-  const returns = await loadDonorBankReturnsTab(instrumentIds, churchId);
+async function BankReturnsTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const returns = await loadDonorBankReturnsTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Bank Returns">
       {returns.length === 0 ? (
@@ -618,8 +630,8 @@ async function BankReturnsTab({ instrumentIds, churchId }: { instrumentIds: stri
   );
 }
 
-async function DisputesTab({ instrumentIds, churchId }: { instrumentIds: string[]; churchId: string }) {
-  const disputes = await loadDonorDisputesTab(instrumentIds, churchId);
+async function DisputesTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const disputes = await loadDonorDisputesTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Disputes">
       {disputes.length === 0 ? (
@@ -668,8 +680,8 @@ async function DisputesTab({ instrumentIds, churchId }: { instrumentIds: string[
   );
 }
 
-async function ActivityTab({ donor, instrumentIds, churchId }: { donor: any; instrumentIds: string[]; churchId: string }) {
-  const events = await loadDonorActivityTab(donor, instrumentIds, churchId);
+async function ActivityTab({ donor, instrumentIds, churchId, scopedUserId }: { donor: any; instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
+  const events = await loadDonorActivityTab(donor, instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Activity">
       {events.length === 0 ? (

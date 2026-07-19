@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
@@ -10,12 +9,23 @@ import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
 import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
+  // Team-access Checkpoint 4C: migrated off getSession() to
+  // requireMerchantSession() (which already fails closed for wgc_admin and
+  // disabled users) — VIEWER remains explicitly blocked per the approved
+  // Checkpoint 3 spec ("VIEWER cannot take payments").
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return toSafeErrorResponse("You do not have permission to perform this action.", err.status);
+    throw err;
+  }
+  if (auth.role === "viewer") {
     return toSafeErrorResponse("You do not have permission to perform this action.", 401);
   }
 
@@ -73,7 +83,7 @@ export async function POST(req: Request) {
       donor.phone = normalized;
     }
 
-    const church = await prisma.church.findUnique({ where: { id: session.churchId } });
+    const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
     if (!church || !church.finixMerchantId) {
       return NextResponse.json({ success: false, code: "PAYMENT_CONFIGURATION_ERROR", message: "Organization is not set up to accept payments", retryable: false }, { status: 400 });
     }
@@ -156,7 +166,7 @@ export async function POST(req: Request) {
       : await prisma.paymentAttempt.create({
           data: {
             churchId: church.id,
-            adminUserId: session.userId,
+            adminUserId: auth.userId,
             clientAttemptId,
             idempotencyId,
             amountCents: donationAmountCents,
@@ -206,7 +216,7 @@ export async function POST(req: Request) {
         source: "wgc_admin_payment",
         merchantId: church.finixMerchantId,
         churchId: church.id,
-        adminUserId: session.userId,
+        adminUserId: auth.userId,
         donation_amount_cents: String(donationAmountCents),
         processing_fee_cents: String(feeStrategy.expectedFeeCents),
         donor_covers_fee: String(coverFees),
@@ -271,6 +281,15 @@ export async function POST(req: Request) {
       data: {
         churchId: church.id,
         donorId: donorRecord.id,
+        // Team-access Checkpoint 3: no "assign to another user" parameter
+        // exists in this flow today (createdByAdminUserId below has always
+        // been unconditionally the acting session user, never
+        // client-selectable) — so this defaults to the acting merchant user
+        // for every role, which also happens to satisfy "FUNDRAISER is
+        // always forced to themselves" for free, without extra branching.
+        // Building an explicit OWNER/ADMIN "assign to someone else" control
+        // would be new UI + API surface, out of scope for this checkpoint.
+        attributedUserId: auth.userId,
         finixTransferId: transfer.id,
         finixBuyerIdentityId: identityId,
         finixPaymentInstrumentId: instrumentId,
@@ -284,7 +303,7 @@ export async function POST(req: Request) {
         fundName: fundName || null,
         note: note || null,
         isAnonymous: isAnonymous ?? false,
-        createdByAdminUserId: session.userId,
+        createdByAdminUserId: auth.userId,
         paymentAttemptId: attempt.id,
         goodsServicesProvided: goodsServicesProvidedValue,
         goodsServicesDescription: goodsServicesProvidedValue ? goodsServicesDescription : null,
@@ -302,9 +321,9 @@ export async function POST(req: Request) {
 
     await logDashboardAction({
       churchId: church.id,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "TAKE_PAYMENT",
       entityType: "PAYMENT",
       entityId: newPayment.id,

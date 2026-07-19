@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { resolveRecurringPaymentAttribution } from "@/lib/auth/attributionSnapshot";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
 import { redactFinixPayload } from "@/lib/finix/redact";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
@@ -329,6 +330,13 @@ export async function syncFinixDataFromWebhookEvent(
                   churchId,
                   donorId,
                   givingLinkId: sub.givingLinkId || null,
+                  // Team-access Checkpoint 3: inherited directly from the
+                  // subscription's own snapshotted attribution — never
+                  // re-read from the giving link here, so a link
+                  // reassignment after the subscription was created doesn't
+                  // change attribution for this or any other recurring
+                  // charge on this subscription.
+                  attributedUserId: resolveRecurringPaymentAttribution(sub),
                   finixTransferId: data.id,
                   finixBuyerIdentityId: sub.finixBuyerIdentityId || data.merchant_identity || null,
                   finixPaymentInstrumentId: data.source || null,

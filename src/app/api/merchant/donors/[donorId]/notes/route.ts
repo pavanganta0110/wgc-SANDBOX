@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET(req: Request, { params }: { params: Promise<{ donorId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { donorId } = await params;
-  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: session.churchId } });
+  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: auth.churchId } });
   if (!donor) {
     return NextResponse.json({ error: "Donor not found" }, { status: 404 });
   }
 
   const notes = await prisma.donorNote.findMany({
-    where: { donorId, churchId: session.churchId, deletedAt: null },
+    where: { donorId, churchId: auth.churchId, deletedAt: null },
     orderBy: { createdAt: "desc" },
   });
 
@@ -26,14 +33,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ donorId:
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ donorId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canAddNote) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canAddNote) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { donorId } = await params;
-  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: session.churchId } });
+  const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId: auth.churchId } });
   if (!donor) {
     return NextResponse.json({ error: "Donor not found" }, { status: 404 });
   }
@@ -47,18 +60,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ donorId
   const note = await prisma.donorNote.create({
     data: {
       donorId,
-      churchId: session.churchId,
+      churchId: auth.churchId,
       body: noteBody,
-      createdByUserId: session.userId,
-      createdByEmail: session.email,
+      createdByUserId: auth.userId,
+      createdByEmail: auth.email,
     },
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.note_added",
     entityType: "donor",
     entityId: donorId,

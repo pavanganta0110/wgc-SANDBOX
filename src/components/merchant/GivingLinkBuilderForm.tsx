@@ -159,6 +159,9 @@ export default function GivingLinkBuilderForm({
   churchName,
   churchLogoUrl,
   pricing,
+  ownerOptions,
+  initialOwnerUserId,
+  canAssignOwner,
 }: {
   mode: "create" | "edit";
   linkId?: string;
@@ -166,9 +169,15 @@ export default function GivingLinkBuilderForm({
   churchName: string;
   churchLogoUrl?: string | null;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
+  /** Active same-church team members eligible to own a giving link. Omit to hide the ownership section entirely. */
+  ownerOptions?: { id: string; email: string; role: string }[];
+  initialOwnerUserId?: string;
+  /** FUNDRAISER never gets this — they're always forced to themselves server-side regardless. */
+  canAssignOwner?: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<BuilderState>({ ...defaultState(), ...(initial || {}) });
+  const [ownerUserId, setOwnerUserId] = useState<string>(initialOwnerUserId || "");
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -356,6 +365,7 @@ export default function GivingLinkBuilderForm({
       failureReturnUrl: state.failureReturnUrl.trim() || null,
       cancelReturnUrl: state.cancelReturnUrl.trim() || null,
       brandingSettings: state.branding,
+      ...(canAssignOwner && ownerUserId ? { ownerUserId } : {}),
     };
 
     try {
@@ -398,6 +408,35 @@ export default function GivingLinkBuilderForm({
         
         {/* Left: configuration */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-100 lg:h-full lg:overflow-y-auto pb-32 p-1">
+          {ownerOptions && ownerOptions.length > 0 && (
+            <Section title="Ownership" defaultOpen={mode === "create"}>
+              <div>
+                <FieldLabel>Owner</FieldLabel>
+                {canAssignOwner ? (
+                  <>
+                    <select
+                      value={ownerUserId}
+                      onChange={(e) => setOwnerUserId(e.target.value)}
+                      className={inputClass}
+                    >
+                      {ownerOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.email} ({o.role})
+                        </option>
+                      ))}
+                    </select>
+                    {mode === "edit" && (
+                      <p className="text-xs text-amber-600 mt-1.5">
+                        Changing the owner only affects future donations through this link — historical transactions and their attribution remain unchanged.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-slate-600">{ownerOptions.find((o) => o.id === ownerUserId)?.email || "You"}</p>
+                )}
+              </div>
+            </Section>
+          )}
           <Section title="Basic Link Information">
             <div>
               <FieldLabel>Internal Name *</FieldLabel>

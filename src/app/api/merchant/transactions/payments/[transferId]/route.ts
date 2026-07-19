@@ -1,21 +1,31 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { reconcilePaymentFees } from "@/lib/payments/backfill";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildPaymentScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET(req: Request, { params }: { params: Promise<{ transferId: string }> }) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return toSafeErrorResponse("You do not have permission to perform this action.", 401);
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return toSafeErrorResponse(err.message, err.status);
+    throw err;
   }
 
   const { transferId } = await params;
 
   try {
+    // Team-access Checkpoint 4A: id + scope combined in one query, not
+    // fetch-then-check — a FUNDRAISER guessing another user's transferId
+    // gets the same 404 a nonexistent one would.
+    const viewScope = await resolveViewScope(auth);
+    const scope = buildPaymentScope(auth, viewScope);
     let payment = await prisma.payment.findFirst({
-      where: { finixTransferId: transferId, churchId: session.churchId },
+      where: { finixTransferId: transferId, ...scope },
     });
 
     if (!payment) {

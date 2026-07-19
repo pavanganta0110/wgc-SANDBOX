@@ -11,13 +11,26 @@ describe("getSettingsPermissions", () => {
     expect(p.canManageTeam).toBe(false);
   });
 
-  it("church_admin can edit everything except triggering a processor sync", () => {
+  it("Checkpoint 4: church_admin normalizes to admin-equivalent — can edit org settings but canManageTeam is override-gated, not unconditional", () => {
     const p = getSettingsPermissions("church_admin");
     expect(p.canEdit).toBe(true);
-    expect(p.canManageTeam).toBe(true);
+    expect(p.canManageTeam).toBe(false); // ADMIN's canManageTeam is override-only per the Checkpoint 2 matrix
     expect(p.canManageSecurity).toBe(true);
     expect(p.canManageBranding).toBe(true);
     expect(p.canTriggerSync).toBe(false);
+  });
+
+  it("only OWNER can request account closure", () => {
+    expect(getSettingsPermissions("owner").canRequestAccountClosure).toBe(true);
+    expect(getSettingsPermissions("admin").canRequestAccountClosure).toBe(false);
+  });
+
+  it("FUNDRAISER and VIEWER cannot see or edit Settings at all", () => {
+    for (const role of ["fundraiser", "viewer"] as const) {
+      const p = getSettingsPermissions(role);
+      expect(p.canView).toBe(false);
+      expect(p.canEdit).toBe(false);
+    }
   });
 
   it("default-denies for an unrecognized or missing role", () => {

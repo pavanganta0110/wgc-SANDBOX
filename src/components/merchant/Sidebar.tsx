@@ -30,6 +30,10 @@ interface NavItem {
   href: string;
   icon: typeof LayoutDashboard;
   children?: { name: string; href: string }[];
+  /** Sections that are organization-level only — hidden for FUNDRAISER/VIEWER,
+   * matching the API-level access policy (they're denied server-side either way;
+   * this just keeps the nav from showing a link that always 404s/401s for them). */
+  organizationOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -46,24 +50,30 @@ const NAV_ITEMS: NavItem[] = [
       { name: "Bank Returns", href: "/merchant/transactions/bank-returns" },
     ],
   },
-  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert },
-  { name: "Settlements", href: "/merchant/settlements", icon: Landmark },
-  { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank },
+  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert, organizationOnly: true },
+  { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true },
+  { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true },
   { name: "Donors", href: "/merchant/donors", icon: Users },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
-  { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard },
-  { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck },
-  { name: "Settings", href: "/merchant/settings", icon: Settings },
+  { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true },
+  { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck, organizationOnly: true },
+  { name: "Settings", href: "/merchant/settings", icon: Settings, organizationOnly: true },
   { name: "Support", href: "/merchant/support", icon: LifeBuoy },
-  { name: "Company", href: "/merchant/organization", icon: Building2 },
+  { name: "Company", href: "/merchant/organization", icon: Building2, organizationOnly: true },
 ];
 
 const STORAGE_KEY = "wgc_merchant_sidebar_collapsed";
 
-export default function Sidebar() {
+export default function Sidebar({ role }: { role?: string } = {}) {
   const pathname = usePathname();
+  // Role navigation: FUNDRAISER/VIEWER get only their own links,
+  // transactions, donors, and recurring gifts — organization-level
+  // sections (settlements, deposits, disputes, billing, compliance,
+  // settings, company) are hidden rather than shown-but-denied.
+  const isOrgLevelRole = role === "owner" || role === "admin" || role === "church_admin" || !role;
+  const visibleItems = isOrgLevelRole ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.organizationOnly);
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
@@ -73,7 +83,7 @@ export default function Sidebar() {
   }, []);
 
   useEffect(() => {
-    const activeGroup = NAV_ITEMS.find((item) =>
+    const activeGroup = visibleItems.find((item) =>
       item.children?.some((child) => pathname === child.href)
     );
     if (activeGroup) {
@@ -112,7 +122,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="space-y-1">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = item.icon;
 
           if (item.children) {

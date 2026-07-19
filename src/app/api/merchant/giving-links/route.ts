@@ -1,14 +1,27 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { generatePublicSlug, isValidReturnUrl } from "@/lib/givingLinks/validation";
 import { DEFAULT_DONOR_FIELD_SETTINGS } from "@/lib/givingLinks/types";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveGivingLinkOwnerForCreate } from "@/lib/auth/givingLinkOwnership";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildGivingLinkScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Team-access Checkpoint 4: now scoped via buildGivingLinkScope +
+  // resolveViewScope — FUNDRAISER sees only ownerUserId = themselves,
+  // OWNER/authorized ADMIN can select organization or a specific user's
+  // scope, VIEWER defaults to their own scope. See scopes.ts.
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
+  const viewScope = await resolveViewScope(auth);
+  const scope = buildGivingLinkScope(auth, viewScope);
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") || undefined;
@@ -18,7 +31,7 @@ export async function GET(req: Request) {
 
   const links = await prisma.givingLink.findMany({
     where: {
-      churchId: session.churchId,
+      ...scope,
       ...(status ? { status } : {}),
       ...(linkType ? { linkType } : {}),
       ...(amountType ? { amountType } : {}),
@@ -31,9 +44,12 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const body = await req.json();
@@ -66,7 +82,16 @@ export async function POST(req: Request) {
     failureReturnUrl,
     cancelReturnUrl,
     brandingSettings,
+    ownerUserId: requestedOwnerUserId,
   } = body;
+
+  let resolvedOwnerUserId: string;
+  try {
+    resolvedOwnerUserId = await resolveGivingLinkOwnerForCreate(auth, requestedOwnerUserId);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   if (!internalName?.trim() || !publicTitle?.trim()) {
     return NextResponse.json({ error: "Internal name and public title are required" }, { status: 400 });
@@ -112,7 +137,7 @@ export async function POST(req: Request) {
 
   const link = await prisma.givingLink.create({
     data: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       publicSlug,
       internalName: internalName.trim(),
       publicTitle: publicTitle.trim(),
@@ -143,7 +168,8 @@ export async function POST(req: Request) {
       failureReturnUrl: failureReturnUrl?.trim() || null,
       cancelReturnUrl: cancelReturnUrl?.trim() || null,
       brandingSettingsJson: brandingSettings || null,
-      createdByUserId: session.userId,
+      createdByUserId: auth.userId,
+      ownerUserId: resolvedOwnerUserId,
     },
   });
 

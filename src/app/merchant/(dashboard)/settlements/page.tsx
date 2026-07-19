@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowUpDown, Landmark } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
+import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { formatCents, formatSignedCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -47,7 +49,17 @@ export default async function SettlementsPage({
   }>;
 }) {
   const session = await getSession();
-  const churchId = session!.churchId!;
+  // Team-access Checkpoint 4: settlements are organization-level financial
+  // information — OWNER always, ADMIN only with canViewSettlements,
+  // FUNDRAISER/VIEWER denied per the approved policy. Previously this page
+  // had no role gate at all beyond the coarse middleware session check, so
+  // any authenticated org member — including FUNDRAISER/VIEWER — could load
+  // full settlement data. Redirecting before any data fetch closes that gap
+  // without needing a new access-denied UI component.
+  if (!session?.churchId || !getSettlementPermissions(session.role).canView) {
+    redirect("/merchant/dashboard");
+  }
+  const churchId = session.churchId;
   const sp = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;

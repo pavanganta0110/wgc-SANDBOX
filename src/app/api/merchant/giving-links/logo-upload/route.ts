@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   try {
@@ -36,7 +40,7 @@ export async function POST(req: Request) {
 
     // Get organization Finix ID
     const church = await prisma.church.findUnique({
-      where: { id: session.churchId },
+      where: { id: auth.churchId },
       select: { finixMerchantId: true, finixIdentityId: true }
     });
 
@@ -94,10 +98,10 @@ export async function POST(req: Request) {
 
     // 3. Audit log
     await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "giving_link.logo_uploaded",
       entityType: "giving_link",
       metadata: { fileName: file.name, fileSize: file.size, fileId: finixFileId },

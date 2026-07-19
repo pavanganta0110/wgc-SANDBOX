@@ -1,20 +1,28 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildFinixTransferScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ transferId: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return toSafeErrorResponse("You do not have permission to perform this action.", 401);
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return toSafeErrorResponse(err.message, err.status);
+    throw err;
   }
 
   const { transferId } = await params;
 
+  const viewScope = await resolveViewScope(auth);
+  const transferScope = await buildFinixTransferScope(auth, viewScope);
   const transfer = await prisma.finixTransfer.findFirst({
-    where: { finixTransferId: transferId, churchId: session.churchId },
+    where: { AND: [{ finixTransferId: transferId }, transferScope] },
   });
   if (!transfer) {
     return NextResponse.json({ error: "Payment not found" }, { status: 404 });
@@ -39,7 +47,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ transf
     });
 
     await prisma.payment.updateMany({
-      where: { finixTransferId: transferId, churchId: session.churchId },
+      where: { finixTransferId: transferId, churchId: auth.churchId },
       data: { receiptStatus: "SENT", receiptSentAt: new Date() },
     });
 
@@ -47,8 +55,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ transf
   } catch (error: any) {
     console.error(`Receipt send failed for transfer ${transferId}:`, error);
     return toSafeErrorResponse(error, 402, {
-      userId: session.userId,
-      organizationId: session.churchId,
+      userId: auth.userId,
+      organizationId: auth.churchId,
       route: `/api/merchant/transactions/payments/${transferId}/receipt`,
       action: "SEND_RECEIPT",
       resourceId: transferId,

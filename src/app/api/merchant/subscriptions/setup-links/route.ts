@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { SUPPORTED_SUBSCRIPTION_FREQUENCIES, frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
@@ -8,17 +7,25 @@ import { sendWgcEmail } from "@/lib/email";
 import { formatCents } from "@/lib/format";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const DEFAULT_EXPIRY_DAYS = 14;
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const links = await prisma.subscriptionSetupLink.findMany({
-    where: { churchId: session.churchId },
+    where: { churchId: auth.churchId },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -27,12 +34,18 @@ export async function GET(req: Request) {
 
 /** Flow 2 — Send Secure Setup Link. Only a token hash is ever stored; the raw token exists solely in the emailed URL and this single response. */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canCreate) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canCreate) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
 
   const body = await req.json();
   const { donorId, donorFirstName, donorLastName, donorEmail, donorPhone, amountCents, billingInterval, startDate: startDateStr, endDate: endDateStr, fundId, message, expiresInDays } = body;
@@ -95,7 +108,7 @@ export async function POST(req: Request) {
       message: message || null,
       status: "PENDING",
       expiresAt,
-      createdByUserId: session.userId,
+      createdByUserId: auth.userId,
     },
   });
 
@@ -124,9 +137,9 @@ export async function POST(req: Request) {
 
   await logDashboardAction({
     churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "subscription.setup_link_sent",
     entityType: "subscription_setup_link",
     entityId: link.id,

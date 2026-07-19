@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
@@ -5,6 +6,13 @@ import ContactsPanel from "@/components/merchant/ContactsPanel";
 
 export default async function OrganizationContactsPage() {
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
+  // matching API-route guard comment for why this back door exists
+  // otherwise.
+  if (session?.role === "wgc_admin") {
+    redirect("/merchant/dashboard");
+  }
   const permissions = getOrganizationPermissions(session?.role);
   const contacts = await prisma.organizationContact.findMany({ where: { churchId: session!.churchId! }, orderBy: { createdAt: "asc" } });
 

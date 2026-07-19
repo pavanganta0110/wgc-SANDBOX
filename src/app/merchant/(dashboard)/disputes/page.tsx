@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowUpDown, ShieldAlert } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { getDisputePermissions } from "@/lib/finix/disputePermissions";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -55,7 +57,14 @@ export default async function DisputesPage({
   }>;
 }) {
   const session = await getSession();
-  const churchId = session!.churchId!;
+  // Team-access Checkpoint 4A: previously had no role gate at all beyond
+  // middleware — every authenticated org member saw every dispute
+  // org-wide. Disputes have no row-level attribution wired yet, so
+  // FUNDRAISER/VIEWER are denied entirely per the approved fallback policy.
+  if (!session?.churchId || !getDisputePermissions(session.role).canView) {
+    redirect("/merchant/dashboard");
+  }
+  const churchId = session.churchId;
   const sp = await searchParams;
   const tab = sp.tab === "needs_attention" ? "needs_attention" : "all";
   const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);

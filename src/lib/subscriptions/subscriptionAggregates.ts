@@ -111,6 +111,12 @@ export interface SubscriptionCandidateFilters {
   donorId?: string;
   id?: string;
   status?: SubscriptionDisplayStatus | "MIXED";
+  // Team-access Checkpoint 4A: null/undefined = organization scope (all
+  // church subscriptions, including unattributed). A string value scopes
+  // to that user's FinixSubscription.attributedUserId only — see
+  // buildSubscriptionScope in src/lib/auth/scopes.ts, which callers should
+  // use to resolve this value rather than reading view-scope state directly.
+  attributedUserId?: string;
 }
 
 /** Fetches a bounded set of subscriptions + their instrument/donor/givingLink/fund joins in a fixed number of batch queries, then shapes each into a fully-attributed SubscriptionRow. This is the single shared source both the Subscriptions (schedule-centric) and Recurring Donors (donor-centric, grouped by donorId) list loaders build on. */
@@ -130,6 +136,7 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
       churchId,
       ...(filters.donorId ? { donorId: filters.donorId } : {}),
       ...(filters.id ? { id: filters.id } : {}),
+      ...(filters.attributedUserId ? { attributedUserId: filters.attributedUserId } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: SUBSCRIPTION_CANDIDATE_CAP,

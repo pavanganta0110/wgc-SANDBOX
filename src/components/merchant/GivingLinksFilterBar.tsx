@@ -19,7 +19,14 @@ function titleCase(s: string) {
   return s.charAt(0) + s.slice(1).toLowerCase();
 }
 
-export default function GivingLinksFilterBar({ exportHref }: { exportHref?: string }) {
+export default function GivingLinksFilterBar({
+  exportHref,
+  ownerOptions,
+}: {
+  exportHref?: string;
+  /** Present only for OWNER/ADMIN — FUNDRAISER/VIEWER are already hard-scoped server-side. */
+  ownerOptions?: { id: string; email: string; disabledAt: Date | null }[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -27,12 +34,14 @@ export default function GivingLinksFilterBar({ exportHref }: { exportHref?: stri
   const linkType = searchParams.get("linkType") || "";
   const amountType = searchParams.get("amountType") || "";
   const name = searchParams.get("name") || "";
+  const owner = searchParams.get("owner") || "";
 
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isLinkTypeOpen, setIsLinkTypeOpen] = useState(false);
   const [isAmountTypeOpen, setIsAmountTypeOpen] = useState(false);
+  const [isOwnerOpen, setIsOwnerOpen] = useState(false);
 
-  const activeFilterCount = [status, linkType, amountType, name].filter(Boolean).length;
+  const activeFilterCount = [status, linkType, amountType, name, owner].filter(Boolean).length;
 
   const setParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -135,6 +144,45 @@ export default function GivingLinksFilterBar({ exportHref }: { exportHref?: stri
           </>
         )}
       </div>
+
+      {/* Owner */}
+      {ownerOptions && ownerOptions.length > 0 && (
+        <div className="relative">
+          <button
+            onClick={() => setIsOwnerOpen((o) => !o)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 ${
+              isOwnerOpen ? "border-slate-900" : "border-slate-200"
+            }`}
+          >
+            {owner === "mine" ? "My Links" : owner ? ownerOptions.find((o) => o.id === owner)?.email || "Team Member" : "All Links"}
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOwnerOpen ? "rotate-180" : ""}`} />
+          </button>
+          {isOwnerOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setIsOwnerOpen(false)} />
+              <div className="absolute left-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 w-56 max-h-72 overflow-y-auto">
+                <button onClick={() => { setParam("owner", ""); setIsOwnerOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                  All Links
+                </button>
+                <button onClick={() => { setParam("owner", "mine"); setIsOwnerOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                  My Links
+                </button>
+                <div className="border-t border-slate-100 my-1" />
+                {ownerOptions.map((o) => (
+                  <button
+                    key={o.id}
+                    onClick={() => { setParam("owner", o.id); setIsOwnerOpen(false); }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 truncate"
+                  >
+                    {o.email}
+                    {o.disabledAt && <span className="ml-1.5 text-xs text-slate-400">(disabled)</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Link Name */}
       <input

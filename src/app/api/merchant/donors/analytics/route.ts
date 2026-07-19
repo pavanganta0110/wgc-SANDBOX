@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { loadDonorSummary } from "@/lib/donors/donorSummary";
 import { loadDonationTrend, loadTopDonors, type TopDonorMetric } from "@/lib/donors/donorAnalytics";
@@ -12,9 +13,15 @@ import { prisma } from "@/lib/prisma";
 // never accepted from the browser, even though callers could try to pass
 // their own churchId in the query string.
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -33,7 +40,7 @@ export async function GET(req: Request) {
     previousPeriodFilter = { gte: new Date(dateFilter.gte.getTime() - spanMs), lte: new Date(dateFilter.gte.getTime() - 1) };
   }
 
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
 
   const summary = await loadDonorSummary(churchId, dateFilter);
   const trend = await loadDonationTrend(churchId, dateFilter, "weekly");

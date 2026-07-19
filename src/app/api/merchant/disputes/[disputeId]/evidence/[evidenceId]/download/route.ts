@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { getDisputePermissions } from "@/lib/finix/disputePermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Proxies the evidence file back through our own server so the browser
@@ -15,15 +16,21 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ disputeId: string; evidenceId: string }> }
 ) {
-  const session = await getSession();
-  const permissions = getDisputePermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDisputePermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { disputeId, evidenceId } = await params;
   const dispute = await prisma.finixDispute.findFirst({
-    where: { finixDisputeId: disputeId, churchId: session.churchId },
+    where: { finixDisputeId: disputeId, churchId: auth.churchId },
   });
   if (!dispute) {
     return NextResponse.json({ error: "Dispute not found" }, { status: 404 });

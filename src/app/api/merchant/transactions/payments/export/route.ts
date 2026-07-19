@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildFinixTransferScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -16,11 +19,19 @@ function csvEscape(value: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Team-access Checkpoint 4A: was gated on the legacy church_admin-only
+  // check and exported the whole church unconditionally — now scoped
+  // identically to the dashboard payments list (test: "Payment export
+  // equals payment dashboard scope").
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
+  const viewScope = await resolveViewScope(auth);
+  const transferScope = await buildFinixTransferScope(auth, viewScope);
 
   const { searchParams } = new URL(req.url);
   const state = searchParams.get("state") || undefined;
@@ -35,7 +46,7 @@ export async function GET(req: Request) {
 
   const transfers = await prisma.finixTransfer.findMany({
     where: {
-      churchId: session.churchId,
+      ...transferScope,
       // See the same OR-in-null fix in transactions/payments/page.tsx —
       // NOT: { subtype: { contains: "RETURN" } } alone excludes every
       // null-subtype row too under SQL's three-valued logic.

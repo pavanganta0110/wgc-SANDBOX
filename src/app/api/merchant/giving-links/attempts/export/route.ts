@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { loadGivingLinkAttempts } from "@/lib/givingLinks/attempts";
 import { resolveDateRange } from "@/lib/dateRangePresets";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
+import { normalizeMerchantRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
 
 function csvEscape(value: string) {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -13,8 +15,23 @@ function csvEscape(value: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  // Team-access Checkpoint 4C: this route was legacy-role-gated (only the
+  // pre-Checkpoint-1 "church_admin" string, which locked out every
+  // owner/admin created since) and, separately, loadGivingLinkAttempts has
+  // no per-user attribution filter today — per the established fallback
+  // policy for resources that can't yet be reliably row-scoped, this stays
+  // organization-wide-only (OWNER/ADMIN with export+all-transactions
+  // permission), FUNDRAISER/VIEWER denied entirely.
+  const normalized = normalizeMerchantRole(auth.rawRole);
+  const base = normalized ? ROLE_PERMISSIONS[normalized] : null;
+  if (!base?.canExportReports || !base.canViewAllTransactions) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,7 +43,7 @@ export async function GET(req: Request) {
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
-  const rows = await loadGivingLinkAttempts(session.churchId, { givingLinkId, dateFilter, take: 5000 });
+  const rows = await loadGivingLinkAttempts(auth.churchId, { givingLinkId, dateFilter, take: 5000 });
 
   const header = [
     "Attempt ID",

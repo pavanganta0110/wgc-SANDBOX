@@ -1,18 +1,25 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { resolveBankAccountDisplayStatus } from "@/lib/organization/bankAccountStatus";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET() {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const pending = await prisma.organizationBankAccount.findFirst({
-    where: { churchId: session.churchId, isActiveDestination: false, status: { notIn: ["REJECTED", "REPLACED"] } },
+    where: { churchId: auth.churchId, isActiveDestination: false, status: { notIn: ["REJECTED", "REPLACED"] } },
     orderBy: { addedAt: "desc" },
   });
 

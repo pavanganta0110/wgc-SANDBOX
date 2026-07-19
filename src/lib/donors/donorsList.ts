@@ -44,6 +44,16 @@ export interface DonorsListFilters {
   hasDispute?: boolean;
   hasActiveSubscription?: boolean;
   archivedStatus?: "active" | "archived" | "all";
+  /** Team-access Checkpoint 4A: undefined = organization scope (all
+   * church donors). A non-null array restricts to exactly these donor IDs —
+   * set from resolveScopedDonorIds(auth, viewScope) in scopes.ts, which
+   * derives "does this donor have a Payment/FinixSubscription attributed to
+   * the scoped user" (Donor itself has no ownerUserId/attributedUserId — a
+   * donor can give through multiple team members' links, per the approved
+   * spec). An empty array (not undefined) means the scoped user has zero
+   * qualifying donors — that must exclude everything, not be treated as
+   * "no filter." */
+  donorIdIn?: string[] | null;
 }
 
 export interface DonorsListSort {
@@ -74,6 +84,7 @@ export async function loadDonorsList(
     ...(archivedStatus === "active" ? { archivedAt: null } : {}),
     ...(archivedStatus === "archived" ? { archivedAt: { not: null } } : {}),
     ...(filters.createdDateFilter ? { createdAt: filters.createdDateFilter } : {}),
+    ...(filters.donorIdIn ? { id: { in: filters.donorIdIn } } : {}),
   };
 
   if (filters.search) {

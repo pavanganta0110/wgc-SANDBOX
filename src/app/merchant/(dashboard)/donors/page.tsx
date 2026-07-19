@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { ArrowUpDown, Users, AlertTriangle } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
@@ -77,10 +81,24 @@ export default async function DonorsPage({
     id?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
-  const permissions = getDonorPermissions(session?.role);
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/dashboard");
+    throw err;
+  }
+  const churchId = auth.churchId;
+  const permissions = getDonorPermissions(auth.rawRole);
   const sp = await searchParams;
+
+  // Team-access: donor list scoped to donors with attributed activity for
+  // the selected user (resolveScopedDonorIds, same helper used by the
+  // donor-export and donor-detail routes). Summary/trend/growth analytics
+  // cards above the table remain organization-wide — those loaders don't
+  // yet accept a scope filter.
+  const viewScope = await resolveViewScope(auth);
+  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
 
   const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -135,6 +153,7 @@ export default async function DonorsPage({
       hasDispute: sp.hasDispute === "1",
       hasActiveSubscription: sp.hasActiveSubscription === "1",
       archivedStatus: (sp.archived as "active" | "archived" | "all") || "active",
+      donorIdIn: scopedDonorIds,
     },
     { key: sortKey, dir: sortDir },
     page,

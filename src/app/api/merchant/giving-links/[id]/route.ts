@@ -1,34 +1,52 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { isValidReturnUrl } from "@/lib/givingLinks/validation";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { validateGivingLinkReassignment } from "@/lib/auth/givingLinkOwnership";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildGivingLinkScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
+import { logDashboardAction } from "@/lib/dashboardAudit";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
   const { id } = await params;
 
-  const link = await prisma.givingLink.findFirst({ where: { id, churchId: session.churchId } });
+  // Team-access Checkpoint 4: scoped by id + the same buildGivingLinkScope
+  // fragment as the list route, not just churchId — a FUNDRAISER guessing
+  // another user's link ID must get the same 404 as a nonexistent one, not
+  // a 200 with data the list would never have shown them (test 2/9).
+  const viewScope = await resolveViewScope(auth);
+  const scope = buildGivingLinkScope(auth, viewScope);
+  const link = await prisma.givingLink.findFirst({ where: { id, ...scope } });
   if (!link) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
   return NextResponse.json({ link });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
   const { id } = await params;
 
-  const existing = await prisma.givingLink.findFirst({ where: { id, churchId: session.churchId } });
+  const existing = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!existing) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
   const body = await req.json();
   const {
+    ownerUserId: requestedOwnerUserId,
     internalName,
     publicTitle,
     description,
@@ -80,6 +98,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "At least one payment method is required" }, { status: 400 });
   }
 
+  // Team-access Checkpoint 3: reassignment is a distinct, permission-checked
+  // operation layered onto the general-purpose edit endpoint — see
+  // validateGivingLinkReassignment for exactly who's allowed to do this.
+  // Reassignment never touches historical Payment/FinixSubscription
+  // attribution (those are snapshotted once at creation) — only future
+  // donations through this link are affected.
+  const isReassignment = requestedOwnerUserId !== undefined && requestedOwnerUserId !== existing.ownerUserId;
+  if (isReassignment) {
+    try {
+      await validateGivingLinkReassignment(
+        auth,
+        { currentOwnerUserId: existing.ownerUserId, linkChurchId: existing.churchId },
+        requestedOwnerUserId
+      );
+    } catch (err) {
+      if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+      throw err;
+    }
+  }
+
   const resolvedAmountType = amountType === "VARIABLE" || amountType === "FIXED" ? amountType : undefined;
 
   const link = await prisma.givingLink.update({
@@ -113,8 +151,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(failureReturnUrl !== undefined ? { failureReturnUrl: failureReturnUrl?.trim() || null } : {}),
       ...(cancelReturnUrl !== undefined ? { cancelReturnUrl: cancelReturnUrl?.trim() || null } : {}),
       ...(brandingSettings !== undefined ? { brandingSettingsJson: brandingSettings } : {}),
+      ...(isReassignment ? { ownerUserId: requestedOwnerUserId } : {}),
     },
   });
+
+  if (isReassignment) {
+    await logDashboardAction({
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      action: "GIVING_LINK_REASSIGNED",
+      entityType: "GivingLink",
+      entityId: link.id,
+      metadata: {
+        previousOwnerUserId: existing.ownerUserId,
+        newOwnerUserId: requestedOwnerUserId,
+      },
+      req,
+    });
+  }
 
   revalidatePath(`/g/${link.publicSlug}`);
 
@@ -128,10 +184,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       cleanupUnusedLogo(
         oldLogoUrl,
         id,
-        session!.churchId!,
-        session!.userId!,
-        session!.email!,
-        session!.role!,
+        auth.churchId,
+        auth.userId,
+        auth.email,
+        auth.rawRole,
         req
       );
     }).catch(err => {

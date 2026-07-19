@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { mergeDonors } from "@/lib/donors/donorMerge";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 // The `donorId` route param is the PRIMARY (surviving) donor; the body
 // names the duplicate being merged away.
 export async function POST(req: Request, { params }: { params: Promise<{ donorId: string }> }) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canMerge) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canMerge) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -21,13 +28,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ donorId
   }
 
   try {
-    const result = await mergeDonors(donorId, duplicateDonorId, session.churchId, session.userId, session.email);
+    const result = await mergeDonors(donorId, duplicateDonorId, auth.churchId, auth.userId, auth.email);
 
     await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "donor.merged",
       entityType: "donor",
       entityId: donorId,

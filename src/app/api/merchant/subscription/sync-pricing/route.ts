@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { getSettingsPermissions } from "@/lib/settings/settingsPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * POST /api/merchant/subscription/sync-pricing
@@ -14,14 +17,30 @@ import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
  * does NOT re-sync payments, refunds, or any transaction records.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-
-  if (!session || !session.churchId || !["church_admin", "wgc_admin"].includes(session.role ?? "")) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return toSafeErrorResponse("Unauthorized", err.status);
+    throw err;
+  }
+  // Team-access Checkpoint 4D: was gated on the legacy "church_admin" role
+  // string (plus wgc_admin) — migrated to the centralized settings
+  // permission (OWNER/authorized ADMIN via canEdit), never available while
+  // viewing another user's scope.
+  const permissions = getSettingsPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return toSafeErrorResponse("Unauthorized", 401);
+  }
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return toSafeErrorResponse(err.message, err.status);
+    throw err;
   }
 
   const church = await prisma.church.findUnique({
-    where: { id: session.churchId },
+    where: { id: auth.churchId },
     select: { finixMerchantId: true },
   });
 
@@ -34,7 +53,7 @@ export async function POST(req: Request) {
 
   try {
     const { syncChurchPricingForChurch } = await import("@/lib/finix/sync/syncFeeProfiles");
-    const pricing = await syncChurchPricingForChurch(session.churchId, church.finixMerchantId);
+    const pricing = await syncChurchPricingForChurch(auth.churchId, church.finixMerchantId);
 
     if (!pricing) {
       return NextResponse.json(

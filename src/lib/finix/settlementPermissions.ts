@@ -1,11 +1,6 @@
-/**
- * Settlement action permissions, scoped to the roles that actually exist in
- * this app's session model today (wgc_admin/church_admin) — not the full
- * six-role model described in some specs, which the current task explicitly
- * excludes. church_admin can view and export their own church's data but
- * cannot confirm deposit links or reconciliation; only wgc_admin can.
- */
-export type SessionRole = "wgc_admin" | "church_admin";
+import { normalizeMerchantRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
+
+export type SessionRole = "wgc_admin" | "church_admin" | "owner" | "admin" | "fundraiser" | "viewer";
 
 export interface SettlementPermissions {
   canView: boolean;
@@ -15,6 +10,15 @@ export interface SettlementPermissions {
   canTriggerSync: boolean;
 }
 
+/**
+ * Team-access Checkpoint 4: composed from the centralized role-permission
+ * matrix, directly per the approved policy — "OWNER: allowed. ADMIN:
+ * allowed according to canViewSettlements. FUNDRAISER: denied. VIEWER:
+ * denied unless explicitly overridden." Deposit-link confirmation and
+ * reconciliation management stay wgc_admin-only, matching this module's
+ * original, still-correct design intent (no organization-side role gets
+ * these — they're WGC-operational actions, not merchant self-service ones).
+ */
 export function getSettlementPermissions(role: SessionRole | null | undefined): SettlementPermissions {
   if (role === "wgc_admin") {
     return {
@@ -25,18 +29,22 @@ export function getSettlementPermissions(role: SessionRole | null | undefined): 
       canTriggerSync: true,
     };
   }
-  if (role === "church_admin") {
+
+  const normalized = normalizeMerchantRole(role);
+  if (!normalized) {
     return {
-      canView: true,
-      canExport: true,
+      canView: false,
+      canExport: false,
       canConfirmDepositLink: false,
       canManageReconciliation: false,
       canTriggerSync: false,
     };
   }
+
+  const base = ROLE_PERMISSIONS[normalized];
   return {
-    canView: false,
-    canExport: false,
+    canView: base.canViewSettlements,
+    canExport: base.canViewSettlements && base.canExportReports,
     canConfirmDepositLink: false,
     canManageReconciliation: false,
     canTriggerSync: false,

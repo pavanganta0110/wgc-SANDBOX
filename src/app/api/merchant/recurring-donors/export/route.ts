@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { loadSubscriptionCandidates, groupSubscriptionsByDonor, type RecurringDonorRow } from "@/lib/subscriptions/subscriptionAggregates";
 import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
 import { formatCents } from "@/lib/format";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const COLUMNS: CsvColumn<RecurringDonorRow>[] = [
   { header: "Donor ID", value: (r) => r.donorId },
@@ -24,20 +27,28 @@ const COLUMNS: CsvColumn<RecurringDonorRow>[] = [
 ];
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canExport) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const subscriptions = await loadSubscriptionCandidates(session.churchId);
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const subscriptions = await loadSubscriptionCandidates(auth.churchId, { attributedUserId: scopedUserId });
   const donors = groupSubscriptionsByDonor(subscriptions);
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "recurring_donors.exported",
     entityType: "recurring_donor",
     metadata: { rowCount: donors.length },

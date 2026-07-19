@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
+import { isAuthError } from "@/lib/auth/errors";
 import {
   PAYOUT_PROOF_ALLOWED_MIME_TYPES,
   PAYOUT_PROOF_ALLOWED_EXTENSIONS_LABEL,
@@ -22,14 +24,20 @@ const UPLOAD_ALLOWED_STATUSES = new Set(["SUBMITTED", "REQUIRES_ACTION"]);
 
 export async function GET(_req: Request, { params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params;
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const account = await prisma.organizationBankAccount.findUnique({ where: { id: accountId } });
-  if (!account || account.churchId !== session.churchId) {
+  if (!account || account.churchId !== auth.churchId) {
     return NextResponse.json({ error: "Payout account not found" }, { status: 404 });
   }
 
@@ -50,21 +58,36 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
  */
 export async function POST(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params;
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUpdateBankAccount) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canUpdateBankAccount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  // Team-access Checkpoint 4B: bank-account mutations are blocked while
+  // viewing another user's scope — a reporting view-as selection must never
+  // be able to touch bank settings.
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const account = await prisma.organizationBankAccount.findUnique({ where: { id: accountId } });
-  if (!account || account.churchId !== session.churchId) {
+  if (!account || account.churchId !== auth.churchId) {
     return NextResponse.json({ error: "Payout account not found" }, { status: 404 });
   }
   if (!UPLOAD_ALLOWED_STATUSES.has(account.status)) {
     return NextResponse.json({ error: "This account's submitted evidence is locked and can no longer accept new files." }, { status: 400 });
   }
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { finixMerchantId: true } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { finixMerchantId: true } });
   if (!church?.finixMerchantId) {
     return NextResponse.json({ error: "This organization can't accept document uploads yet" }, { status: 400 });
   }
@@ -113,15 +136,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ account
       fileSize: file.size,
       mimeType: file.type,
       finixFileId,
-      uploadedByUserId: session.userId,
+      uploadedByUserId: auth.userId,
     },
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.payout_documents_uploaded",
     entityType: "organization_bank_account",
     entityId: account.id,

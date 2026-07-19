@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { generatePublicSlug } from "@/lib/givingLinks/validation";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
   const { id } = await params;
 
-  const source = await prisma.givingLink.findFirst({ where: { id, churchId: session.churchId } });
+  const source = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!source) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
   let publicSlug = generatePublicSlug();
@@ -55,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       failureReturnUrl: source.failureReturnUrl,
       cancelReturnUrl: source.cancelReturnUrl,
       brandingSettingsJson: source.brandingSettingsJson ?? undefined,
-      createdByUserId: session.userId,
+      createdByUserId: auth.userId,
     },
   });
 

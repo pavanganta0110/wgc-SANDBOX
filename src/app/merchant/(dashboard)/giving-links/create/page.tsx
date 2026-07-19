@@ -1,14 +1,31 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import GivingLinkBuilderForm from "@/components/merchant/GivingLinkBuilderForm";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export default async function CreateGivingLinkPage() {
-  const session = await getSession();
-  const [church, pricing] = await Promise.all([
-    prisma.church.findUnique({ where: { id: session!.churchId! }, select: { name: true, logoUrl: true } }),
-    prisma.churchPricing.findUnique({ where: { churchId: session!.churchId! } }),
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const canAssignOwner = auth.role === "owner" || auth.role === "admin";
+
+  const [church, pricing, teamMembers] = await Promise.all([
+    prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true } }),
+    prisma.churchPricing.findUnique({ where: { churchId: auth.churchId } }),
+    canAssignOwner
+      ? prisma.user.findMany({
+          where: { churchId: auth.churchId, disabledAt: null, role: { in: ["owner", "admin", "fundraiser", "viewer", "church_admin"] } },
+          select: { id: true, email: true, role: true },
+          orderBy: { email: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -26,6 +43,9 @@ export default async function CreateGivingLinkPage() {
           cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
           achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
         }}
+        ownerOptions={canAssignOwner ? teamMembers : undefined}
+        initialOwnerUserId={auth.userId}
+        canAssignOwner={canAssignOwner}
       />
     </div>
   );

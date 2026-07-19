@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSupportPermissions } from "@/lib/support/supportPermissions";
@@ -8,6 +8,13 @@ import { categoryLabel } from "@/lib/support/ticketCategories";
 export default async function TicketDetailPage({ params }: { params: Promise<{ ticketId: string }> }) {
   const { ticketId } = await params;
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
+  // matching API-route guard comment for why this back door exists
+  // otherwise.
+  if (session?.role === "wgc_admin") {
+    redirect("/merchant/dashboard");
+  }
   const permissions = getSupportPermissions(session?.role);
   if (!session?.churchId || !permissions.canView) notFound();
 

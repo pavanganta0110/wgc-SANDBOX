@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail } from "@/lib/email";
 import { sendText, isSmsConfigured } from "@/lib/sms/sendText";
@@ -8,13 +9,16 @@ import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
 const CHANNELS = new Set(["COPY_LINK", "QR_CODE", "EMAIL", "TEXT", "MANUAL", "EMBED"]);
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
   const { id } = await params;
 
-  const link = await prisma.givingLink.findFirst({ where: { id, churchId: session.churchId } });
+  const link = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!link) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
   const body = await req.json();
@@ -26,14 +30,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
   const publicUrl = `${appUrl}/g/${link.publicSlug}`;
-  const church = await prisma.church.findUnique({ where: { id: session.churchId } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 
   if (channel === "COPY_LINK" || channel === "QR_CODE" || channel === "MANUAL" || channel === "EMBED") {
     const share = await prisma.givingLinkShare.create({
       data: {
         givingLinkId: id,
-        churchId: session.churchId,
-        sharedByUserId: session.userId,
+        churchId: auth.churchId,
+        sharedByUserId: auth.userId,
         channel,
         recipient: null,
         state: "SENT",
@@ -65,8 +69,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const share = await prisma.givingLinkShare.create({
       data: {
         givingLinkId: id,
-        churchId: session.churchId,
-        sharedByUserId: session.userId,
+        churchId: auth.churchId,
+        sharedByUserId: auth.userId,
         channel: "EMAIL",
         recipient,
         message: message?.trim() || null,
@@ -95,8 +99,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const share = await prisma.givingLinkShare.create({
       data: {
         givingLinkId: id,
-        churchId: session.churchId,
-        sharedByUserId: session.userId,
+        churchId: auth.churchId,
+        sharedByUserId: auth.userId,
         channel: "TEXT",
         recipient: normalized,
         message: message?.trim() || null,

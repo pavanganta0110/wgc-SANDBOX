@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildPaymentScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Post-payment correction of a payment's goods/services acknowledgment
@@ -15,13 +18,19 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * was already sent (see sendDonationReceipt).
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ transferId: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const { transferId } = await params;
-  const payment = await prisma.payment.findFirst({ where: { finixTransferId: transferId, churchId: session.churchId } });
+  // Team-access Checkpoint 4A: id + scope combined in one query.
+  const viewScope = await resolveViewScope(auth);
+  const scope = buildPaymentScope(auth, viewScope);
+  const payment = await prisma.payment.findFirst({ where: { finixTransferId: transferId, ...scope } });
   if (!payment) {
     return NextResponse.json({ error: "Payment not found" }, { status: 404 });
   }
@@ -58,16 +67,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ transf
       goodsServicesFairMarketValueCents: goodsServicesProvided ? goodsServicesFairMarketValueCents : null,
       goodsServicesInternalNote,
       recordedContributionAmountCents,
-      acknowledgmentConfiguredByUserId: session.userId,
+      acknowledgmentConfiguredByUserId: auth.userId,
       acknowledgmentConfiguredAt: new Date(),
     },
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "giving.goods_services_acknowledgment_corrected",
     entityType: "payment",
     entityId: payment.id,
@@ -87,7 +96,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ transf
 
   let receiptResult: { receiptNumber: string; version: number } | null = null;
   if (payment.receiptSentAt && resend) {
-    receiptResult = await sendDonationReceipt(payment.id, session.churchId, session.userId);
+    receiptResult = await sendDonationReceipt(payment.id, auth.churchId, auth.userId);
   }
 
   return NextResponse.json({ success: true, requiresResendConfirmation: Boolean(payment.receiptSentAt) && !resend, receipt: receiptResult });

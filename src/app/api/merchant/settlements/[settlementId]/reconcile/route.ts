@@ -7,8 +7,14 @@ import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 const VALID_STATUSES = new Set(["UNRECONCILED", "PARTIALLY_RECONCILED", "RECONCILED", "MISMATCH", "NEEDS_REVIEW"]);
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ settlementId: string }> }) {
+  // Team-access Checkpoint 4C: intentionally NOT migrated to
+  // requireMerchantSession() — canManageReconciliation is wgc_admin-only
+  // (see settlementPermissions.ts: "no organization-side role gets these —
+  // they're WGC-operational actions"), and requireMerchantSession() fails
+  // closed for wgc_admin. This route only ever succeeds for WGC internal
+  // support today, same exception class as bank-account/activate.
   const session = await getSession();
-  const permissions = getSettlementPermissions(session?.role as "wgc_admin" | "church_admin" | undefined);
+  const permissions = getSettlementPermissions(session?.role);
   // church_admin can view reconciliation status but never confirm or
   // override it — only wgc_admin can act on this route.
   if (!session || !session.churchId || !permissions.canManageReconciliation) {

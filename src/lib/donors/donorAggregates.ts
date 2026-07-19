@@ -78,6 +78,12 @@ export async function loadDonorAggregatesBatch(
   donorIds: string[],
   churchId: string,
   dateFilter?: DateRangeFilter,
+  // Team-access Checkpoint 4B: undefined = organization scope (unchanged
+  // behavior). A string value restricts every total below to only the
+  // transfers/subscriptions attributed to that user — see the in-memory
+  // transfer filter a few lines down for how this bridges through
+  // Payment.attributedUserId (FinixTransfer itself carries no attribution).
+  attributedUserId?: string,
 ): Promise<Map<string, DonorAggregates>> {
   const result = new Map<string, DonorAggregates>(donorIds.map((id) => [id, { ...EMPTY_DONOR_AGGREGATES }]));
   if (donorIds.length === 0) return result;
@@ -89,15 +95,30 @@ export async function loadDonorAggregatesBatch(
   const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));
   const instrumentIds = [...instrumentToDonor.keys()];
 
+  // Resolved once, up front, so the in-memory transfer filter below is a
+  // simple Set membership check rather than a second query per branch.
+  const allowedTransferIds = attributedUserId
+    ? new Set(
+        (
+          await prisma.payment.findMany({
+            where: { churchId, attributedUserId },
+            select: { finixTransferId: true },
+          })
+        )
+          .map((p) => p.finixTransferId)
+          .filter((id): id is string => Boolean(id))
+      )
+    : null;
+
   if (instrumentIds.length === 0) {
-    const activeSubs = await loadActiveSubscriptionCounts(donorIds, churchId);
+    const activeSubs = await loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId);
     for (const donorId of donorIds) {
       result.set(donorId, { ...EMPTY_DONOR_AGGREGATES, activeSubscriptionCount: activeSubs.get(donorId) ?? 0 });
     }
     return result;
   }
 
-  const transfers = await prisma.finixTransfer.findMany({
+  const allTransfers = await prisma.finixTransfer.findMany({
     where: {
       churchId,
       finixPaymentInstrumentId: { in: instrumentIds },
@@ -112,6 +133,11 @@ export async function loadDonorAggregatesBatch(
       createdAtFinix: true,
     },
   });
+  // Team-access Checkpoint 4B: scoped-user filter applied in-memory rather
+  // than threaded into the query above, so this stays a single, low-risk
+  // addition on top of the existing (already complex) aggregation logic
+  // rather than a rewrite of it.
+  const transfers = allowedTransferIds ? allTransfers.filter((t) => allowedTransferIds.has(t.finixTransferId)) : allTransfers;
 
   const successfulByDonor = new Map<string, typeof transfers>();
   const failedCountByDonor = new Map<string, number>();
@@ -154,7 +180,7 @@ export async function loadDonorAggregatesBatch(
           select: { finixTransferId: true, amountCents: true },
         })
       : Promise.resolve([]),
-    loadActiveSubscriptionCounts(donorIds, churchId),
+    loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
     transferIds.length
       ? prisma.payment.findMany({
           where: {
@@ -243,8 +269,9 @@ export async function loadDonorAggregates(
   donorId: string,
   churchId: string,
   dateFilter?: DateRangeFilter,
+  attributedUserId?: string,
 ): Promise<DonorAggregates> {
-  const map = await loadDonorAggregatesBatch([donorId], churchId, dateFilter);
+  const map = await loadDonorAggregatesBatch([donorId], churchId, dateFilter, attributedUserId);
   return map.get(donorId) ?? { ...EMPTY_DONOR_AGGREGATES };
 }
 
@@ -255,7 +282,11 @@ export async function loadDonorAggregates(
  * is a distinct, unrelated model (WGC's own SaaS billing of the organization,
  * not a donor recurring gift) and is intentionally not used here.
  */
-async function loadActiveSubscriptionCounts(donorIds: string[], churchId: string): Promise<Map<string, number>> {
+async function loadActiveSubscriptionCounts(
+  donorIds: string[],
+  churchId: string,
+  attributedUserId?: string,
+): Promise<Map<string, number>> {
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
     where: { churchId, donorId: { in: donorIds } },
     select: { finixPaymentInstrumentId: true, donorId: true },
@@ -265,7 +296,8 @@ async function loadActiveSubscriptionCounts(donorIds: string[], churchId: string
   if (instrumentIds.length === 0) return new Map();
 
   const subs = await prisma.finixSubscription.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "ACTIVE" },
+    // FinixSubscription carries attributedUserId directly — no bridging needed.
+    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "ACTIVE", ...(attributedUserId ? { attributedUserId } : {}) },
     select: { finixPaymentInstrumentId: true },
   });
 

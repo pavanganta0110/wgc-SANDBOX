@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDisputePermissions } from "@/lib/finix/disputePermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 // A submission attempt older than this is assumed dead (crashed request,
 // timed-out connection, etc.) and can be reclaimed rather than blocking
@@ -11,15 +12,21 @@ import { getDisputePermissions } from "@/lib/finix/disputePermissions";
 const STALE_LOCK_MS = 30_000;
 
 export async function POST(req: Request, { params }: { params: Promise<{ disputeId: string }> }) {
-  const session = await getSession();
-  const permissions = getDisputePermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canSubmit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDisputePermissions(auth.rawRole);
+  if (!permissions.canSubmit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { disputeId } = await params;
   const dispute = await prisma.finixDispute.findFirst({
-    where: { finixDisputeId: disputeId, churchId: session.churchId },
+    where: { finixDisputeId: disputeId, churchId: auth.churchId },
     include: { evidence: { where: { deletedAt: null } } },
   });
   if (!dispute) {
@@ -77,10 +84,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ dispute
     });
 
     await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "dispute.submission_failed",
       entityType: "dispute",
       entityId: dispute.finixDisputeId,
@@ -104,10 +111,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ dispute
   ]);
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "dispute.response_submitted",
     entityType: "dispute",
     entityId: dispute.finixDisputeId,

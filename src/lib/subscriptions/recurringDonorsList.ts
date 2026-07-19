@@ -13,6 +13,8 @@ export interface RecurringDonorsListFilters {
   requiresAttention?: boolean;
   createdDateFilter?: { gte: Date; lte?: Date };
   nextBillingDateFilter?: { gte: Date; lte?: Date };
+  /** Team-access Checkpoint 4A: undefined = organization scope. */
+  attributedUserId?: string;
 }
 
 export type RecurringDonorsSortKey = "monthlyValue" | "nextBillingDate" | "donorName" | "lifetimeDonated" | "createdAt";
@@ -31,7 +33,7 @@ export async function loadRecurringDonorsList(
   page: number,
   pageSize: number,
 ): Promise<RecurringDonorsListResult> {
-  const subscriptions = await loadSubscriptionCandidates(churchId);
+  const subscriptions = await loadSubscriptionCandidates(churchId, { attributedUserId: filters.attributedUserId });
   let donors = groupSubscriptionsByDonor(subscriptions);
 
   if (filters.search) {

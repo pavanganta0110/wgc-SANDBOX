@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { normalizeEmail, normalizePhone } from "@/lib/donors/donorContact";
 import { buildImportPreview } from "@/lib/donors/csvImport";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Re-parses and re-validates the CSV server-side rather than trusting the
@@ -13,9 +14,15 @@ import { buildImportPreview } from "@/lib/donors/csvImport";
  * server itself classifies as "valid" (not error/duplicate) are written.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canEdit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,7 +33,7 @@ export async function POST(req: Request) {
   }
 
   const existingDonors = await prisma.donor.findMany({
-    where: { churchId: session.churchId, archivedAt: null, normalizedEmail: { not: null } },
+    where: { churchId: auth.churchId, archivedAt: null, normalizedEmail: { not: null } },
     select: { normalizedEmail: true },
   });
   const existingNormalizedEmails = new Set(existingDonors.map((d) => d.normalizedEmail!));
@@ -41,7 +48,7 @@ export async function POST(req: Request) {
     try {
       await prisma.donor.create({
         data: {
-          churchId: session.churchId,
+          churchId: auth.churchId,
           name: row.input.name,
           email: row.input.email,
           normalizedEmail: normalizeEmail(row.input.email),
@@ -65,10 +72,10 @@ export async function POST(req: Request) {
   const skipped = rows.length - toCreate.length;
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.csv_import",
     entityType: "donor",
     metadata: { totalRows: rows.length, created, skipped, failed: failed.length },

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { loadRecurringDonorsList, type RecurringDonorsSortKey } from "@/lib/subscriptions/recurringDonorsList";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 function parseDateFilter(fromStr: string | null, toStr: string | null): { gte: Date; lte?: Date } | undefined {
   if (!fromStr) return undefined;
@@ -12,9 +15,15 @@ function parseDateFilter(fromStr: string | null, toStr: string | null): { gte: D
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -24,9 +33,13 @@ export async function GET(req: Request) {
   const sortKey = (searchParams.get("sort") || "monthlyValue") as RecurringDonorsSortKey;
   const sortDir = (searchParams.get("dir") || "desc") as "asc" | "desc";
 
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+
   const result = await loadRecurringDonorsList(
-    session.churchId,
+    auth.churchId,
     {
+      attributedUserId: scopedUserId,
       search: searchParams.get("search")?.trim() || undefined,
       status: searchParams.get("status") || undefined,
       frequency: searchParams.get("frequency") || undefined,

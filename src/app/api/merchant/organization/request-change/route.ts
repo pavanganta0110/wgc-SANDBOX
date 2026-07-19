@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth";
+import { isAuthError } from "@/lib/auth/errors";
 
 const VALID_AREAS: Record<string, string> = {
   LEGAL_NAME: "Legal Business Name Change",
@@ -14,10 +16,19 @@ const VALID_AREAS: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const body = await req.json().catch(() => ({}));
@@ -39,31 +50,31 @@ export async function POST(req: Request) {
 
   const ticket = await prisma.supportTicket.create({
     data: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       subject: VALID_AREAS[area],
       category: area === "BANK_ACCOUNT" ? "ACCOUNT_ACCESS" : "VERIFICATION",
       description: details,
       priority: "NORMAL",
-      createdByUserId: session.userId,
-      createdByEmail: session.email,
+      createdByUserId: auth.userId,
+      createdByEmail: auth.email,
     },
   });
 
   await prisma.supportTicketMessage.create({
     data: {
       ticketId: ticket.id,
-      senderRole: session.role,
-      senderUserId: session.userId,
-      senderEmail: session.email,
+      senderRole: auth.rawRole,
+      senderUserId: auth.userId,
+      senderEmail: auth.email,
       body: details,
     },
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.restricted_change_requested",
     entityType: "support_ticket",
     entityId: ticket.id,

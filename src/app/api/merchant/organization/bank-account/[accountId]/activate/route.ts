@@ -19,6 +19,13 @@ import { activatePayoutDestination } from "@/lib/organization/payoutDestinationA
  * be APPROVED) — reactivating a HISTORICAL account is never a shortcut.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  // Team-access Checkpoint 4B: deliberately NOT migrated to
+  // requireMerchantSession() and NOT given the merchant wgc_admin-rejection
+  // guard used elsewhere — this is the one bank-account route wgc_admin is
+  // supposed to reach (see the file comment above: WGC-support-confirmed
+  // exception-path activation, not a normal merchant self-service action).
+  // requireMerchantSession() would reject wgc_admin unconditionally and
+  // break this route's only legitimate caller.
   const { accountId } = await params;
   const session = await getSession();
   if (!session || session.role !== "wgc_admin" || !session.churchId) {

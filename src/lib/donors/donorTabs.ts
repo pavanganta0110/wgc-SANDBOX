@@ -9,6 +9,36 @@ export async function loadDonorInstrumentIds(donorId: string, churchId: string) 
   return { instruments, instrumentIds: instruments.map((i) => i.finixPaymentInstrumentId) };
 }
 
+/**
+ * Team-access Checkpoint 4B: shared bridge for tabs that read a
+ * Finix-mirror table with no attribution of its own (FinixRefundOrReversal,
+ * BankReturn, FinixDispute — all keyed off finixTransferId, not
+ * Payment.attributedUserId). Returns the transfer IDs on this donor's
+ * instruments that are ALSO attributed to attributedUserId (or every
+ * transfer ID, unfiltered, for organization scope).
+ */
+async function resolveScopedTransferIds(
+  instrumentIds: string[],
+  churchId: string,
+  attributedUserId?: string,
+): Promise<string[]> {
+  const transfers = instrumentIds.length
+    ? await prisma.finixTransfer.findMany({
+        where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } },
+        select: { finixTransferId: true },
+      })
+    : [];
+  const transferIds = transfers.map((t) => t.finixTransferId);
+  if (!attributedUserId || transferIds.length === 0) return attributedUserId ? [] : transferIds;
+
+  const ownPayments = await prisma.payment.findMany({
+    where: { churchId, attributedUserId, finixTransferId: { in: transferIds } },
+    select: { finixTransferId: true },
+  });
+  const allowed = new Set(ownPayments.map((p) => p.finixTransferId).filter((id): id is string => Boolean(id)));
+  return transferIds.filter((id) => allowed.has(id));
+}
+
 export interface DonationsTabFilters {
   state?: string;
   refunded?: boolean;
@@ -25,6 +55,7 @@ export async function loadDonorDonationsTab(
   filters: DonationsTabFilters,
   page: number,
   pageSize: number,
+  attributedUserId?: string,
 ) {
   if (instrumentIds.length === 0) return { rows: [], totalCount: 0 };
 
@@ -74,6 +105,14 @@ export async function loadDonorDonationsTab(
     payment: paymentsByTransfer.get(t.finixTransferId) ?? null,
   }));
 
+  // Team-access Checkpoint 4B: the payment join above already carries
+  // attributedUserId per row — a user-scoped view keeps only rows whose
+  // Payment is attributed to that user (a transfer with no matching Payment
+  // row, or one attributed to someone else, is excluded).
+  if (attributedUserId) {
+    rows = rows.filter((r) => r.payment?.attributedUserId === attributedUserId);
+  }
+
   if (filters.refunded) rows = rows.filter((r) => r.refunds.length > 0);
   if (filters.disputed) rows = rows.filter((r) => r.dispute !== null);
 
@@ -82,15 +121,22 @@ export async function loadDonorDonationsTab(
   return { rows: paged, totalCount };
 }
 
-export async function loadDonorRecurringTab(instrumentIds: string[], churchId: string) {
+export async function loadDonorRecurringTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
   return prisma.finixSubscription.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } },
+    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, ...(attributedUserId ? { attributedUserId } : {}) },
     orderBy: { createdAtFinix: "desc" },
   });
 }
 
-export async function loadDonorGivingLinksTab(instrumentIds: string[], churchId: string) {
+/**
+ * Team-access Checkpoint 4C: `attributedUserId`, when passed, restricts
+ * this tab to giving links the scoped user actually owns AND that have
+ * activity attributed to that user on this donor — a FUNDRAISER never sees
+ * another team member's giving links, even for a donor they share.
+ * Undefined = organization scope (owner/admin), unchanged.
+ */
+export async function loadDonorGivingLinksTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
 
   const transfers = await prisma.finixTransfer.findMany({
@@ -102,7 +148,12 @@ export async function loadDonorGivingLinksTab(instrumentIds: string[], churchId:
 
   const payments = transferIds.length
     ? await prisma.payment.findMany({
-        where: { churchId, finixTransferId: { in: transferIds }, givingLinkId: { not: null } },
+        where: {
+          churchId,
+          finixTransferId: { in: transferIds },
+          givingLinkId: { not: null },
+          ...(attributedUserId ? { attributedUserId } : {}),
+        },
         select: { finixTransferId: true, givingLinkId: true, status: true, createdAt: true },
       })
     : [];
@@ -124,7 +175,12 @@ export async function loadDonorGivingLinksTab(instrumentIds: string[], churchId:
   }
 
   const subs = await prisma.finixSubscription.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, givingLinkId: { not: null } },
+    where: {
+      churchId,
+      finixPaymentInstrumentId: { in: instrumentIds },
+      givingLinkId: { not: null },
+      ...(attributedUserId ? { attributedUserId } : {}),
+    },
     select: { givingLinkId: true },
   });
   for (const s of subs) {
@@ -136,17 +192,15 @@ export async function loadDonorGivingLinksTab(instrumentIds: string[], churchId:
 
   if (byLink.size === 0) return [];
 
-  const links = await prisma.givingLink.findMany({ where: { id: { in: [...byLink.keys()] }, churchId } });
+  const links = await prisma.givingLink.findMany({
+    where: { id: { in: [...byLink.keys()] }, churchId, ...(attributedUserId ? { ownerUserId: attributedUserId } : {}) },
+  });
   return links.map((link) => ({ link, ...byLink.get(link.id)! }));
 }
 
-export async function loadDonorRefundsTab(instrumentIds: string[], churchId: string) {
+export async function loadDonorRefundsTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
-  const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } },
-    select: { finixTransferId: true },
-  });
-  const transferIds = transfers.map((t) => t.finixTransferId);
+  const transferIds = await resolveScopedTransferIds(instrumentIds, churchId, attributedUserId);
   if (transferIds.length === 0) return [];
   return prisma.finixRefundOrReversal.findMany({
     where: { churchId, finixOriginalTransferId: { in: transferIds } },
@@ -154,13 +208,9 @@ export async function loadDonorRefundsTab(instrumentIds: string[], churchId: str
   });
 }
 
-export async function loadDonorBankReturnsTab(instrumentIds: string[], churchId: string) {
+export async function loadDonorBankReturnsTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
-  const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } },
-    select: { finixTransferId: true },
-  });
-  const transferIds = transfers.map((t) => t.finixTransferId);
+  const transferIds = await resolveScopedTransferIds(instrumentIds, churchId, attributedUserId);
   if (transferIds.length === 0) return [];
   return prisma.bankReturn.findMany({
     where: { churchId, originalTransferId: { in: transferIds } },
@@ -168,13 +218,9 @@ export async function loadDonorBankReturnsTab(instrumentIds: string[], churchId:
   });
 }
 
-export async function loadDonorDisputesTab(instrumentIds: string[], churchId: string) {
+export async function loadDonorDisputesTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
-  const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } },
-    select: { finixTransferId: true },
-  });
-  const transferIds = transfers.map((t) => t.finixTransferId);
+  const transferIds = await resolveScopedTransferIds(instrumentIds, churchId, attributedUserId);
   if (transferIds.length === 0) return [];
   return prisma.finixDispute.findMany({
     where: { churchId, finixTransferId: { in: transferIds } },
@@ -190,21 +236,44 @@ export interface ActivityEvent {
   href?: string;
 }
 
-/** Built entirely from real, already-recorded timestamps — no event is fabricated. */
-export async function loadDonorActivityTab(donor: { id: string; createdAt: Date; updatedAt: Date }, instrumentIds: string[], churchId: string): Promise<ActivityEvent[]> {
+/**
+ * Team-access Checkpoint 4C: `attributedUserId`, when passed, restricts
+ * every transaction event (donations, refunds, ACH returns, disputes,
+ * recurring donations) to the scoped user's own attributed activity via
+ * the same resolveScopedTransferIds bridge used by the refunds/returns/
+ * disputes tabs, and hides organization-internal donor notes entirely.
+ * Donor Created/Profile Updated are donor-lifecycle metadata, not staff
+ * activity, so they remain visible in both scopes. Undefined = organization
+ * scope (owner/admin), unchanged.
+ */
+export async function loadDonorActivityTab(
+  donor: { id: string; createdAt: Date; updatedAt: Date },
+  instrumentIds: string[],
+  churchId: string,
+  attributedUserId?: string,
+): Promise<ActivityEvent[]> {
   const events: ActivityEvent[] = [{ label: "Donor Created", date: donor.createdAt }];
   if (donor.updatedAt.getTime() !== donor.createdAt.getTime()) {
     events.push({ label: "Donor Profile Updated", date: donor.updatedAt });
   }
 
   if (instrumentIds.length > 0) {
-    const [transfers, subs, notes] = await Promise.all([
-      prisma.finixTransfer.findMany({ where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } } }),
-      prisma.finixSubscription.findMany({ where: { churchId, finixPaymentInstrumentId: { in: instrumentIds } } }),
-      prisma.donorNote.findMany({ where: { donorId: donor.id, churchId, deletedAt: null } }),
-    ]);
+    const scopedTransferIds = await resolveScopedTransferIds(instrumentIds, churchId, attributedUserId);
 
-    const transferIds = transfers.map((t) => t.finixTransferId);
+    const [transfersRaw, subs, notes] = await Promise.all([
+      scopedTransferIds.length
+        ? prisma.finixTransfer.findMany({ where: { churchId, finixTransferId: { in: scopedTransferIds } } })
+        : Promise.resolve([]),
+      prisma.finixSubscription.findMany({
+        where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, ...(attributedUserId ? { attributedUserId } : {}) },
+      }),
+      // Notes are organization-internal staff annotations — hidden
+      // entirely for a user-scoped view, same policy as loadDonorDetail.
+      attributedUserId ? Promise.resolve([]) : prisma.donorNote.findMany({ where: { donorId: donor.id, churchId, deletedAt: null } }),
+    ]);
+    const transfers = transfersRaw;
+
+    const transferIds = scopedTransferIds;
     const [refunds, bankReturns, disputes] = await Promise.all([
       transferIds.length ? prisma.finixRefundOrReversal.findMany({ where: { churchId, finixOriginalTransferId: { in: transferIds } } }) : Promise.resolve([]),
       transferIds.length ? prisma.bankReturn.findMany({ where: { churchId, originalTransferId: { in: transferIds } } }) : Promise.resolve([]),

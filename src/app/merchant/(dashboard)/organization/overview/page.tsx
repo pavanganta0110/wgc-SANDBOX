@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { loadOrganizationProfile } from "@/lib/organization/organizationProfileLoader";
@@ -20,6 +21,13 @@ function Row({ label, value, area, canRequest }: { label: string; value: string;
 
 export default async function OrganizationOverviewPage() {
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
+  // matching API-route guard comment for why this back door exists
+  // otherwise.
+  if (session?.role === "wgc_admin") {
+    redirect("/merchant/dashboard");
+  }
   const permissions = getOrganizationPermissions(session?.role);
   const profile = await loadOrganizationProfile(session!.churchId!);
   if (!profile) return null;

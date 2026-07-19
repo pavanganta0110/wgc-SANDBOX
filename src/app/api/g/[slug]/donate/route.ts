@@ -11,6 +11,7 @@ import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
+import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
 import crypto from "crypto";
 
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
@@ -423,6 +424,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
           // re-derived from the processor's subscription response.
           donorId: donorRecord.id,
           givingLinkId: link.id,
+          // Team-access Checkpoint 3: snapshotted once at subscription
+          // creation from the giving link's owner — see the comment on the
+          // one-time Payment.attributedUserId above for the full rationale.
+          // Every recurring charge generated from this subscription later
+          // (webhooks/finix/route.ts) inherits this value directly.
+          attributedUserId: resolvePaymentAttributionFromGivingLink(link, church.id),
           finixMerchantId: church.finixMerchantId,
           finixBuyerIdentityId: identityId,
           finixPaymentInstrumentId: instrumentId,
@@ -524,6 +531,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         churchId: church.id,
         donorId: donorRecord.id,
         givingLinkId: link.id,
+        // Team-access Checkpoint 3: snapshotted once here, at payment
+        // creation — never re-derived from the giving link later (a
+        // subsequent reassignment must not change this payment's
+        // attribution). church was looked up via link.churchId above, so
+        // this is guaranteed same-church by construction. Stays null when
+        // the link has no owner — never substituted with the church's
+        // primary owner.
+        attributedUserId: resolvePaymentAttributionFromGivingLink(link, church.id),
         finixTransferId: transfer.id,
         finixBuyerIdentityId: identityId,
         finixPaymentInstrumentId: instrumentId,

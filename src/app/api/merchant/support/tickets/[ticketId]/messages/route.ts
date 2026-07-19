@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSupportPermissions } from "@/lib/support/supportPermissions";
 import { uploadTicketAttachment } from "@/lib/support/ticketAttachmentUpload";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(req: Request, { params }: { params: Promise<{ ticketId: string }> }) {
   const { ticketId } = await params;
-  const session = await getSession();
-  const permissions = getSupportPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canReply) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSupportPermissions(auth.rawRole);
+  if (!permissions.canReply) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const ticket = await prisma.supportTicket.findUnique({ where: { id: ticketId } });
-  if (!ticket || ticket.churchId !== session.churchId) {
+  if (!ticket || ticket.churchId !== auth.churchId || (!permissions.canViewAllTickets && ticket.createdByUserId !== auth.userId)) {
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
   }
   if (["RESOLVED", "CLOSED"].includes(ticket.status)) {
@@ -34,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     if (!permissions.canUploadAttachment) {
       return NextResponse.json({ error: "Unauthorized to upload attachments" }, { status: 401 });
     }
-    const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { finixMerchantId: true } });
+    const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { finixMerchantId: true } });
     if (!church?.finixMerchantId) {
       return NextResponse.json({ error: "Attachments aren't available for this organization yet" }, { status: 400 });
     }
@@ -48,9 +55,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
   const message = await prisma.supportTicketMessage.create({
     data: {
       ticketId: ticket.id,
-      senderRole: session.role,
-      senderUserId: session.userId,
-      senderEmail: session.email,
+      senderRole: auth.rawRole,
+      senderUserId: auth.userId,
+      senderEmail: auth.email,
       body: body || "(Attachment)",
       attachments: attachment
         ? { create: [{ fileName: attachment.fileName, fileSize: attachment.fileSize, mimeType: attachment.mimeType, finixFileId: attachment.finixFileId }] }
@@ -59,14 +66,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     include: { attachments: true },
   });
 
-  const newStatus = session.role === "wgc_admin" ? "WAITING_ON_ORGANIZATION" : "WAITING_ON_SUPPORT";
+  const newStatus = auth.rawRole === "wgc_admin" ? "WAITING_ON_ORGANIZATION" : "WAITING_ON_SUPPORT";
   await prisma.supportTicket.update({ where: { id: ticket.id }, data: { status: newStatus } });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "support.ticket_message_sent",
     entityType: "support_ticket",
     entityId: ticket.id,
@@ -74,10 +81,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     req,
   });
 
-  if (session.role === "wgc_admin") {
+  if (auth.rawRole === "wgc_admin") {
     const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
     await notifyEvent({
-      churchId: session.churchId,
+      churchId: auth.churchId,
       eventKey: "SUPPORT_TICKET_REPLY",
       subject: `WGC Support replied: ${ticket.subject}`,
       title: "Support Ticket Reply",

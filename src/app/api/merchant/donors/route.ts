@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { loadDonorsList, type DonorsListFilters, type DonorsListSort } from "@/lib/donors/donorsList";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import type { DonorDisplayStatus } from "@/lib/donors/donorStatus";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const SORT_KEYS = new Set(["createdAt", "name", "totalDonatedCents", "donationCount", "lastDonationAt", "firstDonationAt"]);
 const STATUS_KEYS = new Set(["ARCHIVED", "AT_RISK", "RECURRING", "ACTIVE", "INACTIVE"]);
@@ -14,9 +17,15 @@ function parseDateFilter(range: string | null, from: string | null, to: string |
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -66,7 +75,13 @@ export async function GET(req: Request) {
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "25", 10) || 25));
 
-  const result = await loadDonorsList(session.churchId, filters, sort, page, pageSize);
+  // Team-access Checkpoint 4A: a donor is visible in a user-scoped view
+  // only when they have a Payment or FinixSubscription attributed to that
+  // user — Donor itself carries no ownerUserId/attributedUserId.
+  const viewScope = await resolveViewScope(auth);
+  filters.donorIdIn = await resolveScopedDonorIds(auth, viewScope);
+
+  const result = await loadDonorsList(auth.churchId, filters, sort, page, pageSize);
 
   return NextResponse.json({
     rows: result.rows.map((r) => ({

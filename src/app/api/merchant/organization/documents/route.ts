@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 export async function GET() {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId }, select: { onboardingApplicationId: true } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { onboardingApplicationId: true } });
   if (!church?.onboardingApplicationId) return NextResponse.json({ documents: [] });
 
   const documents = await prisma.merchantDocument.findMany({
@@ -26,14 +33,20 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUploadDocuments) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canUploadDocuments) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const church = await prisma.church.findUnique({
-    where: { id: session.churchId },
+    where: { id: auth.churchId },
     select: { onboardingApplicationId: true, finixMerchantId: true },
   });
   if (!church?.onboardingApplicationId || !church.finixMerchantId) {
@@ -72,10 +85,10 @@ export async function POST(req: Request) {
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.document_uploaded",
     entityType: "merchant_document",
     entityId: document.id,

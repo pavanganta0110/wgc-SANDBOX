@@ -1,5 +1,6 @@
-/** Mirrors src/lib/donors/donorPermissions.ts — same two real roles, church_admin always labeled "Organization Admin" in UI. */
-export type SessionRole = "wgc_admin" | "church_admin";
+import { normalizeMerchantRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
+
+export type SessionRole = "wgc_admin" | "church_admin" | "owner" | "admin" | "fundraiser" | "viewer";
 
 export interface OrganizationPermissions {
   canView: boolean;
@@ -11,6 +12,15 @@ export interface OrganizationPermissions {
   canExport: boolean;
 }
 
+/**
+ * Team-access Checkpoint 4: composed from the centralized role-permission
+ * matrix (src/lib/auth/roles.ts) rather than a second, independent
+ * wgc_admin/church_admin-only definition. wgc_admin keeps its own explicit
+ * branch here — this module is still reachable from getSession()-based
+ * internal WGC review flows that requireMerchantSession() intentionally
+ * excludes (see that function's Checkpoint 2 correction), so wgc_admin's
+ * view-only support access needs to remain real, not just "not yet wired."
+ */
 export function getOrganizationPermissions(role: SessionRole | null | undefined): OrganizationPermissions {
   if (role === "wgc_admin") {
     return {
@@ -23,24 +33,28 @@ export function getOrganizationPermissions(role: SessionRole | null | undefined)
       canExport: false,
     };
   }
-  if (role === "church_admin") {
+
+  const normalized = normalizeMerchantRole(role);
+  if (!normalized) {
     return {
-      canView: true,
-      canEditProfile: true,
-      canRequestRestrictedChange: true,
-      canUpdateBankAccount: true,
-      canManageContacts: true,
-      canUploadDocuments: true,
-      canExport: true,
+      canView: false,
+      canEditProfile: false,
+      canRequestRestrictedChange: false,
+      canUpdateBankAccount: false,
+      canManageContacts: false,
+      canUploadDocuments: false,
+      canExport: false,
     };
   }
+
+  const base = ROLE_PERMISSIONS[normalized];
   return {
-    canView: false,
-    canEditProfile: false,
-    canRequestRestrictedChange: false,
-    canUpdateBankAccount: false,
-    canManageContacts: false,
-    canUploadDocuments: false,
-    canExport: false,
+    canView: true,
+    canEditProfile: base.canManageOrgSettings,
+    canRequestRestrictedChange: base.canManageOrgSettings,
+    canUpdateBankAccount: base.canManageBankAccount,
+    canManageContacts: base.canManageOrgSettings,
+    canUploadDocuments: base.canManageOrgSettings,
+    canExport: base.canExportReports,
   };
 }

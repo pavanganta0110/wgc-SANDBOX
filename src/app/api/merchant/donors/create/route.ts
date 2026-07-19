@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { normalizeEmail, normalizePhone, isValidEmail, isValidPhone } from "@/lib/donors/donorContact";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 function cleanString(value: unknown, maxLength = 200): string | null {
   if (typeof value !== "string") return null;
@@ -16,9 +17,15 @@ function cleanString(value: unknown, maxLength = 200): string | null {
 // processor identity until an actual payment flow creates one — nothing
 // downstream assumes every Donor row has a Finix identity attached.
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canEdit) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -43,7 +50,7 @@ export async function POST(req: Request) {
 
   if (normalizedEmail) {
     const existing = await prisma.donor.findFirst({
-      where: { churchId: session.churchId, normalizedEmail, archivedAt: null },
+      where: { churchId: auth.churchId, normalizedEmail, archivedAt: null },
     });
     if (existing) {
       return NextResponse.json(
@@ -55,7 +62,7 @@ export async function POST(req: Request) {
 
   const donor = await prisma.donor.create({
     data: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       name,
       email,
       normalizedEmail,
@@ -76,19 +83,19 @@ export async function POST(req: Request) {
     await prisma.donorNote.create({
       data: {
         donorId: donor.id,
-        churchId: session.churchId,
+        churchId: auth.churchId,
         body: body.internalNote.trim().slice(0, 4000),
-        createdByUserId: session.userId,
-        createdByEmail: session.email,
+        createdByUserId: auth.userId,
+        createdByEmail: auth.email,
       },
     });
   }
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "donor.created",
     entityType: "donor",
     entityId: donor.id,

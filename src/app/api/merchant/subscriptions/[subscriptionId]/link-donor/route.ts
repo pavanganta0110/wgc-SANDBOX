@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /** Lightweight donor search used only to populate the manual donor-matching picker — never used to auto-assign, only to let an admin pick. */
 export async function GET(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canUpdateAmount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   await params;
@@ -18,7 +26,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ subscrip
 
   const donors = await prisma.donor.findMany({
     where: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       archivedAt: null,
       OR: [
         { name: { contains: q, mode: "insensitive" } },
@@ -34,11 +42,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ subscrip
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  if (!session || session.role !== "church_admin" || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
-  const permissions = getSubscriptionPermissions(session.role);
+  const permissions = getSubscriptionPermissions(auth.rawRole);
   if (!permissions.canUpdateAmount) {
     // Reuses the existing "can manage subscription details" permission tier
     // rather than inventing a new one for this narrow admin-only action.
@@ -53,7 +64,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ subscr
   }
 
   const subscription = await prisma.finixSubscription.findFirst({
-    where: { id: subscriptionId, churchId: session.churchId },
+    where: { id: subscriptionId, churchId: auth.churchId },
   });
   if (!subscription) {
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
@@ -62,7 +73,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ subscr
   // Never trust a donorId from the client without confirming it belongs to
   // this same church — tenant isolation, not just an existence check.
   const donor = await prisma.donor.findFirst({
-    where: { id: donorId, churchId: session.churchId },
+    where: { id: donorId, churchId: auth.churchId },
   });
   if (!donor) {
     return NextResponse.json({ error: "Donor not found in this organization" }, { status: 400 });
@@ -74,8 +85,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ subscr
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
     action: "subscription.donor_manually_matched",
     entityType: "finix_subscription",
     entityId: subscriptionId,

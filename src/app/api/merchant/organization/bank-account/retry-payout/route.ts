@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Retries a failed payout using Finix's documented failed-settlement-funding
@@ -16,10 +18,22 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * client, and is idempotent per funding-transfer-attempt via a retry marker.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUpdateBankAccount) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canUpdateBankAccount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  try {
+    await requireFullOrganizationContext(auth);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const body = await req.json().catch(() => ({}));
@@ -29,7 +43,7 @@ export async function POST(req: Request) {
   }
 
   const attempt = await prisma.finixFundingTransferAttempt.findUnique({ where: { id: fundingTransferAttemptId } });
-  if (!attempt || attempt.churchId !== session.churchId) {
+  if (!attempt || attempt.churchId !== auth.churchId) {
     return NextResponse.json({ error: "Deposit not found" }, { status: 404 });
   }
   if (attempt.state !== "FAILED" && attempt.state !== "RETURNED") {
@@ -45,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   const activeAccount = await prisma.organizationBankAccount.findFirst({
-    where: { churchId: session.churchId, isActiveDestination: true },
+    where: { churchId: auth.churchId, isActiveDestination: true },
   });
   if (!activeAccount?.finixPaymentInstrumentId) {
     return NextResponse.json({ error: "No active, verified payout bank account is on file to retry this payout to" }, { status: 400 });
@@ -64,14 +78,14 @@ export async function POST(req: Request) {
 
   await prisma.finixFundingTransferAttempt.update({
     where: { id: attempt.id },
-    data: { retriedAt: new Date(), retriedByUserId: session.userId },
+    data: { retriedAt: new Date(), retriedByUserId: auth.userId },
   });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "organization.payout_retry_requested",
     entityType: "funding_transfer_attempt",
     entityId: attempt.id,
@@ -81,7 +95,7 @@ export async function POST(req: Request) {
 
   const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
   await notifyEvent({
-    churchId: session.churchId,
+    churchId: auth.churchId,
     eventKey: "PAYOUT_DEPOSIT_DELAYED",
     subject: "Payout retry submitted",
     title: "Payout Retry Submitted",

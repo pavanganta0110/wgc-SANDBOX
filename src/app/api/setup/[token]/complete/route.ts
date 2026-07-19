@@ -102,11 +102,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     // (Finix has no in-place "change payment method" endpoint) and chains
     // the replacement, rather than leaving the old subscription active and
     // creating an unrelated second one.
-    let oldSubscriptionForUpdate: { id: string; finixSubscriptionId: string } | null = null;
+    let oldSubscriptionForUpdate: { id: string; finixSubscriptionId: string; attributedUserId: string | null } | null = null;
     if (link.updateTargetFinixSubscriptionId) {
       oldSubscriptionForUpdate = await prisma.finixSubscription.findFirst({
         where: { finixSubscriptionId: link.updateTargetFinixSubscriptionId, churchId: link.churchId },
-        select: { id: true, finixSubscriptionId: true },
+        select: { id: true, finixSubscriptionId: true, attributedUserId: true },
       });
       if (oldSubscriptionForUpdate) {
         await finixClient.cancelSubscription(oldSubscriptionForUpdate.finixSubscriptionId);
@@ -131,6 +131,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         startedAt: link.startDate,
         consentSource: "DONOR_DIRECT",
         supersedesSubscriptionId: oldSubscriptionForUpdate?.id ?? null,
+        // Team-access Checkpoint 3: this setup link has no giving-link
+        // association (SubscriptionSetupLink is donor-direct/admin-sent,
+        // not tied to a GivingLink) — no attribution can be proven here.
+        // Exception: a payment-update-link is a continuation of an
+        // existing subscription (see supersedesSubscriptionId above), so it
+        // inherits that subscription's already-snapshotted attribution
+        // rather than losing it on a payment-method change.
+        attributedUserId: oldSubscriptionForUpdate?.attributedUserId ?? null,
         lastSyncedAt: new Date(),
       },
     });

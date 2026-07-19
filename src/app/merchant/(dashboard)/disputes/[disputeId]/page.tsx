@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -27,6 +28,13 @@ export default async function DisputeFullDetailPage({
   params: Promise<{ disputeId: string }>;
 }) {
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
+  // matching API-route guard comment for why this back door exists
+  // otherwise.
+  if (session?.role === "wgc_admin") {
+    redirect("/merchant/dashboard");
+  }
   const churchId = session!.churchId!;
   const { disputeId } = await params;
   const permissions = getDisputePermissions(session?.role);

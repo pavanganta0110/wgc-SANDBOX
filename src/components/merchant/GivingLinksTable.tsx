@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { formatCents } from "@/lib/format";
 import { formatDateCDT, formatTimeCDT, formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { resolveGivingLinkStatus } from "@/lib/givingLinks/status";
@@ -21,18 +22,38 @@ function StackedDateTime({ date }: { date: Date | null | undefined }) {
 
 export default async function GivingLinksTable({
   churchId,
+  baseScope,
   searchParams,
+  canFilterByOwner = false,
+  ownerFilterOptions = [],
+  currentUserId,
 }: {
   churchId: string;
+  /** Pre-resolved via buildGivingLinkScope(auth, viewScope) — already forces FUNDRAISER/VIEWER to their own ownerUserId. */
+  baseScope?: Prisma.GivingLinkWhereInput;
   searchParams: Record<string, string | undefined>;
+  canFilterByOwner?: boolean;
+  ownerFilterOptions?: { id: string; email: string; disabledAt: Date | null }[];
+  currentUserId?: string;
 }) {
-  const { status, linkType, amountType, name, range, from, to } = searchParams;
+  const { status, linkType, amountType, name, range, from, to, owner } = searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
+
+  // "My Links" / a specific team member is only ever honored for OWNER/ADMIN
+  // (canFilterByOwner) — buildGivingLinkScope already hard-scopes anyone else.
+  const ownerFilter =
+    canFilterByOwner && owner === "mine" && currentUserId
+      ? { ownerUserId: currentUserId }
+      : canFilterByOwner && owner && owner !== "all"
+      ? { ownerUserId: owner }
+      : {};
 
   const allLinks = await prisma.givingLink.findMany({
     where: {
       churchId,
+      ...(baseScope || {}),
+      ...ownerFilter,
       ...(linkType ? { linkType } : {}),
       ...(amountType ? { amountType } : {}),
       ...(name ? { internalName: { contains: name, mode: "insensitive" } } : {}),
@@ -42,10 +63,14 @@ export default async function GivingLinksTable({
   });
 
   const links = status ? allLinks.filter((l) => resolveGivingLinkStatus(l) === status) : allLinks;
+  const ownerEmailById = new Map(ownerFilterOptions.map((o) => [o.id, o.email]));
 
   return (
     <>
-      <GivingLinksFilterBar exportHref="/api/merchant/giving-links/export" />
+      <GivingLinksFilterBar
+        exportHref="/api/merchant/giving-links/export"
+        ownerOptions={canFilterByOwner ? ownerFilterOptions : undefined}
+      />
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         {links.length === 0 ? (
@@ -68,6 +93,7 @@ export default async function GivingLinksTable({
                 <th className="px-6 py-3">ID</th>
                 <th className="px-6 py-3">Created (CDT)</th>
                 <th className="px-6 py-3">Giving Link Name</th>
+                {canFilterByOwner && <th className="px-6 py-3">Owner</th>}
                 <th className="px-6 py-3">Amount Type</th>
                 <th className="px-6 py-3">Link Type</th>
                 <th className="px-6 py-3">Status</th>
@@ -105,6 +131,11 @@ export default async function GivingLinksTable({
                         )}
                       </Link>
                     </td>
+                    {canFilterByOwner && (
+                      <td className="px-6 py-3 text-slate-600">
+                        {l.ownerUserId ? ownerEmailById.get(l.ownerUserId) || "—" : "Unassigned"}
+                      </td>
+                    )}
                     <td className="px-6 py-3">
                       <p className="text-slate-700">{l.amountType === "VARIABLE" ? "Variable Amount" : "Fixed Amount"}</p>
                       {l.amountType === "FIXED" && l.fixedAmountCents != null && (

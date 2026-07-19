@@ -32,9 +32,13 @@ export interface SubscriptionsAnalytics {
   candidateCapReached: boolean;
 }
 
-export async function loadSubscriptionsAnalytics(churchId: string, rangeDays = 30): Promise<SubscriptionsAnalytics> {
+export async function loadSubscriptionsAnalytics(
+  churchId: string,
+  rangeDays = 30,
+  attributedUserId?: string
+): Promise<SubscriptionsAnalytics> {
   const periodStart = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
-  const subscriptions = await loadSubscriptionCandidates(churchId);
+  const subscriptions = await loadSubscriptionCandidates(churchId, { attributedUserId });
 
   const active = subscriptions.filter((s) => s.displayStatus === "ACTIVE");
   const paused = subscriptions.filter((s) => s.displayStatus === "PAUSED");

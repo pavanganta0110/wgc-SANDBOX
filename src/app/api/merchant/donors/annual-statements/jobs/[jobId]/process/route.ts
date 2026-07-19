@@ -1,29 +1,33 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { processBulkStatementJobChunk } from "@/lib/donors/bulkStatementJobs";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(req: Request, { params }: { params: Promise<{ jobId: string }> }) {
-  const session = await getSession();
-  if (!session || !session.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const { jobId } = await params;
 
   let job;
   try {
-    job = await processBulkStatementJobChunk(jobId, session.churchId, session.email);
+    job = await processBulkStatementJobChunk(jobId, auth.churchId, auth.email);
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Job not found" }, { status: 404 });
   }
 
   if (job.status === "COMPLETED") {
     await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: job.jobType === "GENERATE" ? "statement.bulk_generation_completed" : "statement.bulk_sending_completed",
       entityType: "donor",
       metadata: {

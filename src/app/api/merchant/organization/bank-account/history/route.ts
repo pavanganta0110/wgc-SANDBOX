@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { resolveBankAccountDisplayStatus } from "@/lib/organization/bankAccountStatus";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function GET() {
-  const session = await getSession();
-  const permissions = getOrganizationPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canView) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getOrganizationPermissions(auth.rawRole);
+  if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const rows = await prisma.organizationBankAccount.findMany({
-    where: { churchId: session.churchId },
+    where: { churchId: auth.churchId },
     orderBy: { addedAt: "desc" },
   });
 
   const [deposits] = await Promise.all([
     prisma.finixFundingTransferAttempt.findMany({
-      where: { churchId: session.churchId, state: "COMPLETED" },
+      where: { churchId: auth.churchId, state: "COMPLETED" },
       orderBy: { arrivedAt: "desc" },
       select: { bankAccountLast4: true, arrivedAt: true },
     }),

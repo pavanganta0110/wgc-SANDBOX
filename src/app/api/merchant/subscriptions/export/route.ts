@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { loadSubscriptionCandidates, type SubscriptionRow } from "@/lib/subscriptions/subscriptionAggregates";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
 import { formatCents } from "@/lib/format";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const COLUMNS: CsvColumn<SubscriptionRow>[] = [
   { header: "Subscription ID", value: (r) => r.finixSubscriptionId },
@@ -29,19 +32,29 @@ const COLUMNS: CsvColumn<SubscriptionRow>[] = [
 ];
 
 export async function GET(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canExport) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const rows = await loadSubscriptionCandidates(session.churchId);
+  // Team-access Checkpoint 4A: export scope matches the list route exactly
+  // (test: "Subscription export equals subscription dashboard scope").
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const rows = await loadSubscriptionCandidates(auth.churchId, { attributedUserId: scopedUserId });
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "subscriptions.exported",
     entityType: "subscription",
     metadata: { rowCount: rows.length },

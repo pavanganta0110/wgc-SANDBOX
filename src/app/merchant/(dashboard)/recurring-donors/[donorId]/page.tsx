@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AlertTriangle, ArrowUpRight } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { formatDateCDT, formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
@@ -13,6 +12,10 @@ import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { loadDonorInstrumentIds, loadDonorGivingLinksTab, loadDonorRefundsTab, loadDonorBankReturnsTab, loadDonorDisputesTab, loadDonorActivityTab } from "@/lib/donors/donorTabs";
 import { loadRecurringPaymentsForDonor, loadUnattributedRecurringCandidates } from "@/lib/subscriptions/recurringDonorPayments";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -44,17 +47,33 @@ export default async function RecurringDonorDetailPage({
   params: Promise<{ donorId: string }>;
   searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
-  const permissions = getSubscriptionPermissions(session?.role);
+  // Team-access Checkpoint 4C: migrated off getSession() to
+  // requireMerchantSession() — this page previously showed a donor's full
+  // recurring-giving history (payments, giving links, refunds, disputes,
+  // activity) with no donor-qualification gate and no per-tab attribution
+  // scoping at all.
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/dashboard");
+    throw err;
+  }
+  const churchId = auth.churchId;
+  const permissions = getSubscriptionPermissions(auth.rawRole);
   const { donorId } = await params;
   const sp = await searchParams;
   const tab = (TABS.some((t) => t.key === sp.tab) ? sp.tab : "overview") as TabKey;
 
+  const viewScope = await resolveViewScope(auth);
+  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
+  if (scopedDonorIds !== null && !scopedDonorIds.includes(donorId)) notFound();
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+
   const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId } });
   if (!donor) notFound();
 
-  const subscriptions = await loadSubscriptionCandidates(churchId, { donorId });
+  const subscriptions = await loadSubscriptionCandidates(churchId, { donorId, attributedUserId: scopedUserId });
   if (subscriptions.length === 0) notFound();
 
   const active = subscriptions.filter((s) => s.displayStatus === "ACTIVE");
@@ -137,14 +156,20 @@ export default async function RecurringDonorDetailPage({
       {tab === "overview" && <OverviewTab subscriptions={subscriptions} donor={donor} />}
       {tab === "subscriptions" && <SubscriptionsTab subscriptions={subscriptions} />}
       {tab === "payments" && (
-        <PaymentsTab donorId={donorId} churchId={churchId} page={Math.max(1, parseInt(sp.page || "1", 10) || 1)} canReconcileUnattributed={permissions.canReconcileUnattributed} />
+        <PaymentsTab
+          donorId={donorId}
+          churchId={churchId}
+          page={Math.max(1, parseInt(sp.page || "1", 10) || 1)}
+          canReconcileUnattributed={permissions.canReconcileUnattributed}
+          scopedUserId={scopedUserId}
+        />
       )}
       {tab === "payment-methods" && <PaymentMethodsTab donorId={donorId} churchId={churchId} />}
-      {tab === "giving-links" && <GivingLinksTab donorId={donorId} churchId={churchId} />}
-      {tab === "refunds" && <RefundsTab donorId={donorId} churchId={churchId} />}
-      {tab === "bank-returns" && <BankReturnsTab donorId={donorId} churchId={churchId} />}
-      {tab === "disputes" && <DisputesTab donorId={donorId} churchId={churchId} />}
-      {tab === "activity" && <ActivityTab donorId={donorId} churchId={churchId} donor={donor} />}
+      {tab === "giving-links" && <GivingLinksTab donorId={donorId} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "refunds" && <RefundsTab donorId={donorId} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "bank-returns" && <BankReturnsTab donorId={donorId} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "disputes" && <DisputesTab donorId={donorId} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "activity" && <ActivityTab donorId={donorId} churchId={churchId} donor={donor} scopedUserId={scopedUserId} />}
     </div>
   );
 }
@@ -282,11 +307,23 @@ function SubscriptionsTab({ subscriptions }: { subscriptions: Awaited<ReturnType
   );
 }
 
-async function PaymentsTab({ donorId, churchId, page, canReconcileUnattributed }: { donorId: string; churchId: string; page: number; canReconcileUnattributed: boolean }) {
+async function PaymentsTab({
+  donorId,
+  churchId,
+  page,
+  canReconcileUnattributed,
+  scopedUserId,
+}: {
+  donorId: string;
+  churchId: string;
+  page: number;
+  canReconcileUnattributed: boolean;
+  scopedUserId?: string;
+}) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
   const [{ rows, totalCount }, unattributed] = await Promise.all([
-    loadRecurringPaymentsForDonor(instrumentIds, churchId, page, PAYMENTS_PAGE_SIZE),
-    canReconcileUnattributed ? loadUnattributedRecurringCandidates(instrumentIds, churchId) : Promise.resolve([]),
+    loadRecurringPaymentsForDonor(instrumentIds, churchId, page, PAYMENTS_PAGE_SIZE, scopedUserId),
+    canReconcileUnattributed && !scopedUserId ? loadUnattributedRecurringCandidates(instrumentIds, churchId) : Promise.resolve([]),
   ]);
   const pageCount = Math.max(1, Math.ceil(totalCount / PAYMENTS_PAGE_SIZE));
 
@@ -412,9 +449,9 @@ async function PaymentMethodsTab({ donorId, churchId }: { donorId: string; churc
   );
 }
 
-async function GivingLinksTab({ donorId, churchId }: { donorId: string; churchId: string }) {
+async function GivingLinksTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
-  const rows = await loadDonorGivingLinksTab(instrumentIds, churchId);
+  const rows = await loadDonorGivingLinksTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Giving Links">
       {rows.length === 0 ? (
@@ -433,9 +470,9 @@ async function GivingLinksTab({ donorId, churchId }: { donorId: string; churchId
   );
 }
 
-async function RefundsTab({ donorId, churchId }: { donorId: string; churchId: string }) {
+async function RefundsTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
-  const refunds = await loadDonorRefundsTab(instrumentIds, churchId);
+  const refunds = await loadDonorRefundsTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Refunds">
       {refunds.length === 0 ? (
@@ -455,9 +492,9 @@ async function RefundsTab({ donorId, churchId }: { donorId: string; churchId: st
   );
 }
 
-async function BankReturnsTab({ donorId, churchId }: { donorId: string; churchId: string }) {
+async function BankReturnsTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
-  const returns = await loadDonorBankReturnsTab(instrumentIds, churchId);
+  const returns = await loadDonorBankReturnsTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Bank Returns">
       {returns.length === 0 ? (
@@ -477,9 +514,9 @@ async function BankReturnsTab({ donorId, churchId }: { donorId: string; churchId
   );
 }
 
-async function DisputesTab({ donorId, churchId }: { donorId: string; churchId: string }) {
+async function DisputesTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
-  const disputes = await loadDonorDisputesTab(instrumentIds, churchId);
+  const disputes = await loadDonorDisputesTab(instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Disputes">
       {disputes.length === 0 ? (
@@ -499,9 +536,9 @@ async function DisputesTab({ donorId, churchId }: { donorId: string; churchId: s
   );
 }
 
-async function ActivityTab({ donorId, churchId, donor }: { donorId: string; churchId: string; donor: any }) {
+async function ActivityTab({ donorId, churchId, donor, scopedUserId }: { donorId: string; churchId: string; donor: any; scopedUserId?: string }) {
   const { instrumentIds } = await loadDonorInstrumentIds(donorId, churchId);
-  const events = await loadDonorActivityTab(donor, instrumentIds, churchId);
+  const events = await loadDonorActivityTab(donor, instrumentIds, churchId, scopedUserId);
   return (
     <Card title="Activity">
       {events.length === 0 ? (

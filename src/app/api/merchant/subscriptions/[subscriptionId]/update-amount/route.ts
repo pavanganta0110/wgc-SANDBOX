@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { resolveSubscriptionDisplayStatus } from "@/lib/subscriptions/subscriptionStatus";
 import { recreateSubscriptionWithChange } from "@/lib/subscriptions/subscriptionRecreate";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /** No in-place update endpoint exists on Finix's subscriptions API — this cancels the old schedule and creates a replacement with the new amount, chained via supersedes/supersededBy. Historical payments on the old subscription are never altered. */
 export async function POST(req: Request, { params }: { params: Promise<{ subscriptionId: string }> }) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canUpdateAmount) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canUpdateAmount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
   const { subscriptionId } = await params;
 
   const body = await req.json();
@@ -52,7 +59,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
       finixSubscriptionId: subscription.finixSubscriptionId,
       actionType: "UPDATE_AMOUNT",
       idempotencyKey,
-      requestedByUserId: session.userId,
+      requestedByUserId: auth.userId,
       oldValue: { amountCents: subscription.amountCents },
       newValue: { amountCents: newAmountCents },
       state: "PENDING",
@@ -62,7 +69,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
   try {
     const { newSubscription } = await recreateSubscriptionWithChange({
       churchId,
-      actorUserId: session.userId!,
+      actorUserId: auth.userId!,
       oldSubscription: subscription,
       newAmountCents,
     });
@@ -76,9 +83,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
 
     await logDashboardAction({
       churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "subscription.amount_updated",
       entityType: "subscription",
       entityId: subscription.id,

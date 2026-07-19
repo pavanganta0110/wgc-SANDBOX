@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
 import { loadDisputesList, type DisputeListRow } from "@/lib/finix/disputesList";
@@ -27,10 +28,16 @@ const COLUMNS: CsvColumn<DisputeListRow>[] = [
 ];
 
 export async function GET(req: Request) {
-  const session = await getSession();
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
-  const permissions = getDisputePermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canExport) {
+  const permissions = getDisputePermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -41,7 +48,7 @@ export async function GET(req: Request) {
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
-  const rows = await loadDisputesList(session.churchId, dateFilter);
+  const rows = await loadDisputesList(auth.churchId, dateFilter);
 
   const csv = buildCsvExport(rows, COLUMNS);
   return csvResponse(csv, "disputes.csv");

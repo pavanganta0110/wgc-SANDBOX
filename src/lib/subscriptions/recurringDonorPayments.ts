@@ -7,13 +7,33 @@ import { prisma } from "@/lib/prisma";
  * shares the donor's instrument or a subscription's amount — that would be
  * inference, not attribution.
  */
-export async function loadRecurringPaymentsForDonor(instrumentIds: string[], churchId: string, page: number, pageSize: number) {
+export async function loadRecurringPaymentsForDonor(
+  instrumentIds: string[],
+  churchId: string,
+  page: number,
+  pageSize: number,
+  attributedUserId?: string,
+) {
   if (instrumentIds.length === 0) return { rows: [], totalCount: 0 };
+
+  // FinixTransfer carries no attribution of its own — bridge through
+  // Payment.attributedUserId, same pattern used by donorTabs'
+  // resolveScopedTransferIds. Team-access Checkpoint 4C.
+  let attributedTransferFilter: { in: string[] } | undefined;
+  if (attributedUserId) {
+    const ownPayments = await prisma.payment.findMany({
+      where: { churchId, attributedUserId, finixTransferId: { not: null } },
+      select: { finixTransferId: true },
+    });
+    attributedTransferFilter = { in: ownPayments.map((p) => p.finixTransferId!).filter(Boolean) };
+    if (attributedTransferFilter.in.length === 0) return { rows: [], totalCount: 0 };
+  }
 
   const where = {
     churchId,
     finixPaymentInstrumentId: { in: instrumentIds },
     finixSubscriptionId: { not: null },
+    ...(attributedTransferFilter ? { finixTransferId: attributedTransferFilter } : {}),
   };
 
   const [totalCount, transfers] = await Promise.all([

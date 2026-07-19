@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { formatFundingSpeed } from "@/lib/depositColumns";
+import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 function csvEscape(value: string) {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -13,9 +15,18 @@ function csvEscape(value: string) {
 }
 
 export async function GET(req: Request) {
-  const session = await getSession();
-
-  if (!session || session.role !== "church_admin" || !session.churchId) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  // Team-access Checkpoint 4B: deposits are settlement-level financial
+  // information — same policy as settlements (OWNER always, ADMIN only
+  // with canViewSettlements, FUNDRAISER/VIEWER denied).
+  const permissions = getSettlementPermissions(auth.rawRole);
+  if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -29,14 +40,14 @@ export async function GET(req: Request) {
 
   const deposits = await prisma.finixFundingTransferAttempt.findMany({
     where: {
-      churchId: session.churchId,
+      churchId: auth.churchId,
       ...(state ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
   });
 
-  const church = await prisma.church.findUnique({ where: { id: session.churchId } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 
   const header = [
     "ID",

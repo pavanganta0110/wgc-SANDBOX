@@ -1,20 +1,35 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import GivingLinkBuilderForm from "@/components/merchant/GivingLinkBuilderForm";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies, parseReceiptSettings, parseBrandingSettings } from "@/lib/givingLinks/types";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export default async function EditGivingLinkPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
   const { id } = await params;
+  const canAssignOwner = auth.role === "owner" || auth.role === "admin";
 
-  const [link, church, pricing] = await Promise.all([
-    prisma.givingLink.findFirst({ where: { id, churchId } }),
+  const [link, church, pricing, teamMembers] = await Promise.all([
+    prisma.givingLink.findFirst({ where: { id, churchId, ...(auth.role === "fundraiser" ? { ownerUserId: auth.userId } : {}) } }),
     prisma.church.findUnique({ where: { id: churchId }, select: { name: true, logoUrl: true } }),
     prisma.churchPricing.findUnique({ where: { churchId } }),
+    canAssignOwner
+      ? prisma.user.findMany({
+          where: { churchId, disabledAt: null, role: { in: ["owner", "admin", "fundraiser", "viewer", "church_admin"] } },
+          select: { id: true, email: true, role: true },
+          orderBy: { email: "asc" },
+        })
+      : Promise.resolve([]),
   ]);
   if (!link) notFound();
 
@@ -71,6 +86,9 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
           cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
           achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
         }}
+        ownerOptions={canAssignOwner ? teamMembers : undefined}
+        initialOwnerUserId={link.ownerUserId || auth.userId}
+        canAssignOwner={canAssignOwner}
       />
     </div>
   );

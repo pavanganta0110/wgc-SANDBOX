@@ -1,4 +1,4 @@
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import BarChart from "@/components/merchant/BarChart";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
@@ -8,6 +8,10 @@ import { computeSummaryMetrics, DEFAULT_METRICS, METRIC_LABELS } from "@/lib/rep
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import QuickLinksPanel from "@/components/merchant/QuickLinksPanel";
 import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildFinixTransferScope, buildRefundScope, resolveScopedUserId } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 const CENTRAL_TIME_ZONE = "America/Chicago";
 
@@ -52,8 +56,14 @@ export default async function MerchantDashboardPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string; trend?: string; metrics?: string }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
   const {
     range: rangeParam,
     from: fromParam,
@@ -69,25 +79,45 @@ export default async function MerchantDashboardPage({
   const dateFilter =
     startDate && endDate ? { gte: startDate, lte: endDate } : startDate ? { gte: startDate } : undefined;
 
+  // Team-access: transfers/refunds bridge through Payment.attributedUserId
+  // for a user-scoped view (buildFinixTransferScope/buildRefundScope, same
+  // helpers used by the payments/refunds pages). Disputes/authorizations/
+  // settlements/deposits have no reliable per-user attribution (per the
+  // established CP4C policy) and stay organization-wide regardless of scope.
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope);
+  const [transferScope, refundScope] = await Promise.all([
+    buildFinixTransferScope(auth, viewScope),
+    buildRefundScope(auth, viewScope),
+  ]);
+
   const [transfers, disputes, refunds, authorizations, settlements, deposits] = await Promise.all([
     prisma.finixTransfer.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+      where: { ...transferScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
     }),
-    prisma.finixDispute.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-    }),
+    scopedUserId
+      ? Promise.resolve([])
+      : prisma.finixDispute.findMany({
+          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+        }),
     prisma.finixRefundOrReversal.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+      where: { ...refundScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
     }),
-    prisma.finixAuthorization.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-    }),
-    prisma.finixSettlement.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-    }),
-    prisma.finixFundingTransferAttempt.findMany({
-      where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-    }),
+    scopedUserId
+      ? Promise.resolve([])
+      : prisma.finixAuthorization.findMany({
+          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+        }),
+    scopedUserId
+      ? Promise.resolve([])
+      : prisma.finixSettlement.findMany({
+          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+        }),
+    scopedUserId
+      ? Promise.resolve([])
+      : prisma.finixFundingTransferAttempt.findMany({
+          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
+        }),
   ]);
 
   const succeeded = transfers.filter((t) => (t.state || "").toUpperCase() === "SUCCEEDED");

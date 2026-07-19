@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
@@ -7,6 +6,9 @@ import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPerm
 import { SUPPORTED_SUBSCRIPTION_FREQUENCIES } from "@/lib/subscriptions/subscriptionStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 const TERMS_VERSION = "2026-01-recurring-admin-v1";
 
@@ -18,12 +20,22 @@ const TERMS_VERSION = "2026-01-recurring-admin-v1";
  * made — see section 26 of the spec.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getSubscriptionPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canCreate) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  // Team-access Checkpoint 4: getSubscriptionPermissions() is now composed
+  // from the centralized role-permission matrix (canCreate = canManageRecurring,
+  // true for owner/admin, false for fundraiser/viewer) — no inline role
+  // check needed anymore.
+  const permissions = getSubscriptionPermissions(auth.rawRole);
+  if (!permissions.canCreate) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const churchId = session.churchId;
+  const churchId = auth.churchId;
 
   const body = await req.json();
   const {
@@ -102,10 +114,22 @@ export async function POST(req: Request) {
     const fund = await prisma.fund.findFirst({ where: { id: fundId, churchId } });
     if (!fund) return NextResponse.json({ error: "Fund not found" }, { status: 404 });
   }
+  let givingLink: { ownerUserId: string | null; churchId: string } | null = null;
   if (givingLinkId) {
-    const link = await prisma.givingLink.findFirst({ where: { id: givingLinkId, churchId } });
-    if (!link) return NextResponse.json({ error: "Giving Link not found" }, { status: 404 });
+    givingLink = await prisma.givingLink.findFirst({
+      where: { id: givingLinkId, churchId },
+      select: { ownerUserId: true, churchId: true },
+    });
+    if (!givingLink) return NextResponse.json({ error: "Giving Link not found" }, { status: 404 });
   }
+
+  // Team-access Checkpoint 3: same "default to acting user" reasoning as
+  // Take a Payment — this admin-created-subscription flow has no "assign to
+  // another user" control either. When a giving link is attached, its
+  // owner takes precedence (matches the public-donation attribution rule).
+  const attributedUserId = givingLink
+    ? resolvePaymentAttributionFromGivingLink(givingLink, churchId)
+    : auth.userId;
 
   await prisma.subscriptionAction.create({
     data: {
@@ -113,7 +137,7 @@ export async function POST(req: Request) {
       finixSubscriptionId: "pending",
       actionType: "CREATE",
       idempotencyKey,
-      requestedByUserId: session.userId,
+      requestedByUserId: auth.userId,
       newValue: { donorId, amountCents, billingInterval },
       state: "PENDING",
     },
@@ -139,6 +163,7 @@ export async function POST(req: Request) {
         donorId,
         fundId: fundId || null,
         givingLinkId: givingLinkId || null,
+        attributedUserId,
         finixMerchantId: church.finixMerchantId,
         finixBuyerIdentityId: instrument.finixIdentityId,
         finixPaymentInstrumentId: instrument.finixPaymentInstrumentId,
@@ -149,7 +174,7 @@ export async function POST(req: Request) {
         collectionMethod: "BILL_AUTOMATICALLY",
         nextBillingDate: parseFinixDate(finixSubscription.next_billing_date),
         startedAt: startDate,
-        createdByUserId: session.userId,
+        createdByUserId: auth.userId,
         consentSource: "ADMIN_CONFIRMED",
         lastSyncedAt: new Date(),
       },
@@ -171,7 +196,7 @@ export async function POST(req: Request) {
         donorId,
         finixSubscriptionId: finixSubscription.id,
         consentSource: "ADMIN_CONFIRMED",
-        confirmedByUserId: session.userId,
+        confirmedByUserId: auth.userId,
         termsVersion: TERMS_VERSION,
         recurringTermsSnapshot,
         donorNameSnapshot: donorName,
@@ -202,9 +227,9 @@ export async function POST(req: Request) {
 
     await logDashboardAction({
       churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
       action: "subscription.created_by_admin",
       entityType: "subscription",
       entityId: record.id,

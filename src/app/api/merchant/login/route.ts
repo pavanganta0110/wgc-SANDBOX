@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { setSessionCookie } from "@/lib/auth/session";
+import { setSessionCookie, type SessionPayload } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
   try {
@@ -17,6 +17,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
     }
 
+    // Team-access Checkpoint 1: previously missing entirely — a disabled
+    // user's password still worked, they just happened to fail every
+    // permission check post-login. Reject at the door instead.
+    if (user.disabledAt) {
+      return NextResponse.json({ error: "This account has been disabled." }, { status: 403 });
+    }
+
     const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
       return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
@@ -25,8 +32,9 @@ export async function POST(req: Request) {
     await setSessionCookie({
       userId: user.id,
       email: user.email,
-      role: user.role as "wgc_admin" | "church_admin",
+      role: user.role as SessionPayload["role"],
       churchId: user.churchId,
+      authVersion: user.authVersion,
     });
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

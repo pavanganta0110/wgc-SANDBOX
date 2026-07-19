@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { generateYearEndStatement } from "@/lib/donors/generateStatement";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 /**
  * Runs bulk generation synchronously within this request rather than a
@@ -13,9 +14,15 @@ import { generateYearEndStatement } from "@/lib/donors/generateStatement";
  * UI that doesn't actually run in the background.
  */
 export async function POST(req: Request) {
-  const session = await getSession();
-  const permissions = getDonorPermissions(session?.role);
-  if (!session || !session.churchId || !permissions.canGenerateStatements) {
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  const permissions = getDonorPermissions(auth.rawRole);
+  if (!permissions.canGenerateStatements) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,10 +38,10 @@ export async function POST(req: Request) {
   let failed = 0;
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "statement.bulk_generation_started",
     entityType: "donor",
     metadata: { taxYear, count: donorIds.length },
@@ -43,7 +50,7 @@ export async function POST(req: Request) {
 
   for (const donorId of donorIds) {
     try {
-      const result = await generateYearEndStatement(donorId, session.churchId, taxYear, session.userId);
+      const result = await generateYearEndStatement(donorId, auth.churchId, taxYear, auth.userId);
       generated += 1;
       if (result.status === "NEEDS_REVIEW") needsReview += 1;
     } catch (err) {
@@ -52,10 +59,10 @@ export async function POST(req: Request) {
   }
 
   await logDashboardAction({
-    churchId: session.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
     action: "statement.bulk_generation_completed",
     entityType: "donor",
     metadata: { taxYear, generated, needsReview, failed },

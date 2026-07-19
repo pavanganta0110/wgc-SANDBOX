@@ -1,6 +1,8 @@
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildFinixTransferScope } from "@/lib/auth/scopes";
 import PaymentsFilterBar from "@/components/merchant/PaymentsFilterBar";
 import PaymentsHeaderActions from "@/components/merchant/PaymentsHeaderActions";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -28,8 +30,14 @@ export default async function PaymentsListPage({
     id?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  const auth = await requireMerchantSession();
+  const churchId = auth.churchId;
+  const viewScope = await resolveViewScope(auth);
+  // Team-access Checkpoint 4A: FinixTransfer has no attribution column of
+  // its own — buildFinixTransferScope bridges through Payment.attributedUserId
+  // (see that helper's comment). Organization scope still includes
+  // unattributed transfers, matching the approved payment-scope policy.
+  const transferScope = await buildFinixTransferScope(auth, viewScope);
   const { state, last4, buyer, range, from, to, id } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -55,7 +63,7 @@ export default async function PaymentsListPage({
 
   const transfers = await prisma.finixTransfer.findMany({
     where: {
-      churchId,
+      ...transferScope,
       // subtype is null for most transfers (only bank returns set it) —
       // NOT: { subtype: { contains: "RETURN" } } alone would silently
       // exclude every null-subtype row too, since SQL's NOT NULL is NULL,

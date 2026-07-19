@@ -1,19 +1,44 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
 import GivingLinksTabs from "@/components/merchant/GivingLinksTabs";
 import GivingLinksTable from "@/components/merchant/GivingLinksTable";
 import DonationAttemptsTable from "@/components/merchant/DonationAttemptsTable";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildGivingLinkScope } from "@/lib/auth/scopes";
+import { isAuthError } from "@/lib/auth/errors";
 
 export default async function GivingLinksPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
   const sp = await searchParams;
   const tab = sp.tab === "attempts" ? "attempts" : "links";
+
+  // Team-access: FUNDRAISER/VIEWER are always forced to their own scope by
+  // buildGivingLinkScope regardless of the ?owner= param — the "All Links /
+  // My Links / Team Member" filter below is only meaningful for OWNER/ADMIN.
+  const viewScope = await resolveViewScope(auth);
+  const baseScope = buildGivingLinkScope(auth, viewScope);
+  const canFilterByOwner = auth.role === "owner" || auth.role === "admin";
+  const ownerFilterOptions = canFilterByOwner
+    ? await prisma.user.findMany({
+        where: { churchId, role: { in: ["owner", "admin", "fundraiser", "viewer", "church_admin"] } },
+        select: { id: true, email: true, disabledAt: true },
+        orderBy: { email: "asc" },
+      })
+    : [];
 
   return (
     <div>
@@ -31,7 +56,14 @@ export default async function GivingLinksPage({
       <GivingLinksTabs active={tab} />
 
       {tab === "links" ? (
-        <GivingLinksTable churchId={churchId} searchParams={sp} />
+        <GivingLinksTable
+          churchId={churchId}
+          baseScope={baseScope}
+          searchParams={sp}
+          canFilterByOwner={canFilterByOwner}
+          ownerFilterOptions={ownerFilterOptions}
+          currentUserId={auth.userId}
+        />
       ) : (
         <DonationAttemptsTable churchId={churchId} searchParams={sp} />
       )}

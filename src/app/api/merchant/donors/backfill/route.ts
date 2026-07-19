@@ -5,14 +5,27 @@ import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { backfillDonorNormalization, backfillOrphanedPayments, backfillTransferCreatedVia } from "@/lib/donors/donorBackfill";
 
 /**
- * Support action, wgc_admin only — always scoped to the CALLER'S resolved
- * organization (or an explicit churchId only wgc_admin may pass), never
- * "all organizations" in one call. There is no route that iterates every
- * organization in the database; a real all-org backfill would need to call
- * this once per organization, deliberately, with review between runs.
+ * Team-access Checkpoint 4D: this route is currently UNREACHABLE by design,
+ * not by accident — it explicitly rejects wgc_admin (line below) while its
+ * only granted permission (canTriggerSync) is wgc_admin-only in
+ * donorPermissions.ts, so no caller can ever satisfy both checks. Per the
+ * approved decision: kept disabled rather than rewired, since a real fix
+ * (moving this wgc_admin-only backfill tool under /api/admin) is a new
+ * system and out of scope here. See __tests__/backfillUnreachable.test.ts
+ * for the executable proof.
  */
 export async function POST(req: Request) {
   const session = await getSession();
+
+  // Team-access Checkpoint 4A: explicit wgc_admin rejection — this route passes
+  // session.role into a permission module that has its own wgc_admin branch
+  // (for legitimate internal-support use via getSession() elsewhere); without
+  // this guard, a wgc_admin session could be admitted here through that back
+  // door. requireMerchantSession() (not yet adopted by this route) would
+  // reject this unconditionally; this is the minimal-diff equivalent.
+  if (session?.role === "wgc_admin") {
+    return NextResponse.json({ error: "This route is not available to internal accounts." }, { status: 403 });
+  }
   const permissions = getDonorPermissions(session?.role);
   if (!session || !permissions.canTriggerSync) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

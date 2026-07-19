@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Team-access Checkpoint 4C: migrated off getSession() to
+  // requireMerchantSession() — password change is a security-sensitive
+  // mutation, and requireMerchantSession() already fails closed for
+  // wgc_admin and disabled users.
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   const body = await req.json();
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
@@ -16,7 +26,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "New password must be at least 8 characters." }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
+  const user = await prisma.user.findUnique({ where: { id: auth.userId } });
   if (!user || !user.passwordHash) {
     return NextResponse.json({ error: "Account not found" }, { status: 404 });
   }
@@ -29,18 +39,16 @@ export async function POST(req: Request) {
   const passwordHash = await hashPassword(newPassword);
   await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
 
-  if (session.churchId) {
-    await logDashboardAction({
-      churchId: session.churchId,
-      actorUserId: session.userId,
-      actorEmail: session.email,
-      actorRole: session.role,
-      action: "settings.password_changed",
-      entityType: "user",
-      entityId: user.id,
-      req,
-    });
-  }
+  await logDashboardAction({
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
+    action: "settings.password_changed",
+    entityType: "user",
+    entityId: user.id,
+    req,
+  });
 
   return NextResponse.json({ success: true });
 }
