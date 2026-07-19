@@ -1,28 +1,21 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
-import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
-import { formatPersonName } from "@/lib/formatPersonName";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildFinixTransferScope } from "@/lib/auth/scopes";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { buildTransactionReportData, renderTransactionReportCsv, renderTransactionReportPdf, resolveUserIdentity, type ReportScope } from "@/lib/exports/transactionReportData";
+import { buildTransactionExportFilename, csvResponse } from "@/lib/exports/transactionExport";
 
-const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
-
-function csvEscape(value: string) {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
+/**
+ * Organization-scoped canonical transaction export — the same shared
+ * report-data builder as the team-member/giving-link exports (see
+ * transactionReportData.ts). Respects the existing dashboard view-scope
+ * dropdown: an OWNER/ADMIN "viewing as" a team member gets that member's
+ * scoped report, matching what they see on screen (buildFinixTransferScope's
+ * old behavior, now expressed as an attributedUserId filter instead).
+ */
 export async function GET(req: Request) {
-  // Team-access Checkpoint 4A: was gated on the legacy church_admin-only
-  // check and exported the whole church unconditionally — now scoped
-  // identically to the dashboard payments list (test: "Payment export
-  // equals payment dashboard scope").
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -31,9 +24,10 @@ export async function GET(req: Request) {
     throw err;
   }
   const viewScope = await resolveViewScope(auth);
-  const transferScope = await buildFinixTransferScope(auth, viewScope);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
 
   const { searchParams } = new URL(req.url);
+  const format = searchParams.get("format") === "pdf" ? "pdf" : "csv";
   const state = searchParams.get("state") || undefined;
   const last4 = searchParams.get("last4") || undefined;
   const buyer = searchParams.get("buyer") || undefined;
@@ -42,112 +36,58 @@ export async function GET(req: Request) {
   const to = searchParams.get("to") || undefined;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
-  const isRefundDerivedFilter = state ? REFUND_DERIVED_STATES.has(state) : false;
 
-  const transfers = await prisma.finixTransfer.findMany({
-    where: {
-      ...transferScope,
-      // See the same OR-in-null fix in transactions/payments/page.tsx —
-      // NOT: { subtype: { contains: "RETURN" } } alone excludes every
-      // null-subtype row too under SQL's three-valued logic.
-      OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
-      ...(state && !isRefundDerivedFilter ? { state } : {}),
-      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
-    },
-    orderBy: { createdAtFinix: "desc" },
-  });
-
-  const instrumentIds = transfers
-    .map((t) => t.finixPaymentInstrumentId)
-    .filter((id): id is string => Boolean(id));
-  const instruments = instrumentIds.length
-    ? await prisma.finixPaymentInstrumentSnapshot.findMany({
-        where: { finixPaymentInstrumentId: { in: instrumentIds } },
-      })
-    : [];
-  const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
-
-  const donorIds = instruments.map((i) => i.donorId).filter((did): did is string => Boolean(did));
-  const donors = donorIds.length
-    ? await prisma.donor.findMany({ where: { id: { in: donorIds } } })
-    : [];
-  const donorMap = new Map(donors.map((d) => [d.id, d]));
-
-  const transferIds = transfers.map((t) => t.finixTransferId);
-  const refunds = transferIds.length
-    ? await prisma.finixRefundOrReversal.findMany({
-        where: { finixOriginalTransferId: { in: transferIds } },
-      })
-    : [];
-  const refundsByTransfer = new Map<string, typeof refunds>();
-  for (const r of refunds) {
-    if (!r.finixOriginalTransferId) continue;
-    const list = refundsByTransfer.get(r.finixOriginalTransferId) ?? [];
-    list.push(r);
-    refundsByTransfer.set(r.finixOriginalTransferId, list);
+  let scope: ReportScope = "ENTIRE_ORGANIZATION";
+  let owner = { name: "Entire Organization", email: "", userId: "", role: "" };
+  if (scopedUserId) {
+    const identity = await resolveUserIdentity(scopedUserId);
+    scope = scopedUserId === auth.userId ? "MY_ACTIVITY" : "TEAM_MEMBER";
+    owner = identity
+      ? { name: identity.name, email: identity.email, userId: scopedUserId, role: identity.role }
+      : { name: "", email: "", userId: scopedUserId, role: "" };
   }
 
-  const rows = transfers
-    .map((t) => ({
-      transfer: t,
-      refund: computeRefundStatus(t, refundsByTransfer.get(t.finixTransferId) ?? []),
-    }))
-    .filter(({ transfer: t, refund }) => {
-      const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
-      const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
-      if (last4) {
-        const l4 = instrument?.cardLast4 || instrument?.bankLast4;
-        if (l4 !== last4) return false;
-      }
-      if (buyer) {
-        const name = donor?.name || instrument?.accountHolderName || "";
-        if (!name.toLowerCase().includes(buyer.toLowerCase())) return false;
-      }
-      if (isRefundDerivedFilter && resolveDisplayStatus(t.state, refund) !== state) return false;
-      return true;
-    });
+  const appliedFilters = [
+    state ? `state=${state}` : null,
+    last4 ? `last4=${last4}` : null,
+    buyer ? `buyer=${buyer}` : null,
+    range ? `range=${range}` : null,
+  ]
+    .filter(Boolean)
+    .join(", ") || "None";
 
-  const header = [
-    "ID",
-    "Created",
-    "Donor",
-    "Email",
-    "Phone",
-    "Amount",
-    "State",
-    "Refund Status",
-    "Net Amount",
-    "Display Status",
-    "Instrument Type",
-    "Last Four",
-  ];
-  const lines = [header.join(",")];
-
-  for (const { transfer: t, refund } of rows) {
-    const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
-    const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
-    lines.push(
-      [
-        csvEscape(t.finixTransferId),
-        csvEscape(t.createdAtFinix ? t.createdAtFinix.toISOString() : ""),
-        csvEscape(formatPersonName(donor?.name, instrument?.accountHolderName)),
-        csvEscape(donor?.email || ""),
-        csvEscape(donor?.phone || ""),
-        csvEscape(formatCents(t.amountCents ?? 0)),
-        csvEscape(t.state || "UNKNOWN"),
-        csvEscape(refund.refundStatus),
-        csvEscape(formatCents(refund.netAmountCents)),
-        csvEscape(resolveDisplayStatus(t.state, refund)),
-        csvEscape(instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : "Unknown")),
-        csvEscape(instrument?.cardLast4 || instrument?.bankLast4 || ""),
-      ].join(",")
-    );
-  }
-
-  return new NextResponse(lines.join("\n"), {
-    headers: {
-      "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="payments.csv"`,
-    },
+  const data = await buildTransactionReportData({
+    churchId: auth.churchId,
+    scope,
+    owner,
+    generatedBy: { name: auth.email, email: auth.email },
+    filter: { attributedUserId: scopedUserId, createdAtRange: dateFilter },
+    appliedFiltersDescription: appliedFilters,
   });
+
+  // last4/buyer/state are UI list filters specific to this page — applied
+  // as a post-filter on the canonical rows rather than widening the shared
+  // module's filter surface with route-specific query params.
+  const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING", "PENDING"]);
+  const rows = data.rows.filter((r) => {
+    if (last4 && r.lastFour !== last4) return false;
+    if (buyer && !r.donorName.toLowerCase().includes(buyer.toLowerCase())) return false;
+    if (state) {
+      const isRefundDerived = REFUND_DERIVED_STATES.has(state) && state !== "PENDING";
+      if (isRefundDerived && r.refundStatus !== state) return false;
+      if (!isRefundDerived && r.transactionStatus !== state) return false;
+    }
+    return true;
+  });
+  const filteredData = { ...data, rows };
+
+  const filenameBase = scope === "ENTIRE_ORGANIZATION" ? "org" : owner.email || scopedUserId || "org";
+  const filename = buildTransactionExportFilename("organization", filenameBase, format);
+
+  if (format === "pdf") {
+    const pdf = await renderTransactionReportPdf(filteredData);
+    return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` } });
+  }
+  const csv = renderTransactionReportCsv(filteredData);
+  return csvResponse(csv, filename);
 }

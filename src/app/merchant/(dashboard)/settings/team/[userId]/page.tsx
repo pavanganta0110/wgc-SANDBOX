@@ -87,13 +87,22 @@ export default async function TeamMemberDetailPage({
         <div className="flex items-center gap-2">
           {!isSelf && <ViewMemberDashboardButton userId={summary.userId} />}
           {canExport && (
-            <a
-              href={`/api/merchant/settings/team/${summary.userId}/export`}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
-            >
-              <Download className="w-4 h-4" />
-              Export Data
-            </a>
+            <>
+              <a
+                href={`/api/merchant/settings/team/${summary.userId}/export`}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </a>
+              <a
+                href={`/api/merchant/settings/team/${summary.userId}/export?format=pdf`}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800"
+              >
+                <Download className="w-4 h-4" />
+                Export PDF
+              </a>
+            </>
           )}
         </div>
       </div>

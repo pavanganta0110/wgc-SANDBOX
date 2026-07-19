@@ -126,7 +126,14 @@ export default function PaymentsFilterBar() {
         className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
       >
         <Download className="w-4 h-4" />
-        Export
+        Export CSV
+      </a>
+      <a
+        href={`/api/merchant/transactions/payments/export?${new URLSearchParams({ ...Object.fromEntries(searchParams), format: "pdf" }).toString()}`}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+      >
+        <Download className="w-4 h-4" />
+        Export PDF
       </a>
     </div>
   );

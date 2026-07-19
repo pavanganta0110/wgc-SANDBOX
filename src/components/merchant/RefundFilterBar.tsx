@@ -192,13 +192,22 @@ export default function RefundFilterBar({ exportHref }: { exportHref?: string })
         </div>
 
         {exportHref && (
-          <a
-            href={`${exportHref}?${searchParams.toString()}`}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </a>
+          <>
+            <a
+              href={`${exportHref}?${searchParams.toString()}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </a>
+            <a
+              href={`${exportHref}?${new URLSearchParams({ ...Object.fromEntries(searchParams), format: "pdf" }).toString()}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="w-4 h-4" />
+              Export PDF
+            </a>
+          </>
         )}
       </div>
     </div>

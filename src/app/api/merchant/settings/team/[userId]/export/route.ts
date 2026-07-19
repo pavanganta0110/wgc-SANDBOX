@@ -1,52 +1,19 @@
 import { NextResponse } from "next/server";
-import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { canExportTeamMemberData } from "@/lib/settings/teamMemberAccess";
-import { loadTeamMemberSummary, loadTeamMemberTransactions } from "@/lib/settings/teamMemberDetail";
-import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
-
-interface ExportRow {
-  memberEmail: string;
-  givingLinkName: string;
-  paymentId: string;
-  finixTransferId: string;
-  createdAt: Date;
-  donorName: string;
-  paymentMethodType: string;
-  amountCents: number;
-  feeCents: number;
-  refundedCents: number;
-  netCents: number;
-  status: string;
-  settlementId: string;
-  settlementStatus: string;
-}
-
-const COLUMNS: CsvColumn<ExportRow>[] = [
-  { header: "Member Email", value: (r) => r.memberEmail },
-  { header: "Giving Link", value: (r) => r.givingLinkName },
-  { header: "Transaction ID", value: (r) => r.paymentId },
-  { header: "Finix Transfer ID", value: (r) => r.finixTransferId },
-  { header: "Donation Date", value: (r) => r.createdAt.toISOString() },
-  { header: "Donor Name", value: (r) => r.donorName },
-  { header: "Payment Method", value: (r) => r.paymentMethodType },
-  { header: "Gross Amount", value: (r) => formatCents(r.amountCents) },
-  { header: "Fee Amount", value: (r) => formatCents(r.feeCents) },
-  { header: "Refund Amount", value: (r) => formatCents(r.refundedCents) },
-  { header: "Net Amount", value: (r) => formatCents(r.netCents) },
-  { header: "Status", value: (r) => r.status },
-  { header: "Settlement ID", value: (r) => r.settlementId },
-  { header: "Settlement Status", value: (r) => r.settlementStatus },
-];
+import { loadTeamMemberSummary } from "@/lib/settings/teamMemberDetail";
+import { buildTransactionReportData, renderTransactionReportCsv, renderTransactionReportPdf } from "@/lib/exports/transactionReportData";
+import { buildTransactionExportFilename, csvResponse } from "@/lib/exports/transactionExport";
 
 /**
  * Scoped export for a single team member — never trusts a client-supplied
  * churchId, always re-derives it from the authenticated session and
- * verifies the target user belongs to that same church (canExportTeamMemberData).
- * Deliberately excludes card/bank numbers, tokens, and any raw Finix
- * credential — only the same non-sensitive fields already shown on the
- * Transactions tab, keyed off Payment.attributedUserId.
+ * verifies the target user belongs to that same church
+ * (canExportTeamMemberData). This is the normal transaction export filtered
+ * by Payment.attributedUserId — same canonical columns, calculations, and
+ * serializer as every other transaction export (see transactionExport.ts);
+ * it does not maintain its own CSV schema.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ userId: string }> }) {
   let auth;
@@ -64,24 +31,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ userId: 
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const transactions = await loadTeamMemberTransactions(auth.churchId, summary.userId);
-  const rows: ExportRow[] = transactions.map((t) => ({
-    memberEmail: summary.email,
-    givingLinkName: t.givingLinkName || "",
-    paymentId: t.paymentId,
-    finixTransferId: t.finixTransferId || "",
-    createdAt: t.createdAt,
-    donorName: t.donorName,
-    paymentMethodType: t.paymentMethodType,
-    amountCents: t.amountCents,
-    feeCents: t.feeCents,
-    refundedCents: t.refundedCents,
-    netCents: t.netCents,
-    status: t.status,
-    settlementId: t.settlementId || "",
-    settlementStatus: t.settlementId ? t.settlementState || (t.settledAt ? "SETTLED" : "PENDING") : "",
-  }));
+  const { searchParams } = new URL(req.url);
+  const format = searchParams.get("format") === "pdf" ? "pdf" : "csv";
 
-  const csv = buildCsvExport(rows, COLUMNS);
-  return csvResponse(csv, `team-member-${summary.email.replace(/[^a-z0-9.@-]/gi, "_")}.csv`);
+  const data = await buildTransactionReportData({
+    churchId: auth.churchId,
+    scope: summary.userId === auth.userId ? "MY_ACTIVITY" : "TEAM_MEMBER",
+    owner: { name: summary.email, email: summary.email, userId: summary.userId, role: summary.role },
+    generatedBy: { name: auth.email, email: auth.email },
+    filter: { attributedUserId: summary.userId },
+    appliedFiltersDescription: `Team Member = ${summary.email}`,
+  });
+
+  const filename = buildTransactionExportFilename("team-member", summary.email, format);
+
+  if (format === "pdf") {
+    const pdf = await renderTransactionReportPdf(data);
+    return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` } });
+  }
+  const csv = renderTransactionReportCsv(data);
+  return csvResponse(csv, filename);
 }
