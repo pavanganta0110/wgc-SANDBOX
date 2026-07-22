@@ -30,17 +30,8 @@ export default function InquiryForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(values),
       });
-
-      // Safely parse JSON — only attempt when the body is non-empty.
-      // An empty body (e.g. from an unhandled 500) causes "Unexpected end of
-      // JSON input" if you call res.json() directly.
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : {};
-
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to send inquiry. Please try again.");
-      }
-
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send inquiry");
       setStatus("success");
       setValues({ firstName: "", lastName: "", email: "", phone: "", company: "", role: "Software Partner (ISV)", message: "" });
     } catch (err: any) {

@@ -11,6 +11,7 @@ import { validateGoodsServicesInput, computeRecordedContributionAmountCents } fr
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -181,20 +182,12 @@ export async function POST(req: Request) {
           },
         });
 
-    const donorRecord = await prisma.donor.upsert({
-      where: { finixIdentityId: identityId },
-      create: {
-        churchId: church.id,
-        finixIdentityId: identityId,
-        name: donor.name,
-        email: donor.email,
-        phone: donor.phone || null,
-      },
-      update: {
-        name: donor.name,
-        email: donor.email,
-        phone: donor.phone || undefined,
-      },
+    const donorRecord = await resolveOrCreateDonor({
+      churchId: church.id,
+      finixIdentityId: identityId,
+      name: donor.name,
+      email: donor.email,
+      phone: donor.phone || null,
     });
 
     try {

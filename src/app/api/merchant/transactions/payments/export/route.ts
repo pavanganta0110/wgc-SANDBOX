@@ -31,6 +31,7 @@ export async function GET(req: Request) {
   const state = searchParams.get("state") || undefined;
   const last4 = searchParams.get("last4") || undefined;
   const buyer = searchParams.get("buyer") || undefined;
+  const fund = searchParams.get("fund") || undefined;
   const range = searchParams.get("range") || undefined;
   const from = searchParams.get("from") || undefined;
   const to = searchParams.get("to") || undefined;
@@ -51,6 +52,7 @@ export async function GET(req: Request) {
     state ? `state=${state}` : null,
     last4 ? `last4=${last4}` : null,
     buyer ? `buyer=${buyer}` : null,
+    fund ? `fund=${fund}` : null,
     range ? `range=${range}` : null,
   ]
     .filter(Boolean)
@@ -72,6 +74,7 @@ export async function GET(req: Request) {
   const rows = data.rows.filter((r) => {
     if (last4 && r.lastFour !== last4) return false;
     if (buyer && !r.donorName.toLowerCase().includes(buyer.toLowerCase())) return false;
+    if (fund && !(r.fundName || "").toLowerCase().includes(fund.toLowerCase())) return false;
     if (state) {
       const isRefundDerived = REFUND_DERIVED_STATES.has(state) && state !== "PENDING";
       if (isRefundDerived && r.refundStatus !== state) return false;

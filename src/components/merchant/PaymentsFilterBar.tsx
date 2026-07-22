@@ -2,8 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import toast from "react-hot-toast";
-import { Download, ListFilter, Bookmark, ChevronDown } from "lucide-react";
+import { Download, ChevronDown } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import PillFilterInput from "@/components/merchant/PillFilterInput";
 
@@ -18,12 +17,13 @@ const STATES = [
   "REFUND_PENDING",
 ];
 
-export default function PaymentsFilterBar() {
+export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSuggestions?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const state = searchParams.get("state") || "";
   const last4 = searchParams.get("last4") || "";
   const donorName = searchParams.get("buyer") || "";
+  const fund = searchParams.get("fund") || "";
   const [isStateOpen, setIsStateOpen] = useState(false);
 
   const setParam = (key: string, value: string) => {
@@ -87,6 +87,15 @@ export default function PaymentsFilterBar() {
       </div>
 
       <PillFilterInput
+        label="Fund / Designation"
+        value={fund}
+        width="w-64"
+        placeholder="e.g. General Fund"
+        suggestions={fundSuggestions}
+        onApply={(v) => setParam("fund", v)}
+      />
+
+      <PillFilterInput
         label="Last Four"
         value={last4}
         maxLength={4}
@@ -104,22 +113,6 @@ export default function PaymentsFilterBar() {
       />
 
       <div className="h-6 w-px bg-slate-200" />
-
-      <button
-        onClick={() => toast("More filters are coming soon.", { icon: "🚧" })}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50"
-      >
-        <ListFilter className="w-4 h-4" />
-        Filters
-      </button>
-
-      <button
-        onClick={() => toast("Saved views are coming soon.", { icon: "🚧" })}
-        className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:underline"
-      >
-        <Bookmark className="w-4 h-4" />
-        Save View
-      </button>
 
       <a
         href={`/api/merchant/transactions/payments/export?${searchParams.toString()}`}

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildFinixTransferScope } from "@/lib/auth/scopes";
+import { buildFinixTransferScope, buildPaymentScope } from "@/lib/auth/scopes";
 import PaymentsFilterBar from "@/components/merchant/PaymentsFilterBar";
 import PaymentsHeaderActions from "@/components/merchant/PaymentsHeaderActions";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
@@ -14,6 +14,7 @@ import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundSta
 import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation";
+import { resolveFundFilteredTransferIds } from "@/lib/giving/fundAssignment";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -28,6 +29,7 @@ export default async function PaymentsListPage({
     from?: string;
     to?: string;
     id?: string;
+    fund?: string;
   }>;
 }) {
   const auth = await requireMerchantSession();
@@ -38,12 +40,22 @@ export default async function PaymentsListPage({
   // (see that helper's comment). Organization scope still includes
   // unattributed transfers, matching the approved payment-scope policy.
   const transferScope = await buildFinixTransferScope(auth, viewScope);
-  const { state, last4, buyer, range, from, to, id } = await searchParams;
+  const { state, last4, buyer, range, from, to, id, fund } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   const pricing = await prisma.churchPricing.findUnique({ where: { churchId } });
+
+  // Typeahead suggestions only — current catalog names plus any distinct
+  // historical Payment.fundName snapshots (covers renamed/archived funds
+  // whose old name no longer appears in the live Fund catalog). Scoped to
+  // the church only; the actual filter below is what enforces view scope.
+  const [catalogFunds, historicalFundNames] = await Promise.all([
+    prisma.fund.findMany({ where: { churchId }, orderBy: { displayOrder: "asc" }, select: { name: true } }),
+    prisma.payment.findMany({ where: { churchId, fundName: { not: null } }, distinct: ["fundName"], select: { fundName: true }, take: 200 }),
+  ]);
+  const fundSuggestions = [...new Set([...catalogFunds.map((f) => f.name), ...historicalFundNames.map((p) => p.fundName as string)])].sort();
 
   // Refund-derived states (REFUNDED, etc.) aren't a real value of the
   // transfer's own `state` column — the underlying charge state stays
@@ -64,6 +76,16 @@ export default async function PaymentsListPage({
     }
   });
 
+  // Fund / Designation filter is resolved server-side against the
+  // Payment.fundName snapshot (never the live Fund catalog, so a renamed
+  // or archived fund still matches its historical transactions) and scoped
+  // through buildPaymentScope — the same organization/team-member/
+  // fundraiser attribution rules as every other view here, derived only
+  // from the authenticated session, never a client-supplied value.
+  const fundMatchedTransferIds = fund
+    ? await resolveFundFilteredTransferIds(buildPaymentScope(auth, viewScope), fund)
+    : null;
+
   const transfers = await prisma.finixTransfer.findMany({
     where: {
       ...transferScope,
@@ -74,6 +96,7 @@ export default async function PaymentsListPage({
       OR: [{ subtype: null }, { NOT: { subtype: { contains: "RETURN" } } }],
       ...(state && !isRefundDerivedFilter ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(fundMatchedTransferIds ? { finixTransferId: { in: fundMatchedTransferIds } } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
     take: 100,
@@ -109,13 +132,22 @@ export default async function PaymentsListPage({
     refundsByTransfer.set(r.finixOriginalTransferId, list);
   }
 
+  const payments = transferIds.length
+    ? await prisma.payment.findMany({
+        where: { churchId, finixTransferId: { in: transferIds } },
+        select: { finixTransferId: true, fundName: true },
+      })
+    : [];
+  const paymentByTransfer = new Map(payments.filter((p) => p.finixTransferId).map((p) => [p.finixTransferId as string, p]));
+
   const rows = transfers
     .map((t) => {
       const instrument = instrumentMap.get(t.finixPaymentInstrumentId ?? "");
       const donor = instrument?.donorId ? donorMap.get(instrument.donorId) : undefined;
       const refund = computeRefundStatus(t, refundsByTransfer.get(t.finixTransferId) ?? []);
       const displayStatus = resolveDisplayStatus(t.state, refund);
-      return { transfer: t, instrument, donor, refund, displayStatus };
+      const payment = paymentByTransfer.get(t.finixTransferId);
+      return { transfer: t, instrument, donor, refund, displayStatus, payment };
     })
     .filter(({ instrument, donor, displayStatus }) => {
       if (last4) {
@@ -127,6 +159,7 @@ export default async function PaymentsListPage({
         if (!name.toLowerCase().includes(buyer.toLowerCase())) return false;
       }
       if (isRefundDerivedFilter && displayStatus !== state) return false;
+      // Fund filtering already happened server-side above (fundMatchedTransferIds).
       return true;
     });
 
@@ -145,7 +178,7 @@ export default async function PaymentsListPage({
         />
       </div>
 
-      <PaymentsFilterBar />
+      <PaymentsFilterBar fundSuggestions={fundSuggestions} />
 
       <div className="flex items-start gap-6">
       <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
@@ -164,10 +197,11 @@ export default async function PaymentsListPage({
                 <th className="px-6 py-3">State</th>
                 <th className="px-6 py-3">Payment Instrument</th>
                 <th className="px-6 py-3">Instrument Type</th>
+                <th className="px-6 py-3">Fund</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ transfer: t, instrument, donor, refund, displayStatus }) => {
+              {rows.map(({ transfer: t, instrument, donor, refund, displayStatus, payment }) => {
                 const last4Value = instrument?.cardLast4 || instrument?.bankLast4;
                 const instrumentLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : null);
                 const isFailed = (t.state || "").toUpperCase() === "FAILED";
@@ -207,6 +241,7 @@ export default async function PaymentsListPage({
                       {last4Value ? `••••${last4Value}` : "—"}
                     </td>
                     <td className="px-6 py-3 text-slate-500 text-xs">{instrumentLabel || "Unknown"}</td>
+                    <td className="px-6 py-3 text-slate-600">{payment?.fundName || "Unspecified"}</td>
                   </ClickableTableRow>
                 );
               })}

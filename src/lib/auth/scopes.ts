@@ -4,15 +4,6 @@ import { prisma } from "@/lib/prisma";
 import type { MerchantAuthContext } from "./requireMerchantSession";
 import type { ResolvedViewScope, ViewScope } from "./viewScope";
 
-// Request-level cached payment lookup to prevent duplicate database hits when building scopes
-export const getOwnPaymentTransferIds = cache(async (churchId: string, attributedUserId: string): Promise<string[]> => {
-  const ownPayments = await prisma.payment.findMany({
-    where: { churchId, attributedUserId },
-    select: { finixTransferId: true },
-  });
-  return ownPayments.map((p) => p.finixTransferId).filter((id): id is string => Boolean(id));
-});
-
 /**
  * Checkpoint 4: now that GivingLink.ownerUserId, Payment.attributedUserId,
  * and FinixSubscription.attributedUserId are real, snapshotted-at-creation
@@ -22,6 +13,15 @@ export const getOwnPaymentTransferIds = cache(async (churchId: string, attribute
  * reassignment changes future attribution only, and these scope builders
  * must reflect that: they read the stored snapshot, never the link.
  */
+
+// Request-level cached payment lookup to prevent duplicate database hits when building scopes
+export const getOwnPaymentTransferIds = cache(async (churchId: string, attributedUserId: string): Promise<string[]> => {
+  const ownPayments = await prisma.payment.findMany({
+    where: { churchId, attributedUserId },
+    select: { finixTransferId: true },
+  });
+  return ownPayments.map((p) => p.finixTransferId).filter((id): id is string => Boolean(id));
+});
 
 /**
  * The two giving links flagged in the Checkpoint 3 backfill report as

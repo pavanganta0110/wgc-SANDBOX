@@ -231,7 +231,10 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
       givingLinkId: s.givingLinkId,
       givingLinkName: givingLink?.internalName ?? null,
       fundId,
-      fundName: fundId ? fundById.get(fundId) ?? givingLink?.fundName ?? null : null,
+      // s.fundName is the snapshot captured when the subscription was
+      // created — always preferred over a live catalog lookup so renaming
+      // a fund later never rewrites this historical subscription's display.
+      fundName: s.fundName ?? (fundId ? fundById.get(fundId) ?? givingLink?.fundName ?? null : null),
       failedAttempts: stats.failedAttempts,
       lifetimeCollectedCents: stats.lifetimeCollectedCents,
       requiresAttention: attentionReasons.length > 0,

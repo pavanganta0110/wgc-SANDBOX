@@ -87,6 +87,7 @@ function makeRow(overrides: Partial<TransactionExportRow> = {}): TransactionExpo
     teamMemberEmail: "fund@church-a.com",
     givingLinkName: "Spring Drive",
     givingLinkId: "link-1",
+    fundName: "",
     wgcPaymentId: "p1",
     finixTransferId: FULL_TRANSFER_ID,
     createdAt: new Date("2026-07-19"),
@@ -204,6 +205,19 @@ describe("TransactionReportPdf — table layout", () => {
     expect(cells).toContain("Actual Net");
     expect(cells).toContain("Settlement Included");
     expect(cells.some((c) => c.includes("Actual NetSettlement"))).toBe(false);
+  });
+
+  it("renders a 'Fund / Designation' column header, and 'Unspecified' for a row with no fund", () => {
+    const element = TransactionReportPdf({ rows: [makeRow({ fundName: "" })], summary: emptySummary });
+    const cells = collectTextNodeContents(element);
+    expect(cells).toContain("Fund / Designation");
+    expect(cells).toContain("Unspecified");
+  });
+
+  it("renders the fund name snapshot for a row with a selected fund", () => {
+    const element = TransactionReportPdf({ rows: [makeRow({ fundName: "Building Fund" })], summary: emptySummary });
+    const cells = collectTextNodeContents(element);
+    expect(cells).toContain("Building Fund");
   });
 
   it("the complete Processor Transaction ID is present, never truncated", () => {

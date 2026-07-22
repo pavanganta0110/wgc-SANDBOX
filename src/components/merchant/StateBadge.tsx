@@ -90,7 +90,7 @@ const STATE_STYLES: Record<string, string> = {
   HISTORICAL: "bg-slate-100 text-slate-400",
 };
 
-export default function StateBadge({ state }: { state: string | null | undefined }) {
+export default function StateBadge({ state, label }: { state: string | null | undefined; label?: string }) {
   const s = (state || "UNKNOWN").toUpperCase();
   return (
     <span
@@ -98,7 +98,7 @@ export default function StateBadge({ state }: { state: string | null | undefined
         STATE_STYLES[s] || "bg-slate-100 text-slate-600"
       }`}
     >
-      {s.replace(/_/g, " ")}
+      {label || s.replace(/_/g, " ")}
     </span>
   );
 }

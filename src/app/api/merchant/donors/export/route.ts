@@ -86,8 +86,19 @@ export async function GET(req: Request) {
     const range = searchParams.get("range") || undefined;
     const from = searchParams.get("from") || undefined;
     const to = searchParams.get("to") || undefined;
-    const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
-    const createdDateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
+    // Same rule as the dashboard page (donors/page.tsx): the donor roster
+    // export is only date-bounded when the admin explicitly chose a
+    // range — resolveDateRange's default preset must never silently
+    // shrink "which donors exist" below the always-unbounded Total
+    // Donors KPI, which is what previously caused the dashboard and CSV
+    // donor counts to disagree.
+    const explicitRangeRequested = Boolean(range || from || to);
+    const createdDateFilter = explicitRangeRequested
+      ? (() => {
+          const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
+          return startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
+        })()
+      : undefined;
 
     const filters: DonorsListFilters = {
       search: searchParams.get("q") || undefined,

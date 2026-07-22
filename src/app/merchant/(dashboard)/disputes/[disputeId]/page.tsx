@@ -39,7 +39,7 @@ export default async function DisputeFullDetailPage({
   }
   const churchId = auth.churchId;
   const { disputeId } = await params;
-  const permissions = getDisputePermissions(auth.rawRole);
+  const permissions = getDisputePermissions(auth.rawRole as any);
   if (!permissions.canView) {
     redirect("/merchant/dashboard");
   }

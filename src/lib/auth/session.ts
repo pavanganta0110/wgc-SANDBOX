@@ -9,21 +9,26 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 export interface SessionPayload {
   userId: string;
   email: string;
+  // "church_admin" kept for backward compatibility with any session token
+  // signed before the Checkpoint 1 role expansion — verifySessionToken
+  // doesn't reject it, callers should treat it as equivalent to "admin".
   role: "wgc_super_admin" | "wgc_admin" | "church_admin" | "owner" | "admin" | "fundraiser" | "viewer";
   churchId: string | null;
+  // Team-access Checkpoint 1: the User.authVersion value at sign-in time.
+  // getSession() re-checks this against the live DB value on every call —
+  // see the comment there for why. Optional or missing on tokens signed
+  // before this field existed; those are treated as version 0, which will
+  // never equal a real user's authVersion (starts at 1), so any session
+  // issued before this migration is naturally invalidated on next check
+  // rather than silently trusted.
+  authVersion?: number;
   // Epoch ms of User.passwordChangedAt at the moment this token was
   // issued, or null if the password has never been reset. Used only by
   // getAdminSession() (the internal WGC admin-panel auth path) to
   // invalidate every token issued before a password reset. Optional
   // because merchant-side logins (Team-access) don't set this — they use
-  // authVersion instead (see below).
+  // authVersion instead (see above).
   passwordChangedAt?: number | null;
-  // Team-access Checkpoint 1: the User.authVersion value at sign-in time,
-  // used by requireMerchantSession() (a separate, independent check —
-  // see that file) to invalidate every token issued before a role/
-  // permission/disabled-status change. Optional because admin-panel
-  // logins don't set this — they use passwordChangedAt instead.
-  authVersion?: number;
   exp: number; // unix seconds
 }
 
@@ -101,7 +106,27 @@ export async function getSession(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
-  return verifySessionToken(token);
+  const payload = verifySessionToken(token);
+  if (!payload) return null;
+
+  // Team-access Checkpoint 1: this used to be a purely stateless check
+  // (signature + expiry only) — a role change, permission change, or
+  // disable took effect only once the 7-day cookie naturally expired.
+  // Now every call re-reads the live DB row and rejects the session if
+  // authVersion has moved on (bumped by bumpAuthVersion(), called on
+  // every role/permission/status change) or the user has been disabled
+  // since the token was issued. This adds one indexed lookup per
+  // authenticated request — acceptable here since every merchant/admin
+  // page and API route already calls getSession() once per request
+  // regardless.
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { authVersion: true, disabledAt: true },
+  });
+  if (!user || user.disabledAt) return null;
+  if ((payload.authVersion ?? 0) !== user.authVersion) return null;
+
+  return payload;
 }
 
 export interface AdminSession {
@@ -116,14 +141,21 @@ export interface AdminSession {
  * re-checks the account isn't disabled and that the token's embedded
  * passwordChangedAt still matches the DB, so a password reset immediately
  * revokes every other session even though the cookie itself is stateless.
- * Costs one query per protected admin request, same tradeoff the rest of
- * this codebase already makes for role checks. Unrelated to and
- * unaffected by requireMerchantSession()'s authVersion check — the WGC
- * internal admin panel and the merchant dashboard use two independent
- * invalidation mechanisms on the same session-cookie infrastructure.
+ * Costs one query per protected admin request, same tradeoff getSession()
+ * already makes for role checks. Unrelated to and unaffected by
+ * getSession()'s authVersion check — the WGC internal admin panel and the
+ * merchant dashboard use two independent invalidation mechanisms on the
+ * same session-cookie infrastructure.
  */
 export async function getAdminSession(): Promise<AdminSession | null> {
-  const payload = await getSession();
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return null;
+  // Signature + expiry only, deliberately not getSession() — that also
+  // gates on User.authVersion, a merchant-session-only invalidation
+  // mechanism admin logins don't participate in. The DB-backed checks
+  // below (disabledAt, passwordChangedAt) are this path's own equivalent.
+  const payload = verifySessionToken(token);
   if (!payload) return null;
   if (payload.role !== "wgc_admin" && payload.role !== "wgc_super_admin") return null;
 
@@ -141,14 +173,11 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 }
 
 /**
- * Call after any change to a merchant user's role, permissionsJson,
- * disabledAt, or bank-management permission — invalidates every
- * merchant-dashboard session issued before the change (see
- * requireMerchantSession()'s authVersion comparison). Does not touch the
- * session cookie itself; the next request from that browser simply fails
- * requireMerchantSession() and gets redirected to login. Does not affect
- * WGC admin-panel sessions (getAdminSession() uses passwordChangedAt, not
- * authVersion).
+ * Call after any change to a user's role, permissionsJson, disabledAt, or
+ * bank-management permission — invalidates every session issued before
+ * the change (see getSession()'s authVersion comparison above). Does not
+ * touch the session cookie itself; the next request from that browser
+ * will simply fail getSession() and get redirected to login.
  */
 export async function bumpAuthVersion(userId: string): Promise<void> {
   await prisma.user.update({

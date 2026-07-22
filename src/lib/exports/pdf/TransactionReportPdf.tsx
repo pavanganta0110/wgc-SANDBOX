@@ -21,6 +21,7 @@ const A = {
   date: 55,
   donor: 85,
   givingLink: 85,
+  fund: 80,
   teamMember: 115,
   method: 65,
   txnId: 140,
@@ -276,6 +277,7 @@ export function TransactionReportPdf({ rows, summary }: TransactionReportPdfProp
             <Text style={{ width: A.date, ...styles.cell }}>Date</Text>
             <Text style={{ width: A.donor, ...styles.cell }}>Donor</Text>
             <Text style={{ width: A.givingLink, ...styles.cell }}>Giving Link</Text>
+            <Text style={{ width: A.fund, ...styles.cell }}>Fund / Designation</Text>
             <Text style={{ width: A.teamMember, ...styles.cell }}>Team Member</Text>
             <Text style={{ width: A.method, ...styles.cell }}>Payment Method</Text>
             <Text style={{ width: A.txnId, ...styles.cell }}>Processor Transaction ID</Text>
@@ -291,6 +293,7 @@ export function TransactionReportPdf({ rows, summary }: TransactionReportPdfProp
                 <Text style={{ width: A.date, ...styles.cell }}>{dateStr(r.createdAt)}</Text>
                 <Text style={{ width: A.donor, ...styles.cell }}>{r.donorName}</Text>
                 <Text style={{ width: A.givingLink, ...styles.cell }}>{r.givingLinkName || "—"}</Text>
+                <Text style={{ width: A.fund, ...styles.cell }}>{r.fundName || "Unspecified"}</Text>
                 <View style={{ width: A.teamMember, ...styles.cell }}>
                   <Text>{r.teamMemberName || "—"}</Text>
                   {showEmailLine && <Text style={styles.cellSub}>{r.teamMemberEmail}</Text>}

@@ -110,7 +110,7 @@ export default async function MerchantDashboardPage({
       ? Promise.resolve([])
       : prisma.finixAuthorization.findMany({
           where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { state: true, amountCents: true, amountRequestedCents: true, isVoid: true, voidState: true, createdAtFinix: true },
+          select: { state: true, amountCents: true, amountRequestedCents: true, isVoid: true, createdAtFinix: true },
         }),
     scopedUserId
       ? Promise.resolve([])
@@ -122,7 +122,7 @@ export default async function MerchantDashboardPage({
       ? Promise.resolve([])
       : prisma.finixFundingTransferAttempt.findMany({
           where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { state: true, amountCents: true, createdAtFinix: true },
+          select: { amountCents: true, createdAtFinix: true },
         }),
   ]);
 

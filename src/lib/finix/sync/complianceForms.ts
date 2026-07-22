@@ -61,12 +61,18 @@ export async function upsertComplianceFormFromFinix(churchId: string, finixMerch
 
 export const SYNC_TYPES = {
   FINIX_COMPLIANCE_FORMS: "FINIX_COMPLIANCE_FORMS",
-};
+} as const;
 
-export const COMPLIANCE_SYNC_COOLDOWN_MS = 60 * 60 * 1000;       // 1 hour for success
-export const COMPLIANCE_SYNC_RETRY_COOLDOWN_MS = 5 * 60 * 1000;  // 5 minutes for failure
-export const COMPLIANCE_SYNC_LEASE_MS = 30 * 1000;               // 30 seconds concurrency lease lock
+export const COMPLIANCE_SYNC_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+export const COMPLIANCE_SYNC_RETRY_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+export const COMPLIANCE_SYNC_LEASE_MS = 30 * 1000; // 30 seconds lock lease
 
+/**
+ * Self-healing fallback: fetches any Compliance Forms Finix has on file for
+ * this merchant that we don't already have locally (or haven't refreshed
+ * recently), independent of whether their creation/update webhook ever
+ * arrived. Throttled + read-mostly, safe to call on every dashboard load.
+ */
 export async function reconcileComplianceFormsForChurch(churchId: string): Promise<void> {
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   if (!church?.finixMerchantId) return;

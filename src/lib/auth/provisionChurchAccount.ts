@@ -89,10 +89,9 @@ export async function provisionChurchAccount(app: {
 
   const setPasswordLink = `https://wgcpayments.com/merchant/set-password/${rawToken}`;
 
-  const subject = "Your WGC Payments dashboard access";
-  const result = await sendWgcEmail({
+  await sendWgcEmail({
     to: app.contactEmail,
-    subject,
+    subject: "Your WGC Payments dashboard access",
     title: "Set up your dashboard access",
     badgeText: "Action Required",
     badgeColor: "#0B5DBC",
@@ -102,33 +101,5 @@ export async function provisionChurchAccount(app: {
                <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`,
   });
 
-  // sendWgcEmail never throws — it swallows Resend errors internally — so
-  // this is the only place that failure is observable. Without logging it,
-  // a failed send here leaves a fully-provisioned account whose owner never
-  // receives the one link that lets them log in, with zero record anywhere.
-  await prisma.emailLog.create({
-    data: {
-      onboardingApplicationId: app.id,
-      type: "DASHBOARD_ACCESS",
-      to: app.contactEmail,
-      subject,
-      status: result.success ? "SENT" : "FAILED",
-      sentAt: result.success ? new Date() : null,
-      error: result.success ? null : String(result.error ?? "unknown error"),
-    },
-  });
-
-  if (!result.success) {
-    await sendWgcEmail({
-      to: process.env.SUPPORT_EMAIL || "support@wgcpayments.com",
-      subject: `[ALERT] Dashboard access email failed to send — ${orgName}`,
-      title: "Dashboard access email failed",
-      badgeText: "Action Needed",
-      badgeColor: "#EF4444",
-      bodyHtml: `<p>The dashboard-access email to <strong>${app.contactEmail}</strong> (${orgName}) failed to send after account approval.</p>
-                 <p>The account and set-password link were created successfully, but the customer has not been notified. Resend it manually from the admin dashboard.</p>`,
-    }).catch((err) => console.error("Failed to send internal alert for dashboard-access email failure:", err));
-  }
-
-  return { church, user, emailSent: result.success };
+  return { church, user, emailSent: true };
 }

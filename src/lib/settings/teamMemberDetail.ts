@@ -126,6 +126,7 @@ export interface TeamMemberTransactionRow {
   createdAt: Date;
   donorName: string;
   givingLinkName: string | null;
+  fundName: string | null;
   paymentMethodType: string;
   amountCents: number;
   feeCents: number;
@@ -157,6 +158,7 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
       amountCents: true,
       status: true,
       createdAt: true,
+      fundName: true,
     },
     orderBy: { createdAt: "desc" },
     take: 300,
@@ -212,6 +214,7 @@ export async function loadTeamMemberTransactions(churchId: string, userId: strin
       createdAt: p.createdAt,
       donorName: formatPersonName(p.donorId ? donorMap.get(p.donorId) : null),
       givingLinkName: p.givingLinkId ? linkMap.get(p.givingLinkId) || null : null,
+      fundName: p.fundName,
       paymentMethodType: p.paymentMethodType,
       amountCents: p.amountCents,
       feeCents: transfer?.feeCents || 0,

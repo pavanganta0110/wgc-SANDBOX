@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { Paperclip } from "lucide-react";
 import StateBadge from "@/components/merchant/StateBadge";
+import { merchantStatusLabel } from "@/lib/support/ticketCategories";
 
 interface Attachment {
   id: string;
@@ -23,6 +24,7 @@ interface Message {
 
 export default function TicketThread({
   ticketId,
+  ticketNumber,
   subject,
   meta,
   initialMessages,
@@ -32,6 +34,7 @@ export default function TicketThread({
   canUploadAttachment,
 }: {
   ticketId: string;
+  ticketNumber: string;
   subject: string;
   meta: string;
   initialMessages: Message[];
@@ -100,8 +103,9 @@ export default function TicketThread({
     <div>
       <div className="mb-6">
         <div className="flex items-center gap-3 mb-1">
+          <span className="text-xs font-mono text-slate-400">{ticketNumber}</span>
           <h2 className="text-lg font-bold text-slate-900">{subject}</h2>
-          <StateBadge state={status} />
+          <StateBadge state={status} label={merchantStatusLabel(status)} />
         </div>
         <p className="text-xs text-slate-500">{meta}</p>
       </div>

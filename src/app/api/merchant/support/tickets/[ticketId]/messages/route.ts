@@ -5,6 +5,7 @@ import { uploadTicketAttachment } from "@/lib/support/ticketAttachmentUpload";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { notifyMerchantReply } from "@/lib/support/ticketNotifications";
 
 export async function POST(req: Request, { params }: { params: Promise<{ ticketId: string }> }) {
   const { ticketId } = await params;
@@ -66,8 +67,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     include: { attachments: true },
   });
 
-  const newStatus = auth.rawRole === "wgc_admin" ? "WAITING_ON_ORGANIZATION" : "WAITING_ON_SUPPORT";
-  await prisma.supportTicket.update({ where: { id: ticket.id }, data: { status: newStatus } });
+  // This route is merchant-only (getSupportPermissions denies canReply to
+  // wgc_admin/wgc_super_admin above) — a reply reaching here is always
+  // from the organization, so the ticket always moves to
+  // WAITING_ON_SUPPORT, never the reverse. WGC's own reply path is the
+  // separate internal admin messages route.
+  const updatedTicket = await prisma.supportTicket.update({ where: { id: ticket.id }, data: { status: "WAITING_ON_SUPPORT" } });
 
   await logDashboardAction({
     churchId: auth.churchId,
@@ -77,22 +82,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     action: "support.ticket_message_sent",
     entityType: "support_ticket",
     entityId: ticket.id,
-    metadata: { hasAttachment: !!attachment },
+    metadata: { hasAttachment: !!attachment, ticketNumber: ticket.ticketNumber },
     req,
   });
 
-  if (auth.rawRole === "wgc_admin") {
-    const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
-    await notifyEvent({
-      churchId: auth.churchId,
-      eventKey: "SUPPORT_TICKET_REPLY",
-      subject: `WGC Support replied: ${ticket.subject}`,
-      title: "Support Ticket Reply",
-      badgeText: "New Reply",
-      badgeColor: "#0B5DBC",
-      bodyHtml: `<p>WGC Support has replied to your ticket "<strong>${ticket.subject}</strong>".</p><p><a href="https://wgcpayments.com/merchant/support/tickets/${ticket.id}">View ticket</a></p>`,
-    });
-  }
+  // Best-effort — never lets an email failure remove or duplicate the
+  // reply, which is already committed above.
+  await notifyMerchantReply(updatedTicket, message.body);
 
   return NextResponse.json({ message }, { status: 201 });
 }

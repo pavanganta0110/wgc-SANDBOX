@@ -6,6 +6,7 @@ import GivingLinkBuilderForm from "@/components/merchant/GivingLinkBuilderForm";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies, parseReceiptSettings, parseBrandingSettings } from "@/lib/givingLinks/types";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { loadAllAssignedFunds } from "@/lib/giving/fundAssignment";
 
 export default async function EditGivingLinkPage({ params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -33,6 +34,8 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
   ]);
   if (!link) notFound();
 
+  const fundAssignments = (await loadAllAssignedFunds(link.id)).map((f) => ({ ...f, description: f.description || "" }));
+
   const suggestedAmounts = Array.isArray(link.suggestedAmountsJson)
     ? (link.suggestedAmountsJson as number[]).map((c) => (c / 100).toString()).join(", ")
     : "25, 50, 100, 250";
@@ -53,6 +56,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     maxSuccessfulUses: link.maxSuccessfulUses?.toString() || "",
     maxCollectedAmount: link.maxCollectedAmountCents != null ? (link.maxCollectedAmountCents / 100).toString() : "",
     fundName: link.fundName || "",
+    fundSelectionEnabled: link.fundSelectionEnabled,
     allowedPaymentMethods: parseAllowedPaymentMethods(link.allowedPaymentMethodsJson),
     donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
     feeCoverEnabled: link.feeCoverEnabled,
@@ -89,6 +93,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
         ownerOptions={canAssignOwner ? teamMembers : undefined}
         initialOwnerUserId={link.ownerUserId || auth.userId}
         canAssignOwner={canAssignOwner}
+        initialFundAssignments={fundAssignments}
       />
     </div>
   );

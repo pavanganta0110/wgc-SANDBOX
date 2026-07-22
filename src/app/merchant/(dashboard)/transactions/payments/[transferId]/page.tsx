@@ -308,6 +308,7 @@ export default async function PaymentFullDetailPage({
             <h3 className="text-sm font-bold text-slate-900 mb-4">Payment Details</h3>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <Row label="Created Via" value={sourceLabel(transfer.source)} />
+              <Row label="Fund / Designation" value={payment?.fundName || "Unspecified"} />
               <Row label="Statement Descriptor" value={transfer.statementDescriptor || "—"} />
               {transfer.failureCode && <Row label="Failure Code" value={transfer.failureCode} />}
               {transfer.failureMessage && <Row label="Failure Reason" value={transfer.failureMessage} />}

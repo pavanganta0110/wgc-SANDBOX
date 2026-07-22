@@ -5,6 +5,8 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requireFullOrganizationContext } from "@/lib/auth";
 import { isAuthError } from "@/lib/auth/errors";
+import { createSupportTicketWithNumber } from "@/lib/support/ticketNumber";
+import { notifyNewSupportTicket } from "@/lib/support/ticketNotifications";
 
 const VALID_AREAS: Record<string, string> = {
   LEGAL_NAME: "Legal Business Name Change",
@@ -48,18 +50,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Please describe the change you're requesting" }, { status: 400 });
   }
 
-  const ticket = await prisma.supportTicket.create({
-    data: {
-      churchId: auth.churchId,
-      subject: VALID_AREAS[area],
-      category: area === "BANK_ACCOUNT" ? "ACCOUNT_ACCESS" : "VERIFICATION",
-      description: details,
-      priority: "NORMAL",
-      createdByUserId: auth.userId,
-      createdByEmail: auth.email,
-    },
+  const ticket = await createSupportTicketWithNumber({
+    churchId: auth.churchId,
+    subject: VALID_AREAS[area],
+    category: area === "BANK_ACCOUNT" ? "ACCOUNT_ACCESS" : "VERIFICATION",
+    description: details,
+    priority: "NORMAL",
+    createdByUserId: auth.userId,
+    createdByEmail: auth.email,
   });
-
   await prisma.supportTicketMessage.create({
     data: {
       ticketId: ticket.id,
@@ -78,9 +77,11 @@ export async function POST(req: Request) {
     action: "organization.restricted_change_requested",
     entityType: "support_ticket",
     entityId: ticket.id,
-    metadata: { area },
+    metadata: { area, ticketNumber: ticket.ticketNumber },
     req,
   });
+
+  await notifyNewSupportTicket(ticket);
 
   return NextResponse.json({ success: true, ticketId: ticket.id }, { status: 201 });
 }

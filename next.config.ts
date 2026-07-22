@@ -17,23 +17,32 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      // Finix.js tokenization lib + inline scripts needed by Next.js hydration + Google reCAPTCHA.
-      // pay.google.com: Google Pay JS API (pay.js). applepay.cdn-apple.com: Apple's official
-      // <apple-pay-button> web component. cdn.sift.com: Finix's own fraud-detection SDK
-      // (Finix.Auth), loaded by finix.js for every donation, wallet or card — without it the
-      // fraud_session_id every charge requires can never be generated.
-      "script-src 'self' 'unsafe-inline' https://js.finix.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
+      // Finix.js tokenization lib + inline scripts needed by Next.js hydration.
+      // pay.google.com serves the Google Pay JS API (pay.js) and applepay.cdn-apple.com
+      // serves Apple's official <apple-pay-button> web component — without
+      // these, both wallet scripts fail to load and the buttons never
+      // appear, regardless of any env var configuration. This was the
+      // second (independent) root cause of Google/Apple Pay not showing up,
+      // alongside the missing wallet env vars — see loadPublicGivingPageData.ts.
+      // cdn.sift.com: Finix's own fraud-detection SDK (Finix.Auth, wraps
+      // Sift Science), loaded by finix.js itself to produce fraud_session_id
+      // — required for every donation, wallet or card, not wallet-specific.
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
-      // pay.google.com: Google Pay's client makes XHR calls to its own origin during
-      // isReadyToPay/loadPaymentData. cdn.sift.com: Finix's fraud SDK reports back to its own origin.
+      // pay.google.com: Google Pay's client makes XHR calls to its own
+      // origin during isReadyToPay/loadPaymentData.
       "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
-      // Allow Google reCAPTCHA iframes, Google Pay's payment-sheet iframe, and the
-      // Finix card-tokenization iframe (application/index.html) — an explicit frame-src
-      // fully replaces the default-src fallback for framed content, so every framed
-      // origin needs its own entry here, not just the ones being newly added.
-      "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://pay.google.com https://js.finix.com",
+      // Google Pay's payment sheet renders inside an iframe from pay.google.com.
+      // js.finix.com: the Finix card-tokenization form itself is mounted as
+      // an iframe (application/index.html) — adding an explicit frame-src
+      // above for Google Pay without also listing this domain silently
+      // broke card payments (frame-src has no "inherit the rest from
+      // script-src" behavior; an explicit frame-src fully replaces the
+      // default-src fallback for iframes, so every framed origin needs its
+      // own entry here).
+      "frame-src 'self' https://pay.google.com https://js.finix.com",
       // Prevent this page from being embedded anywhere
       "frame-ancestors 'none'",
     ].join("; "),
@@ -58,17 +67,13 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
-        // /embed/* must be iframe-able... except Finix's own tokenization
-        // SDK refuses to mount inside any iframe at all (confirmed by
-        // testing), so this route is only ever opened as a top-level
-        // popup window, never actually nested — this override exists so
-        // that path stays available if a future Finix SDK update lifts
-        // the iframe restriction. Per-org domain restriction (when an
-        // admin opts in) is enforced at the application layer instead
-        // (see src/lib/giving/embedDomainCheck.ts), since Next's
-        // headers() here is static and can't vary per-org. Next merges
-        // header entries by key in array order, so this later, more
-        // specific match overrides X-Frame-Options/CSP for this path.
+        // /embed/* must be iframe-able from arbitrary third-party sites —
+        // that's the entire point of the website-embed feature. Per-org
+        // domain restriction (when an admin opts in) is enforced at the
+        // application layer instead (see src/lib/giving/embedDomainCheck.ts),
+        // since Next's headers() here is static and can't vary per-org.
+        // Next merges header entries by key in array order, so this later,
+        // more specific match overrides X-Frame-Options/CSP for this path.
         source: "/embed/:path*",
         headers: [
           { key: "X-Frame-Options", value: "" },
@@ -76,15 +81,19 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              // /embed/[slug] renders the same GivingLinkForm as /g/[slug] — including its
-              // own Google/Apple Pay buttons and Finix card iframe — so it needs the
-              // identical wallet allowances as the main CSP block above.
-              "script-src 'self' 'unsafe-inline' https://js.finix.com https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/ https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
+              // /embed/[slug] renders the same GivingLinkForm as /g/[slug] —
+              // including its own Google/Apple Pay buttons and Finix card
+              // iframe — so it needs the identical wallet allowances as the
+              // main CSP block above, kept in sync deliberately rather than
+              // shared via a helper since these two blocks already diverge
+              // on X-Frame-Options/frame-ancestors for the embed use case.
+              // cdn.sift.com: Finix's own fraud-detection SDK, required by finix.js.
+              "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
               "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
-              "frame-src 'self' https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://pay.google.com https://js.finix.com",
+              "frame-src 'self' https://pay.google.com https://js.finix.com",
               "frame-ancestors *",
             ].join("; "),
           },

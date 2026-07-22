@@ -154,12 +154,6 @@ support@wgcpayments.com
   }
 }
 
-/**
- * Subject/title/badge/body for the customer-facing onboarding-status email,
- * keyed by the application's current onboardingStatus. Shared by the
- * approval webhook's first resend action and the admin email-logs resend
- * action so the copy only lives in one place.
- */
 export function buildOnboardingStatusEmailContent(status: string | null, orgName: string) {
   const safeOrgName = orgName || "your organization";
 

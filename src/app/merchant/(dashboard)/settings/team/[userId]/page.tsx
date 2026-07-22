@@ -243,6 +243,7 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
             <th className="px-6 py-3">Date</th>
             <th className="px-6 py-3">Donor</th>
             <th className="px-6 py-3">Giving Link</th>
+            <th className="px-6 py-3">Fund</th>
             <th className="px-6 py-3">Payment Method</th>
             <th className="px-6 py-3 text-right">Gross</th>
             <th className="px-6 py-3 text-right">Fee</th>
@@ -258,6 +259,7 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
               <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{formatDateCDT(t.createdAt)}</td>
               <td className="px-6 py-3 text-slate-700">{t.donorName}</td>
               <td className="px-6 py-3 text-slate-600">{t.givingLinkName || "—"}</td>
+              <td className="px-6 py-3 text-slate-600">{t.fundName || "Unspecified"}</td>
               <td className="px-6 py-3 text-slate-600">{t.paymentMethodType}</td>
               <td className="px-6 py-3 text-right text-slate-700">{formatCents(t.amountCents)}</td>
               <td className="px-6 py-3 text-right text-slate-600">{t.feeCents > 0 ? formatCents(t.feeCents) : "—"}</td>

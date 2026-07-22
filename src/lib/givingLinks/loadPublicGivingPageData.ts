@@ -12,6 +12,7 @@ import {
 } from "@/lib/givingLinks/types";
 import type { Church, GivingLink } from "@prisma/client";
 import type { FrequencyKey, PaymentMethodKey } from "@/lib/givingLinks/types";
+import { loadAssignedActiveFunds, type AssignedActiveFund } from "@/lib/giving/fundAssignment";
 
 /**
  * Shared data loader for both the hosted public giving page (/g/[slug])
@@ -40,6 +41,8 @@ export type PublicGivingPageData =
       googlePayEnvironment: "TEST" | "PRODUCTION";
       serverAvailability: { APPLE_PAY: { enabledForOrganization: boolean }; GOOGLE_PAY: { enabledForOrganization: boolean } };
       logoUrl: string | null;
+      fundSelectionEnabled: boolean;
+      assignedFunds: AssignedActiveFund[];
     };
 
 export async function loadPublicGivingPageData(slug: string): Promise<PublicGivingPageData> {
@@ -98,6 +101,8 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
     organizationLogoUrl: church.logoUrl,
   });
 
+  const assignedFunds = link.fundSelectionEnabled ? await loadAssignedActiveFunds(link.id) : [];
+
   return {
     ok: true,
     link,
@@ -118,5 +123,7 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
     googlePayEnvironment,
     serverAvailability,
     logoUrl,
+    fundSelectionEnabled: link.fundSelectionEnabled,
+    assignedFunds,
   };
 }

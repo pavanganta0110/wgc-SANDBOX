@@ -3,15 +3,19 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import StateBadge from "@/components/merchant/StateBadge";
-import { categoryLabel } from "@/lib/support/ticketCategories";
+import { categoryLabel, merchantStatusLabel } from "@/lib/support/ticketCategories";
 
 interface Ticket {
   id: string;
+  ticketNumber: string;
   subject: string;
   category: string;
   priority: string;
   status: string;
+  createdByEmail: string | null;
+  createdAt: string;
   updatedAt: string;
+  unreadCount: number;
 }
 
 const TABS = [
@@ -86,12 +90,20 @@ export default function TicketListPanel() {
             {tickets.map((ticket) => (
               <Link key={ticket.id} href={`/merchant/support/tickets/${ticket.id}`} className="flex items-center justify-between py-3 hover:bg-slate-50 -mx-2 px-2 rounded-lg">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">{ticket.subject}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono text-slate-400">{ticket.ticketNumber}</span>
+                    <div className="text-sm font-semibold text-slate-900">{ticket.subject}</div>
+                    {ticket.unreadCount > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold">
+                        {ticket.unreadCount}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-slate-500">
-                    {categoryLabel(ticket.category)} · {new Date(ticket.updatedAt).toLocaleDateString()}
+                    {categoryLabel(ticket.category)} · Created by {ticket.createdByEmail || "—"} on {new Date(ticket.createdAt).toLocaleDateString()} · Updated {new Date(ticket.updatedAt).toLocaleDateString()}
                   </div>
                 </div>
-                <StateBadge state={ticket.status} />
+                <StateBadge state={ticket.status} label={merchantStatusLabel(ticket.status)} />
               </Link>
             ))}
           </div>

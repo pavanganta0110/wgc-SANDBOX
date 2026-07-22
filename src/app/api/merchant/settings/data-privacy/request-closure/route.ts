@@ -5,6 +5,8 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requireFullOrganizationContext } from "@/lib/auth";
 import { isAuthError } from "@/lib/auth/errors";
+import { createSupportTicketWithNumber } from "@/lib/support/ticketNumber";
+import { notifyNewSupportTicket } from "@/lib/support/ticketNotifications";
 
 // Account closure is existential/irreversible — OWNER-only
 // (canRequestAccountClosure is not composable by ADMIN, see
@@ -34,16 +36,14 @@ export async function POST(req: Request) {
 
   const description = reason || "The organization has requested account closure via Settings > Data & Privacy.";
 
-  const ticket = await prisma.supportTicket.create({
-    data: {
-      churchId: auth.churchId,
-      subject: "Account Closure Request",
-      category: "OTHER",
-      description,
-      priority: "HIGH",
-      createdByUserId: auth.userId,
-      createdByEmail: auth.email,
-    },
+  const ticket = await createSupportTicketWithNumber({
+    churchId: auth.churchId,
+    subject: "Account Closure Request",
+    category: "OTHER",
+    description,
+    priority: "HIGH",
+    createdByUserId: auth.userId,
+    createdByEmail: auth.email,
   });
 
   await prisma.supportTicketMessage.create({
@@ -64,8 +64,11 @@ export async function POST(req: Request) {
     action: "settings.account_closure_requested",
     entityType: "support_ticket",
     entityId: ticket.id,
+    metadata: { ticketNumber: ticket.ticketNumber },
     req,
   });
+
+  await notifyNewSupportTicket(ticket);
 
   return NextResponse.json({ success: true, ticketId: ticket.id });
 }

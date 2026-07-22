@@ -101,6 +101,17 @@ export default async function DonorsPage({
 
   const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
+  // resolveDateRange always falls back to a default preset (currently
+  // "Last 6 Months") even when the admin never picked a range — correct
+  // for period-scoped metrics (Active/New/Recurring, trend, Top Donors),
+  // which need *some* window to mean anything. It is NOT correct for the
+  // donor roster itself: filtering "which donors exist" by Donor.createdAt
+  // within a silently-applied default window is why the Donors table/CSV
+  // export previously showed fewer rows than the always-unbounded Total
+  // Donors KPI. The roster (and its CSV/PDF export) is date-bounded only
+  // when the admin explicitly chose a range.
+  const explicitRangeRequested = Boolean(sp.range || sp.from || sp.to);
+  const rosterDateFilter = explicitRangeRequested ? dateFilter : undefined;
   const visibleCols = parseVisibleDonorColumns(sp.cols);
 
   const minTotal = sp.minTotal ? Math.round(parseFloat(sp.minTotal) * 100) : undefined;
@@ -140,7 +151,7 @@ export default async function DonorsPage({
     churchId,
     {
       search: sp.q,
-      createdDateFilter: dateFilter,
+      createdDateFilter: rosterDateFilter,
       donorStatus: sp.status && sp.status in DONOR_DISPLAY_STATUS_LABELS ? (sp.status as DonorDisplayStatus) : undefined,
       recurringOnly: sp.recurring === "1",
       paymentMethod: sp.paymentMethod === "card" || sp.paymentMethod === "bank" ? sp.paymentMethod : undefined,

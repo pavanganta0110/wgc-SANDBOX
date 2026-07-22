@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { advancePayoutAccountStatus, isTerminalPayoutAccountStatus, resolveVerificationState, resolvePaymentInstrumentState } from "@/lib/organization/bankAccountStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { createSupportTicketWithNumber } from "@/lib/support/ticketNumber";
+import { notifyNewSupportTicket } from "@/lib/support/ticketNotifications";
 
 /**
  * Called whenever an account first reaches APPROVED, from either the
@@ -32,17 +34,15 @@ export async function flagPayoutAccountVerifiedForActivationConfirmation(
     : null;
 
   if (!existingTicket || existingTicket.status === "CLOSED" || existingTicket.status === "RESOLVED") {
-    const ticket = await prisma.supportTicket.create({
-      data: {
-        churchId,
-        subject: "Payout bank account approved — activation confirmation needed",
-        category: "ACCOUNT_ACCESS",
-        priority: "HIGH",
-        description:
-          `A new payout bank account (••••${account.last4 || "----"}) has been approved by the processor. ` +
-          `WGC could not confirm via API that this account is now the organization's active payout destination — ` +
-          `please confirm activation status directly with the processor and mark it active for future payouts once confirmed.`,
-      },
+    const ticket = await createSupportTicketWithNumber({
+      churchId,
+      subject: "Payout bank account approved — activation confirmation needed",
+      category: "ACCOUNT_ACCESS",
+      priority: "HIGH",
+      description:
+        `A new payout bank account (••••${account.last4 || "----"}) has been approved by the processor. ` +
+        `WGC could not confirm via API that this account is now the organization's active payout destination — ` +
+        `please confirm activation status directly with the processor and mark it active for future payouts once confirmed.`,
     });
     await prisma.supportTicketMessage.create({
       data: { ticketId: ticket.id, senderRole: "system", body: "Auto-created after processor approval.", isSystemEvent: true },
@@ -51,6 +51,7 @@ export async function flagPayoutAccountVerifiedForActivationConfirmation(
       where: { id: account.id },
       data: { supportTicketId: ticket.id, verificationMethod: "SUPPORT_REVIEW" },
     });
+    await notifyNewSupportTicket(ticket);
   }
 
   await logDashboardAction({

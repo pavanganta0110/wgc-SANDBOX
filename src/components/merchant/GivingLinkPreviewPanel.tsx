@@ -5,6 +5,7 @@ import { Monitor, Smartphone, AlertCircle } from "lucide-react";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import { resolveGivingPageLogo } from "@/lib/givingLinks/types";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
+import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 
 export default function GivingLinkPreviewPanel({
   churchName,
@@ -29,6 +30,8 @@ export default function GivingLinkPreviewPanel({
   description,
   hideFooter,
   showPoweredByWgc,
+  fundSelectionEnabled = false,
+  assignedFunds = [],
 }: {
   churchName: string;
   light: BrandingModeSettings;
@@ -52,6 +55,8 @@ export default function GivingLinkPreviewPanel({
   description: string;
   hideFooter: boolean;
   showPoweredByWgc?: boolean;
+  fundSelectionEnabled?: boolean;
+  assignedFunds?: AssignedActiveFund[];
 }) {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
@@ -179,6 +184,8 @@ export default function GivingLinkPreviewPanel({
                 googlePayMerchantId={null}
                 googlePayEnvironment="TEST"
                 previewMode
+                fundSelectionEnabled={fundSelectionEnabled}
+                assignedFunds={assignedFunds}
                 onFormError={() => setFormError(true)}
               />
 

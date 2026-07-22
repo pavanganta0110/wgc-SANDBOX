@@ -9,6 +9,7 @@ export default function PillFilterInput({
   maxLength,
   width = "w-48",
   placeholder,
+  suggestions,
   onApply,
 }: {
   label: string;
@@ -16,10 +17,13 @@ export default function PillFilterInput({
   maxLength?: number;
   width?: string;
   placeholder?: string;
+  /** Enables native browser typeahead (via <datalist>) — options the user can pick from while still being free to type anything else. */
+  suggestions?: string[];
   onApply: (value: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const datalistId = suggestions ? `pill-filter-suggestions-${label.replace(/\s+/g, "-").toLowerCase()}` : undefined;
 
   return (
     <div className="relative">
@@ -46,6 +50,7 @@ export default function PillFilterInput({
               maxLength={maxLength}
               placeholder={placeholder}
               value={draft}
+              list={datalistId}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -55,6 +60,13 @@ export default function PillFilterInput({
               }}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-[#eab308]"
             />
+            {datalistId && (
+              <datalist id={datalistId}>
+                {suggestions!.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            )}
             <div className="flex items-center justify-end gap-2 mt-3">
               <button
                 onClick={() => {

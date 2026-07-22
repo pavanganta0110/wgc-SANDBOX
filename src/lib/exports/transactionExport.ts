@@ -66,6 +66,7 @@ export interface TransactionExportRow {
   teamMemberEmail: string;
   givingLinkName: string;
   givingLinkId: string;
+  fundName: string;
   wgcPaymentId: string;
   finixTransferId: string;
   createdAt: Date;
@@ -214,6 +215,7 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Team Member Email", value: (r) => r.teamMemberEmail },
   { header: "Giving Link Name", value: (r) => r.givingLinkName },
   { header: "Giving Link ID", value: (r) => r.givingLinkId },
+  { header: "Fund / Designation", value: (r) => r.fundName || "Unspecified" },
   { header: "WGC Payment ID", value: (r) => r.wgcPaymentId },
   { header: "Processor Transaction ID", value: (r) => r.finixTransferId },
   { header: "Created At", value: (r) => formatIsoOrEmpty(r.createdAt) },
@@ -287,6 +289,7 @@ export interface PaymentExportFilter {
   attributedUserId?: string;
   givingLinkId?: string;
   donorId?: string;
+  fundId?: string;
   createdAtRange?: { gte: Date; lte?: Date };
 }
 
@@ -305,6 +308,7 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
       ...(filter.attributedUserId ? { attributedUserId: filter.attributedUserId } : {}),
       ...(filter.givingLinkId ? { givingLinkId: filter.givingLinkId } : {}),
       ...(filter.donorId ? { donorId: filter.donorId } : {}),
+      ...(filter.fundId ? { fundId: filter.fundId } : {}),
       ...(filter.createdAtRange ? { createdAt: filter.createdAtRange } : {}),
     },
     orderBy: { createdAt: "desc" },
@@ -500,6 +504,7 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
       teamMemberEmail: attributedUser?.email || "",
       givingLinkName: givingLink?.internalName || givingLink?.publicTitle || "",
       givingLinkId: givingLink?.id || "",
+      fundName: p.fundName || "",
       wgcPaymentId: p.id,
       finixTransferId: p.finixTransferId || "",
       createdAt: p.createdAt,

@@ -20,14 +20,32 @@ export default async function TicketDetailPage({ params }: { params: Promise<{ t
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: ticketId },
-    include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: true } } },
+    // isInternalNote: false — internal WGC notes must never reach a
+    // merchant-facing query, not even filtered out client-side.
+    include: { messages: { where: { isInternalNote: false }, orderBy: { createdAt: "asc" }, include: { attachments: true } } },
   });
-  if (!ticket || ticket.churchId !== session.churchId) notFound();
+  // Team-access Checkpoint 4D: FUNDRAISER (canViewAllTickets=false) may
+  // only open a ticket they created — same-church alone isn't enough.
+  // Matches the API route's identical guard.
+  if (!ticket || ticket.churchId !== session.churchId || (!permissions.canViewAllTickets && ticket.createdByUserId !== session.userId)) {
+    notFound();
+  }
+
+  // Mark every unread WGC reply read now that the merchant has opened
+  // this ticket — best-effort, never blocks rendering the page.
+  const unreadWgcMessageIds = ticket.messages.filter((m) => m.senderRole === "wgc_admin" && !m.readByMerchantAt).map((m) => m.id);
+  if (unreadWgcMessageIds.length > 0) {
+    await prisma.supportTicketMessage.updateMany({
+      where: { id: { in: unreadWgcMessageIds } },
+      data: { readByMerchantAt: new Date() },
+    });
+  }
 
   return (
     <div className="space-y-6 max-w-3xl">
       <TicketThread
         ticketId={ticket.id}
+        ticketNumber={ticket.ticketNumber}
         subject={ticket.subject}
         meta={`${categoryLabel(ticket.category)} · Opened ${new Date(ticket.createdAt).toLocaleDateString()}`}
         initialMessages={ticket.messages.map((m) => ({

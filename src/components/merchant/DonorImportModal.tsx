@@ -77,7 +77,9 @@ export default function DonorImportModal({ onClose }: { onClose: () => void }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Import failed");
-      toast.success(`Imported ${data.created} donor(s)${data.skipped ? `, ${data.skipped} skipped` : ""}${data.failed?.length ? `, ${data.failed.length} failed` : ""}`);
+      toast.success(
+        `${data.created} created${data.updated ? `, ${data.updated} updated` : ""}${data.reused ? `, ${data.reused} reused` : ""}${data.rejected ? `, ${data.rejected} rejected` : ""}${data.failed?.length ? `, ${data.failed.length} failed` : ""}`
+      );
       router.refresh();
       onClose();
     } catch (err: any) {

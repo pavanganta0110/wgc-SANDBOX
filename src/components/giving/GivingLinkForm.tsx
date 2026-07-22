@@ -11,6 +11,7 @@ import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
+import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 // This holds the Finix Identity ID (starts "ID...") that Apple Pay's
@@ -75,6 +76,8 @@ export default function GivingLinkForm({
   googlePayEnvironment,
   previewMode = false,
   serverAvailability,
+  fundSelectionEnabled = false,
+  assignedFunds = [],
   onFormError,
   onResult,
 }: {
@@ -104,6 +107,8 @@ export default function GivingLinkForm({
   previewMode?: boolean;
   /** Shared server-side availability result (getPaymentMethodAvailability) — gates wallet visibility alongside the real device capability check, so this page, the preview, and Settings never disagree. */
   serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
+  fundSelectionEnabled?: boolean;
+  assignedFunds?: AssignedActiveFund[];
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
@@ -142,6 +147,18 @@ export default function GivingLinkForm({
   const [submitting, setSubmitting] = useState(false);
   const [formReady, setFormReady] = useState(false);
   const [result, setResult] = useState<ResultState>({ step: "form" });
+
+  // Preselect when there's exactly one active fund, or a default among
+  // several — otherwise the donor must explicitly choose. This is a
+  // convenience default only; the server (resolveDonorSelectedFund) is the
+  // actual enforcement boundary and re-derives the same rules independently.
+  const [selectedFundId, setSelectedFundId] = useState<string>(() => {
+    if (!fundSelectionEnabled || assignedFunds.length === 0) return "";
+    if (assignedFunds.length === 1) return assignedFunds[0].fundId;
+    return assignedFunds.find((f) => f.isDefault)?.fundId ?? "";
+  });
+  const selectedFund = assignedFunds.find((f) => f.fundId === selectedFundId) || null;
+  const fundSelectionRequired = fundSelectionEnabled && assignedFunds.length > 0 && !selectedFundId;
 
   useEffect(() => {
     onResult?.(result);
@@ -244,6 +261,7 @@ export default function GivingLinkForm({
           isRecurring: false,
           fraudSessionId,
           clientAttemptId: attemptId,
+          fundId: selectedFundId || undefined,
           // Donor Information is now required and collected before any
           // wallet button is reachable (see donorInfoValid gating below),
           // so the entered fields — not the wallet's own billing contact,
@@ -321,6 +339,10 @@ export default function GivingLinkForm({
       focusFirstMissingDonorField();
       return;
     }
+    if (fundSelectionRequired) {
+      toast.error("Please select where you'd like your gift to go.");
+      return;
+    }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
@@ -377,6 +399,10 @@ export default function GivingLinkForm({
     if (!donorInfoValid) {
       toast.error("Enter your name, email, and phone number to continue.");
       focusFirstMissingDonorField();
+      return;
+    }
+    if (fundSelectionRequired) {
+      toast.error("Please select where you'd like your gift to go.");
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -615,6 +641,10 @@ export default function GivingLinkForm({
       focusFirstMissingDonorField();
       return;
     }
+    if (fundSelectionRequired) {
+      toast.error("Please select where you'd like your gift to go.");
+      return;
+    }
     if (!formInstanceRef.current || !formReady) {
       toast.error("Payment form is still loading — please wait a moment");
       return;
@@ -662,6 +692,7 @@ export default function GivingLinkForm({
               paymentMethod,
               fraudSessionId,
               clientAttemptId: attemptId,
+              fundId: selectedFundId || undefined,
               donor: {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
@@ -873,6 +904,30 @@ export default function GivingLinkForm({
           </>
         )}
       </div>
+
+      {fundSelectionEnabled && assignedFunds.length > 0 && (
+        <div>
+          <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
+            Where would you like your gift to go?
+          </label>
+          <select
+            value={selectedFundId}
+            onChange={(e) => setSelectedFundId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+            style={{ borderColor: light.borderColor }}
+          >
+            {assignedFunds.length > 1 && <option value="">Select a fund...</option>}
+            {assignedFunds.map((f) => (
+              <option key={f.fundId} value={f.fundId}>{f.name}</option>
+            ))}
+          </select>
+          {selectedFund?.description && (
+            <p className="text-xs mt-1" style={{ color: light.bodyTextColor }}>
+              {selectedFund.description}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Donor Information — one shared, required section for every payment
           method (card, bank, Apple Pay, Google Pay). Moved above the

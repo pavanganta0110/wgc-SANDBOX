@@ -179,6 +179,7 @@ function OverviewTab({ s }: { s: Sub }) {
             <div className="flex justify-between"><span className="text-slate-500">Subscription ID</span><CopyableIdBadge id={s.finixSubscriptionId} /></div>
             <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-semibold text-slate-800">{formatCents(s.amountCents)}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Currency</span><span className="font-semibold text-slate-800">{s.currency}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">Fund / Designation</span><span className="font-semibold text-slate-800">{s.fundName || "Unspecified"}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Frequency</span><span className="font-semibold text-slate-800">{frequencyLabel(s.billingInterval)}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Monthly Normalized Value</span><span className="font-semibold text-slate-800">{formatCents(s.monthlyValueCents)}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Status</span><StateBadge state={s.displayStatus} /></div>

@@ -1,4 +1,121 @@
 import { prisma } from "@/lib/prisma";
+import { loadDonorAggregatesBatch } from "@/lib/donors/donorAggregates";
+
+export interface DuplicateDonorGroupMember {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  createdAt: Date;
+  paymentCount: number;
+  subscriptionCount: number;
+  totalDonatedCents: number;
+  firstDonationAt: Date | null;
+  lastDonationAt: Date | null;
+  hasActiveSubscription: boolean;
+}
+
+export interface DuplicateDonorGroup {
+  churchId: string;
+  normalizedEmail: string;
+  donors: DuplicateDonorGroupMember[];
+  proposedCanonicalDonorId: string;
+  proposedMergeDonorIds: string[];
+  conflicts: string[];
+}
+
+/**
+ * Read-only church-wide duplicate report — groups every active (non-
+ * archived) donor by churchId + normalizedEmail and, for every group with
+ * more than one donor, proposes a canonical survivor. This never writes
+ * anything; it's the preview step that must be reviewed before mergeDonors
+ * is ever called on live data.
+ *
+ * Canonical selection, in priority order (per spec):
+ *   1. Donor with an active subscription
+ *   2. Donor with the most linked records (payments + subscriptions)
+ *   3. Earliest created donor
+ *   4. Most complete profile (has both email and phone) as the final tiebreak
+ */
+export async function findDuplicateDonorGroups(churchId: string): Promise<DuplicateDonorGroup[]> {
+  const donors = await prisma.donor.findMany({
+    where: { churchId, archivedAt: null, normalizedEmail: { not: null } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const byEmail = new Map<string, typeof donors>();
+  for (const d of donors) {
+    const key = d.normalizedEmail!;
+    const list = byEmail.get(key) ?? [];
+    list.push(d);
+    byEmail.set(key, list);
+  }
+
+  const duplicateGroups = [...byEmail.entries()].filter(([, group]) => group.length > 1);
+  if (duplicateGroups.length === 0) return [];
+
+  const allDonorIds = duplicateGroups.flatMap(([, group]) => group.map((d) => d.id));
+  const aggregatesMap = await loadDonorAggregatesBatch(allDonorIds, churchId);
+
+  const subscriptionCounts = await prisma.finixSubscription.groupBy({
+    by: ["donorId"],
+    where: { churchId, donorId: { in: allDonorIds } },
+    _count: { _all: true },
+  });
+  const subscriptionCountByDonor = new Map(subscriptionCounts.map((s) => [s.donorId!, s._count._all]));
+
+  const paymentCounts = await prisma.payment.groupBy({
+    by: ["donorId"],
+    where: { churchId, donorId: { in: allDonorIds } },
+    _count: { _all: true },
+  });
+  const paymentCountByDonor = new Map(paymentCounts.map((p) => [p.donorId!, p._count._all]));
+
+  return duplicateGroups.map(([normalizedEmail, group]) => {
+    const members: DuplicateDonorGroupMember[] = group.map((d) => {
+      const agg = aggregatesMap.get(d.id)!;
+      return {
+        id: d.id,
+        name: d.name,
+        email: d.email,
+        phone: d.phone,
+        createdAt: d.createdAt,
+        paymentCount: paymentCountByDonor.get(d.id) ?? 0,
+        subscriptionCount: subscriptionCountByDonor.get(d.id) ?? 0,
+        totalDonatedCents: agg.totalDonatedCents,
+        firstDonationAt: agg.firstDonationAt,
+        lastDonationAt: agg.lastDonationAt,
+        hasActiveSubscription: agg.activeSubscriptionCount > 0,
+      };
+    });
+
+    const canonical = [...members].sort((a, b) => {
+      if (a.hasActiveSubscription !== b.hasActiveSubscription) return a.hasActiveSubscription ? -1 : 1;
+      const aLinked = a.paymentCount + a.subscriptionCount;
+      const bLinked = b.paymentCount + b.subscriptionCount;
+      if (aLinked !== bLinked) return bLinked - aLinked;
+      if (a.createdAt.getTime() !== b.createdAt.getTime()) return a.createdAt.getTime() - b.createdAt.getTime();
+      const aComplete = Number(Boolean(a.email)) + Number(Boolean(a.phone));
+      const bComplete = Number(Boolean(b.email)) + Number(Boolean(b.phone));
+      return bComplete - aComplete;
+    })[0];
+
+    const conflicts: string[] = [];
+    const namesWithoutGeneric = new Set(members.map((m) => (m.name || "").trim().toLowerCase()).filter(Boolean));
+    if (namesWithoutGeneric.size > 1) conflicts.push("Donors in this group have different names on file");
+    const phones = new Set(members.map((m) => m.phone).filter(Boolean));
+    if (phones.size > 1) conflicts.push("Donors in this group have different phone numbers on file");
+
+    return {
+      churchId,
+      normalizedEmail,
+      donors: members,
+      proposedCanonicalDonorId: canonical.id,
+      proposedMergeDonorIds: members.filter((m) => m.id !== canonical.id).map((m) => m.id),
+      conflicts,
+    };
+  });
+}
 
 export interface DuplicateCandidate {
   donor: { id: string; name: string | null; email: string | null; phone: string | null; createdAt: Date };
@@ -48,7 +165,15 @@ export interface MergeResult {
     paymentAttempts: number;
     instruments: number;
     notes: number;
+    subscriptions: number;
+    subscriptionConsents: number;
+    subscriptionSetupLinks: number;
+    statements: number;
   };
+  /** AnnualDonationStatement rows left on the archived donor because the
+   * primary already has one for the same (taxYear, version) — never
+   * silently dropped, always the caller's job to review and resolve. */
+  statementConflicts: number;
 }
 
 /**
@@ -76,6 +201,29 @@ export async function mergeDonors(primaryDonorId: string, duplicateDonorId: stri
     const paymentAttempts = await tx.paymentAttempt.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
     const instruments = await tx.finixPaymentInstrumentSnapshot.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
     const notes = await tx.donorNote.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
+    const subscriptions = await tx.finixSubscription.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
+    const subscriptionConsents = await tx.subscriptionConsent.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
+    const subscriptionSetupLinks = await tx.subscriptionSetupLink.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
+
+    // AnnualDonationStatement is unique on (donorId, taxYear, version) — a
+    // plain updateMany would throw if the primary already has one for the
+    // same year/version, so these are reassigned one at a time and any
+    // collision is left on the archived donor (never dropped) and counted
+    // as a conflict for the caller to resolve manually.
+    const duplicateStatements = await tx.annualDonationStatement.findMany({ where: { donorId: duplicateDonorId, churchId } });
+    let statementsMoved = 0;
+    let statementConflicts = 0;
+    for (const statement of duplicateStatements) {
+      const conflict = await tx.annualDonationStatement.findFirst({
+        where: { donorId: primaryDonorId, taxYear: statement.taxYear, version: statement.version },
+      });
+      if (conflict) {
+        statementConflicts += 1;
+        continue;
+      }
+      await tx.annualDonationStatement.update({ where: { id: statement.id }, data: { donorId: primaryDonorId } });
+      statementsMoved += 1;
+    }
 
     await tx.donor.update({
       where: { id: duplicateDonorId },
@@ -118,7 +266,12 @@ export async function mergeDonors(primaryDonorId: string, duplicateDonorId: stri
         paymentAttempts: paymentAttempts.count,
         instruments: instruments.count,
         notes: notes.count,
+        subscriptions: subscriptions.count,
+        subscriptionConsents: subscriptionConsents.count,
+        subscriptionSetupLinks: subscriptionSetupLinks.count,
+        statements: statementsMoved,
       },
+      statementConflicts,
     };
   });
 

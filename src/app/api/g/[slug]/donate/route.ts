@@ -12,10 +12,40 @@ import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
 import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
+import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
+import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
+import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import crypto from "crypto";
 
-export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
+/**
+ * Public donation endpoint — used both by the hosted /g/[slug] page
+ * (same-origin, no CORS headers needed) and by the wgc-giving.js inline
+ * embed form running on a third-party website (cross-origin). CORS is
+ * layered on as a thin wrapper around the existing handler below so 100%
+ * of the donation/payment logic stays exactly as it was — the inline embed
+ * reuses this same route rather than duplicating any of it.
+ */
+export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params;
+  const origin = req.headers.get("origin");
+  const allowOrigin = origin ? await resolveEmbedCorsOrigin(slug, origin) : null;
+  if (origin && !allowOrigin) {
+    return NextResponse.json({ success: false, code: "ORIGIN_NOT_ALLOWED", message: "This domain is not authorized to submit gifts for this giving page." }, { status: 403, headers: embedCorsHeaders(null) });
+  }
+  const res = await handleDonate(req, slug);
+  if (allowOrigin) {
+    for (const [key, value] of Object.entries(embedCorsHeaders(allowOrigin))) res.headers.set(key, value as string);
+  }
+  return res;
+}
+
+export async function OPTIONS(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const allowOrigin = await resolveEmbedCorsOrigin(slug, req.headers.get("origin"));
+  return embedPreflightResponse(allowOrigin);
+}
+
+async function handleDonate(req: Request, slug: string) {
   const correlationId = crypto.randomUUID();
   const logEvent = (checkpoint: string, data: any) => {
     console.log(JSON.stringify({
@@ -51,6 +81,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       preview = false,
       expectedTotalCents,
       clientAttemptId,
+      fundId: submittedFundId,
     } = body;
 
     const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
@@ -91,6 +122,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const finixMerchantId = church.finixMerchantId;
     logEvent("2_INPUT_VALIDATION_PASSED", { churchId: church.id, givingLinkId: link.id });
+
+    // Gift Designations: resolved and validated entirely server-side —
+    // never trusts a client-provided fundId beyond checking it against
+    // this specific giving link's own active fund assignments. Reporting
+    // only; never affects church.finixMerchantId, the merchant, or
+    // settlement routing below.
+    let resolvedFund: { fundId: string | null; fundName: string | null };
+    try {
+      resolvedFund = await resolveDonorSelectedFund(link, submittedFundId);
+    } catch (err) {
+      if (err instanceof FundAssignmentError) {
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: err.message, retryable: true }, { status: 400 });
+      }
+      throw err;
+    }
 
     // Amount rules
     if (link.amountType === "FIXED") {
@@ -189,20 +235,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       identityId = instrument.identity;
       cardBrand = instrument.card?.brand || null;
 
-      const existingDonor = await prisma.donor.findFirst({
-        where: { finixIdentityId: identityId, churchId: church.id },
+      donorRecord = await resolveOrCreateDonor({
+        churchId: church.id,
+        finixIdentityId: identityId,
+        name: fullName,
+        email: donor.email,
+        phone: donor.phone || null,
       });
-      if (existingDonor) {
-        donorRecord = existingDonor;
-      } else {
-        const [firstName, ...rest] = fullName.trim().split(" ");
-        const lastName = rest.join(" ") || firstName;
-        donorRecord = await prisma.donor.upsert({
-          where: { finixIdentityId: identityId },
-          create: { churchId: church.id, finixIdentityId: identityId, name: fullName, email: donor.email, phone: donor.phone || null },
-          update: { name: fullName, email: donor.email, phone: donor.phone || undefined },
-        });
-      }
     } else {
       const [firstName, ...rest] = fullName.trim().split(" ");
       const lastName = rest.join(" ") || firstName;
@@ -312,10 +351,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
       cardBrand = instrument.card?.brand || null;
 
-      donorRecord = await prisma.donor.upsert({
-        where: { finixIdentityId: identityId },
-        create: { churchId: church.id, finixIdentityId: identityId, name: fullName, email: donor.email, phone: donor.phone || null },
-        update: { name: fullName, email: donor.email, phone: donor.phone || undefined },
+      donorRecord = await resolveOrCreateDonor({
+        churchId: church.id,
+        finixIdentityId: identityId,
+        name: fullName,
+        email: donor.email,
+        phone: donor.phone || null,
       });
 
       try {
@@ -433,6 +474,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
           finixMerchantId: church.finixMerchantId,
           finixBuyerIdentityId: identityId,
           finixPaymentInstrumentId: instrumentId,
+          fundId: resolvedFund.fundId,
+          fundName: resolvedFund.fundName,
           state: subscription.state ?? "ACTIVE",
           amountCents: totalCents,
           currency: "USD",
@@ -560,7 +603,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
         fixedFeeCents: feeStrategy.fixedFeeCents,
         feeCalculationVersion: FEE_CALCULATION_VERSION,
         merchantExpectedNetCents: totalCents - feeStrategy.expectedFeeCents,
-        fundName: link.fundName || null,
+        fundId: resolvedFund.fundId,
+        fundName: resolvedFund.fundName || link.fundName || null,
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
         note: fieldSettings.donorNote !== "HIDDEN" ? donor.note?.trim() || null : null,
       },

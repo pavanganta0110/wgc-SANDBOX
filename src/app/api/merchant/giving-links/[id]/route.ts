@@ -8,6 +8,7 @@ import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { validateFundAssignments, FundAssignmentError, loadAllAssignedFunds, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -28,7 +29,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const link = await prisma.givingLink.findFirst({ where: { id, ...scope } });
   if (!link) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
-  return NextResponse.json({ link });
+  const fundAssignments = await loadAllAssignedFunds(link.id);
+  return NextResponse.json({ link, fundAssignments });
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -61,6 +63,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     maxCollectedAmountCents,
     expiresAt,
     fundName,
+    fundSelectionEnabled,
+    fundAssignments,
     recurringEnabled,
     allowedFrequencies,
     allowedPaymentMethods,
@@ -120,6 +124,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const resolvedAmountType = amountType === "VARIABLE" || amountType === "FIXED" ? amountType : undefined;
 
+  const resolvedFundSelectionEnabled: boolean | undefined = fundSelectionEnabled !== undefined ? !!fundSelectionEnabled : undefined;
+  let validatedFundAssignments: FundAssignmentInput[] | undefined;
+  const effectiveFundSelectionEnabled = resolvedFundSelectionEnabled ?? existing.fundSelectionEnabled;
+  if (fundAssignments !== undefined) {
+    try {
+      validatedFundAssignments = await validateFundAssignments(auth.churchId, Array.isArray(fundAssignments) ? fundAssignments : []);
+    } catch (err) {
+      if (err instanceof FundAssignmentError) return NextResponse.json({ error: err.message }, { status: 400 });
+      throw err;
+    }
+  }
+  if (effectiveFundSelectionEnabled) {
+    const finalAssignmentCount =
+      validatedFundAssignments !== undefined
+        ? validatedFundAssignments.length
+        : await prisma.givingLinkFund.count({ where: { givingLinkId: id } });
+    if (finalAssignmentCount === 0) {
+      return NextResponse.json({ error: "Select at least one fund when fund selection is enabled" }, { status: 400 });
+    }
+  }
+
   const link = await prisma.givingLink.update({
     where: { id },
     data: {
@@ -137,6 +162,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(maxCollectedAmountCents !== undefined ? { maxCollectedAmountCents: maxCollectedAmountCents || null } : {}),
       ...(expiresAt !== undefined ? { expiresAt: expiresAt ? new Date(expiresAt) : null } : {}),
       ...(fundName !== undefined ? { fundName: fundName?.trim() || null } : {}),
+      ...(resolvedFundSelectionEnabled !== undefined ? { fundSelectionEnabled: resolvedFundSelectionEnabled } : {}),
       ...(recurringEnabled !== undefined ? { recurringEnabled } : {}),
       ...(allowedFrequencies !== undefined ? { allowedFrequenciesJson: allowedFrequencies } : {}),
       ...(allowedPaymentMethods !== undefined ? { allowedPaymentMethodsJson: allowedPaymentMethods } : {}),
@@ -154,6 +180,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(isReassignment ? { ownerUserId: requestedOwnerUserId } : {}),
     },
   });
+
+  if (validatedFundAssignments !== undefined) {
+    // Full replace, not a diff — GivingLinkFund rows carry no historical
+    // meaning of their own (unlike Payment.fundName snapshots, which are
+    // never touched here); only the current assignment set matters.
+    await prisma.givingLinkFund.deleteMany({ where: { givingLinkId: id } });
+    if (validatedFundAssignments.length > 0) {
+      await prisma.givingLinkFund.createMany({
+        data: validatedFundAssignments.map((a) => ({
+          givingLinkId: id,
+          fundId: a.fundId,
+          isDefault: a.isDefault ?? false,
+          displayOrder: a.displayOrder ?? 0,
+        })),
+      });
+    }
+  }
 
   if (isReassignment) {
     await logDashboardAction({

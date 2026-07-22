@@ -13,10 +13,11 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants'
 const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/forgot-password', '/admin/reset-password', '/admin/accept-invite'];
 
 // The login/forgot-password APIs must themselves be reachable without a
-// session — otherwise nobody could ever log in. validate-reset-token and
-// set-password are shared with the merchant flow and live under
-// /api/merchant, so they're outside this middleware's /api/admin matcher.
-const PUBLIC_ADMIN_API_PATHS = ['/api/admin/login', '/api/admin/forgot-password'];
+// session — otherwise nobody could ever log in. seed-admin is the
+// one-time sandbox admin bootstrap (see that route for its own
+// independent secret-header gate — a session could never exist for the
+// very first admin, so it can't be gated the normal way).
+const PUBLIC_ADMIN_API_PATHS = ['/api/admin/login', '/api/admin/forgot-password', '/api/admin/setup/seed-admin'];
 
 // Team-access Checkpoint 2: routes under /merchant and /api/merchant that
 // must stay reachable without a session — the pre-auth flows (login,
@@ -27,7 +28,7 @@ const PUBLIC_ADMIN_API_PATHS = ['/api/admin/login', '/api/admin/forgot-password'
 // requireMerchantSession() does). Every sensitive merchant route must
 // still call requireMerchantSession() itself; this middleware existing
 // does not remove that requirement. Entirely separate from, and does not
-// change, the /admin session-cookie verification above.
+// change, the /admin session-cookie verification below.
 const MERCHANT_PUBLIC_PREFIXES = [
   '/merchant/login',
   '/merchant/forgot-password',

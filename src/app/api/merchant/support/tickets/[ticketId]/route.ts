@@ -21,7 +21,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ ticketI
 
   const ticket = await prisma.supportTicket.findUnique({
     where: { id: ticketId },
-    include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: true } } },
+    // isInternalNote: false — internal WGC notes must never reach a
+    // merchant-facing response.
+    include: { messages: { where: { isInternalNote: false }, orderBy: { createdAt: "asc" }, include: { attachments: true } } },
   });
   // Team-access Checkpoint 4D: FUNDRAISER (canViewAllTickets=false) may
   // only open a ticket they created — same-church alone isn't enough.

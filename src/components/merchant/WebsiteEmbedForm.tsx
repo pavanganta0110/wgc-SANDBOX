@@ -9,6 +9,14 @@ interface GivingLinkOption {
   publicTitle: string;
 }
 
+// Generated embed code must always point at the canonical production
+// domain — never at whatever Vercel/preview URL happens to be serving the
+// dashboard the merchant copied the snippet from (NEXT_PUBLIC_APP_URL is
+// wgc-payments-finix-first-wgcpayments.vercel.app in sandbox). The embed
+// loader itself is environment-agnostic vanilla JS; only its own script
+// src needs to be pinned here.
+const WGC_EMBED_SCRIPT_ORIGIN = "https://www.wgcpayments.com";
+
 const PLATFORMS = [
   { key: "wordpress", label: "WordPress", steps: ["Edit the page or post where you want the button/form.", "Add a Custom HTML block.", "Paste the code into the block.", "Publish or update the page."] },
   { key: "wix", label: "Wix", steps: ["Open the Wix Editor for your site.", "Click Add Elements, then choose Embed Code.", "Select Embed HTML and paste the code.", "Publish your site."] },
@@ -42,7 +50,7 @@ export default function WebsiteEmbedForm({
   const [savingDomains, setSavingDomains] = useState(false);
 
   const selectedLink = givingLinks.find((l) => l.publicSlug === slug);
-  const scriptSrc = `${appUrl}/embed/wgc-giving.js`;
+  const scriptSrc = `${WGC_EMBED_SCRIPT_ORIGIN}/embed/wgc-giving.js`;
   const embedUrl = slug ? `${appUrl}/embed/${slug}` : "";
 
   const code = useMemo(() => {

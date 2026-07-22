@@ -6,10 +6,13 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     complianceForm: { findFirst: vi.fn() },
-    supportTicket: { create: vi.fn() },
+    supportTicket: { create: vi.fn(), count: vi.fn().mockResolvedValue(0) },
     supportTicketMessage: { create: vi.fn() },
     church: { findUnique: vi.fn() },
   },
+}));
+vi.mock("@/lib/support/ticketNotifications", () => ({
+  notifyNewSupportTicket: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("@/lib/finix/sync/complianceForms", () => ({
   reconcileComplianceFormsForChurch: vi.fn().mockResolvedValue(undefined),

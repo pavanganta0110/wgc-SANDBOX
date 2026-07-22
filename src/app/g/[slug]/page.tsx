@@ -26,7 +26,7 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
 
   const { light, church } = data;
 
-  const { link, branding, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl } = data;
+  const { link, branding, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds } = data;
 
   return (
     <div className="min-h-screen py-12 px-4" style={{ backgroundColor: light.pageBackground }}>
@@ -80,6 +80,8 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           googlePayMerchantId={googlePayMerchantId}
           googlePayEnvironment={googlePayEnvironment}
           serverAvailability={serverAvailability}
+          fundSelectionEnabled={fundSelectionEnabled}
+          assignedFunds={assignedFunds}
         />
 
         {(() => {

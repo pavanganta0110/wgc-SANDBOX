@@ -269,7 +269,8 @@ model ContactInquiry {
   message        String
   emailSent      Boolean   @default(false)
   emailError     String?
-  // NEW | REVIEWED | CONTACTED | CLOSED
+  // NEW | REVIEWED | CONTACTED | CLOSED — internal admin triage status,
+  // ported from the live internal admin inquiries workflow.
   status         String    @default("NEW")
   internalNote   String?
   reviewedBy     String?
@@ -299,17 +300,15 @@ model Church {
   finixMerchantId               String?
   finixIdentityId               String?
   finixApplicationId            String?
-  status                        String
   // Team-access Checkpoint 1: exactly one User (role "owner") accountable
   // per Church. Nullable during migration — existing churches are backfilled
   // via an explicit, reviewed report (see ownerBackfillPreview), never
   // silently assigned. Deliberately a plain String FK-by-convention (no
   // Prisma @relation) to match this schema's existing style for User<->Church
   // cross-references (see User.invitedByUserId/disabledByUserId) and to keep
-  // this migration additive-only. Reporting/ownership only — never used to
-  // select a Finix merchant, identity, settlement destination, or bank
-  // account; those always come from Church.finixMerchantId/finixIdentityId.
+  // this migration additive-only.
   primaryOwnerUserId            String?
+  status                        String
   // Organization identity used on annual donation statements and the
   // organization profile — not required by onboarding/payments, so all
   // nullable. Intentionally not backfilled from OnboardingApplication:
@@ -630,6 +629,11 @@ model OrganizationContact {
 /// no prior support-ticket model existed anywhere in this schema.
 model SupportTicket {
   id                     String    @id @default(cuid())
+  // Human-readable "WGC-1001" style number — generated once at creation,
+  // never reused. Unique so concurrent creation can never collide (the
+  // create call retries on a unique-constraint violation instead of
+  // pre-reserving a number under a lock).
+  ticketNumber           String    @unique
   churchId               String
   subject                String
   category               String // PAYMENT | REFUND | BANK_RETURN | DISPUTE | SETTLEMENT | DEPOSIT | SUBSCRIPTION | RECURRING_DONOR | DONOR | GIVING_LINK | ANNUAL_STATEMENT | FEES | ACCOUNT_ACCESS | SECURITY | VERIFICATION | INTEGRATION | OTHER
@@ -646,6 +650,10 @@ model SupportTicket {
   createdByUserId        String?
   createdByEmail         String?
   assignedTeam           String    @default("WGC Support")
+  // Internal WGC admin (User.role wgc_admin/wgc_super_admin) currently
+  // working this ticket — separate from assignedTeam (a free-text label).
+  // Null until an admin claims it.
+  assignedToAdminUserId  String?
   resolvedAt             DateTime?
   closedAt               DateTime?
   createdAt              DateTime  @default(now())
@@ -656,6 +664,7 @@ model SupportTicket {
 
   @@index([churchId, status])
   @@index([churchId, createdAt])
+  @@index([assignedToAdminUserId])
 }
 
 model SupportTicketMessage {
@@ -665,6 +674,13 @@ model SupportTicketMessage {
   senderUserId  String?
   senderEmail   String?
   body          String
+  // Internal-admin-only note — never returned by a merchant-facing API,
+  // never rendered in the merchant dashboard, never emailed to a merchant.
+  isInternalNote Boolean @default(false)
+  // Read-receipt timestamps for the unread-count badges — set once, on
+  // the first view by that side, never cleared/reset.
+  readByMerchantAt DateTime?
+  readByAdminAt    DateTime?
   isSystemEvent Boolean  @default(false) // status changes, ticket resolved/reopened, etc — rendered distinctly from a human reply
   createdAt     DateTime @default(now())
 
@@ -758,11 +774,34 @@ model Fund {
   name        String
   description String?
   isActive    Boolean  @default(true)
+  // Church-wide catalog ordering (e.g. the org's "Manage Funds" list).
+  // Per-giving-link dropdown order is separate — see GivingLinkFund.displayOrder.
+  displayOrder Int     @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([churchId, name])
   @@index([churchId])
+}
+
+// Gift Designations: many-to-many assignment of a church's Fund catalog to
+// a specific GivingLink, with per-link ordering/default independent of the
+// fund's own catalog order. A fund can be assigned to multiple giving
+// links; a giving link can offer multiple funds. Deliberately a thin join
+// table (no soft-delete of its own) — removing an assignment here only
+// stops the fund from being offered on this link going forward, it never
+// touches Payment.fundId/fundName snapshots already recorded.
+model GivingLinkFund {
+  id           String   @id @default(cuid())
+  givingLinkId String
+  fundId       String
+  isDefault    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([givingLinkId, fundId])
+  @@index([givingLinkId])
+  @@index([fundId])
 }
 
 model Payment {
@@ -826,7 +865,10 @@ model Payment {
   // a Finix merchant, identity, settlement destination, or bank account —
   // those always come from Church.finixMerchantId/finixIdentityId. Plain
   // string FK-by-convention (no @relation), matching this schema's existing
-  // style for User cross-references.
+  // style for User cross-references (see Church.primaryOwnerUserId) —
+  // there are currently zero Prisma relations between User and any other
+  // model in this schema, so adding one only here would be the first,
+  // inconsistent exception rather than following an established pattern.
   attributedUserId                  String?
   paymentAttemptId                  String?
   donorCoversFee                    Boolean?
@@ -1344,6 +1386,11 @@ model FinixSubscription {
   churchSubscriptionId       String?
   givingLinkId               String?
   fundId                     String?
+  // Snapshotted once at subscription-creation time from the donor's
+  // selected Fund.name — never re-read later, so renaming a fund doesn't
+  // change historical recurring-donation records. Same rationale as
+  // Payment.fundName.
+  fundName                   String?
   // Denormalized from FinixPaymentInstrumentSnapshot.donorId at webhook-sync
   // time — donor is only ever real-linked through the instrument, this
   // column exists purely so the Recurring Donors / Subscriptions list
@@ -1386,13 +1433,13 @@ model FinixSubscription {
   // method flow) from one created by a donor via the public giving page or
   // a secure setup link — never inferred, always set at creation time.
   createdByUserId            String?
-  // Team-access Checkpoint 3: snapshotted once at subscription-creation
-  // time from GivingLink.ownerUserId (via givingLinkId above) — never
-  // re-read from the giving link afterward, so a later link reassignment
-  // doesn't change history. Every recurring Payment generated from this
-  // subscription inherits this value directly rather than re-deriving it.
-  // Null when attribution can't be proven (no giving link, unowned link).
-  // Same plain-string-FK rationale as Payment.attributedUserId.
+  // Team-access Checkpoint 3: snapshotted once at subscription-creation time
+  // from GivingLink.ownerUserId (via givingLinkId above) — never re-read
+  // from the giving link afterward, so a later link reassignment doesn't
+  // change history. Every recurring Payment generated from this subscription
+  // inherits this value directly rather than re-deriving it. Null when
+  // attribution can't be proven (no giving link, unowned link). Same
+  // plain-string-FK rationale as Payment.attributedUserId.
   attributedUserId           String?
   consentSource              String? // ADMIN_CONFIRMED | DONOR_DIRECT
   rawJsonRedacted            Json?
@@ -1658,19 +1705,30 @@ model FinixPayoutProfileSnapshot {
 model User {
   id                        String    @id @default(cuid())
   email                     String    @unique
+  // Internal WGC admin display name (Settings -> Admins). Null for
+  // merchant-side users, who don't have a separate display name field.
   name                      String?
   passwordHash              String?
   // Team-access Checkpoint 1: organization-side roles are "owner" |
   // "admin" | "fundraiser" | "viewer" (exactly one "owner" per church,
   // enforced at the application layer via Church.primaryOwnerUserId, not a
-  // DB constraint). "wgc_admin"/"wgc_super_admin" are WGC's own internal
-  // roles and are never treated as an organization owner anywhere in
-  // permission logic — kept as completely separate values on purpose.
-  // Existing rows are all "wgc_super_admin", "wgc_admin", or the legacy
-  // "church_admin" until the owner-backfill migration (see
-  // ownerBackfillPreview) maps church_admin -> owner/admin.
-  role                      String // "wgc_super_admin" | "wgc_admin" | "church_admin" | "owner" | "admin" | "fundraiser" | "viewer"
+  // DB constraint). "wgc_admin" is WGC's own internal support role and is
+  // never treated as an organization owner anywhere in permission logic —
+  // kept as a completely separate value on purpose. Existing rows are all
+  // "wgc_admin" or the legacy "church_admin" until the owner-backfill
+  // migration (see ownerBackfillPreview) maps church_admin -> owner/admin.
+  role                      String // "wgc_admin" | "owner" | "admin" | "fundraiser" | "viewer" (legacy: "church_admin")
   churchId                  String?
+  setPasswordTokenHash      String?
+  setPasswordTokenExpiresAt DateTime?
+  lastLoginAt               DateTime?
+  // Team & Access (Settings -> Team). A User with passwordHash null and a
+  // live setPasswordTokenHash is "invited, pending" — the exact same
+  // pattern already used by forgot-password, reused here rather than
+  // inventing a separate invitation concept.
+  invitedByUserId           String?
+  disabledAt                DateTime?
+  disabledByUserId          String?
   // Team-access Checkpoint 1: roles + a small override on top, per the
   // approved plan (roles are the primary model; this is for narrow
   // exceptions like an ADMIN being granted canManageBankAccount without a
@@ -1680,29 +1738,18 @@ model User {
   // Team-access Checkpoint 1: incremented whenever this user's role,
   // permissions, active/disabled status, or bank-management permission
   // changes (see bumpAuthVersion in src/lib/auth/session.ts). The signed
-  // merchant session cookie carries the authVersion value that was
-  // current at sign-in; requireMerchantSession() rejects the cookie if it
-  // no longer matches the DB value, so a stale session can't keep acting
-  // on since-revoked permissions until it naturally expires. Unrelated to
-  // and does not replace passwordChangedAt, which the separate WGC
-  // admin-panel session check (getAdminSession()) still uses.
+  // session cookie carries the authVersion value that was current at
+  // sign-in; getSession() rejects the cookie if it no longer matches the
+  // DB value, so a stale session can't keep acting on since-revoked
+  // permissions until it naturally expires (previously not possible at
+  // all — session.ts had no DB lookup, this app's getSession() was purely
+  // stateless HMAC signature + expiry).
   authVersion               Int       @default(1)
-  setPasswordTokenHash      String?
-  setPasswordTokenExpiresAt DateTime?
-  lastLoginAt               DateTime?
-  // Team & Access (Settings -> Team). A User with passwordHash null and a
-  // live setPasswordTokenHash is "invited, pending" — the exact same
-  // pattern already used by forgot-password, reused here rather than
-  // inventing a separate invitation concept. Also reused for wgc-side
-  // admin invites (Admin Dashboard -> Settings -> Admins).
-  invitedByUserId           String?
-  disabledAt                DateTime?
-  disabledByUserId          String?
-  // Bumped (set to now) on every completed password reset. Session tokens
-  // carry the value that was current at sign-in time; a mismatch means the
-  // password changed since and the session is rejected — the only way to
-  // invalidate our stateless HMAC-signed cookies without a server-side
-  // session store.
+  // Bumped on every completed password reset. Internal WGC admin session
+  // tokens carry the value that was current at sign-in; getAdminSession()
+  // rejects the cookie on a mismatch — the admin-panel's own invalidation
+  // mechanism, independent of authVersion (which requireMerchantSession()
+  // uses for the merchant dashboard).
   passwordChangedAt         DateTime?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
@@ -1766,8 +1813,14 @@ model GivingLink {
   maxSuccessfulUses         Int?
   maxCollectedAmountCents   Int?
   expiresAt                 DateTime?
+  // Legacy single free-text fund label — kept for backward compatibility,
+  // superseded by the Fund/GivingLinkFund catalog below for links with
+  // fundSelectionEnabled = true.
   fundName                  String?
   fundId                    String?
+  // Gift Designations: when true, the public giving page offers a fund
+  // dropdown built from this link's GivingLinkFund assignments.
+  fundSelectionEnabled      Boolean   @default(false)
   recurringEnabled          Boolean   @default(false)
   allowedFrequenciesJson    Json?
   allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
@@ -1801,7 +1854,9 @@ model GivingLink {
   // (server-enforced, never trusted from client JSON). Reassigning this
   // field changes attribution for FUTURE payments/subscriptions only —
   // Payment.attributedUserId/FinixSubscription.attributedUserId are
-  // snapshotted once at creation and never rewritten when this changes.
+  // snapshotted once at creation and never rewritten when this changes. See
+  // Payment.attributedUserId's comment for why this stays a plain string
+  // field rather than a Prisma relation.
   ownerUserId               String?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt

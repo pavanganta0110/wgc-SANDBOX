@@ -32,7 +32,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
     );
   }
 
-  const { link, church, branding, light, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl } = data;
+  const { link, church, branding, light, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds } = data;
 
   if (church.embedDomainRestrictionEnabled) {
     const requestHeaders = await headers();
@@ -108,6 +108,8 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           googlePayMerchantId={googlePayMerchantId}
           googlePayEnvironment={googlePayEnvironment}
           serverAvailability={serverAvailability}
+          fundSelectionEnabled={fundSelectionEnabled}
+          assignedFunds={assignedFunds}
         />
 
         {!branding.hideFooter && (

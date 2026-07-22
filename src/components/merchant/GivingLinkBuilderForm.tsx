@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { ChevronDown, Upload, X, AlertCircle } from "lucide-react";
+import { ChevronDown, Upload, X, AlertCircle, Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { formatCents } from "@/lib/format";
 import GivingLinkPreviewPanel from "@/components/merchant/GivingLinkPreviewPanel";
 import {
@@ -71,6 +71,7 @@ interface BuilderState {
   maxSuccessfulUses: string;
   maxCollectedAmount: string;
   fundName: string;
+  fundSelectionEnabled: boolean;
   allowedPaymentMethods: PaymentMethodKey[];
   donorFieldSettings: DonorFieldSettings;
   feeCoverEnabled: boolean;
@@ -104,6 +105,7 @@ function defaultState(): BuilderState {
     maxSuccessfulUses: "",
     maxCollectedAmount: "",
     fundName: "",
+    fundSelectionEnabled: false,
     allowedPaymentMethods: ["CARD"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
     feeCoverEnabled: true,
@@ -119,6 +121,22 @@ function defaultState(): BuilderState {
     cancelReturnUrl: "",
     branding: DEFAULT_BRANDING_SETTINGS,
   };
+}
+
+interface FundRow {
+  fundId: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  isDefault: boolean;
+  displayOrder: number;
+}
+
+interface CatalogFund {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
 }
 
 function amountsToCents(input: string): number[] {
@@ -162,6 +180,7 @@ export default function GivingLinkBuilderForm({
   ownerOptions,
   initialOwnerUserId,
   canAssignOwner,
+  initialFundAssignments,
 }: {
   mode: "create" | "edit";
   linkId?: string;
@@ -174,6 +193,8 @@ export default function GivingLinkBuilderForm({
   initialOwnerUserId?: string;
   /** FUNDRAISER never gets this — they're always forced to themselves server-side regardless. */
   canAssignOwner?: boolean;
+  /** Existing fund assignments (edit mode only) — includes archived funds so an admin can see and knowingly remove a stale assignment. */
+  initialFundAssignments?: FundRow[];
 }) {
   const router = useRouter();
   const [state, setState] = useState<BuilderState>({ ...defaultState(), ...(initial || {}) });
@@ -184,6 +205,123 @@ export default function GivingLinkBuilderForm({
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoMetadata, setLogoMetadata] = useState<{ fileName: string; fileSize: string } | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
+
+  const [funds, setFunds] = useState<FundRow[]>(
+    [...(initialFundAssignments || [])].sort((a, b) => a.displayOrder - b.displayOrder)
+  );
+  const [fundCatalog, setFundCatalog] = useState<CatalogFund[] | null>(null);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  const [newFundName, setNewFundName] = useState("");
+  const [newFundDescription, setNewFundDescription] = useState("");
+  const [savingNewFund, setSavingNewFund] = useState(false);
+
+  const loadFundCatalog = async () => {
+    if (fundCatalog !== null || loadingCatalog) return;
+    setLoadingCatalog(true);
+    try {
+      const res = await fetch("/api/merchant/funds");
+      if (res.ok) {
+        const data = await res.json();
+        setFundCatalog(data.funds || []);
+      }
+    } finally {
+      setLoadingCatalog(false);
+    }
+  };
+
+  const addFundToLink = (fund: CatalogFund) => {
+    setFunds((prev) => {
+      if (prev.some((f) => f.fundId === fund.id)) return prev;
+      const row: FundRow = {
+        fundId: fund.id,
+        name: fund.name,
+        description: fund.description || "",
+        isActive: fund.isActive,
+        isDefault: prev.length === 0,
+        displayOrder: prev.length,
+      };
+      return [...prev, row];
+    });
+  };
+
+  const handleCreateFund = async () => {
+    const name = newFundName.trim();
+    if (!name) {
+      toast.error("Fund name is required");
+      return;
+    }
+    setSavingNewFund(true);
+    try {
+      const res = await fetch("/api/merchant/funds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, description: newFundDescription.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || "Failed to create fund");
+        return;
+      }
+      addFundToLink(data.fund);
+      setFundCatalog((prev) => (prev ? [...prev, data.fund] : [data.fund]));
+      setNewFundName("");
+      setNewFundDescription("");
+    } finally {
+      setSavingNewFund(false);
+    }
+  };
+
+  const removeFundFromLink = (fundId: string) => {
+    setFunds((prev) => {
+      const next = prev.filter((f) => f.fundId !== fundId).map((f, i) => ({ ...f, displayOrder: i }));
+      if (!next.some((f) => f.isDefault) && next.length > 0) next[0].isDefault = true;
+      return next;
+    });
+  };
+
+  const setDefaultFund = (fundId: string) => {
+    setFunds((prev) => prev.map((f) => ({ ...f, isDefault: f.fundId === fundId })));
+  };
+
+  const moveFund = (fundId: string, direction: -1 | 1) => {
+    setFunds((prev) => {
+      const idx = prev.findIndex((f) => f.fundId === fundId);
+      const swapIdx = idx + direction;
+      if (idx === -1 || swapIdx < 0 || swapIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+      return next.map((f, i) => ({ ...f, displayOrder: i }));
+    });
+  };
+
+  const toggleArchiveFund = async (fundId: string) => {
+    const row = funds.find((f) => f.fundId === fundId);
+    if (!row) return;
+    const nextActive = !row.isActive;
+    try {
+      const res = await fetch(`/api/merchant/funds/${fundId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error || "Failed to update fund");
+        return;
+      }
+      setFunds((prev) => prev.map((f) => (f.fundId === fundId ? { ...f, isActive: nextActive } : f)));
+      setFundCatalog((prev) => (prev ? prev.map((f) => (f.id === fundId ? { ...f, isActive: nextActive } : f)) : prev));
+    } catch {
+      toast.error("Failed to update fund");
+    }
+  };
+
+  const unassignedCatalogFunds = (fundCatalog || []).filter((f) => !funds.some((r) => r.fundId === f.id));
+
+  useEffect(() => {
+    if (state.fundSelectionEnabled) loadFundCatalog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.fundSelectionEnabled]);
 
   const getFileNameFromUrl = (url: string) => {
     if (!url) return "";
@@ -331,6 +469,10 @@ export default function GivingLinkBuilderForm({
       toast.error("At least one payment method is required");
       return;
     }
+    if (state.fundSelectionEnabled && funds.length === 0) {
+      toast.error("Add at least one fund or turn off fund selection");
+      return;
+    }
 
     setSaving(true);
     setSaveStatus("saving");
@@ -351,6 +493,10 @@ export default function GivingLinkBuilderForm({
       maxCollectedAmountCents: state.maxCollectedAmount ? Math.round(parseFloat(state.maxCollectedAmount) * 100) : null,
       expiresAt: computeExpiresAt(),
       fundName: state.fundName.trim() || null,
+      fundSelectionEnabled: state.fundSelectionEnabled,
+      fundAssignments: state.fundSelectionEnabled
+        ? funds.map((f) => ({ fundId: f.fundId, isDefault: f.isDefault, displayOrder: f.displayOrder }))
+        : [],
       recurringEnabled: state.recurringEnabled,
       allowedFrequencies: state.allowedFrequencies,
       allowedPaymentMethods: state.allowedPaymentMethods,
@@ -483,6 +629,123 @@ export default function GivingLinkBuilderForm({
                 rows={2}
                 className={inputClass}
               />
+            </div>
+
+            <div className="border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-1">
+                <h5 className="text-sm font-bold text-slate-900">Gift Designations</h5>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <span className="text-xs font-semibold text-slate-500">Enable fund selection</span>
+                  <input
+                    type="checkbox"
+                    checked={state.fundSelectionEnabled}
+                    onChange={(e) => update("fundSelectionEnabled", e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                </label>
+              </div>
+
+              {state.fundSelectionEnabled && (
+                <div className="space-y-3 mt-3">
+                  {funds.length === 0 && (
+                    <p className="text-xs text-slate-400">No funds added yet. Add one below.</p>
+                  )}
+                  {funds.map((f, i) => (
+                    <div key={f.fundId} className="border border-slate-200 rounded-lg p-2 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex flex-col">
+                          <button
+                            type="button"
+                            onClick={() => moveFund(f.fundId, -1)}
+                            disabled={i === 0}
+                            className="text-slate-400 disabled:opacity-30"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveFund(f.fundId, 1)}
+                            disabled={i === funds.length - 1}
+                            className="text-slate-400 disabled:opacity-30"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900 flex-1">{f.name}</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${f.isActive ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}
+                        >
+                          {f.isActive ? "Active" : "Inactive"}
+                        </span>
+                        {f.isDefault && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Default</span>
+                        )}
+                      </div>
+                      {f.description && <p className="text-xs text-slate-400">{f.description}</p>}
+                      <div className="flex items-center gap-3 text-xs">
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="defaultFund"
+                            checked={f.isDefault}
+                            onChange={() => setDefaultFund(f.fundId)}
+                          />
+                          Default
+                        </label>
+                        <button type="button" onClick={() => toggleArchiveFund(f.fundId)} className="text-slate-500 hover:underline">
+                          {f.isActive ? "Archive" : "Reactivate"}
+                        </button>
+                        <button type="button" onClick={() => removeFundFromLink(f.fundId)} className="text-red-500 hover:underline">
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {unassignedCatalogFunds.length > 0 && (
+                    <div>
+                      <FieldLabel>Add Existing Fund</FieldLabel>
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          const fund = unassignedCatalogFunds.find((f) => f.id === e.target.value);
+                          if (fund) addFundToLink(fund);
+                        }}
+                        className={inputClass}
+                      >
+                        <option value="">Select a fund...</option>
+                        {unassignedCatalogFunds.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}{!f.isActive ? " (Inactive)" : ""}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="border-t border-slate-100 pt-3 space-y-2">
+                    <FieldLabel>Add Fund</FieldLabel>
+                    <input
+                      value={newFundName}
+                      onChange={(e) => setNewFundName(e.target.value)}
+                      placeholder="e.g. Building Fund"
+                      className={inputClass}
+                    />
+                    <input
+                      value={newFundDescription}
+                      onChange={(e) => setNewFundDescription(e.target.value)}
+                      placeholder="Optional short description"
+                      className={inputClass}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateFund}
+                      disabled={savingNewFund}
+                      className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Fund
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -881,6 +1144,10 @@ export default function GivingLinkBuilderForm({
             description={state.description}
             hideFooter={state.branding.hideFooter}
             showPoweredByWgc={state.branding.showPoweredByWgc}
+            fundSelectionEnabled={state.fundSelectionEnabled}
+            assignedFunds={funds
+              .filter((f) => f.isActive)
+              .map((f) => ({ fundId: f.fundId, name: f.name, description: f.description || null, isDefault: f.isDefault, displayOrder: f.displayOrder }))}
           />
         </div>
       </div>

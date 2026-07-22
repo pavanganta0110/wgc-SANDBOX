@@ -7,6 +7,7 @@ import { resolveGivingLinkOwnerForCreate } from "@/lib/auth/givingLinkOwnership"
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { validateFundAssignments, FundAssignmentError, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
 
 export async function GET(req: Request) {
   // Team-access Checkpoint 4: now scoped via buildGivingLinkScope +
@@ -68,6 +69,8 @@ export async function POST(req: Request) {
     maxCollectedAmountCents,
     expiresAt,
     fundName,
+    fundSelectionEnabled,
+    fundAssignments,
     recurringEnabled,
     allowedFrequencies,
     allowedPaymentMethods,
@@ -128,6 +131,23 @@ export async function POST(req: Request) {
     );
   }
 
+  const resolvedFundSelectionEnabled = !!fundSelectionEnabled;
+  let validatedFundAssignments: FundAssignmentInput[] = [];
+  if (resolvedFundSelectionEnabled) {
+    try {
+      validatedFundAssignments = await validateFundAssignments(
+        auth.churchId,
+        Array.isArray(fundAssignments) ? fundAssignments : []
+      );
+    } catch (err) {
+      if (err instanceof FundAssignmentError) return NextResponse.json({ error: err.message }, { status: 400 });
+      throw err;
+    }
+    if (validatedFundAssignments.length === 0) {
+      return NextResponse.json({ error: "Select at least one fund when fund selection is enabled" }, { status: 400 });
+    }
+  }
+
   let publicSlug = generatePublicSlug();
   for (let attempt = 0; attempt < 5; attempt++) {
     const existing = await prisma.givingLink.findUnique({ where: { publicSlug } });
@@ -154,6 +174,7 @@ export async function POST(req: Request) {
       maxCollectedAmountCents: maxCollectedAmountCents || null,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       fundName: fundName?.trim() || null,
+      fundSelectionEnabled: resolvedFundSelectionEnabled,
       recurringEnabled: recurringEnabled ?? false,
       allowedFrequenciesJson: Array.isArray(allowedFrequencies) ? allowedFrequencies : ["MONTHLY"],
       allowedPaymentMethodsJson: methods,
@@ -172,6 +193,17 @@ export async function POST(req: Request) {
       ownerUserId: resolvedOwnerUserId,
     },
   });
+
+  if (validatedFundAssignments.length > 0) {
+    await prisma.givingLinkFund.createMany({
+      data: validatedFundAssignments.map((a) => ({
+        givingLinkId: link.id,
+        fundId: a.fundId,
+        isDefault: a.isDefault ?? false,
+        displayOrder: a.displayOrder ?? 0,
+      })),
+    });
+  }
 
   return NextResponse.json({ link });
 }

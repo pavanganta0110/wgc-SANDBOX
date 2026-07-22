@@ -373,10 +373,11 @@ async function DonationsTab({ instrumentIds, churchId, page, scopedUserId }: { i
               <th className="px-6 py-3">Payment Method</th>
               <th className="px-6 py-3">Last Four</th>
               <th className="px-6 py-3">Settlement</th>
+              <th className="px-6 py-3">Fund</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ transfer, refunds }) => {
+            {rows.map(({ transfer, refunds, payment }) => {
               const refund = computeRefundStatus(transfer, refunds);
               return (
                 <tr key={transfer.id} className="border-t border-slate-50 hover:bg-slate-50">
@@ -400,6 +401,7 @@ async function DonationsTab({ instrumentIds, churchId, page, scopedUserId }: { i
                       "—"
                     )}
                   </td>
+                  <td className="px-6 py-3 text-slate-600">{payment?.fundName || "Unspecified"}</td>
                 </tr>
               );
             })}
