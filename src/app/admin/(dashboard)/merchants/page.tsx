@@ -17,15 +17,18 @@ interface MerchantData {
   name: string;
   status: string;
   onboardingStatus: string;
-  activationStatus: string;
-  primaryOwner: string;
-  ownerEmail: string;
+  merchantActivationStatus: string | null;
+  primaryOwner: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
   counts: {
     users: number;
-    locations: number;
+    locations?: number;
     transactions: number;
   };
-  lastActivityAt: string;
+  lastActivity: string;
   createdAt: string;
 }
 
@@ -92,8 +95,9 @@ export default function MerchantsDirectoryPage() {
     });
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status?.toUpperCase()) {
+  const getStatusBadgeClass = (status: string | null) => {
+    if (!status) return "bg-slate-100 text-slate-700 border-slate-200";
+    switch (status.toUpperCase()) {
       case "ACTIVE":
       case "COMPLETED":
       case "APPROVED":
@@ -238,15 +242,21 @@ export default function MerchantsDirectoryPage() {
                         </div>
                         <div className="flex items-center justify-between text-xs w-full max-w-[140px]">
                           <span className="text-slate-500">Activation:</span>
-                          <span className={`px-2 py-0.5 rounded-full border text-[10px] font-medium ${getStatusBadgeClass(merchant.activationStatus)}`}>
-                            {merchant.activationStatus || "UNKNOWN"}
+                          <span className={`px-2 py-0.5 rounded-full border text-[10px] font-medium ${getStatusBadgeClass(merchant.merchantActivationStatus)}`}>
+                            {merchant.merchantActivationStatus || "UNKNOWN"}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-slate-900 font-medium">{merchant.primaryOwner || "No Owner"}</div>
-                      <div className="text-xs text-slate-500">{merchant.ownerEmail || "N/A"}</div>
+                      {merchant.primaryOwner ? (
+                        <div>
+                          <div className="text-slate-900 font-medium">{merchant.primaryOwner.name || "Unnamed owner"}</div>
+                          <div className="text-xs text-slate-500">{merchant.primaryOwner.email}</div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">No owner assigned</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-xs space-y-1">
@@ -256,7 +266,7 @@ export default function MerchantsDirectoryPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-500">
-                      {formatDate(merchant.lastActivityAt)}
+                      {formatDate(merchant.lastActivity)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-slate-500">
                       {formatDate(merchant.createdAt)}
