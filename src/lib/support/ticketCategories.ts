@@ -30,3 +30,27 @@ export function isValidPriority(value: unknown): boolean {
 export function categoryLabel(value: string): string {
   return TICKET_CATEGORIES.find((c) => c.value === value)?.label || value;
 }
+
+/** Merchant-facing status labels — WAITING_ON_ORGANIZATION is this
+ * schema's existing name for "the ball is in the merchant's court,"
+ * displayed to the merchant as "Waiting on You." WAITING_ON_SUPPORT
+ * covers the same idea from the merchant's own side (they just replied,
+ * now WGC needs to act) and shows as "In Progress" to avoid a merchant-
+ * facing status that implies WGC is waiting on someone else. */
+export function merchantStatusLabel(status: string): string {
+  switch (status) {
+    case "OPEN":
+      return "Open";
+    case "IN_PROGRESS":
+    case "WAITING_ON_SUPPORT":
+      return "In Progress";
+    case "WAITING_ON_ORGANIZATION":
+      return "Waiting on You";
+    case "RESOLVED":
+      return "Resolved";
+    case "CLOSED":
+      return "Closed";
+    default:
+      return status;
+  }
+}
