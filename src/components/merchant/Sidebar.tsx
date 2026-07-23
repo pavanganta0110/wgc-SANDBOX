@@ -107,15 +107,10 @@ export default function Sidebar({ role }: { role?: string } = {}) {
   return (
     <aside
       className={cn(
-        "shrink-0 bg-white border-r border-slate-100 min-h-screen py-8 px-3 hidden md:block transition-all",
+        "shrink-0 bg-white border-r border-slate-100 min-h-screen pt-6 pb-8 px-3 hidden md:block transition-all",
         collapsed ? "w-20" : "w-64"
       )}
     >
-      <div className="flex items-center justify-center mb-6 px-1">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/wgc-email-logo.png" alt="WGC Payments" className="w-full h-auto object-contain" />
-      </div>
-
       <div className={cn("flex mb-4 px-1", collapsed ? "justify-center" : "justify-end")}>
         <button
           onClick={toggle}

@@ -97,17 +97,17 @@ export default async function MerchantDashboardLayout({
         <Sidebar role={auth.role ?? undefined} />
         <div className="flex-grow flex flex-col min-w-0">
           <div className="flex items-center justify-between px-6 md:px-10 py-6 border-b border-slate-100 bg-white">
-            <Link href="/merchant/dashboard" className="flex items-center gap-3">
+            <Link href="/merchant/dashboard" className="flex items-center gap-4">
               {/* This is WGC's own dashboard product, not a white-labeled
                   tool per organization — the header always shows the WGC
                   mark, never a merchant-uploaded logo. Org-uploaded logos
                   (Settings > Branding) are for donor-facing giving pages
                   only, a separate concern. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/wgc-email-logo.png" alt="WGC Payments" className="h-9 w-auto shrink-0" />
-              <div className="border-l border-slate-200 pl-3">
+              <img src="/wgc-email-logo.png" alt="WGC Payments" className="h-11 md:h-14 w-auto object-contain shrink-0" />
+              <div>
                 <h1 className="text-lg font-bold text-slate-900">{church.name}</h1>
-                <p className="text-[11px] text-slate-400">Powered by WGC Payments</p>
+                <p className="text-[11px] text-slate-500">Powered by WGC Payments</p>
               </div>
             </Link>
             <div className="flex items-center gap-4">
