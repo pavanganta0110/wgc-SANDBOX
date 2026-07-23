@@ -59,6 +59,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
   { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true },
   { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck, organizationOnly: true },
+  { name: "Team", href: "/merchant/settings/team", icon: Users, organizationOnly: true },
   { name: "Settings", href: "/merchant/settings", icon: Settings, organizationOnly: true },
   { name: "Support", href: "/merchant/support", icon: LifeBuoy },
   { name: "Company", href: "/merchant/organization", icon: Building2, organizationOnly: true },

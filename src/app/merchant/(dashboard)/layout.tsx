@@ -1,7 +1,5 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
 import Sidebar from "@/components/merchant/Sidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
 import ComplianceBanner from "@/components/merchant/ComplianceBanner";
@@ -88,18 +86,28 @@ export default async function MerchantDashboardLayout({
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
-      <Header />
       <ComplianceBanner status={complianceStatus} />
       <div className="flex-grow flex">
         <Sidebar role={auth.role ?? undefined} />
         <div className="flex-grow flex flex-col min-w-0">
           <div className="flex items-center justify-between px-6 md:px-10 py-6 border-b border-slate-100 bg-white">
-            <div>
-              <h1 className="text-lg font-bold text-slate-900">{church.name}</h1>
-              <p className="text-xs text-slate-500">Merchant Dashboard</p>
+            <div className="flex items-center gap-3">
+              {church.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={church.logoUrl}
+                  alt={`${church.name} logo`}
+                  className="w-9 h-9 rounded-lg object-contain"
+                />
+              )}
+              <div>
+                <h1 className="text-lg font-bold text-slate-900">{church.name}</h1>
+                <p className="text-[11px] text-slate-400">Powered by WGC Payments</p>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               {scopeSelector}
+              <span className="text-sm text-slate-600 hidden md:inline">{auth.email}</span>
               <LogoutButton />
             </div>
           </div>
@@ -108,7 +116,6 @@ export default async function MerchantDashboardLayout({
           </main>
         </div>
       </div>
-      <Footer />
     </div>
   );
 }
