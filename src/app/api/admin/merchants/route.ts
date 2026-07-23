@@ -29,7 +29,7 @@ export async function GET(req: Request) {
     const createdDateEnd = searchParams.get("createdDateEnd");
     
     // Search
-    const search = searchParams.get("q") || "";
+    const search = searchParams.get("search") || searchParams.get("q") || "";
 
     // Base WHERE conditions
     const conditions: Prisma.Sql[] = [Prisma.sql`1=1`];
