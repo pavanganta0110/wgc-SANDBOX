@@ -12,6 +12,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
+import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -28,6 +29,12 @@ export async function POST(req: Request) {
   }
   if (auth.role === "viewer") {
     return toSafeErrorResponse("You do not have permission to perform this action.", 401);
+  }
+
+  try {
+    await assertNonprofitApproved(auth.churchId);
+  } catch (err: any) {
+    return NextResponse.json({ error: "This organization is not currently approved to accept donations." }, { status: 403 });
   }
 
   try {

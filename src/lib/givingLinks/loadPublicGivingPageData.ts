@@ -10,18 +10,11 @@ import {
   type BrandingSettings,
   type DonorFieldSettings,
 } from "@/lib/givingLinks/types";
+import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVerificationGuard";
 import type { Church, GivingLink } from "@prisma/client";
 import type { FrequencyKey, PaymentMethodKey } from "@/lib/givingLinks/types";
 import { loadAssignedActiveFunds, type AssignedActiveFund } from "@/lib/giving/fundAssignment";
 
-/**
- * Shared data loader for both the hosted public giving page (/g/[slug])
- * and the embeddable giving page (/embed/[slug]) — extracted so the two
- * routes can never drift out of sync on status/branding/payment-method
- * resolution. Purely a data loader; each caller owns its own rendering
- * (the hosted page shows the full marketing chrome, the embed page is
- * full-bleed for iframing).
- */
 export type PublicGivingPageData =
   | { ok: false; notFound: true }
   | { ok: false; notFound: false; message: string; church: Church; light: BrandingSettings["light"] }
@@ -51,6 +44,20 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
 
   const church = await prisma.church.findUnique({ where: { id: link.churchId } });
   if (!church || !church.finixMerchantId) return { ok: false, notFound: true };
+
+  const branding = parseBrandingSettings(link.brandingSettingsJson);
+  const light = branding.light;
+
+  const verification = await checkNonprofitVerificationStatus(church.id);
+  if (!verification.isApproved) {
+    return {
+      ok: false,
+      notFound: false,
+      message: "This organization is not currently approved to accept donations.",
+      church,
+      light,
+    };
+  }
 
   const status = resolveGivingLinkStatus(link);
   const branding = parseBrandingSettings(link.brandingSettingsJson);

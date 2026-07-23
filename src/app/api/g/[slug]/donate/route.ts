@@ -15,6 +15,7 @@ import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionS
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
+import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import crypto from "crypto";
 
 /**
@@ -117,7 +118,16 @@ async function handleDonate(req: Request, slug: string) {
 
     const church = await prisma.church.findUnique({ where: { id: link.churchId } });
     if (!church || !church.finixMerchantId) {
-      return NextResponse.json({ error: "This organization cannot accept gifts right now" }, { status: 400 });
+      return NextResponse.json({ error: "This organization is not currently approved to accept donations.", message: "This organization is not currently approved to accept donations." }, { status: 400 });
+    }
+
+    try {
+      await assertNonprofitApproved(church.id);
+    } catch (err: any) {
+      return NextResponse.json(
+        { success: false, code: "ORGANIZATION_NOT_APPROVED", error: "This organization is not currently approved to accept donations.", message: "This organization is not currently approved to accept donations." },
+        { status: 403 }
+      );
     }
 
     const finixMerchantId = church.finixMerchantId;

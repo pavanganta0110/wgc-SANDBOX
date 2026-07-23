@@ -59,6 +59,25 @@ export default function TermsPage() {
               </p>
             </section>
 
+            <section id="nonprofit-eligibility-and-verification">
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">Nonprofit Eligibility and Verification</h2>
+              <p className="mb-4">
+                WGC Payments provides donation-processing services exclusively to validated, registered nonprofit organizations. WGC Payments does not permit individuals, unregistered organizations, for-profit businesses, or organizations that have not completed verification to collect charitable donations through the platform.
+              </p>
+              <p className="mb-4">
+                Before an organization is approved to accept donations, including donations made using Google Pay, WGC Payments requires the organization to provide documentation confirming its nonprofit status. For organizations operating in the United States, this documentation includes the organization’s legal name, Employer Identification Number (EIN), and valid IRS documentation confirming recognition as a tax-exempt organization under Section 501(c)(3).
+              </p>
+              <p className="mb-4">
+                WGC Payments reviews the submitted documentation and may verify the organization’s information against applicable government records, including the IRS Tax Exempt Organization Search, and through the underwriting and verification procedures of our payment-processing partners.
+              </p>
+              <p className="mb-4">
+                Donation processing and digital-wallet payment methods will not be enabled while verification is pending. Organizations that cannot provide satisfactory proof of nonprofit status, provide inaccurate information, or lose their qualifying nonprofit status may be rejected, suspended, or removed from the WGC Payments platform.
+              </p>
+              <p>
+                Each organization is responsible for promptly notifying WGC Payments of any change to its legal name, tax-exempt status, registration, operations, or other information submitted during verification.
+              </p>
+            </section>
+
             <section>
               <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">4. Authorization to Share Information</h2>
               <p>

@@ -9,6 +9,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 
 const TERMS_VERSION = "2026-01-recurring-admin-v1";
 
@@ -36,6 +37,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const churchId = auth.churchId;
+
+  try {
+    await assertNonprofitApproved(churchId);
+  } catch (err: any) {
+    return NextResponse.json({ error: "This organization is not currently approved to accept donations." }, { status: 403 });
+  }
 
   const body = await req.json();
   const {
