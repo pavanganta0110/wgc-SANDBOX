@@ -16,7 +16,7 @@ function getClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error("Supabase storage is not configured (missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)");
+    throw new Error(`Supabase storage is not configured. (url_exists: ${!!url}, key_exists: ${!!key})`);
   }
   client = createClient(url, key, { auth: { persistSession: false } });
   return client;
