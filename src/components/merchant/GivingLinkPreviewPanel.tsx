@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Monitor, Smartphone, AlertCircle } from "lucide-react";
+import OrganizationLogo from "@/components/merchant/OrganizationLogo";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import { resolveGivingPageLogo } from "@/lib/givingLinks/types";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
@@ -138,8 +139,7 @@ export default function GivingLinkPreviewPanel({
                 });
                 return resolvedLogo ? (
                   <div className="flex justify-center mb-6">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <OrganizationLogo
                       src={resolvedLogo}
                       alt={`${churchName} Logo`}
                       className="max-w-[160px] max-h-[96px] object-contain"
