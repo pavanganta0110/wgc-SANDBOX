@@ -258,24 +258,24 @@ model EmailLog {
 /// the form previously had no backend at all (no action/onSubmit/API), so
 /// every prior submission was silently lost before this model existed.
 model ContactInquiry {
-  id             String    @id @default(cuid())
-  firstName      String
-  lastName       String
-  email          String
-  phone          String?
-  company        String?
-  role           String?
-  subject        String?
-  message        String
-  emailSent      Boolean   @default(false)
-  emailError     String?
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String
+  phone        String?
+  company      String?
+  role         String?
+  subject      String?
+  message      String
+  emailSent    Boolean  @default(false)
+  emailError   String?
   // NEW | REVIEWED | CONTACTED | CLOSED — internal admin triage status,
   // ported from the live internal admin inquiries workflow.
-  status         String    @default("NEW")
-  internalNote   String?
-  reviewedBy     String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  status       String   @default("NEW")
+  internalNote String?
+  reviewedBy   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([status])
 }
@@ -668,21 +668,21 @@ model SupportTicket {
 }
 
 model SupportTicketMessage {
-  id            String   @id @default(cuid())
-  ticketId      String
-  senderRole    String // church_admin | wgc_admin | system
-  senderUserId  String?
-  senderEmail   String?
-  body          String
+  id               String    @id @default(cuid())
+  ticketId         String
+  senderRole       String // church_admin | wgc_admin | system
+  senderUserId     String?
+  senderEmail      String?
+  body             String
   // Internal-admin-only note — never returned by a merchant-facing API,
   // never rendered in the merchant dashboard, never emailed to a merchant.
-  isInternalNote Boolean @default(false)
+  isInternalNote   Boolean   @default(false)
   // Read-receipt timestamps for the unread-count badges — set once, on
   // the first view by that side, never cleared/reset.
   readByMerchantAt DateTime?
   readByAdminAt    DateTime?
-  isSystemEvent Boolean  @default(false) // status changes, ticket resolved/reopened, etc — rendered distinctly from a human reply
-  createdAt     DateTime @default(now())
+  isSystemEvent    Boolean   @default(false) // status changes, ticket resolved/reopened, etc — rendered distinctly from a human reply
+  createdAt        DateTime  @default(now())
 
   ticket      SupportTicket             @relation(fields: [ticketId], references: [id])
   attachments SupportTicketAttachment[]
@@ -769,16 +769,16 @@ model DonorNote {
 // fundName itself is left in place on those models for backward
 // compatibility; fundId is the new relationship going forward.
 model Fund {
-  id          String   @id @default(cuid())
-  churchId    String
-  name        String
-  description String?
-  isActive    Boolean  @default(true)
+  id           String   @id @default(cuid())
+  churchId     String
+  name         String
+  description  String?
+  isActive     Boolean  @default(true)
   // Church-wide catalog ordering (e.g. the org's "Manage Funds" list).
   // Per-giving-link dropdown order is separate — see GivingLinkFund.displayOrder.
-  displayOrder Int     @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([churchId, name])
   @@index([churchId])
@@ -2008,4 +2008,78 @@ model SynchronizationState {
 
   @@unique([churchId, syncType])
   @@index([syncType, lastSuccessfulAt])
+}
+
+// -----------------------------------------------------------------------------
+// FIRST LOOK LEADS SYSTEM
+// -----------------------------------------------------------------------------
+
+model FirstLookLead {
+  id                          String    @id @default(cuid())
+  publicReference             String    @unique
+  firstName                   String
+  lastName                    String
+  normalizedEmail             String    @unique
+  originalEmail               String
+  organizationName            String
+  role                        String
+  annualGivingRange           String
+  preferredSessionTime        String
+  painPoint                   String?
+  buildUpdatesPreference      String    @default("PENDING") // PENDING | OPTED_IN | SESSION_ONLY
+  buildUpdatesPreferenceSetAt DateTime?
+  status                      String    @default("NEW") // NEW | CONTACTED | QUALIFIED | SESSION_SCHEDULED | ATTENDED | APPLICATION_STARTED | CONVERTED | NOT_INTERESTED
+  source                      String?
+  utmSource                   String?
+  utmMedium                   String?
+  utmCampaign                 String?
+  utmContent                  String?
+  utmTerm                     String?
+  landingPageUrl              String?
+  referrer                    String?
+  metaEventId                 String?
+  metaBrowserEventRecordedAt  DateTime?
+  confirmationEmailStatus     String?
+  confirmationEmailSentAt     DateTime?
+  confirmationEmailError      String?
+  internalNotificationStatus  String?
+  internalNotificationSentAt  DateTime?
+  internalNotificationError   String?
+  firstSubmittedAt            DateTime  @default(now())
+  lastSubmittedAt             DateTime  @default(now())
+  submissionCount             Int       @default(1)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  notes    FirstLookLeadNote[]
+  activity FirstLookLeadActivity[]
+
+  @@index([status])
+  @@index([buildUpdatesPreference])
+}
+
+model FirstLookLeadNote {
+  id          String   @id @default(cuid())
+  leadId      String
+  adminUserId String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead FirstLookLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model FirstLookLeadActivity {
+  id                     String   @id @default(cuid())
+  leadId                 String
+  action                 String
+  metadataJson           Json?
+  performedByAdminUserId String?
+  createdAt              DateTime @default(now())
+
+  lead FirstLookLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
 }

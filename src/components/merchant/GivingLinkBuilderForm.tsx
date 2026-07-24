@@ -244,25 +244,6 @@ export default function GivingLinkBuilderForm({
     });
   };
 
-  const addAllFundsToLink = (fundsToAdd: CatalogFund[]) => {
-    setFunds((prev) => {
-      let newFunds = [...prev];
-      fundsToAdd.forEach((fund) => {
-        if (!newFunds.some((f) => f.fundId === fund.id)) {
-          newFunds.push({
-            fundId: fund.id,
-            name: fund.name,
-            description: fund.description || "",
-            isActive: fund.isActive,
-            isDefault: newFunds.length === 0,
-            displayOrder: newFunds.length,
-          });
-        }
-      });
-      return newFunds;
-    });
-  };
-
   const handleCreateFund = async () => {
     const name = newFundName.trim();
     if (!name) {
@@ -652,18 +633,7 @@ export default function GivingLinkBuilderForm({
 
             <div className="border border-slate-200 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
-                <div className="flex items-baseline gap-3">
-                  <h5 className="text-sm font-bold text-slate-900">Gift Designations</h5>
-                  {state.fundSelectionEnabled && unassignedCatalogFunds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => addAllFundsToLink(unassignedCatalogFunds)}
-                      className="text-xs font-semibold text-blue-600 hover:underline"
-                    >
-                      Select all
-                    </button>
-                  )}
-                </div>
+                <h5 className="text-sm font-bold text-slate-900">Gift Designations</h5>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <span className="text-xs font-semibold text-slate-500">Enable fund selection</span>
                   <input

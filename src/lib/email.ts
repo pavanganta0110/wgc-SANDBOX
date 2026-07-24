@@ -322,3 +322,58 @@ export async function sendWgcAdminOnboardingNotification(options: WgcAdminOnboar
     bodyHtml,
   });
 }
+
+// -----------------------------------------------------------------------------
+// FIRST LOOK LEADS
+// -----------------------------------------------------------------------------
+
+export async function sendFirstLookConfirmationEmail(lead: any) {
+  const bodyHtml = `
+    <p>Hi ${lead.firstName},</p>
+    <p>You’re on the list. We’re locking the session schedule based on what works for the people who have registered, and we’ll email you as soon as it’s set.</p>
+    <p>In the meantime, if you want to see exactly how we’re building this platform—what’s working, what’s breaking, and the decisions we’re making behind the scenes—you can opt into our weekly build updates below.</p>
+    <div style="margin-top: 30px; margin-bottom: 30px;">
+      <a href="https://wgcpayments.com/first-look/confirmed?ref=${lead.publicReference}" style="display: inline-block; padding: 12px 24px; background-color: #14213D; color: #FFFFFF; text-decoration: none; border-radius: 4px; font-weight: 600;">Manage Preferences</a>
+    </div>
+    <p>We’ll talk soon.</p>
+  `;
+
+  return await sendWgcEmail({
+    to: lead.originalEmail,
+    subject: "You're on the list",
+    title: "Waypoint Gateway Collective",
+    previewText: "We'll send you the schedule as soon as it's locked in.",
+    bodyHtml,
+  });
+}
+
+export async function sendFirstLookInternalNotification(lead: any) {
+  const adminEmail = process.env.SUPPORT_EMAIL || "support@wgcpayments.com";
+  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com"}/admin/first-look-leads/${lead.id}`;
+
+  const bodyHtml = `
+    <p>A new registration just came in for the First Look campaign.</p>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 20px; font-size: 14px; text-align: left;">
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Name:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.firstName} ${lead.lastName}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Email:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.originalEmail}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Organization:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.organizationName}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Role:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.role}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Giving:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.annualGivingRange}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Pain Point:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.painPoint || "None provided"}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Campaign:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${lead.utmCampaign || "N/A"}</td></tr>
+    </table>
+    <div style="margin-top: 30px; text-align: center;">
+      <a href="${adminDashboardLink}" style="display: inline-block; padding: 10px 20px; background-color: #0B5DBC; color: #FFFFFF; text-decoration: none; border-radius: 4px; font-weight: 600;">View Lead Details</a>
+    </div>
+  `;
+
+  return await sendWgcEmail({
+    to: adminEmail,
+    subject: `New First Look Lead: ${lead.firstName} ${lead.lastName} (${lead.organizationName})`,
+    title: "New First Look Registration",
+    badgeText: "NEW LEAD",
+    badgeColor: "#10B981",
+    bodyHtml,
+  });
+}
+

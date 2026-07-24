@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Merchants", href: "/admin/merchants", icon: Building },
   { name: "Support Tickets", href: "/admin/support/tickets", icon: LifeBuoy },
+  { name: "First Look Leads", href: "/admin/first-look-leads", icon: Inbox },
   { name: "Inquiries", href: "/admin/inquiries", icon: Inbox },
   { name: "501(c)(3) Documents", href: "/admin/documents", icon: FileText },
   { name: "Email Logs", href: "/admin/email-logs", icon: Mail },
