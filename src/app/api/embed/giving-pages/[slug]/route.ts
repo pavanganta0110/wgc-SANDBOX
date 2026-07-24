@@ -13,16 +13,29 @@ import { checkEmbedRateLimit } from "@/lib/giving/embedRateLimit";
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const origin = req.headers.get("origin");
+  const selfOrigin = new URL(req.url).origin;
 
   const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown";
   if (!checkEmbedRateLimit(`embed-public-config:${ip}:${slug}`)) {
-    const allowOrigin = await resolveEmbedCorsOrigin(slug, origin);
+    const allowOrigin = await resolveEmbedCorsOrigin(slug, origin, selfOrigin);
     return NextResponse.json({ ok: false, error: "Too many requests. Please try again shortly." }, { status: 429, headers: embedCorsHeaders(allowOrigin) });
   }
 
-  const allowOrigin = await resolveEmbedCorsOrigin(slug, origin);
+  const allowOrigin = await resolveEmbedCorsOrigin(slug, origin, selfOrigin);
   if (origin && !allowOrigin) {
-    return NextResponse.json({ ok: false, error: "This domain is not authorized to embed this giving page." }, { status: 403, headers: embedCorsHeaders(null) });
+    // Includes the exact host that was blocked so a merchant/donor can
+    // self-diagnose and add it under Website Embed -> Domain restrictions,
+    // rather than guessing at what "not authorized" refers to.
+    let blockedHost = origin;
+    try {
+      blockedHost = new URL(origin).hostname;
+    } catch {
+      /* keep raw origin if it somehow isn't a valid URL */
+    }
+    return NextResponse.json(
+      { ok: false, error: `This domain (${blockedHost}) is not authorized to embed this giving page. Ask the organization to add it under Website Embed settings.`, blockedHost },
+      { status: 403, headers: embedCorsHeaders(null) }
+    );
   }
   const headers = embedCorsHeaders(allowOrigin);
 
@@ -39,6 +52,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     church,
     branding,
     light,
+    pricing,
     donorFieldSettings,
     allowedPaymentMethods,
     allowedFrequencies,
@@ -82,7 +96,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         campaignImageUrl: branding.campaignImageUrl,
         showPoweredByWgc: !branding.hideFooter,
         thankYouMessage: branding.thankYouMessage,
+        // Full light-mode branding object, in the exact shape
+        // GivingLinkPreviewPanel/GivingLinkForm already expect — lets the
+        // Website Embed settings page reuse that existing preview
+        // component directly instead of building a second renderer.
+        light,
       },
+      pricing,
       wallets: {
         // Inline Apple Pay / Google Pay buttons require the host merchant's
         // own domain to be registered/approved with Apple/Google — WGC's
@@ -111,6 +131,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
 export async function OPTIONS(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const allowOrigin = await resolveEmbedCorsOrigin(slug, req.headers.get("origin"));
+  const allowOrigin = await resolveEmbedCorsOrigin(slug, req.headers.get("origin"), new URL(req.url).origin);
   return embedPreflightResponse(allowOrigin);
 }

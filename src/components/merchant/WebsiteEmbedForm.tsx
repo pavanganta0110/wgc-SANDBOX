@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import GivingLinkPreviewPanel from "@/components/merchant/GivingLinkPreviewPanel";
 
 interface GivingLinkOption {
   id: string;
@@ -9,13 +10,69 @@ interface GivingLinkOption {
   publicTitle: string;
 }
 
-// Generated embed code must always point at the canonical production
-// domain — never at whatever Vercel/preview URL happens to be serving the
-// dashboard the merchant copied the snippet from (NEXT_PUBLIC_APP_URL is
-// wgc-payments-finix-first-wgcpayments.vercel.app in sandbox). The embed
-// loader itself is environment-agnostic vanilla JS; only its own script
-// src needs to be pinned here.
-const WGC_EMBED_SCRIPT_ORIGIN = "https://www.wgcpayments.com";
+// Shape returned by GET /api/embed/giving-pages/[slug] — the same public
+// config the inline embed script itself loads. Reused here (same-origin,
+// always authorized — see embedCors.ts's selfOrigin check) so the Website
+// Embed settings preview shows the real, current giving-page configuration
+// instead of a second hand-maintained copy.
+interface EmbedConfig {
+  ok: true;
+  organization: { name: string; logoUrl: string | null };
+  givingPage: { title: string; description: string };
+  amount: {
+    type: "FIXED" | "VARIABLE";
+    fixedAmountCents: number | null;
+    minAmountCents: number | null;
+    maxAmountCents: number | null;
+    suggestedAmountsCents: number[];
+    allowCustomAmount: boolean;
+  };
+  recurring: { enabled: boolean; allowedFrequencies: string[] };
+  funds: { selectionEnabled: boolean; options: { id: string; name: string; isDefault: boolean }[] };
+  paymentMethods: string[];
+  donorFields: Record<string, "REQUIRED" | "OPTIONAL" | "HIDDEN">;
+  feeCover: { enabled: boolean; defaultOn: boolean };
+  branding: {
+    campaignImageUrl: string;
+    showPoweredByWgc: boolean;
+    thankYouMessage: string;
+    light: {
+      logoUrl: string;
+      headerBackground: string;
+      pageBackground: string;
+      buttonBackground: string;
+      buttonText: string;
+      headingColor: string;
+      bodyTextColor: string;
+      linkColor: string;
+      borderColor: string;
+    };
+  };
+  pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
+}
+
+// On production, generated embed code must point at the canonical
+// wgcpayments.com domain — never at an ephemeral Vercel deployment URL.
+// But on sandbox (or any other non-production environment), the generated
+// code needs to point at THAT environment's own stable app URL, or the
+// giving-page slugs that only exist in that environment's database can
+// never be tested (the canonical domain only has production's data).
+// appUrl (NEXT_PUBLIC_APP_URL) already reflects each environment's own
+// stable, non-ephemeral alias, so it's the correct base everywhere except
+// when it's somehow unset, where the canonical domain is the safe fallback.
+const WGC_CANONICAL_PRODUCTION_ORIGIN = "https://www.wgcpayments.com";
+function resolveEmbedScriptOrigin(appUrl: string): string {
+  if (!appUrl) return WGC_CANONICAL_PRODUCTION_ORIGIN;
+  try {
+    const host = new URL(appUrl).hostname;
+    if (host === "wgcpayments.com" || host === "www.wgcpayments.com") {
+      return WGC_CANONICAL_PRODUCTION_ORIGIN;
+    }
+    return appUrl;
+  } catch {
+    return WGC_CANONICAL_PRODUCTION_ORIGIN;
+  }
+}
 
 const PLATFORMS = [
   { key: "wordpress", label: "WordPress", steps: ["Edit the page or post where you want the button/form.", "Add a Custom HTML block.", "Paste the code into the block.", "Publish or update the page."] },
@@ -43,22 +100,62 @@ export default function WebsiteEmbedForm({
   const [size, setSize] = useState<"small" | "medium" | "large">("medium");
   const [radius, setRadius] = useState<"rounded" | "square">("rounded");
   const [color, setColor] = useState<"gold" | "navy" | "black" | "white">("gold");
+  const [layout, setLayout] = useState<"standard" | "compact">("standard");
   const [openPlatform, setOpenPlatform] = useState<string | null>("wordpress");
 
   const [domainRestrictionEnabled, setDomainRestrictionEnabled] = useState(initialEmbedDomainRestrictionEnabled);
   const [domainsText, setDomainsText] = useState(initialAllowedDomains.join("\n"));
   const [savingDomains, setSavingDomains] = useState(false);
 
+  const [config, setConfig] = useState<EmbedConfig | null>(null);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [configError, setConfigError] = useState<string | null>(null);
+
   const selectedLink = givingLinks.find((l) => l.publicSlug === slug);
-  const scriptSrc = `${WGC_EMBED_SCRIPT_ORIGIN}/embed/wgc-giving.js`;
+  const scriptSrc = `${resolveEmbedScriptOrigin(appUrl)}/embed/wgc-giving.js`;
   const embedUrl = slug ? `${appUrl}/embed/${slug}` : "";
+  const hostedGivingLink = slug ? `${appUrl}/g/${slug}` : "";
 
   const code = useMemo(() => {
     if (mode === "button") {
       return `<script\n  src="${scriptSrc}"\n  data-wgc-slug="${slug}"\n  data-wgc-mode="button"\n  data-wgc-button-text="${buttonText}"\n  data-wgc-button-size="${size}"\n  data-wgc-button-color="${color}"\n  data-wgc-button-radius="${radius}">\n</script>`;
     }
-    return `<div\n  data-wgc-giving\n  data-wgc-slug="${slug}"\n  data-wgc-mode="inline">\n</div>\n\n<script async src="${scriptSrc}"></script>`;
-  }, [mode, slug, buttonText, size, color, radius, scriptSrc]);
+    const layoutAttr = layout === "compact" ? '\n  data-wgc-layout="compact"' : "";
+    return `<div\n  data-wgc-giving\n  data-wgc-slug="${slug}"\n  data-wgc-mode="inline"${layoutAttr}>\n</div>\n\n<script async src="${scriptSrc}"></script>`;
+  }, [mode, slug, buttonText, size, color, radius, layout, scriptSrc]);
+
+  // Live preview data — the same public config the real inline embed script
+  // loads (GET /api/embed/giving-pages/[slug]), reused here rather than
+  // hand-maintaining a second preview data source. Same-origin requests to
+  // this endpoint are always authorized regardless of the church's own
+  // domain allowlist (see embedCors.ts's selfOrigin check), so this keeps
+  // working even when domain restriction is enabled.
+  useEffect(() => {
+    if (!slug || mode !== "inline") return;
+    let cancelled = false;
+    setConfigLoading(true);
+    setConfigError(null);
+    fetch(`/api/embed/giving-pages/${encodeURIComponent(slug)}`)
+      .then((res) => res.json().then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        if (cancelled) return;
+        if (!ok || body.ok === false) {
+          setConfigError(body?.error || "Could not load a preview for this giving page.");
+          setConfig(null);
+          return;
+        }
+        setConfig(body);
+      })
+      .catch(() => {
+        if (!cancelled) setConfigError("A network error occurred while loading the preview.");
+      })
+      .finally(() => {
+        if (!cancelled) setConfigLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, mode]);
 
   async function handleCopy() {
     await navigator.clipboard.writeText(code);
@@ -70,6 +167,12 @@ export default function WebsiteEmbedForm({
         body: JSON.stringify({ channel: "EMBED" }),
       }).catch(() => {});
     }
+  }
+
+  async function handleCopyHostedLink() {
+    if (!hostedGivingLink) return;
+    await navigator.clipboard.writeText(hostedGivingLink);
+    toast.success("Hosted giving link copied");
   }
 
   async function handleSaveDomains(e: React.FormEvent) {
@@ -164,36 +267,98 @@ export default function WebsiteEmbedForm({
               </div>
             </>
           )}
+
+          {mode === "inline" && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">Layout</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setLayout("standard")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${layout === "standard" ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-700"}`}>
+                  Standard
+                </button>
+                <button type="button" onClick={() => setLayout("compact")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${layout === "compact" ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-700"}`}>
+                  Compact
+                </button>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                Color, logo, description, and Powered-by-WGC visibility follow this giving page's own saved branding — edit those in the giving link's own settings, not here, so the embed never drifts out of sync with the hosted page.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Preview */}
         <div>
           <label className="block text-xs font-semibold text-slate-600 mb-1">Preview</label>
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 min-h-[220px] flex items-center justify-center">
-            <div className="text-center space-y-3">
-              <button
-                type="button"
-                onClick={() => embedUrl && window.open(embedUrl, "wgc_preview", "width=480,height=720")}
-                style={{
-                  padding: size === "small" ? "8px 16px" : size === "large" ? "16px 28px" : "12px 22px",
-                  fontSize: size === "small" ? 13 : size === "large" ? 17 : 15,
-                  fontWeight: 700,
-                  borderRadius: radius === "rounded" ? 10 : 2,
-                  backgroundColor: color === "gold" ? "#EAB308" : color === "navy" ? "#0B1220" : color === "black" ? "#111111" : "#FFFFFF",
-                  color: color === "white" ? "#111111" : color === "gold" ? "#0B1220" : "#FFFFFF",
-                  border: color === "white" ? "1px solid #D1D5DB" : "none",
-                  cursor: "pointer",
-                }}
-              >
-                {buttonText || "Give Now"}
-              </button>
-              <p className="text-xs text-slate-400 max-w-xs">
-                {mode === "button"
-                  ? "Click to preview the real giving form — it opens in a secure popup window."
-                  : "This button appears inline on the host page. Clicking it opens the real giving form in a secure popup window (Finix's payment form can't run inside an iframe, so the payment step always opens this way)."}
-              </p>
+          {mode === "button" ? (
+            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 min-h-[220px] flex items-center justify-center">
+              <div className="text-center space-y-3">
+                <button
+                  type="button"
+                  onClick={() => embedUrl && window.open(embedUrl, "wgc_preview", "width=480,height=720")}
+                  style={{
+                    padding: size === "small" ? "8px 16px" : size === "large" ? "16px 28px" : "12px 22px",
+                    fontSize: size === "small" ? 13 : size === "large" ? 17 : 15,
+                    fontWeight: 700,
+                    borderRadius: radius === "rounded" ? 10 : 2,
+                    backgroundColor: color === "gold" ? "#EAB308" : color === "navy" ? "#0B1220" : color === "black" ? "#111111" : "#FFFFFF",
+                    color: color === "white" ? "#111111" : color === "gold" ? "#0B1220" : "#FFFFFF",
+                    border: color === "white" ? "1px solid #D1D5DB" : "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {buttonText || "Give Now"}
+                </button>
+                <p className="text-xs text-slate-400 max-w-xs">
+                  Click to preview the real giving form — it opens in a secure popup window (falls back to same-tab navigation if the popup is blocked).
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="border border-slate-200 rounded-xl bg-slate-50 min-h-[220px] overflow-hidden">
+              {configLoading && (
+                <p className="text-xs text-slate-400 text-center py-16">Loading preview…</p>
+              )}
+              {configError && !configLoading && (
+                <p className="text-xs text-red-600 text-center py-16 px-4">{configError}</p>
+              )}
+              {config && !configLoading && !configError && (
+                <div className={layout === "compact" ? "max-w-[340px] mx-auto p-3" : "max-w-[420px] mx-auto p-3"}>
+                  <GivingLinkPreviewPanel
+                    churchName={config.organization.name}
+                    light={config.branding.light}
+                    churchLogoUrl={config.organization.logoUrl}
+                    amountType={config.amount.type}
+                    fixedAmountCents={config.amount.fixedAmountCents}
+                    minAmountCents={config.amount.minAmountCents}
+                    maxAmountCents={config.amount.maxAmountCents}
+                    suggestedAmountsCents={config.amount.suggestedAmountsCents}
+                    allowCustomAmount={config.amount.allowCustomAmount}
+                    recurringEnabled={config.recurring.enabled}
+                    allowedFrequencies={config.recurring.allowedFrequencies as never}
+                    allowedPaymentMethods={config.paymentMethods as never}
+                    feeCoverEnabled={config.feeCover.enabled}
+                    feeCoverDefaultOn={config.feeCover.defaultOn}
+                    donorFieldSettings={config.donorFields as never}
+                    pricing={config.pricing}
+                    thankYouMessage={config.branding.thankYouMessage}
+                    campaignImageUrl={config.branding.campaignImageUrl}
+                    publicTitle={config.givingPage.title}
+                    description={config.givingPage.description}
+                    hideFooter={!config.branding.showPoweredByWgc}
+                    showPoweredByWgc={config.branding.showPoweredByWgc}
+                    fundSelectionEnabled={config.funds.selectionEnabled}
+                    assignedFunds={config.funds.options.map((f, i) => ({
+                      fundId: f.id,
+                      name: f.name,
+                      description: null,
+                      isDefault: f.isDefault,
+                      displayOrder: i,
+                    }))}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -201,9 +366,14 @@ export default function WebsiteEmbedForm({
       <div>
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-semibold text-slate-600">Embed code</label>
-          <button type="button" onClick={handleCopy} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">
-            Copy Code
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={handleCopyHostedLink} className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50">
+              Copy Hosted Giving Link
+            </button>
+            <button type="button" onClick={handleCopy} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">
+              {mode === "button" ? "Copy Donate Button Code" : "Copy Inline Form Code"}
+            </button>
+          </div>
         </div>
         <pre className="bg-slate-900 text-slate-100 text-xs rounded-xl p-4 overflow-x-auto whitespace-pre-wrap break-all">{code}</pre>
       </div>
@@ -240,13 +410,18 @@ export default function WebsiteEmbedForm({
           Only allow embedding on approved domains
         </label>
         {domainRestrictionEnabled && (
-          <textarea
-            value={domainsText}
-            onChange={(e) => setDomainsText(e.target.value)}
-            rows={4}
-            placeholder={"churchwebsite.org\nwww.churchwebsite.org"}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none font-mono"
-          />
+          <>
+            <textarea
+              value={domainsText}
+              onChange={(e) => setDomainsText(e.target.value)}
+              rows={4}
+              placeholder={"churchwebsite.org\nwww.churchwebsite.org"}
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none font-mono"
+            />
+            <p className="text-xs text-slate-400">
+              Enter just the domain — no <code>https://</code> and no trailing slash (e.g. <code>churchwebsite.org</code>). Adding <code>churchwebsite.org</code> automatically also allows <code>www.churchwebsite.org</code>, and vice versa — WGC treats the www and non-www versions of a domain as the same site, so you only need to list one. If a donor sees &ldquo;This domain is not authorized,&rdquo; the error shows the exact host that was blocked — add that exact value here.
+            </p>
+          </>
         )}
         <button type="submit" disabled={savingDomains} className="px-4 py-2 rounded-lg bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
           {savingDomains ? "Saving…" : "Save domain restrictions"}

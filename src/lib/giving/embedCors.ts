@@ -17,8 +17,14 @@ import { isEmbedOriginAllowed, parseEmbedAllowedDomains } from "@/lib/giving/emb
 export const EMBED_CORS_ALLOWED_METHODS = "GET, POST, OPTIONS";
 export const EMBED_CORS_ALLOWED_HEADERS = "Content-Type";
 
-export async function resolveEmbedCorsOrigin(slug: string, origin: string | null): Promise<string | null> {
+export async function resolveEmbedCorsOrigin(slug: string, origin: string | null, selfOrigin?: string | null): Promise<string | null> {
   if (!origin) return null;
+
+  // The WGC dashboard previewing its own embed config (e.g. the Website
+  // Embed settings page's live preview) is always allowed regardless of a
+  // church's own domain allowlist — that allowlist restricts third-party
+  // sites, never WGC's own app calling its own API about itself.
+  if (selfOrigin && origin === selfOrigin) return origin;
 
   const link = await prisma.givingLink.findUnique({ where: { publicSlug: slug }, select: { churchId: true } });
   if (!link) return null;
