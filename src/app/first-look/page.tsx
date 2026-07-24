@@ -21,8 +21,7 @@ function Header() {
   return (
     <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
       <div className="flex flex-col">
-        <span className="font-serif text-xl font-bold text-[#14213D] leading-none">WGC</span>
-        <span className="text-[10px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
+        <Image src="/wgc-brand-final.png" alt="Waypoint Gateway Collective" width={120} height={32} className="h-8 w-auto" />
       </div>
       <a 
         href="#join"
@@ -80,10 +79,14 @@ export default function FirstLookPage() {
         <section className="px-6 pb-24 max-w-[1120px] mx-auto">
           <div className="bg-[#FFFDF8] rounded-[6px] border border-[rgba(20,33,61,0.13)] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-2 md:p-4">
             <div className="w-full aspect-[16/9] bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
-              {/* Fallback box if image is missing */}
-              <div className="text-center p-6 text-[#41506F]">
-                <p className="font-mono text-sm uppercase tracking-widest opacity-60">Admin View — Transaction Insights, Live</p>
-              </div>
+              {/* Dashboard Preview Image */}
+              <Image 
+                src="/images/first-look-dashboard.png" 
+                alt="Admin View — Transaction Insights"
+                fill
+                className="object-cover object-top"
+                sizes="(max-width: 1120px) 100vw, 1120px"
+              />
             </div>
           </div>
           <p className="text-center text-xs font-mono uppercase tracking-widest text-[#41506F] mt-4">Admin View — Transaction Insights, Live</p>
@@ -147,8 +150,14 @@ export default function FirstLookPage() {
             <div className="relative mx-auto w-full max-w-[320px]">
               {/* Phone Frame Mock */}
               <div className="aspect-[9/19] bg-[#14213D] rounded-[40px] p-3 shadow-2xl relative border-4 border-[#203154]">
-                <div className="w-full h-full bg-[#F5F1E8] rounded-[30px] overflow-hidden flex items-center justify-center">
-                   <span className="font-mono text-xs uppercase text-[#41506F]">Giving App Preview</span>
+                <div className="w-full h-full bg-[#F5F1E8] rounded-[30px] overflow-hidden relative">
+                   <Image 
+                     src="/images/first-look-phone.png"
+                     alt="Giving App Preview"
+                     fill
+                     className="object-cover"
+                     sizes="320px"
+                   />
                 </div>
               </div>
             </div>
@@ -162,8 +171,14 @@ export default function FirstLookPage() {
               <span className="inline-block text-[11px] uppercase font-mono font-bold text-[#E3B94F] mb-6 tracking-widest border-b-2 border-[#C9992E] pb-1">
                 Who's building it
               </span>
-              <div className="w-[170px] h-[170px] rounded-full border-4 border-[#C9992E] overflow-hidden bg-[#203154] mb-6 flex justify-center items-center">
-                 <span className="font-mono text-xs text-[#E8E0CF]">Founder Photo</span>
+              <div className="w-[170px] h-[170px] rounded-full border-4 border-[#C9992E] overflow-hidden bg-[#203154] mb-6 relative">
+                 <Image 
+                   src="/images/collin.png"
+                   alt="Collin Sansom"
+                   fill
+                   className="object-cover"
+                   sizes="170px"
+                 />
               </div>
               <p className="font-serif italic text-xl leading-relaxed text-[#E8E0CF] text-center md:text-left">
                 “I spent years watching ministries lose money to processors that didn't understand them. So I'm building one that does.”
