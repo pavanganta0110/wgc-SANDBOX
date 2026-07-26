@@ -21,7 +21,7 @@ function Header() {
   return (
     <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
       <div className="flex flex-col">
-        <Image src="/wgc-brand-final.png" alt="Waypoint Gateway Collective" width={120} height={32} className="h-8 w-auto" />
+        <Image src="/images/first-look-logo.png" alt="Waypoint Gateway Collective" width={48} height={48} className="w-12 h-12 object-contain" />
       </div>
       <a 
         href="#join"
@@ -81,7 +81,7 @@ export default function FirstLookPage() {
             <div className="w-full aspect-[16/9] bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
               {/* Dashboard Preview Image */}
               <Image 
-                src="/images/nonprofit.png" 
+                src="/images/first-look-dashboard.png" 
                 alt="Admin View — Transaction Insights"
                 fill
                 className="object-cover object-top"
@@ -152,7 +152,7 @@ export default function FirstLookPage() {
               <div className="aspect-[9/19] bg-[#14213D] rounded-[40px] p-3 shadow-2xl relative border-4 border-[#203154]">
                 <div className="w-full h-full bg-[#F5F1E8] rounded-[30px] overflow-hidden relative">
                    <Image 
-                     src="/images/church.png"
+                     src="/images/first-look-phone.png"
                      alt="Giving App Preview"
                      fill
                      className="object-cover"
