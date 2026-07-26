@@ -81,7 +81,7 @@ export default function FirstLookPage() {
             <div className="w-full aspect-[16/9] bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
               {/* Dashboard Preview Image */}
               <Image 
-                src="/images/first-look-dashboard.png" 
+                src="/images/nonprofit.png" 
                 alt="Admin View — Transaction Insights"
                 fill
                 className="object-cover object-top"
@@ -152,7 +152,7 @@ export default function FirstLookPage() {
               <div className="aspect-[9/19] bg-[#14213D] rounded-[40px] p-3 shadow-2xl relative border-4 border-[#203154]">
                 <div className="w-full h-full bg-[#F5F1E8] rounded-[30px] overflow-hidden relative">
                    <Image 
-                     src="/images/first-look-phone.png"
+                     src="/images/church.png"
                      alt="Giving App Preview"
                      fill
                      className="object-cover"
