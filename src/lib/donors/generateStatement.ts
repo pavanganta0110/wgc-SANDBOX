@@ -99,6 +99,8 @@ export async function generateYearEndStatement(
     data: calc.lines.map((l) => ({
       annualStatementId: statement.id,
       paymentId: l.paymentId,
+      externalDonationId: l.externalDonationId ?? null,
+      paymentMethodLabel: l.paymentMethodLabel,
       donationDate: l.donationDate,
       reference: l.reference,
       fundOrCampaignName: l.fundName,
@@ -174,7 +176,7 @@ export async function renderStatementPdf(statementId: string, churchId: string):
         refundedAmountCents: l.refundedAmountCents,
         returnedAmountCents: l.returnedAmountCents,
         finalRecordedAmountCents: l.eligibleAmountCents,
-        paymentMethodLabel: "",
+        paymentMethodLabel: l.paymentMethodLabel || "",
         goodsServicesProvided: l.goodsServicesProvided,
         goodsServicesDescription: l.goodsServicesDescription,
         goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,

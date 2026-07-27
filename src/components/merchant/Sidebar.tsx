@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
+  HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true },
   { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true },
   { name: "Donors", href: "/merchant/donors", icon: Users },
+  { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },

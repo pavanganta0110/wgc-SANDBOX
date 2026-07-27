@@ -1966,6 +1966,12 @@ model AnnualDonationStatementLine {
   id                String  @id @default(cuid())
   annualStatementId String
   paymentId         String?
+  // Set instead of paymentId for a line sourced from a Record External
+  // Donation entry (cash, check, Cash App, etc.) rather than a Finix
+  // transfer — see ExternalDonation. Exactly one of paymentId/
+  // externalDonationId is set per line, never both.
+  externalDonationId String?
+  paymentMethodLabel String?
 
   donationDate       DateTime?
   reference          String?
@@ -2077,4 +2083,139 @@ model FirstLookLeadActivity {
   lead FirstLookLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId])
+}
+
+/// "Record External Donation" — donations a merchant received outside WGC
+/// Payments entirely (cash, check, Cash App, Zelle, Venmo, PayPal, bank
+/// transfer, external card terminal, money order, other) and wants
+/// reflected in donor history, receipts, annual statements, and reporting.
+/// Deliberately a separate model from Payment, not an extension of it:
+/// Payment's entire shape (finixTransferId, finixSettlementId, fee sync
+/// fields, DonationReceipt versioning) assumes a Finix-processed
+/// transaction. Keeping external donations in their own table makes it
+/// structurally impossible for them to leak into Finix processing-volume,
+/// settlement, or fee aggregation — those queries simply never join this
+/// table — rather than relying on every future query to remember to
+/// filter processedByWgc = false.
+model ExternalDonation {
+  id       String @id @default(cuid())
+  churchId String
+
+  donorId           String?
+  // MATCHED | ANONYMOUS | UNMATCHED — UNMATCHED donations show up in the
+  // "Unmatched External Donations" section until an authorized user
+  // connects them to a donor, marks them anonymous, or adds contact info.
+  donorMatchStatus  String  @default("MATCHED")
+  isAnonymous       Boolean @default(false)
+
+  donationAmountCents Int
+  donationDate        DateTime
+
+  // CASH | CHECK | CASH_APP | ZELLE | VENMO | PAYPAL | BANK_TRANSFER |
+  // EXTERNAL_CARD_TERMINAL | MONEY_ORDER | OTHER
+  paymentMethod          String
+  otherPaymentMethodName String?
+
+  // WGC_ONLINE_PAYMENT is never used here — see the module doc above.
+  // EXTERNAL_DIGITAL_PAYMENT | CASH | CHECK | EXTERNAL_BANK_TRANSFER |
+  // EXTERNAL_CARD_PAYMENT | OTHER_OFFLINE_PAYMENT
+  source String
+
+  fundId           String?
+  fundName         String?
+  campaign         String?
+  givingPageLabel  String?
+  donationPurpose  String?
+
+  // Never usernames, passwords, full card/bank numbers — see field-level
+  // notes below and the form-layer validation that enforces this.
+  externalTransactionId     String?
+  confirmationNumber        String?
+  accountOrDestinationLabel String?
+  providerFeeCents          Int?
+  netAmountReceivedCents    Int?
+  // Staff-only — never included on the donor receipt or annual statement.
+  internalNote               String?
+  // Supabase private-storage key (see uploadPrivateFile) — never a public
+  // URL, never surfaced to the donor, gated by canViewExternalDonationProof.
+  proofOfPaymentStorageKey   String?
+  proofOfPaymentFileName     String?
+
+  // Cash-specific
+  receivedByUserId String?
+
+  // Check-specific — never routing/account numbers.
+  checkNumber   String?
+  checkDate     DateTime?
+  bankName      String?
+  // For checks: RECEIVED | DEPOSITED | CLEARED | RETURNED | VOIDED (mirrors
+  // `status` below; kept as a separate field since "deposit status" is a
+  // concept donors/merchants specifically ask about for checks).
+  depositStatus String?
+
+  // External card terminal specific — never full PAN, expiry, or CVV.
+  terminalOrProviderName String?
+  lastFourDigits          String?
+  cardType                 String?
+
+  includeInAnnualStatement Boolean @default(true)
+
+  receiptStatus   String?
+  receiptSentAt   DateTime?
+  receiptNumber   String?
+
+  // RECEIVED | PENDING_CONFIRMATION | DEPOSITED | CLEARED | RETURNED |
+  // CORRECTED | VOIDED. Returned/voided rows are excluded from active
+  // totals and annual statements by every reader of this table (never
+  // hard-deleted, so the audit trail survives a correction).
+  status String @default("RECEIVED")
+
+  // Fixed invariants for every row in this table — never written any other
+  // way, enforced at the API layer, not just defaulted here.
+  processedByWgc     Boolean @default(false)
+  finixTransferId     String?
+  finixSettlementId   String?
+  processingFeeCents  Int     @default(0)
+  supplementalFeeCents Int    @default(0)
+
+  // Set by the pre-save duplicate check (same donor + amount + nearby date,
+  // or same external transaction/reference number) — a soft warning flag,
+  // never a hard block, so a merchant can still save a confirmed non-duplicate.
+  possibleDuplicate             Boolean @default(false)
+  duplicateOfExternalDonationId String?
+
+  createdByUserId String?
+  voidedAt        DateTime?
+  voidedByUserId  String?
+  voidReason      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs ExternalDonationAuditLog[]
+
+  @@index([churchId])
+  @@index([churchId, donorId])
+  @@index([churchId, status])
+  @@index([churchId, donationDate])
+  @@index([churchId, donorMatchStatus])
+}
+
+/// Append-only trail of donor-assignment changes on an ExternalDonation —
+/// required specifically because a merchant can record money received
+/// before they know who sent it (Unmatched External Donations), and later
+/// re-assign it. Every reassignment is logged here, never silently
+/// overwritten.
+model ExternalDonationAuditLog {
+  id                 String   @id @default(cuid())
+  externalDonationId String
+  action             String
+  fromValue          String?
+  toValue            String?
+  performedByUserId  String?
+  createdAt          DateTime @default(now())
+
+  externalDonation ExternalDonation @relation(fields: [externalDonationId], references: [id], onDelete: Cascade)
+
+  @@index([externalDonationId])
 }
