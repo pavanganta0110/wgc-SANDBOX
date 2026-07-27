@@ -66,7 +66,7 @@ export default function FirstLookPage() {
             First Look — Live Working Session
           </span>
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-medium leading-[1.1] mb-8 text-[#14213D] max-w-4xl mx-auto">
-            Your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
+            We're betting your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
           </h1>
           <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-10 leading-relaxed">
             Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code — and we want church leaders in the room while we do it.
@@ -194,7 +194,7 @@ export default function FirstLookPage() {
             
             <div className="md:col-span-8 md:pl-12 md:border-l border-[rgba(255,255,255,0.1)]">
               <p className="text-lg leading-relaxed text-[#E8E0CF] mb-8 font-light">
-                I've spent my career in nonprofit development — managing major donor portfolios, sitting in budget meetings, and watching good organizations quietly hand over money that was given for ministry. I'm finishing a Master of Theological Studies at Midwestern Baptist Theological Seminary. I know this world from the inside, and I'd rather build this with church leaders than guess at what you need.
+                I've spent my career in nonprofit development, managing major donor portfolios, sitting in budget meetings, and watching good organizations quietly hand over money that was given for ministry. I'm finishing a Master of Theological Studies at Midwestern Baptist Theological Seminary. I know this world from the inside, and I'd rather build this with church leaders than guess at what you need.
               </p>
               <div className="flex flex-col">
                 <span className="font-serif text-2xl text-white mb-1">Collin Sansom</span>
