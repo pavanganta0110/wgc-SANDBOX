@@ -162,7 +162,7 @@ export default function FirstLookPage() {
                      src="/images/first-look-phone.png"
                      alt="Giving App Preview"
                      fill
-                     className="object-cover"
+                     className="object-cover object-top"
                      sizes="320px"
                    />
                 </div>
