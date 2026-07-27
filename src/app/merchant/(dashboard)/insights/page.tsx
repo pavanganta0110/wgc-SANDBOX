@@ -16,9 +16,12 @@ import {
   getDisputesInsights,
   getBankReturnsInsights,
   getDepositsInsights,
+  getExternalDonationsInsights,
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
+import { SOURCE_LABELS } from "@/lib/donations/externalDonationTypes";
+import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedUserId } from "@/lib/auth/scopes";
@@ -135,7 +138,44 @@ export default async function InsightsPage({
       {tab === "deposits" && (
         <DepositsTab churchId={churchId} dateFilter={dateFilter} trend={trend} scopedUserId={scopedUserId} />
       )}
+      {tab === "external" && <ExternalDonationsTab churchId={churchId} dateFilter={dateFilter} scopedUserId={scopedUserId} />}
     </div>
+  );
+}
+
+async function ExternalDonationsTab({
+  churchId,
+  dateFilter,
+  scopedUserId,
+}: {
+  churchId: string;
+  dateFilter: { gte: Date; lte?: Date } | undefined;
+  scopedUserId?: string;
+}) {
+  const { summary, bySourceTable, hasData } = await getExternalDonationsInsights(churchId, dateFilter, scopedUserId);
+
+  return (
+    <>
+      <SummaryCards items={summary} />
+      <p className="text-xs text-slate-400 -mt-2">
+        External donations are never sent to WGC's payment processor — they never count toward WGC-processed volume, settlement totals, or processing fees.
+      </p>
+      <ChartCard title="External Donations by Source">
+        {hasData ? (
+          <div className="divide-y divide-slate-100">
+            {bySourceTable.map((row) => (
+              <div key={row.source} className="flex items-center justify-between py-2 text-sm">
+                <span className="text-slate-700">{SOURCE_LABELS[row.source as keyof typeof SOURCE_LABELS] ?? row.source}</span>
+                <span className="text-slate-500">{row.count} donation{row.count === 1 ? "" : "s"}</span>
+                <span className="font-semibold text-slate-900">{formatCents(row.totalCents)}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyChart />
+        )}
+      </ChartCard>
+    </>
   );
 }
 

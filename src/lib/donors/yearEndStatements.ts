@@ -235,9 +235,14 @@ async function computeExternalDonationLines(donorId: string, churchId: string, g
     }));
 }
 
-/** All donors in the organization with at least one qualifying donation in the given year. */
+/** All donors in the organization with at least one qualifying donation in
+ * the given year — Finix-processed OR a Record External Donation entry
+ * (cash, check, Cash App, etc.) with includeInAnnualStatement=true. A donor
+ * with only external donations and no Finix payment instrument is still
+ * offered statement generation. */
 export async function findEligibleDonorsForYear(churchId: string, taxYear: number): Promise<{ donorId: string; donationCount: number; recordedTotalCents: number }[]> {
   const { gte, lte } = yearBoundsCentral(taxYear);
+  const byDonor = new Map<string, { count: number; total: number }>();
 
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
     where: { churchId, donorId: { not: null } },
@@ -245,33 +250,45 @@ export async function findEligibleDonorsForYear(churchId: string, taxYear: numbe
   });
   const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));
   const instrumentIds = [...instrumentToDonor.keys()];
-  if (instrumentIds.length === 0) return [];
 
-  const transfers = await prisma.finixTransfer.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "SUCCEEDED", createdAtFinix: { gte, lte } },
-    select: { finixTransferId: true, finixPaymentInstrumentId: true, amountCents: true },
+  if (instrumentIds.length > 0) {
+    const transfers = await prisma.finixTransfer.findMany({
+      where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "SUCCEEDED", createdAtFinix: { gte, lte } },
+      select: { finixTransferId: true, finixPaymentInstrumentId: true, amountCents: true },
+    });
+    const transferIds = transfers.map((t) => t.finixTransferId);
+
+    const [refunds, returns] = await Promise.all([
+      transferIds.length ? prisma.finixRefundOrReversal.findMany({ where: { churchId, finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" }, select: { finixOriginalTransferId: true, amountCents: true } }) : Promise.resolve([]),
+      transferIds.length ? prisma.bankReturn.findMany({ where: { churchId, originalTransferId: { in: transferIds } }, select: { originalTransferId: true, amountCents: true } }) : Promise.resolve([]),
+    ]);
+    const refundByTransfer = new Map<string, number>();
+    for (const r of refunds) refundByTransfer.set(r.finixOriginalTransferId!, (refundByTransfer.get(r.finixOriginalTransferId!) ?? 0) + (r.amountCents ?? 0));
+    const returnByTransfer = new Map<string, number>();
+    for (const r of returns) returnByTransfer.set(r.originalTransferId!, (returnByTransfer.get(r.originalTransferId!) ?? 0) + (r.amountCents ?? 0));
+
+    for (const t of transfers) {
+      const donorId = t.finixPaymentInstrumentId ? instrumentToDonor.get(t.finixPaymentInstrumentId) : undefined;
+      if (!donorId) continue;
+      const final = (t.amountCents ?? 0) - (refundByTransfer.get(t.finixTransferId) ?? 0) - (returnByTransfer.get(t.finixTransferId) ?? 0);
+      if (final <= 0) continue;
+      const acc = byDonor.get(donorId) ?? { count: 0, total: 0 };
+      acc.count += 1;
+      acc.total += final;
+      byDonor.set(donorId, acc);
+    }
+  }
+
+  const externalDonations = await prisma.externalDonation.findMany({
+    where: { churchId, donorId: { not: null }, includeInAnnualStatement: true, donationDate: { gte, lte } },
+    select: { donorId: true, donationAmountCents: true, status: true, depositStatus: true },
   });
-  const transferIds = transfers.map((t) => t.finixTransferId);
-
-  const [refunds, returns] = await Promise.all([
-    transferIds.length ? prisma.finixRefundOrReversal.findMany({ where: { churchId, finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" }, select: { finixOriginalTransferId: true, amountCents: true } }) : Promise.resolve([]),
-    transferIds.length ? prisma.bankReturn.findMany({ where: { churchId, originalTransferId: { in: transferIds } }, select: { originalTransferId: true, amountCents: true } }) : Promise.resolve([]),
-  ]);
-  const refundByTransfer = new Map<string, number>();
-  for (const r of refunds) refundByTransfer.set(r.finixOriginalTransferId!, (refundByTransfer.get(r.finixOriginalTransferId!) ?? 0) + (r.amountCents ?? 0));
-  const returnByTransfer = new Map<string, number>();
-  for (const r of returns) returnByTransfer.set(r.originalTransferId!, (returnByTransfer.get(r.originalTransferId!) ?? 0) + (r.amountCents ?? 0));
-
-  const byDonor = new Map<string, { count: number; total: number }>();
-  for (const t of transfers) {
-    const donorId = t.finixPaymentInstrumentId ? instrumentToDonor.get(t.finixPaymentInstrumentId) : undefined;
-    if (!donorId) continue;
-    const final = (t.amountCents ?? 0) - (refundByTransfer.get(t.finixTransferId) ?? 0) - (returnByTransfer.get(t.finixTransferId) ?? 0);
-    if (final <= 0) continue;
-    const acc = byDonor.get(donorId) ?? { count: 0, total: 0 };
+  for (const d of externalDonations) {
+    if (!d.donorId || isExcludedFromTotals(d.status, d.depositStatus)) continue;
+    const acc = byDonor.get(d.donorId) ?? { count: 0, total: 0 };
     acc.count += 1;
-    acc.total += final;
-    byDonor.set(donorId, acc);
+    acc.total += d.donationAmountCents;
+    byDonor.set(d.donorId, acc);
   }
 
   return [...byDonor.entries()].map(([donorId, v]) => ({ donorId, donationCount: v.count, recordedTotalCents: v.total }));

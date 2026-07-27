@@ -39,7 +39,7 @@ export default async function ExternalDonationsPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900">External Donations</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Donations recorded outside WGC Payments. Never processed by Finix — excluded from processing volume, settlement, and fee totals.
+            Donations recorded outside WGC Payments. Never processed by WGC — excluded from processing volume, settlement, and fee totals.
           </p>
         </div>
         {canCreate && (
@@ -102,7 +102,11 @@ export default async function ExternalDonationsPage() {
               const donor = d.donorId ? donorById.get(d.donorId) : null;
               return (
                 <tr key={d.id} className={d.status === "VOIDED" ? "opacity-50" : ""}>
-                  <td className="px-5 py-3 whitespace-nowrap">{d.donationDate.toLocaleDateString()}</td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <Link href={`/merchant/donations/external/${d.id}`} className="text-blue-600 hover:underline">
+                      {d.donationDate.toLocaleDateString()}
+                    </Link>
+                  </td>
                   <td className="px-5 py-3">{d.isAnonymous ? "Anonymous" : donor?.name || (d.donorMatchStatus === "UNMATCHED" ? <span className="text-amber-600">Unmatched</span> : "—")}</td>
                   <td className="px-5 py-3">{d.paymentMethod === "OTHER" ? d.otherPaymentMethodName : EXTERNAL_PAYMENT_METHOD_LABELS[d.paymentMethod as ExternalPaymentMethod]}</td>
                   <td className="px-5 py-3 text-slate-500">{SOURCE_LABELS[d.source as keyof typeof SOURCE_LABELS]}</td>
