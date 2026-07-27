@@ -115,7 +115,7 @@ export default function FirstLookPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0.5 bg-[rgba(20,33,61,0.08)] border border-[rgba(20,33,61,0.08)]">
               {[
                 { title: "Givers cover the fee", body: "One checkbox at checkout and the full gift lands in the fund. Most givers say yes when you simply ask." },
-                { title: "Recurring that holds", body: "Set to the 1st and 15th by default, because that's when people get paid. Card updates handled quietly in the background." },
+                { title: "Recurring that holds", body: "We're building recurring to default to the 1st and 15th, with card updates handled quietly in the background — because that's how people actually get paid." },
                 { title: "Designated funds", body: "Building fund, missions, benevolence. Split at the point of the gift so it doesn't get sorted by hand later." },
                 { title: "Giving links anywhere", body: "Bulletin, text, kiosk, QR on the screen. Same page, same reporting, no separate system to babysit." },
                 { title: "Reporting a treasurer can read", body: "Deposits, settlements, and disputes in plain language, tied back to the gift that caused them." },
