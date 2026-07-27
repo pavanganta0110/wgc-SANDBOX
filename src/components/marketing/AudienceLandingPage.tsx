@@ -12,6 +12,16 @@ export interface AudienceFeature {
   description: string;
 }
 
+export interface AudienceUseCase {
+  title: string;
+  description: string;
+}
+
+export interface AudienceFAQ {
+  question: string;
+  answer: string;
+}
+
 export interface AudienceLandingContent {
   eyebrow: string;
   headline: string;
@@ -19,11 +29,17 @@ export interface AudienceLandingContent {
   intro: string;
   whoWeServeTitle: string;
   whoWeServe: string[];
+  useCasesTitle: string;
+  useCasesSubtitle: string;
+  useCases: AudienceUseCase[];
   featuresTitle: string;
   featuresSubtitle: string;
   features: AudienceFeature[];
+  faqTitle: string;
+  faqs: AudienceFAQ[];
   ctaHeadline: string;
   ctaSubheadline: string;
+  ctaText?: string;
 }
 
 export default function AudienceLandingPage({ content }: { content: AudienceLandingContent }) {
@@ -34,15 +50,35 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
     intro,
     whoWeServeTitle,
     whoWeServe,
+    useCasesTitle,
+    useCasesSubtitle,
+    useCases,
     featuresTitle,
     featuresSubtitle,
     features,
+    faqTitle,
+    faqs,
     ctaHeadline,
     ctaSubheadline,
+    ctaText,
   } = content;
+
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: { "@type": "Answer", text: faq.answer },
+    })),
+  };
 
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       <Header />
       <main className="flex-grow">
         {/* HERO SECTION */}
@@ -103,6 +139,26 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
           </div>
         </section>
 
+        {/* USE CASES SECTION */}
+        <section className="py-24 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-wgc-navy-900 mb-4">{useCasesTitle}</h2>
+              <p className="text-wgc-navy-400">{useCasesSubtitle}</p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {useCases.map((useCase, idx) => (
+                <ScrollFade key={useCase.title} delay={idx * 0.1}>
+                  <div className="p-8 h-full rounded-3xl border border-wgc-navy-50 bg-wgc-off">
+                    <h3 className="text-lg font-bold text-wgc-navy-900 mb-3">{useCase.title}</h3>
+                    <p className="text-wgc-navy-500 text-sm leading-relaxed">{useCase.description}</p>
+                  </div>
+                </ScrollFade>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* FEATURES SECTION */}
         <section className="py-24 bg-wgc-off relative">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -121,8 +177,25 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
           </div>
         </section>
 
+        {/* FAQ SECTION */}
+        <section className="py-24 bg-white border-t border-wgc-navy-50">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ScrollFade>
+              <h2 className="text-3xl md:text-4xl font-bold text-wgc-navy-900 mb-12 text-center">{faqTitle}</h2>
+              <div className="space-y-6">
+                {faqs.map((faq) => (
+                  <div key={faq.question} className="border-b border-wgc-navy-50 pb-6">
+                    <h3 className="text-base font-bold text-wgc-navy-900 mb-2">{faq.question}</h3>
+                    <p className="text-wgc-navy-500 text-sm leading-relaxed">{faq.answer}</p>
+                  </div>
+                ))}
+              </div>
+            </ScrollFade>
+          </div>
+        </section>
+
         {/* CTA SECTION */}
-        <CTASection headline={ctaHeadline} subheadline={ctaSubheadline} ctaText="Get Started" ctaLink="/start" />
+        <CTASection headline={ctaHeadline} subheadline={ctaSubheadline} ctaText={ctaText || "Get Started"} ctaLink="/start" />
       </main>
       <Footer />
     </>
