@@ -2009,3 +2009,72 @@ model SynchronizationState {
   @@unique([churchId, syncType])
   @@index([syncType, lastSuccessfulAt])
 }
+
+model FirstLookLead {
+  id                          String    @id @default(cuid())
+  publicReference             String    @unique
+  firstName                   String
+  lastName                    String
+  normalizedEmail             String    @unique
+  originalEmail               String
+  organizationName            String
+  role                        String
+  annualGivingRange           String
+  preferredSessionTime        String
+  painPoint                   String?
+  buildUpdatesPreference      String    @default("PENDING") // PENDING | OPTED_IN | SESSION_ONLY
+  buildUpdatesPreferenceSetAt DateTime?
+  status                      String    @default("NEW") // NEW | CONTACTED | QUALIFIED | SESSION_SCHEDULED | ATTENDED | APPLICATION_STARTED | CONVERTED | NOT_INTERESTED
+  source                      String?
+  utmSource                   String?
+  utmMedium                   String?
+  utmCampaign                 String?
+  utmContent                  String?
+  utmTerm                     String?
+  landingPageUrl              String?
+  referrer                    String?
+  metaEventId                 String?
+  metaBrowserEventRecordedAt  DateTime?
+  confirmationEmailStatus     String?
+  confirmationEmailSentAt     DateTime?
+  confirmationEmailError      String?
+  internalNotificationStatus  String?
+  internalNotificationSentAt  DateTime?
+  internalNotificationError   String?
+  firstSubmittedAt            DateTime  @default(now())
+  lastSubmittedAt             DateTime  @default(now())
+  submissionCount             Int       @default(1)
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
+
+  notes    FirstLookLeadNote[]
+  activity FirstLookLeadActivity[]
+
+  @@index([status])
+}
+
+model FirstLookLeadNote {
+  id          String   @id @default(cuid())
+  leadId      String
+  adminUserId String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lead FirstLookLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
+
+model FirstLookLeadActivity {
+  id                     String   @id @default(cuid())
+  leadId                 String
+  action                 String
+  metadataJson           Json?
+  performedByAdminUserId String?
+  createdAt              DateTime @default(now())
+
+  lead FirstLookLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+}
