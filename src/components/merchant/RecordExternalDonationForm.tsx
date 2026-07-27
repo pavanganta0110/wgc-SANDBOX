@@ -9,8 +9,15 @@ import {
   DIGITAL_PROVIDER_METHODS,
   type ExternalPaymentMethod,
 } from "@/lib/donations/externalDonationTypes";
+import DonorPicker from "@/components/merchant/DonorPicker";
 
-type DonorMode = "new" | "anonymous" | "unmatched";
+type DonorMode = "existing" | "new" | "anonymous" | "unmatched";
+interface DonorHit {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+}
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -25,7 +32,8 @@ export default function RecordExternalDonationForm() {
   const [paymentMethod, setPaymentMethod] = useState<ExternalPaymentMethod>("CASH");
   const [otherPaymentMethodName, setOtherPaymentMethodName] = useState("");
 
-  const [donorMode, setDonorMode] = useState<DonorMode>("new");
+  const [donorMode, setDonorMode] = useState<DonorMode>("existing");
+  const [selectedDonor, setSelectedDonor] = useState<DonorHit | null>(null);
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [donorPhone, setDonorPhone] = useState("");
@@ -81,6 +89,10 @@ export default function RecordExternalDonationForm() {
       toast.error("Enter a donor name, email, or phone — or choose Anonymous / Unmatched");
       return;
     }
+    if (donorMode === "existing" && !selectedDonor) {
+      toast.error("Search for and select an existing donor, or switch to Add a new donor");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -90,6 +102,7 @@ export default function RecordExternalDonationForm() {
         paymentMethod,
         otherPaymentMethodName: paymentMethod === "OTHER" ? otherPaymentMethodName : undefined,
         donorMode,
+        donorId: donorMode === "existing" ? selectedDonor?.id : undefined,
         donorName: donorMode === "new" ? donorName : undefined,
         donorEmail: donorMode === "new" ? donorEmail : undefined,
         donorPhone: donorMode === "new" ? donorPhone : undefined,
@@ -99,7 +112,7 @@ export default function RecordExternalDonationForm() {
         donationPurpose: donationPurpose || undefined,
         internalNote: internalNote || undefined,
         includeInAnnualStatement,
-        sendReceipt: sendReceipt && donorMode === "new",
+        sendReceipt: sendReceipt && (donorMode === "new" ? Boolean(donorEmail) : donorMode === "existing" ? Boolean(selectedDonor?.email) : false),
       };
 
       if (isDigitalProvider) {
@@ -320,14 +333,23 @@ export default function RecordExternalDonationForm() {
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">Donor</h2>
-        <div className="flex gap-4 text-sm">
-          {(["new", "anonymous", "unmatched"] as DonorMode[]).map((mode) => (
+        <div className="flex flex-wrap gap-4 text-sm">
+          {(["existing", "new", "anonymous", "unmatched"] as DonorMode[]).map((mode) => (
             <label key={mode} className="flex items-center gap-1.5">
-              <input type="radio" name="donorMode" checked={donorMode === mode} onChange={() => setDonorMode(mode)} />
-              {mode === "new" ? "Donor name / Anonymous" : mode === "anonymous" ? "Anonymous" : "I don't know yet"}
+              <input
+                type="radio"
+                name="donorMode"
+                checked={donorMode === mode}
+                onChange={() => {
+                  setDonorMode(mode);
+                  if (mode !== "existing") setSelectedDonor(null);
+                }}
+              />
+              {mode === "existing" ? "Select existing donor" : mode === "new" ? "Add a new donor" : mode === "anonymous" ? "Anonymous" : "I don't know yet"}
             </label>
           ))}
         </div>
+        {donorMode === "existing" && <DonorPicker selected={selectedDonor} onSelect={setSelectedDonor} onClear={() => setSelectedDonor(null)} />}
         {donorMode === "new" && (
           <div className="grid grid-cols-3 gap-4">
             <input placeholder="Donor name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -359,8 +381,13 @@ export default function RecordExternalDonationForm() {
           Include in annual statement
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={sendReceipt} onChange={(e) => setSendReceipt(e.target.checked)} disabled={donorMode !== "new" || !donorEmail} />
-          Send receipt now {donorMode !== "new" || !donorEmail ? "(requires a donor email)" : ""}
+          <input
+            type="checkbox"
+            checked={sendReceipt}
+            onChange={(e) => setSendReceipt(e.target.checked)}
+            disabled={!(donorMode === "new" ? donorEmail : donorMode === "existing" ? selectedDonor?.email : false)}
+          />
+          Send receipt now {!(donorMode === "new" ? donorEmail : donorMode === "existing" ? selectedDonor?.email : false) ? "(requires a donor email)" : ""}
         </label>
       </section>
 
