@@ -110,6 +110,42 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
   }
 }
 
+/**
+ * TEMPORARY diagnostic reporter — see src/app/api/diagnostics/google-pay/route.ts
+ * for what's captured and why. Fire-and-forget: a failure to report must
+ * never surface to the donor or block the existing cancel/error handling.
+ * Extracts only the safe fields Google's PaymentsError already exposes
+ * (statusCode/statusMessage) plus config-presence booleans — never the
+ * actual merchant ID values, never anything from the payment attempt
+ * itself (no card data, token, or billing/contact info ever reaches this
+ * error object in the first place, since loadPaymentData rejects before
+ * returning any of that).
+ */
+export function reportGooglePayDiagnostic(err: unknown, config: { environment: string; merchantId?: string; gatewayMerchantId?: string }) {
+  try {
+    const asRecord = err && typeof err === "object" ? (err as Record<string, unknown>) : {};
+    const statusCode = typeof asRecord.statusCode === "string" ? asRecord.statusCode : undefined;
+    const statusMessage = typeof asRecord.statusMessage === "string" ? asRecord.statusMessage : undefined;
+    const payload = {
+      statusCode,
+      statusMessage,
+      environment: config.environment,
+      merchantIdConfigured: Boolean(config.merchantId),
+      gatewayMerchantIdConfigured: Boolean(config.gatewayMerchantId),
+      browserType: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 100) : undefined,
+      requestTimestamp: new Date().toISOString(),
+    };
+    void fetch("/api/diagnostics/google-pay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Never let diagnostic reporting itself break the donor's flow.
+  }
+}
+
 export interface GooglePayResult {
   walletToken: string;
   billingContact: {
