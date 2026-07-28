@@ -25,6 +25,7 @@ import {
   HandCoins,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import GatewayIcon from "@/components/ui/GatewayIcon";
 
 interface NavItem {
   name: string;
@@ -113,6 +114,18 @@ export default function Sidebar({ role }: { role?: string } = {}) {
         collapsed ? "w-20" : "w-64"
       )}
     >
+      <div className={cn("flex items-center mb-6 px-1", collapsed ? "justify-center" : "gap-2.5 px-2")}>
+        <Link href="/merchant/dashboard" className="flex items-center gap-2.5 shrink-0">
+          <GatewayIcon className="h-8 w-auto shrink-0" />
+          {!collapsed && (
+            <div className="flex flex-col leading-none">
+              <span className="font-serif text-base font-bold text-[#14213D]">WGC</span>
+              <span className="text-[9px] uppercase font-mono tracking-widest text-[#41506F] mt-0.5">Payments</span>
+            </div>
+          )}
+        </Link>
+      </div>
+
       <div className={cn("flex mb-4 px-1", collapsed ? "justify-center" : "justify-end")}>
         <button
           onClick={toggle}
