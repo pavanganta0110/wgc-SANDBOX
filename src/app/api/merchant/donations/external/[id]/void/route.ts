@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -17,7 +18,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const existing = await prisma.externalDonation.findFirst({ where: { id, churchId: auth.churchId } });
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
+  const existing = await prisma.externalDonation.findFirst({
+    where: { id, churchId: auth.churchId, ...(scopedUserId ? { createdByUserId: scopedUserId } : {}) },
+  });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.status === "VOIDED") {
     return NextResponse.json({ error: "This donation is already voided" }, { status: 400 });

@@ -9,6 +9,7 @@ import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
 import { classifySource, isExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import { findPossibleDuplicateExternalDonation } from "@/lib/donations/checkExternalDonationDuplicate";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 export async function GET(req: Request) {
   let auth;
@@ -23,10 +24,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const unmatchedOnly = searchParams.get("unmatched") === "true";
   const status = searchParams.get("status");
+  // FUNDRAISER/VIEWER (no canViewAllTransactions) only see donations they
+  // personally recorded — same rule as every other Payments/Donors list.
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
 
   const rows = await prisma.externalDonation.findMany({
     where: {
       churchId: auth.churchId,
+      ...(scopedUserId ? { createdByUserId: scopedUserId } : {}),
       ...(unmatchedOnly ? { donorMatchStatus: "UNMATCHED" } : {}),
       ...(status ? { status } : {}),
     },

@@ -7,6 +7,7 @@ import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 /**
  * Connects an Unmatched (or previously matched) external donation to a
@@ -25,7 +26,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const existing = await prisma.externalDonation.findFirst({ where: { id, churchId: auth.churchId } });
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
+  const existing = await prisma.externalDonation.findFirst({
+    where: { id, churchId: auth.churchId, ...(scopedUserId ? { createdByUserId: scopedUserId } : {}) },
+  });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   let body: any;
