@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "How Waypoint Gateway Collective collects, uses, and protects data across its payment infrastructure.",
   alternates: { canonical: "/legal/privacy" },
   openGraph: {
-    images: [{ url: "/og/default.png", width: 1200, height: 630 }], title: "Privacy Policy | WGC Payments", description: "How Waypoint Gateway Collective collects, uses, and protects data across its payment infrastructure.", url: "https://wgcpayments.com/legal/privacy" },
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }], title: "Privacy Policy | WGC Payments", description: "How Waypoint Gateway Collective collects, uses, and protects data across its payment infrastructure.", url: "https://www.wgcpayments.com/legal/privacy" },
 };
 
 export default function PrivacyPage() {

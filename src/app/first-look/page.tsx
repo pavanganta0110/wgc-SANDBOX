@@ -45,7 +45,7 @@ function Footer() {
     <footer className="w-full bg-[#14213D] text-[#FFFDF8] py-16 px-6 text-center border-t-4 border-[#C9992E]">
       <div className="max-w-4xl mx-auto flex flex-col items-center">
         <span className="font-serif text-2xl font-bold mb-2">Waypoint Gateway Collective</span>
-        <a href="https://wgcpayments.com" className="text-[#C9992E] hover:underline mb-8 font-mono text-sm">wgcpayments.com</a>
+        <a href="https://www.wgcpayments.com" className="text-[#C9992E] hover:underline mb-8 font-mono text-sm">wgcpayments.com</a>
         
         <p className="font-serif italic text-[#E8E0CF] text-lg">“Thus far the Lord has helped us.” — 1 Samuel 7:12</p>
       </div>

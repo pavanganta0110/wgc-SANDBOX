@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "Developer Docs & Payment APIs | WGC",
     description: "Integrate WGC's payment APIs with production-ready endpoints, authentication, and a familiar developer experience built for ministry software.",
-    url: "https://wgcpayments.com/developers",
+    url: "https://www.wgcpayments.com/developers",
   },
 };
 

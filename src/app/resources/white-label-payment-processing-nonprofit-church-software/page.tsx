@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "How to White-Label Payments for Nonprofit Software | WGC",
     description: "A step-by-step look at white-labeling payments inside nonprofit and church software, from gateway setup to settlement and compliance.",
-    url: "https://wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software",
+    url: "https://www.wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software",
   },
 };
 

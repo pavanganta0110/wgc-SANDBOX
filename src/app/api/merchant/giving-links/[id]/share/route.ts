@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Invalid share channel" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const publicUrl = `${appUrl}/g/${link.publicSlug}`;
   const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 

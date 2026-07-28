@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
     description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
-    url: "https://wgcpayments.com/resources/church-payment-processing-pricing-guide",
+    url: "https://www.wgcpayments.com/resources/church-payment-processing-pricing-guide",
   },
 };
 

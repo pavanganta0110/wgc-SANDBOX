@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: "In-depth guides on church and 501(c) payment processing: processor comparisons, fee breakdowns, and white-label implementation for nonprofit software.",
   alternates: { canonical: "/resources" },
   openGraph: {
-    images: [{ url: "/og/resources.png", width: 1200, height: 630 }], title: "WGC Research Center | Church & Nonprofit Payment Guides", description: "In-depth guides on church and 501(c) payment processing: processor comparisons, fee breakdowns, and white-label implementation for nonprofit software.", url: "https://wgcpayments.com/resources" },
+    images: [{ url: "/og/resources.png", width: 1200, height: 630 }], title: "WGC Research Center | Church & Nonprofit Payment Guides", description: "In-depth guides on church and 501(c) payment processing: processor comparisons, fee breakdowns, and white-label implementation for nonprofit software.", url: "https://www.wgcpayments.com/resources" },
 };
 
 const RESOURCES = [

@@ -4,7 +4,7 @@
 // organization, which previously appeared twice under two different spellings
 // ("Way Point Gateway Collective" and "Waypoint Gateway Collective (WGC)").
 
-export const SITE = "https://wgcpayments.com";
+export const SITE = "https://www.wgcpayments.com";
 export const ORG_ID = `${SITE}/#organization`;
 export const SITE_ID = `${SITE}/#website`;
 

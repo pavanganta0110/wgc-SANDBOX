@@ -45,7 +45,7 @@ export async function POST(req: Request) {
 
     // Always use the canonical app URL — never trust a request header,
     // which could be spoofed to construct a phishing link.
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
     const resetLink = `${appUrl}/admin/reset-password?token=${rawToken}`;
 
     await sendWgcEmail({

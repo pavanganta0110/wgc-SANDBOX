@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/kansas-city.png", width: 1200, height: 630 }],
     title: "Church Payment Processing in Kansas City | WGC",
     description: "WGC provides the most transparent and affordable church payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
-    url: "https://wgcpayments.com/kansas-city/church-payment-processing",
+    url: "https://www.wgcpayments.com/kansas-city/church-payment-processing",
   },
 };
 

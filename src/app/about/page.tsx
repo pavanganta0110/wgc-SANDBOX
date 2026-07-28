@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "About WGC | Why We Built Payments for Ministries",
     description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
-    url: "https://wgcpayments.com/about",
+    url: "https://www.wgcpayments.com/about",
   },
 };
 

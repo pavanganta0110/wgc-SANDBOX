@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/kansas-city.png", width: 1200, height: 630 }],
     title: "Tithe.ly Alternative for Kansas City Churches | WGC",
     description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration.",
-    url: "https://wgcpayments.com/kansas-city/tithely-alternative",
+    url: "https://www.wgcpayments.com/kansas-city/tithely-alternative",
   },
 };
 

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Donation Processing for Government-Affiliated Foundations & Public Programs",
     description: "Transparent reporting, low-cost ACH, and public-trust-ready accountability for government-affiliated charitable programs.",
-    url: "https://wgcpayments.com/for/government",
+    url: "https://www.wgcpayments.com/for/government",
   },
   alternates: { canonical: "/for/government" },
 };

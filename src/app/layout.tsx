@@ -19,7 +19,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://wgcpayments.com"),
+  metadataBase: new URL("https://www.wgcpayments.com"),
   title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
   description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
   robots: {
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
     type: "website",
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
-    url: "https://wgcpayments.com/",
+    url: "https://www.wgcpayments.com/",
   },
   twitter: {
     card: "summary_large_image",

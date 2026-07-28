@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "Best Payment Processor for Churches in 2026 | WGC",
     description: "A practical guide to choosing a church payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
-    url: "https://wgcpayments.com/resources/church-payment-processing-guide-2026",
+    url: "https://www.wgcpayments.com/resources/church-payment-processing-guide-2026",
   },
 };
 

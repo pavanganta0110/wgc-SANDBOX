@@ -30,7 +30,7 @@ export default function EmailPreviewPage() {
         bodyHtml: `<p>We need additional information to continue reviewing your WGC Payments account for <strong>${businessName}</strong>.</p>
                  <p><strong>Requested items:</strong><br/>• Government ID<br/>• Bank Statement</p>
                  <p>Please use the secure link below to submit the requested information.</p>
-                 <p><a href="https://wgcpayments.com/onboarding/update/dummy-token">Submit Required Information</a></p>`
+                 <p><a href="https://www.wgcpayments.com/onboarding/update/dummy-token">Submit Required Information</a></p>`
       })
     },
     {

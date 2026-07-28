@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE = "https://wgcpayments.com";
+const BASE = "https://www.wgcpayments.com";
 
 // Public, indexable routes only. Merchant, admin, onboarding, demo, embed and
 // per-org giving pages are deliberately excluded.

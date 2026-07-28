@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "Contact WGC | Talk to Our Payments Team",
     description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church, nonprofit, or other 501(c) organization software platform.",
-    url: "https://wgcpayments.com/contact",
+    url: "https://www.wgcpayments.com/contact",
   },
 };
 

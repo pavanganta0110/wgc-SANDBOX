@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "Embedded Payments for Ministry SaaS | WGC for Partners",
     description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches and nonprofits, with developer-ready APIs.",
-    url: "https://wgcpayments.com/software-partners",
+    url: "https://www.wgcpayments.com/software-partners",
   },
 };
 

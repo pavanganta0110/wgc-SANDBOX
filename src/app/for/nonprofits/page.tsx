@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Donation Processing for Nonprofits & 501(c) Organizations | WGC Payments",
     description: "Event ticketing, membership dues, matching-gift-ready donations, and a transparent dashboard for nonprofits and other 501(c) organizations.",
-    url: "https://wgcpayments.com/for/nonprofits",
+    url: "https://www.wgcpayments.com/for/nonprofits",
   },
   alternates: { canonical: "/for/nonprofits" },
 };

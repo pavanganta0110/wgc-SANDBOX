@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "School Fundraising & Tuition Assistance Payment Software | WGC Payments",
     description: "Accept annual fund gifts, tuition assistance donations, and capital campaign pledges online — built for private, religious, and nonprofit schools.",
-    url: "https://wgcpayments.com/for/schools",
+    url: "https://www.wgcpayments.com/for/schools",
   },
   alternates: { canonical: "/for/schools" },
 };

@@ -55,8 +55,8 @@ const jsonLd = {
           "unitText": "per organization per month"
         },
         "availability": "https://schema.org/InStock",
-        "url": "https://wgcpayments.com/pricing",
-        "seller": { "@id": "https://wgcpayments.com/#organization" }
+        "url": "https://www.wgcpayments.com/pricing",
+        "seller": { "@id": "https://www.wgcpayments.com/#organization" }
       }
     },
     {

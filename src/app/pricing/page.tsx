@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/pricing.png", width: 1200, height: 630 }],
     title: "Pricing | Transparent Church & Nonprofit Payment Rates",
     description: "Clear, competitive payment pricing built for ministries, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
-    url: "https://wgcpayments.com/pricing",
+    url: "https://www.wgcpayments.com/pricing",
   },
 };
 

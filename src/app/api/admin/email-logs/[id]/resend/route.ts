@@ -85,7 +85,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       data: { setPasswordTokenHash: tokenHash, setPasswordTokenExpiresAt: expiresAt },
     });
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
     const link = `${appUrl}/merchant/set-password/${rawToken}`;
     const copy = ACCOUNT_LINK_TYPES[log.type];
 

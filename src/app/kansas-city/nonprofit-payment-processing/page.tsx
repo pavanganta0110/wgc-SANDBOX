@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/kansas-city.png", width: 1200, height: 630 }],
     title: "Nonprofit Payment Processing in Kansas City, MO | WGC",
     description: "Secure, low-cost nonprofit payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
-    url: "https://wgcpayments.com/kansas-city/nonprofit-payment-processing",
+    url: "https://www.wgcpayments.com/kansas-city/nonprofit-payment-processing",
   },
 };
 

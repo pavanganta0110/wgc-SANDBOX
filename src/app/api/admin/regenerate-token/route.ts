@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       }
     });
 
-    const secureLink = `https://wgcpayments.com/onboarding/update/${rawToken}`;
+    const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
     const safeOrgName = app.organizationName || "your organization";
 
     let requestedItemsStr = app.updateRequestedItems || "Additional documentation is required to verify your business and identity.";

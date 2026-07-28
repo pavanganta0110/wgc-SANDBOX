@@ -287,7 +287,7 @@ export async function syncFinixDataFromWebhookEvent(
         title: "Recurring Payment Failed",
         badgeText: "Action May Be Required",
         badgeColor: "#DC2626",
-        bodyHtml: `<p>A scheduled recurring donation payment failed to process${data.failure_message ? `: ${data.failure_message}` : "."}</p><p><a href="https://wgcpayments.com/merchant/subscriptions">View subscriptions</a></p>`,
+        bodyHtml: `<p>A scheduled recurring donation payment failed to process${data.failure_message ? `: ${data.failure_message}` : "."}</p><p><a href="https://www.wgcpayments.com/merchant/subscriptions">View subscriptions</a></p>`,
       });
     }
 
@@ -595,7 +595,7 @@ export async function syncFinixDataFromWebhookEvent(
         title: "New Dispute Opened",
         badgeText: "Action May Be Required",
         badgeColor: "#DC2626",
-        bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://wgcpayments.com/merchant/disputes">View disputes</a></p>`,
+        bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://www.wgcpayments.com/merchant/disputes">View disputes</a></p>`,
       });
     }
     return;
@@ -672,7 +672,7 @@ export async function syncFinixDataFromWebhookEvent(
         title: "Settlement Funded",
         badgeText: "Funds Deposited",
         badgeColor: "#059669",
-        bodyHtml: `<p>A settlement batch has been funded to your bank account.</p><p><a href="https://wgcpayments.com/merchant/settlements">View settlements</a></p>`,
+        bodyHtml: `<p>A settlement batch has been funded to your bank account.</p><p><a href="https://www.wgcpayments.com/merchant/settlements">View settlements</a></p>`,
       });
     }
     return;
@@ -1341,7 +1341,7 @@ export async function POST(req: Request) {
             newStatus: "APPROVED",
             whatHappened: "Finix approved the merchant onboarding application.",
             actionNeeded: "None.",
-            adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
           });
 
           // Provision the Church row + church_admin User account and send
@@ -1392,7 +1392,7 @@ export async function POST(req: Request) {
               }
             }
 
-            const secureLink = `https://wgcpayments.com/onboarding/update/${rawToken}`;
+            const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
 
             await sendWebhookEmail(
               app.id,
@@ -1415,7 +1415,7 @@ export async function POST(req: Request) {
               newStatus: "MORE_INFORMATION_REQUIRED",
               whatHappened: "Finix requested additional information or documents for the merchant.",
               actionNeeded: "Merchant has been sent a secure upload link.",
-              adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+              adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
             });
           }
         } else if (onboardingState === "REJECTED" || status === "REJECTED" || status === "FAILED") {
@@ -1445,7 +1445,7 @@ export async function POST(req: Request) {
             newStatus: "REJECTED",
             whatHappened: "Finix rejected the merchant onboarding application.",
             actionNeeded: "Review rejection reason in Finix. Contact merchant if needed.",
-            adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
           });
         }
       } else if (eventType === "verification.created") {
@@ -1494,7 +1494,7 @@ export async function POST(req: Request) {
         newStatus: "WEBHOOK_FAILED",
         whatHappened: `Failed to process webhook event: ${eventType} (${eventId})`,
         actionNeeded: `Check logs. Error: ${processError.message}`,
-        adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+        adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
       });
 
       throw processError;

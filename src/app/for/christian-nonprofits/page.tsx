@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Donation Software for Missions Organizations & Christian Nonprofits",
     description: "Field-worker support, sponsorship-style giving, and international donor payments for missions organizations and Christian nonprofits.",
-    url: "https://wgcpayments.com/for/christian-nonprofits",
+    url: "https://www.wgcpayments.com/for/christian-nonprofits",
   },
   alternates: { canonical: "/for/christian-nonprofits" },
 };
