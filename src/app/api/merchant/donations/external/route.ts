@@ -10,6 +10,7 @@ import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
 import { classifySource, isExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import { findPossibleDuplicateExternalDonation } from "@/lib/donations/checkExternalDonationDuplicate";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
+import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 
 export async function GET(req: Request) {
   let auth;
@@ -69,6 +70,7 @@ export async function POST(req: Request) {
     donorName,
     donorEmail,
     donorPhone,
+    donorAddress,
     fundId,
     fundName,
     campaign,
@@ -147,6 +149,29 @@ export async function POST(req: Request) {
     });
     donorId = resolved.id;
     donorMatchStatus = "MATCHED";
+
+    if (donorAddress && typeof donorAddress === "object") {
+      const cleaned = cleanAddressInput(donorAddress);
+      if (hasAnyAddressField(cleaned)) {
+        const source = isAddressSource(donorAddress.source) ? donorAddress.source : "EXTERNAL_DONATION";
+        await applyDonorAddressUpdate({
+          donorId,
+          churchId: auth.churchId,
+          newAddress: cleaned,
+          source,
+          enteredByDonor: false,
+          actorUserId: auth.userId,
+          actorEmail: auth.email,
+          actorRole: auth.role,
+          req,
+        });
+        // A needs_confirmation result (donor already had a different
+        // address) is not treated as an error here — the donation still
+        // records; the merchant can resolve the address conflict from the
+        // donor's own profile afterward, per the non-destructive-overwrite
+        // rule.
+      }
+    }
   } else {
     // "unmatched" or omitted — money received, donor unknown for now.
     donorMatchStatus = "UNMATCHED";

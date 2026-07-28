@@ -424,6 +424,11 @@ model Church {
   embedDomainRestrictionEnabled Boolean @default(false)
   embedAllowedDomainsJson       Json?
 
+  // Seeds GivingLink.collectMailingAddress when a merchant creates a NEW
+  // giving link — this only affects new links going forward, never an
+  // existing link's already-set value.
+  defaultCollectMailingAddressOnNewLinks Boolean @default(true)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -722,6 +727,23 @@ model Donor {
   state               String?
   postalCode          String?
   country             String?
+  // How this address was obtained — ONLINE_DONATION_FORM |
+  // MERCHANT_MANUAL_ENTRY | EXTERNAL_DONATION | DONOR_PORTAL | CRM_IMPORT |
+  // CSV_IMPORT | DONATION_ENVELOPE | CHECK | PLEDGE_FORM |
+  // EXISTING_ORGANIZATION_RECORD | OTHER. Merchant-facing only — never
+  // shown on a donor receipt or statement.
+  addressSource            String?
+  // UNVERIFIED | CONFIRMED_BY_DONOR | CONFIRMED_BY_ORG. Never set to a
+  // confirmed value merely because the address passed format validation —
+  // only an explicit donor submission or merchant confirmation action sets
+  // this away from UNVERIFIED.
+  addressVerified          String    @default("UNVERIFIED")
+  lastAddressConfirmedAt   DateTime?
+  // Set automatically whenever any address field changes — distinct from
+  // the row-level `updatedAt` so "when did the mailing address last change"
+  // survives edits to unrelated donor fields (name, phone, notes, etc.).
+  addressUpdatedAt         DateTime?
+  addressUpdatedByUserId   String?
   companyName         String?
   // Donor-level display preference, distinct from Payment.isAnonymous
   // (a per-payment flag) — this is "always show this donor as anonymous."
@@ -1825,6 +1847,12 @@ model GivingLink {
   allowedFrequenciesJson    Json?
   allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
   donorFieldSettingsJson    Json?
+  // Shows the collapsed "Add mailing address (optional)" accordion on this
+  // link's public giving page when true. Per-link, not organization-wide —
+  // seeded from Church.defaultCollectMailingAddressOnNewLinks at creation
+  // time, then independently editable per link. Never affects any other
+  // giving link when changed.
+  collectMailingAddress     Boolean   @default(true)
   feeCoverEnabled           Boolean   @default(true)
   feeCoverDefaultOn         Boolean   @default(true)
   receiptSettingsJson       Json?

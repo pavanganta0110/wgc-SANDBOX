@@ -74,6 +74,7 @@ interface BuilderState {
   fundSelectionEnabled: boolean;
   allowedPaymentMethods: PaymentMethodKey[];
   donorFieldSettings: DonorFieldSettings;
+  collectMailingAddress: boolean;
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
   recurringEnabled: boolean;
@@ -108,6 +109,7 @@ function defaultState(): BuilderState {
     fundSelectionEnabled: false,
     allowedPaymentMethods: ["CARD"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
+    collectMailingAddress: true,
     feeCoverEnabled: true,
     feeCoverDefaultOn: true,
     recurringEnabled: false,
@@ -520,6 +522,7 @@ export default function GivingLinkBuilderForm({
       allowedFrequencies: state.allowedFrequencies,
       allowedPaymentMethods: state.allowedPaymentMethods,
       donorFieldSettings: state.donorFieldSettings,
+      collectMailingAddress: state.collectMailingAddress,
       feeCoverEnabled: state.feeCoverEnabled,
       feeCoverDefaultOn: state.feeCoverDefaultOn,
       receiptSettings: state.receiptSettings,
@@ -893,6 +896,13 @@ export default function GivingLinkBuilderForm({
           </Section>
 
           <Section title="Donor Details" defaultOpen={false}>
+            <label className="flex items-center gap-2 text-sm text-slate-700 mb-3">
+              <input type="checkbox" checked={state.collectMailingAddress} onChange={(e) => update("collectMailingAddress", e.target.checked)} />
+              Include optional mailing-address section
+            </label>
+            <p className="text-xs text-slate-400 mb-3 -mt-2">
+              Shows a collapsed "Add mailing address (optional)" section on this link's giving page. Donors are never required to open or complete it.
+            </p>
             <div className="space-y-2">
               {DONOR_FIELDS.map((field) => (
                 <div key={field} className="flex items-center justify-between gap-2">
@@ -1167,6 +1177,7 @@ export default function GivingLinkBuilderForm({
             feeCoverEnabled={state.feeCoverEnabled}
             feeCoverDefaultOn={state.feeCoverDefaultOn}
             donorFieldSettings={state.donorFieldSettings}
+            collectMailingAddress={state.collectMailingAddress}
             pricing={pricing}
             thankYouMessage={state.receiptSettings.customMessage || "Thank you for your gift!"}
             campaignImageUrl={state.branding.campaignImageUrl || undefined}

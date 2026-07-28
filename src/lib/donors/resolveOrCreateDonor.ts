@@ -31,6 +31,13 @@ export interface DonorResolutionInput {
   postalCode?: string | null;
   country?: string | null;
   companyName?: string | null;
+  /** Only meaningful alongside an address field above — how the address
+   * was obtained (e.g. "CSV_IMPORT"). Ignored if no address field is set. */
+  addressSource?: string | null;
+  /** ISO date string — when the imported/provided address was already
+   * confirmed by the source system, if known. Never set from format
+   * validation alone. */
+  addressConfirmedDate?: string | null;
 }
 
 /**
@@ -79,6 +86,8 @@ export async function resolveOrCreateDonor(input: DonorResolutionInput): Promise
     postalCode: input.postalCode,
     country: input.country,
     companyName: input.companyName,
+    addressSource: input.addressSource,
+    addressConfirmedDate: input.addressConfirmedDate,
   };
 
   const existing = await findExistingDonor(churchId, input.finixIdentityId, normalizedEmail, normalizedPhone);
@@ -104,6 +113,14 @@ export async function resolveOrCreateDonor(input: DonorResolutionInput): Promise
         postalCode: input.postalCode || null,
         country: input.country || null,
         companyName: input.companyName || null,
+        ...(input.addressLine1
+          ? {
+              addressSource: input.addressSource || null,
+              addressVerified: input.addressConfirmedDate ? "CONFIRMED_BY_ORG" : "UNVERIFIED",
+              lastAddressConfirmedAt: input.addressConfirmedDate ? new Date(input.addressConfirmedDate) : null,
+              addressUpdatedAt: new Date(),
+            }
+          : {}),
       },
     });
     return { id: created.id, created: true, updated: false };
@@ -160,7 +177,11 @@ interface ProfileUpdateInput {
   postalCode?: string | null;
   country?: string | null;
   companyName?: string | null;
+  addressSource?: string | null;
+  addressConfirmedDate?: string | null;
 }
+
+const ADDRESS_FIELDS_FOR_BACKFILL = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"] as const;
 
 const FILL_WHEN_EMPTY_FIELDS = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country", "companyName"] as const;
 
@@ -199,10 +220,23 @@ async function applyProfileUpdates(
   if (!existing.finixIdentityId && update.finixIdentityId) {
     data.finixIdentityId = update.finixIdentityId;
   }
+  let addressFieldFilled = false;
   for (const field of FILL_WHEN_EMPTY_FIELDS) {
     if (!existing[field] && update[field]) {
       data[field] = update[field];
+      if ((ADDRESS_FIELDS_FOR_BACKFILL as readonly string[]).includes(field)) addressFieldFilled = true;
     }
+  }
+  // Address metadata only ever gets set here when addressLine1 itself was
+  // actually empty and just got backfilled — an existing populated address
+  // (confirmed or not) is never touched by this fill-when-empty path,
+  // which is exactly the "do not overwrite a confirmed address" rule for
+  // CSV/CRM import.
+  if (addressFieldFilled && !existing.addressLine1 && data.addressLine1) {
+    data.addressSource = update.addressSource || null;
+    data.addressVerified = update.addressConfirmedDate ? "CONFIRMED_BY_ORG" : "UNVERIFIED";
+    data.lastAddressConfirmedAt = update.addressConfirmedDate ? new Date(update.addressConfirmedDate) : null;
+    data.addressUpdatedAt = new Date();
   }
 
   if (Object.keys(data).length === 0) return { id: existing.id, changed: false };

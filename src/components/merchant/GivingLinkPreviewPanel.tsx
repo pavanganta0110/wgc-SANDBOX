@@ -23,6 +23,7 @@ export default function GivingLinkPreviewPanel({
   feeCoverEnabled,
   feeCoverDefaultOn,
   donorFieldSettings,
+  collectMailingAddress = true,
   pricing,
   thankYouMessage,
   campaignImageUrl,
@@ -48,6 +49,7 @@ export default function GivingLinkPreviewPanel({
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
   donorFieldSettings: DonorFieldSettings;
+  collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
   campaignImageUrl?: string;
@@ -178,6 +180,7 @@ export default function GivingLinkPreviewPanel({
                 feeCoverEnabled={feeCoverEnabled}
                 feeCoverDefaultOn={feeCoverDefaultOn}
                 donorFieldSettings={donorFieldSettings}
+                collectMailingAddress={collectMailingAddress}
                 pricing={pricing}
                 thankYouMessage={thankYouMessage}
                 googlePayGatewayMerchantId={null}

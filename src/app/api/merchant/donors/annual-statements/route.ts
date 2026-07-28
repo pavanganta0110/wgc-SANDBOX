@@ -6,6 +6,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { computeAddressStatus } from "@/lib/donors/donorAddress";
 
 export async function GET(req: Request) {
   let auth;
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
   const nameQuery = searchParams.get("name") || undefined;
   const missingOnly = searchParams.get("missing") === "1";
   const minAmount = searchParams.get("minAmount") ? Math.round(parseFloat(searchParams.get("minAmount")!) * 100) : undefined;
+  const addressStatus = searchParams.get("addressStatus") || undefined;
 
   const eligible = await findEligibleDonorsForYear(auth.churchId, taxYear);
   const donorIds = eligible.map((e) => e.donorId);
@@ -44,10 +46,13 @@ export async function GET(req: Request) {
     const statement = statementByDonor.get(donor.id) ?? null;
     const name = donor.anonymousPreference ? "Anonymous Donor" : formatPersonName(donor.name);
     const hasMissingInfo = hasMissingStatementInfo(donor, name, donor.anonymousPreference);
+    const addressStatusValue = computeAddressStatus(donor);
     return {
       donorId: donor.id,
       donorName: name,
       donorEmail: donor.email,
+      addressStatus: addressStatusValue,
+      readyToMail: addressStatusValue !== "MISSING",
       donationCount: eligibility.donationCount,
       grossDonatedCents: statement?.grossDonatedCents ?? null,
       refundedAmountCents: statement?.refundedAmountCents ?? null,
@@ -68,6 +73,7 @@ export async function GET(req: Request) {
   if (nameQuery) rows = rows.filter((r) => r.donorName.toLowerCase().includes(nameQuery.toLowerCase()));
   if (missingOnly) rows = rows.filter((r) => r.hasMissingInfo);
   if (minAmount != null) rows = rows.filter((r) => r.recordedTotalCents >= minAmount);
+  if (addressStatus) rows = rows.filter((r) => r.addressStatus === addressStatus);
 
   const summary = {
     eligibleDonors: donors.length,
@@ -77,6 +83,8 @@ export async function GET(req: Request) {
     missingEmail: rows.filter((r) => !r.donorEmail || !isValidEmail(r.donorEmail)).length,
     failedDelivery: rows.filter((r) => r.deliveryStatus === "FAILED").length,
     totalRecordedDonationsCents: rows.reduce((s, r) => s + r.recordedTotalCents, 0),
+    readyToMail: rows.filter((r) => r.readyToMail).length,
+    missingMailingAddress: rows.filter((r) => r.addressStatus === "MISSING").length,
   };
 
   return NextResponse.json({ taxYear, rows, summary });

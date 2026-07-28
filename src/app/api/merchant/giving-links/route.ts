@@ -75,6 +75,7 @@ export async function POST(req: Request) {
     allowedFrequencies,
     allowedPaymentMethods,
     donorFieldSettings,
+    collectMailingAddress,
     feeCoverEnabled,
     feeCoverDefaultOn,
     receiptSettings,
@@ -148,6 +149,15 @@ export async function POST(req: Request) {
     }
   }
 
+  // Seeds from the organization-level default only when the caller didn't
+  // explicitly pass a value — after creation this is fully independent per
+  // link (changing the org default never touches an existing link).
+  let resolvedCollectMailingAddress = typeof collectMailingAddress === "boolean" ? collectMailingAddress : true;
+  if (typeof collectMailingAddress !== "boolean") {
+    const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { defaultCollectMailingAddressOnNewLinks: true } });
+    resolvedCollectMailingAddress = church?.defaultCollectMailingAddressOnNewLinks ?? true;
+  }
+
   let publicSlug = generatePublicSlug();
   for (let attempt = 0; attempt < 5; attempt++) {
     const existing = await prisma.givingLink.findUnique({ where: { publicSlug } });
@@ -179,6 +189,7 @@ export async function POST(req: Request) {
       allowedFrequenciesJson: Array.isArray(allowedFrequencies) ? allowedFrequencies : ["MONTHLY"],
       allowedPaymentMethodsJson: methods,
       donorFieldSettingsJson: donorFieldSettings || DEFAULT_DONOR_FIELD_SETTINGS,
+      collectMailingAddress: resolvedCollectMailingAddress,
       feeCoverEnabled: feeCoverEnabled ?? true,
       feeCoverDefaultOn: feeCoverDefaultOn ?? true,
       receiptSettingsJson: receiptSettings || null,
