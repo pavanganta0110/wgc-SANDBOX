@@ -79,7 +79,12 @@ export type PermissionKey =
   | "canVoidExternalDonation"
   | "canSendExternalDonationReceipt"
   | "canViewExternalDonationProof"
-  | "canMatchExternalDonationToDonor";
+  | "canMatchExternalDonationToDonor"
+  | "canViewDonorAddress"
+  | "canEditDonorAddress"
+  | "canExportDonorAddress"
+  | "canConfirmDonorAddress"
+  | "canViewAddressAuditHistory";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -107,6 +112,11 @@ const ALL_FALSE: PermissionMatrix = {
   canSendExternalDonationReceipt: false,
   canViewExternalDonationProof: false,
   canMatchExternalDonationToDonor: false,
+  canViewDonorAddress: false,
+  canEditDonorAddress: false,
+  canExportDonorAddress: false,
+  canConfirmDonorAddress: false,
+  canViewAddressAuditHistory: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -136,6 +146,11 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canSendExternalDonationReceipt: true,
     canViewExternalDonationProof: true,
     canMatchExternalDonationToDonor: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -156,6 +171,11 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditExternalDonation: true,
     canSendExternalDonationReceipt: true,
     canMatchExternalDonationToDonor: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and
@@ -172,6 +192,13 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewDonors: true, // scope-limited to donors tied to their attributed payments; see buildGivingLinkScope/buildPaymentScope
     canCreateExternalDonation: true, // fundraisers are the ones recording cash/checks received in person
     canMatchExternalDonationToDonor: true,
+    // Address view/edit follow the same donor-scoping rule as canViewDonors
+    // (limited to donors tied to their attributed payments) — a fundraiser
+    // regularly collects a mailing address while recording a gift in
+    // person, but export/confirm/audit-history are left owner/admin-only
+    // by default, override-able.
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,

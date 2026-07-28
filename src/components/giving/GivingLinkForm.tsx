@@ -12,8 +12,16 @@ import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSe
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
+import { trackMetaEvent } from "@/components/common/MetaPixel";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
+
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
+  "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM",
+  "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
+  "WV", "WI", "WY",
+];
 // This holds the Finix Identity ID (starts "ID...") that Apple Pay's
 // merchant validation is actually performed against server-side — see
 // FINIX_APPLICATION_OWNER_ID in validate-merchant/route.ts, which must
@@ -69,6 +77,7 @@ export default function GivingLinkForm({
   feeCoverEnabled,
   feeCoverDefaultOn,
   donorFieldSettings,
+  collectMailingAddress = true,
   pricing,
   thankYouMessage,
   googlePayGatewayMerchantId,
@@ -97,6 +106,8 @@ export default function GivingLinkForm({
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
   donorFieldSettings: DonorFieldSettings;
+  /** Shows the collapsed "Add mailing address (optional)" accordion when true. Defaults to true so a page rendered from stale/incomplete config still shows it — the actual default lives on GivingLink.collectMailingAddress. */
+  collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
   /** Finix Application Owner Identity ID ("ID..."), used as Google Pay's gatewayMerchantId. Null when not configured. */
@@ -143,6 +154,34 @@ export default function GivingLinkForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  // Mailing address — collapsed by default, never required. Values persist
+  // across close/reopen (plain component state, not reset on toggle) per
+  // spec ("preserve entered address information if the donor closes and
+  // reopens the section").
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [addressOpenedOnce, setAddressOpenedOnce] = useState(false);
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressPostalCode, setAddressPostalCode] = useState("");
+  const [addressCountry, setAddressCountry] = useState("US");
+  const [saveAddress, setSaveAddress] = useState(false);
+  // Only sent — and only ever persisted — when the donor both filled it in
+  // AND checked "Save this as my mailing address." Per spec, an address
+  // entered without the checkbox is never stored as the donor's permanent
+  // mailing address.
+  const mailingAddressPayload =
+    saveAddress && addressLine1.trim()
+      ? {
+          addressLine1: addressLine1.trim(),
+          addressLine2: addressLine2.trim() || undefined,
+          city: addressCity.trim() || undefined,
+          state: addressState.trim() || undefined,
+          postalCode: addressPostalCode.trim() || undefined,
+          country: addressCountry.trim() || undefined,
+        }
+      : undefined;
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formReady, setFormReady] = useState(false);
@@ -164,6 +203,30 @@ export default function GivingLinkForm({
     onResult?.(result);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
+
+  // Privacy-safe interaction tracking only — never the donor's actual
+  // street address, city, ZIP, or any other address value.
+  useEffect(() => {
+    if (collectMailingAddress && !previewMode) trackMetaEvent("MailingAddressSectionDisplayed");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (addressOpen && !addressOpenedOnce) {
+      setAddressOpenedOnce(true);
+      if (!previewMode) trackMetaEvent("MailingAddressSectionOpened");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressOpen]);
+
+  const [addressCompletedTracked, setAddressCompletedTracked] = useState(false);
+  useEffect(() => {
+    if (mailingAddressPayload && !addressCompletedTracked) {
+      setAddressCompletedTracked(true);
+      if (!previewMode) trackMetaEvent("MailingAddressSectionCompleted");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mailingAddressPayload]);
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const cardBankMethods = allowedPaymentMethods.filter((m) => m === "CARD" || m === "BANK");
@@ -277,6 +340,7 @@ export default function GivingLinkForm({
             note: note.trim() || undefined,
             isAnonymous,
           },
+          mailingAddress: mailingAddressPayload,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -702,6 +766,7 @@ export default function GivingLinkForm({
                 note: note.trim() || undefined,
                 isAnonymous,
               },
+              mailingAddress: mailingAddressPayload,
             }),
           });
 
@@ -1007,6 +1072,96 @@ export default function GivingLinkForm({
             style={{ borderColor: light.borderColor }}
           />
         </div>
+        {collectMailingAddress && (
+          <div className="mb-3 rounded-lg border" style={{ borderColor: light.borderColor }}>
+            <button
+              type="button"
+              onClick={() => setAddressOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+              style={{ color: light.bodyTextColor }}
+              aria-expanded={addressOpen}
+            >
+              <span>Add mailing address (optional)</span>
+              <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
+                ▾
+              </span>
+            </button>
+            {addressOpen && (
+              <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: light.borderColor }}>
+                <p className="text-xs" style={{ color: light.bodyTextColor, opacity: 0.7 }}>
+                  Used for mailed receipts and annual giving statements.
+                </p>
+                <input
+                  placeholder="Address line 1"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                />
+                <input
+                  placeholder="Address line 2 (optional)"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    placeholder="City"
+                    value={addressCity}
+                    onChange={(e) => setAddressCity(e.target.value)}
+                    className="px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ borderColor: light.borderColor }}
+                  />
+                  {addressCountry === "US" ? (
+                    <select
+                      value={addressState}
+                      onChange={(e) => setAddressState(e.target.value)}
+                      className="px-3 py-2 rounded-lg border text-sm outline-none"
+                      style={{ borderColor: light.borderColor }}
+                    >
+                      <option value="">State</option>
+                      {US_STATES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      placeholder="State / Province"
+                      value={addressState}
+                      onChange={(e) => setAddressState(e.target.value)}
+                      className="px-3 py-2 rounded-lg border text-sm outline-none"
+                      style={{ borderColor: light.borderColor }}
+                    />
+                  )}
+                  <input
+                    placeholder={addressCountry === "US" ? "ZIP code" : "Postal code"}
+                    value={addressPostalCode}
+                    onChange={(e) => setAddressPostalCode(e.target.value)}
+                    className="px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ borderColor: light.borderColor }}
+                  />
+                </div>
+                <select
+                  value={addressCountry}
+                  onChange={(e) => setAddressCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                >
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
+                  <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
+                  Save this as my mailing address for receipts and annual statements
+                </label>
+              </div>
+            )}
+          </div>
+        )}
         {isFieldVisible("donorNote") && (
           <input
             placeholder="Note (optional)"

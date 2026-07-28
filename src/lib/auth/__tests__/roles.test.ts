@@ -76,4 +76,27 @@ describe("ROLE_PERMISSIONS matrix", () => {
     expect(f.canViewAsUser).toBe(false);
     expect(f.canViewAllTransactions).toBe(false);
   });
+
+  it("donor address permissions: OWNER full access, ADMIN full access, FUNDRAISER view/edit only (scoped), VIEWER none by default", () => {
+    expect(ROLE_PERMISSIONS.owner.canViewDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.owner.canEditDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.owner.canExportDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.owner.canConfirmDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.owner.canViewAddressAuditHistory).toBe(true);
+
+    expect(ROLE_PERMISSIONS.admin.canViewDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.admin.canEditDonorAddress).toBe(true);
+
+    expect(ROLE_PERMISSIONS.fundraiser.canViewDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.fundraiser.canEditDonorAddress).toBe(true);
+    expect(ROLE_PERMISSIONS.fundraiser.canExportDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.fundraiser.canConfirmDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.fundraiser.canViewAddressAuditHistory).toBe(false);
+
+    expect(ROLE_PERMISSIONS.viewer.canViewDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.viewer.canEditDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.viewer.canExportDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.viewer.canConfirmDonorAddress).toBe(false);
+    expect(ROLE_PERMISSIONS.viewer.canViewAddressAuditHistory).toBe(false);
+  });
 });

@@ -38,6 +38,7 @@ export async function GET(req: Request) {
       givingTermsUrl: church.givingTermsUrl,
       givingPrivacyUrl: church.givingPrivacyUrl,
       givingSupportEmail: church.givingSupportEmail,
+      defaultCollectMailingAddressOnNewLinks: church.defaultCollectMailingAddressOnNewLinks,
     },
     givingLinks,
   });
@@ -74,6 +75,11 @@ export async function PATCH(req: Request) {
     const email = normalizeWhitespace(body.givingSupportEmail);
     if (email && !isValidEmail(email)) errors.givingSupportEmail = "Please enter a valid email address";
     else data.givingSupportEmail = email;
+  }
+  // Seeds new giving links' collectMailingAddress going forward only — never
+  // touches an already-created link (see /api/merchant/giving-links POST).
+  if ("defaultCollectMailingAddressOnNewLinks" in body) {
+    data.defaultCollectMailingAddressOnNewLinks = body.defaultCollectMailingAddressOnNewLinks === true;
   }
 
   if (Object.keys(errors).length > 0) {

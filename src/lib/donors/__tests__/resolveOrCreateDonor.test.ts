@@ -88,6 +88,20 @@ describe("resolveOrCreateDonor — canonical identity", () => {
     expect(third.id).toBe(first.id);
   });
 
+  it("never merges two donors just because they share a mailing address — a household can have multiple distinct donors", async () => {
+    const prismaMock = makePrismaMock();
+    const { resolveOrCreateDonor } = await loadModule(prismaMock);
+    const sharedAddress = { addressLine1: "1 Family Ln", city: "Springfield", state: "IL", postalCode: "62704", country: "US" };
+
+    const husband = await resolveOrCreateDonor({ churchId: "church-a", email: "husband@example.com", name: "John Doe", finixIdentityId: "ID_1", ...sharedAddress });
+    const wife = await resolveOrCreateDonor({ churchId: "church-a", email: "wife@example.com", name: "Jane Doe", finixIdentityId: "ID_2", ...sharedAddress });
+
+    expect(husband.created).toBe(true);
+    expect(wife.created).toBe(true);
+    expect(husband.id).not.toBe(wife.id);
+    expect(prismaMock.__donors.filter((d) => d.churchId === "church-a")).toHaveLength(2);
+  });
+
   it("leading/trailing spaces are ignored", async () => {
     const prismaMock = makePrismaMock();
     const { resolveOrCreateDonor } = await loadModule(prismaMock);

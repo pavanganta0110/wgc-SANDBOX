@@ -22,6 +22,9 @@ const HEADER_ALIASES: Record<string, keyof ImportRowInput> = {
   company: "companyName",
   "company name": "companyName",
   organization: "companyName",
+  "address source": "addressSource",
+  "address confirmed date": "addressConfirmedDate",
+  "address confirmed": "addressConfirmedDate",
 };
 
 export interface ImportRowInput {
@@ -35,6 +38,8 @@ export interface ImportRowInput {
   postalCode: string | null;
   country: string | null;
   companyName: string | null;
+  addressSource: string | null;
+  addressConfirmedDate: string | null;
 }
 
 export interface ImportRowResult {
@@ -125,6 +130,8 @@ export function mapCsvRow(headers: string[], row: string[]): ImportRowInput {
     postalCode: null,
     country: null,
     companyName: null,
+    addressSource: null,
+    addressConfirmedDate: null,
   };
   headers.forEach((rawHeader, i) => {
     const key = HEADER_ALIASES[rawHeader.trim().toLowerCase()];
@@ -134,12 +141,20 @@ export function mapCsvRow(headers: string[], row: string[]): ImportRowInput {
   return input;
 }
 
+const VALID_IMPORT_ADDRESS_SOURCES = new Set(["CRM_IMPORT", "CSV_IMPORT", "EXISTING_ORGANIZATION_RECORD", "OTHER"]);
+
 export function validateImportRowInput(input: ImportRowInput): string[] {
   const errors: string[] = [];
   if (!input.name && !input.companyName) errors.push("Missing donor name");
   if (input.email && !isValidEmail(input.email)) errors.push("Invalid email");
   if (input.phone && !isValidPhone(input.phone)) errors.push("Invalid phone number");
   if (!input.email && !input.phone) errors.push("At least one of email or phone is required");
+  if (input.addressSource && !VALID_IMPORT_ADDRESS_SOURCES.has(input.addressSource.toUpperCase())) {
+    errors.push("Invalid address source (use CSV_IMPORT, CRM_IMPORT, EXISTING_ORGANIZATION_RECORD, or OTHER)");
+  }
+  if (input.addressConfirmedDate && Number.isNaN(Date.parse(input.addressConfirmedDate))) {
+    errors.push("Invalid address confirmed date");
+  }
   return errors;
 }
 

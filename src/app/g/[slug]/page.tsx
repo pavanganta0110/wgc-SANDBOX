@@ -66,6 +66,7 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           feeCoverEnabled={link.feeCoverEnabled}
           feeCoverDefaultOn={link.feeCoverDefaultOn}
           donorFieldSettings={donorFieldSettings}
+          collectMailingAddress={link.collectMailingAddress}
           pricing={pricing}
           thankYouMessage={branding.thankYouMessage}
           googlePayGatewayMerchantId={googlePayGatewayMerchantId}

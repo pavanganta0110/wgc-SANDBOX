@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
@@ -10,6 +10,8 @@ import {
   type ExternalPaymentMethod,
 } from "@/lib/donations/externalDonationTypes";
 import DonorPicker from "@/components/merchant/DonorPicker";
+import DonorMailingAddressSection, { EMPTY_DONOR_ADDRESS, type DonorAddressValue } from "@/components/merchant/DonorMailingAddressSection";
+import type { AddressSource } from "@/lib/donors/donorAddress";
 
 type DonorMode = "existing" | "new" | "anonymous" | "unmatched";
 interface DonorHit {
@@ -17,6 +19,15 @@ interface DonorHit {
   name: string | null;
   email: string | null;
   phone: string | null;
+}
+
+/** Per spec: cash suggests an envelope, a check is a check, everything else
+ * defaults to staff manually asking/typing it in — the merchant can always
+ * override via the section's own source dropdown. */
+function defaultAddressSourceForMethod(method: ExternalPaymentMethod): AddressSource {
+  if (method === "CASH") return "DONATION_ENVELOPE";
+  if (method === "CHECK") return "CHECK";
+  return "MERCHANT_MANUAL_ENTRY";
 }
 
 function todayISO() {
@@ -37,6 +48,8 @@ export default function RecordExternalDonationForm() {
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [donorPhone, setDonorPhone] = useState("");
+  const [donorAddress, setDonorAddress] = useState<DonorAddressValue>(EMPTY_DONOR_ADDRESS);
+  const [existingDonorAddress, setExistingDonorAddress] = useState<{ addressLine1: string | null; city: string | null; state: string | null; postalCode: string | null } | null | undefined>(undefined);
 
   const [includeInAnnualStatement, setIncludeInAnnualStatement] = useState(true);
   const [sendReceipt, setSendReceipt] = useState(false);
@@ -74,6 +87,29 @@ export default function RecordExternalDonationForm() {
   const isBankTransfer = paymentMethod === "BANK_TRANSFER";
   const isCash = paymentMethod === "CASH";
 
+  useEffect(() => {
+    setDonorAddress((prev) => ({ ...prev, source: defaultAddressSourceForMethod(paymentMethod) }));
+  }, [paymentMethod]);
+
+  useEffect(() => {
+    if (donorMode !== "existing" || !selectedDonor) {
+      setExistingDonorAddress(undefined);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/merchant/donors/${selectedDonor.id}/address`)
+      .then((res) => (res.ok ? res.json() : { address: null }))
+      .then((json) => {
+        if (!cancelled) setExistingDonorAddress(json.address ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setExistingDonorAddress(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [donorMode, selectedDonor]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const donationAmountCents = Math.round((parseFloat(amount) || 0) * 100);
@@ -106,6 +142,7 @@ export default function RecordExternalDonationForm() {
         donorName: donorMode === "new" ? donorName : undefined,
         donorEmail: donorMode === "new" ? donorEmail : undefined,
         donorPhone: donorMode === "new" ? donorPhone : undefined,
+        donorAddress: donorMode === "new" && donorAddress.addressLine1.trim() ? donorAddress : undefined,
         fundName: fundName || undefined,
         campaign: campaign || undefined,
         givingPageLabel: givingPageLabel || undefined,
@@ -349,13 +386,21 @@ export default function RecordExternalDonationForm() {
             </label>
           ))}
         </div>
-        {donorMode === "existing" && <DonorPicker selected={selectedDonor} onSelect={setSelectedDonor} onClear={() => setSelectedDonor(null)} />}
+        {donorMode === "existing" && (
+          <>
+            <DonorPicker selected={selectedDonor} onSelect={setSelectedDonor} onClear={() => setSelectedDonor(null)} />
+            {selectedDonor && <DonorMailingAddressSection value={donorAddress} onChange={setDonorAddress} readOnlyPreview={existingDonorAddress} />}
+          </>
+        )}
         {donorMode === "new" && (
-          <div className="grid grid-cols-3 gap-4">
-            <input placeholder="Donor name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <input placeholder="Donor email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <input placeholder="Donor phone (optional)" value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          </div>
+          <>
+            <div className="grid grid-cols-3 gap-4">
+              <input placeholder="Donor name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <input placeholder="Donor email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <input placeholder="Donor phone (optional)" value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            </div>
+            <DonorMailingAddressSection value={donorAddress} onChange={setDonorAddress} />
+          </>
         )}
         {donorMode === "unmatched" && (
           <p className="text-xs text-slate-500">This donation will show up under Unmatched External Donations until it's connected to a donor.</p>
