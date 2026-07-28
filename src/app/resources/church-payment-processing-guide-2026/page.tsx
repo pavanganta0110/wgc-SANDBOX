@@ -8,12 +8,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/resources/church-payment-processing-guide-2026" },
   title: "Best Payment Processor for Churches and 501(c) Organizations in 2026 | WGC",
   description: "A practical guide to choosing a church and 501(c) organization payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
   openGraph: {
     title: "Best Payment Processor for Churches in 2026 | WGC",
     description: "A practical guide to choosing a church payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
-    url: "https://www.wgcpayments.com/resources/church-payment-processing-guide-2026",
+    url: "https://wgcpayments.com/resources/church-payment-processing-guide-2026",
   },
 };
 

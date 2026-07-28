@@ -50,6 +50,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: "/for-software-partners", destination: "/software-partners", permanent: true },
+      { source: "/churches", destination: "/for/churches", permanent: true },
+      { source: "/register", destination: "/start", permanent: true },
+    ];
+  },
   experimental: {
     // The merchant dashboard shows live financial data (payments,
     // balances, donation totals) — Next's default client router cache

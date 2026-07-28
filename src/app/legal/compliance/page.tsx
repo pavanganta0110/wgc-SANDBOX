@@ -6,12 +6,13 @@ import { ShieldCheck, Landmark, Lock } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/legal/compliance" },
   title: "Security & Compliance | WGC",
   description: "Details on WGC's PCI Level 1 compliance, security practices, and audited payment protocols.",
   openGraph: {
     title: "Security & Compliance | WGC",
     description: "Details on WGC's PCI Level 1 compliance, security practices, and audited payment protocols.",
-    url: "https://www.wgcpayments.com/legal/compliance",
+    url: "https://wgcpayments.com/legal/compliance",
   },
 };
 

@@ -2,6 +2,15 @@ import Link from "next/link";
 import { ArrowLeft, CreditCard, Banknote, ShieldAlert, RotateCcw } from "lucide-react";
 import GatewayIcon from "@/components/ui/GatewayIcon";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Fee Schedule | WGC Payments",
+  description: "Full fee schedule for WGC card processing, ACH transfers, and platform services.",
+  alternates: { canonical: "/legal/fees" },
+  openGraph: { title: "Fee Schedule | WGC Payments", description: "Full fee schedule for WGC card processing, ACH transfers, and platform services.", url: "https://wgcpayments.com/legal/fees" },
+};
+
 export default function FeesPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans">

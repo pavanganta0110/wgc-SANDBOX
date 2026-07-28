@@ -4,6 +4,15 @@ import Footer from "@/components/layout/Footer";
 import ScrollFade from "@/components/ui/ScrollFade";
 import { BookOpen, Newspaper, Shield, CreditCard, ArrowRight } from "lucide-react";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "WGC Research Center | Church & Nonprofit Payment Guides",
+  description: "In-depth guides on church and 501(c) payment processing: processor comparisons, fee breakdowns, and white-label implementation for nonprofit software.",
+  alternates: { canonical: "/resources" },
+  openGraph: { title: "WGC Research Center | Church & Nonprofit Payment Guides", description: "In-depth guides on church and 501(c) payment processing: processor comparisons, fee breakdowns, and white-label implementation for nonprofit software.", url: "https://wgcpayments.com/resources" },
+};
+
 const RESOURCES = [
   {
     title: "Best Payment Processor for Churches and 501(c) Organizations in 2026",

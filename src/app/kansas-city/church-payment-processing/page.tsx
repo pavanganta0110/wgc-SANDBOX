@@ -6,12 +6,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/kansas-city/church-payment-processing" },
   title: "Church & 501(c) Organization Payment Processing in Kansas City | WGC",
   description: "WGC provides the most transparent and affordable church and 501(c) organization payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
   openGraph: {
     title: "Church Payment Processing in Kansas City | WGC",
     description: "WGC provides the most transparent and affordable church payment processing in Kansas City. Lower your fees with flat-rate ACH and white-label ministry rails.",
-    url: "https://www.wgcpayments.com/kansas-city/church-payment-processing",
+    url: "https://wgcpayments.com/kansas-city/church-payment-processing",
   },
 };
 

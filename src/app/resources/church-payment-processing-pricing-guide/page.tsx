@@ -8,12 +8,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/resources/church-payment-processing-pricing-guide" },
   title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
   description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
   openGraph: {
     title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
     description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
-    url: "https://www.wgcpayments.com/resources/church-payment-processing-pricing-guide",
+    url: "https://wgcpayments.com/resources/church-payment-processing-pricing-guide",
   },
 };
 

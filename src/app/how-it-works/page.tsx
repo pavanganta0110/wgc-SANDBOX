@@ -8,12 +8,13 @@ import { Layers, Shield, Landmark } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/how-it-works" },
   title: "How WGC Works | White-Label Payment Infrastructure",
   description: "See how WGC handles gateway orchestration, settlement, and compliance behind your brand — from donor donation page to payout, fully managed.",
   openGraph: {
     title: "How WGC Works | White-Label Payment Infrastructure",
     description: "See how WGC handles gateway orchestration, settlement, and compliance behind your brand — from donor donation page to payout, fully managed.",
-    url: "https://www.wgcpayments.com/how-it-works",
+    url: "https://wgcpayments.com/how-it-works",
   },
 };
 

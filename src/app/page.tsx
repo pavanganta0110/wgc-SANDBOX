@@ -1,10 +1,17 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ShieldCheck, CheckCircle2, Zap, Settings, Globe, BarChart3, Database, Code2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import FeatureCard from "@/components/ui/FeatureCard";
 import CTASection from "@/components/ui/CTASection";
 import ScrollFade from "@/components/ui/ScrollFade";
+
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 const IMPACT_ITEMS = [
   {
@@ -35,8 +42,8 @@ const jsonLd = {
     {
       "@type": "Organization",
       "name": "Waypoint Gateway Collective (WGC)",
-      "url": "https://www.wgcpayments.com",
-      "logo": "https://www.wgcpayments.com/wgc-brand-final.png",
+      "url": "https://wgcpayments.com",
+      "logo": "https://wgcpayments.com/wgc-brand-final.png",
       "description": "Payment infrastructure for software that serves the Church and other 501(c) organizations."
     },
     {
@@ -139,9 +146,12 @@ export default function Home() {
               <ScrollFade delay={200} className="lg:col-span-5">
                 <div className="relative group">
                   <div className="relative rounded-[3rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.4)] border border-white/10 aspect-[4/5] lg:aspect-auto lg:h-[600px]">
-                    <img 
-                      src="/images/church.png" 
+                    <Image
+                      src="/images/church.webp"
                       alt="Modern Church Community"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 45vw"
+                      priority
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 brightness-[1.02]"
                     />
                     
@@ -256,9 +266,11 @@ export default function Home() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10 items-stretch">
               <ScrollFade className="lg:col-span-1">
                 <div className="relative rounded-[3rem] overflow-hidden shadow-2xl h-full min-h-[450px] group border border-wgc-navy-100">
-                    <img 
-                      src="/images/partners.png" 
+                    <Image
+                      src="/images/partners.webp"
                       alt="Partner Impact"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 45vw"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 brightness-[0.85]"
                     />
 

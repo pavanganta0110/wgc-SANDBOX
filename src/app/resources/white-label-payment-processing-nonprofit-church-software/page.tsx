@@ -8,12 +8,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/resources/white-label-payment-processing-nonprofit-church-software" },
   title: "How to White-Label Payments for Nonprofit & 501(c) Organization Software | WGC",
   description: "A step-by-step look at white-labeling payments inside nonprofit, church, and other 501(c) organization software, from gateway setup to settlement and compliance.",
   openGraph: {
     title: "How to White-Label Payments for Nonprofit Software | WGC",
     description: "A step-by-step look at white-labeling payments inside nonprofit and church software, from gateway setup to settlement and compliance.",
-    url: "https://www.wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software",
+    url: "https://wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software",
   },
 };
 

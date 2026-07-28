@@ -6,12 +6,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/kansas-city/nonprofit-payment-processing" },
   title: "Nonprofit & 501(c) Organization Payment Processing in Kansas City, MO | WGC",
   description: "Secure, low-cost nonprofit and 501(c) organization payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
   openGraph: {
     title: "Nonprofit Payment Processing in Kansas City, MO | WGC",
     description: "Secure, low-cost nonprofit payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
-    url: "https://www.wgcpayments.com/kansas-city/nonprofit-payment-processing",
+    url: "https://wgcpayments.com/kansas-city/nonprofit-payment-processing",
   },
 };
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, ChevronDown, CheckCircle2, ShieldCheck, Zap, Globe, BarChart3, Settings } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -8,12 +9,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/software-partners" },
   title: "Embedded Payments for Ministry & 501(c) Organization SaaS | WGC for Partners",
   description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches, nonprofits, and other 501(c) organizations, with developer-ready APIs.",
   openGraph: {
     title: "Embedded Payments for Ministry SaaS | WGC for Partners",
     description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches and nonprofits, with developer-ready APIs.",
-    url: "https://www.wgcpayments.com/software-partners",
+    url: "https://wgcpayments.com/software-partners",
   },
 };
 
@@ -95,9 +97,11 @@ export default function SoftwarePartnersPage() {
               <ScrollFade delay={200}>
                 <div className="mt-16 lg:mt-0 relative group">
                   <div className="relative rounded-[3rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 aspect-[4/5] lg:aspect-auto lg:h-[600px]">
-                    <img 
-                      src="/images/partners.png" 
+                    <Image
+                      src="/images/partners.webp"
                       alt="Partner Collaboration"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 45vw"
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 brightness-[1.02]"
                     />
                     

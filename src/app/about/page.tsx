@@ -6,12 +6,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/about" },
   title: "About WGC | Why We Built Payments for Ministries and 501(c) Organizations",
   description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries, other 501(c) organizations, and the software that serves them steward resources better.",
   openGraph: {
     title: "About WGC | Why We Built Payments for Ministries",
     description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
-    url: "https://www.wgcpayments.com/about",
+    url: "https://wgcpayments.com/about",
   },
 };
 

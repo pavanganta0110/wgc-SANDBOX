@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -9,12 +10,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/pricing" },
   title: "Pricing | Transparent Church, Nonprofit & 501(c) Organization Payment Rates",
   description: "Clear, competitive payment pricing built for ministries and other 501(c) organizations, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
   openGraph: {
     title: "Pricing | Transparent Church & Nonprofit Payment Rates",
     description: "Clear, competitive payment pricing built for ministries, including low flat-rate ACH. No hidden fees — see how WGC saves partners 15–20%.",
-    url: "https://www.wgcpayments.com/pricing",
+    url: "https://wgcpayments.com/pricing",
   },
 };
 
@@ -78,9 +80,11 @@ export default function PricingPage() {
               <ScrollFade delay={200} className="lg:col-span-5">
                 <div className="relative group">
                   <div className="relative rounded-[3rem] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.15)] border border-wgc-navy-100 aspect-[4/5] lg:aspect-auto lg:h-[600px]">
-                    <img 
-                      src="/images/pricing.png" 
+                    <Image
+                      src="/images/pricing.webp"
                       alt="Financial Stewardship Report"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 45vw"
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 brightness-[1.02]"
                     />
                     <div className="absolute bottom-0 left-0 right-0 bg-wgc-navy-950/90 backdrop-blur-md p-10 border-t border-white/10">

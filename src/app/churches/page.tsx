@@ -6,6 +6,12 @@ import FeatureCard from "@/components/ui/FeatureCard";
 import CTASection from "@/components/ui/CTASection";
 import ScrollFade from "@/components/ui/ScrollFade";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/churches" },
+};
+
 const CHURCH_FEATURES = [
   {
     icon: CreditCard,

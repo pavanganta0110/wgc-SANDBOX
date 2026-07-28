@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "School Fundraising & Tuition Assistance Payment Software | WGC Payments",
     description: "Accept annual fund gifts, tuition assistance donations, and capital campaign pledges online — built for private, religious, and nonprofit schools.",
-    url: "https://www.wgcpayments.com/for/schools",
+    url: "https://wgcpayments.com/for/schools",
   },
   alternates: { canonical: "/for/schools" },
 };

@@ -6,12 +6,13 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/kansas-city/tithely-alternative" },
   title: "Tithe.ly Alternative for Kansas City Churches & 501(c) Organizations | WGC",
   description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration for churches and other 501(c) organizations.",
   openGraph: {
     title: "Tithe.ly Alternative for Kansas City Churches | WGC",
     description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration.",
-    url: "https://www.wgcpayments.com/kansas-city/tithely-alternative",
+    url: "https://wgcpayments.com/kansas-city/tithely-alternative",
   },
 };
 

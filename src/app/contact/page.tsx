@@ -7,12 +7,13 @@ import { Mail } from "lucide-react";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/contact" },
   title: "Contact WGC | Talk to Our Payments Team",
   description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church, nonprofit, or other 501(c) organization software platform.",
   openGraph: {
     title: "Contact WGC | Talk to Our Payments Team",
     description: "Get in touch with WGC to discuss embedded payments, partnerships, or onboarding for your church, nonprofit, or other 501(c) organization software platform.",
-    url: "https://www.wgcpayments.com/contact",
+    url: "https://wgcpayments.com/contact",
   },
 };
 

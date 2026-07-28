@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Church Online Giving Software | Tithe, Offering & Building Fund Payments",
     description: "Take Sunday offerings, weekly tithes, and building-fund gifts online — text-to-give, recurring tithing, and a real-time giving dashboard.",
-    url: "https://www.wgcpayments.com/for/churches",
+    url: "https://wgcpayments.com/for/churches",
   },
   alternates: { canonical: "/for/churches" },
 };

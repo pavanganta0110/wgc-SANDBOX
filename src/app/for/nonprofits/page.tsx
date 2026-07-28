@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Donation Processing for Nonprofits & 501(c) Organizations | WGC Payments",
     description: "Event ticketing, membership dues, matching-gift-ready donations, and a transparent dashboard for nonprofits and other 501(c) organizations.",
-    url: "https://www.wgcpayments.com/for/nonprofits",
+    url: "https://wgcpayments.com/for/nonprofits",
   },
   alternates: { canonical: "/for/nonprofits" },
 };

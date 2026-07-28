@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Donation Processing for Government-Affiliated Foundations & Public Programs",
     description: "Transparent reporting, low-cost ACH, and public-trust-ready accountability for government-affiliated charitable programs.",
-    url: "https://www.wgcpayments.com/for/government",
+    url: "https://wgcpayments.com/for/government",
   },
   alternates: { canonical: "/for/government" },
 };
