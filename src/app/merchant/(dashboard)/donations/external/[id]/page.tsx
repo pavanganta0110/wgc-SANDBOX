@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { EXTERNAL_PAYMENT_METHOD_LABELS, SOURCE_LABELS, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import ExternalDonationDetailPanel from "@/components/merchant/ExternalDonationDetailPanel";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 export default async function ExternalDonationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -18,8 +19,9 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
   }
 
   const { id } = await params;
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
   const donation = await prisma.externalDonation.findFirst({
-    where: { id, churchId: auth.churchId },
+    where: { id, churchId: auth.churchId, ...(scopedUserId ? { createdByUserId: scopedUserId } : {}) },
     include: { auditLogs: { orderBy: { createdAt: "desc" } } },
   });
   if (!donation) notFound();

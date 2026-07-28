@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { uploadPrivateFile, createSignedDownloadUrl } from "@/lib/storage/supabaseStorage";
+import { loadScopedExternalDonation } from "@/lib/donations/externalDonationScope";
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/heic", "image/webp", "application/pdf"]);
@@ -22,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const donation = await prisma.externalDonation.findFirst({ where: { id, churchId: auth.churchId } });
+  const donation = await loadScopedExternalDonation(id, auth);
   if (!donation) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!donation.proofOfPaymentStorageKey) return NextResponse.json({ error: "No attachment on this donation" }, { status: 404 });
 
@@ -41,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params;
-  const donation = await prisma.externalDonation.findFirst({ where: { id, churchId: auth.churchId } });
+  const donation = await loadScopedExternalDonation(id, auth);
   if (!donation) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const formData = await req.formData();

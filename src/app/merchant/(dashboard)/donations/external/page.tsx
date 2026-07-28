@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { EXTERNAL_PAYMENT_METHOD_LABELS, SOURCE_LABELS, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import ExternalDonationRowActions from "@/components/merchant/ExternalDonationRowActions";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 export default async function ExternalDonationsPage() {
   let auth;
@@ -17,9 +18,14 @@ export default async function ExternalDonationsPage() {
     throw err;
   }
 
+  // FUNDRAISER/VIEWER without canViewAllTransactions only see donations
+  // they personally recorded — same rule as Payments/Donors everywhere else.
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
+  const scopeWhere = scopedUserId ? { createdByUserId: scopedUserId } : {};
+
   const [donations, unmatched, donorMap] = await Promise.all([
-    prisma.externalDonation.findMany({ where: { churchId: auth.churchId }, orderBy: { donationDate: "desc" }, take: 100 }),
-    prisma.externalDonation.findMany({ where: { churchId: auth.churchId, donorMatchStatus: "UNMATCHED" }, orderBy: { donationDate: "desc" } }),
+    prisma.externalDonation.findMany({ where: { churchId: auth.churchId, ...scopeWhere }, orderBy: { donationDate: "desc" }, take: 100 }),
+    prisma.externalDonation.findMany({ where: { churchId: auth.churchId, donorMatchStatus: "UNMATCHED", ...scopeWhere }, orderBy: { donationDate: "desc" } }),
     prisma.donor.findMany({ where: { churchId: auth.churchId }, select: { id: true, name: true, email: true } }),
   ]);
   const donorById = new Map(donorMap.map((d) => [d.id, d]));

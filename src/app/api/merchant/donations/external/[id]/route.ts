@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -17,8 +18,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   }
 
   const { id } = await params;
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
   const donation = await prisma.externalDonation.findFirst({
-    where: { id, churchId: auth.churchId },
+    where: { id, churchId: auth.churchId, ...(scopedUserId ? { createdByUserId: scopedUserId } : {}) },
     include: { auditLogs: { orderBy: { createdAt: "desc" } } },
   });
   if (!donation) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -62,7 +64,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params;
-  const existing = await prisma.externalDonation.findFirst({ where: { id, churchId: auth.churchId } });
+  const scopedUserId = await resolveExternalDonationScopedUserId(auth);
+  const existing = await prisma.externalDonation.findFirst({
+    where: { id, churchId: auth.churchId, ...(scopedUserId ? { createdByUserId: scopedUserId } : {}) },
+  });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (existing.status === "VOIDED") {
     return NextResponse.json({ error: "This donation has been voided and can no longer be edited." }, { status: 400 });

@@ -537,6 +537,11 @@ export async function getExternalDonationsInsights(churchId: string, dateFilter:
       churchId,
       status: { not: "VOIDED" },
       ...(dateFilter ? { donationDate: dateFilter } : {}),
+      // scopedUserId (passed as attributedUserId, same param name the other
+      // getXInsights functions in this file use) restricts a FUNDRAISER/
+      // VIEWER without canViewAllTransactions to donations they personally
+      // recorded — same rule as every other tab on this page.
+      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
     },
   });
   const active = rows.filter((d) => d.depositStatus !== "RETURNED");
