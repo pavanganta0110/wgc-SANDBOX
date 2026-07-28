@@ -476,12 +476,21 @@ export default function GivingLinkForm({
     if (!googlePayGatewayMerchantId) return;
     setWalletProcessing("google_pay");
     try {
+      // TEMPORARY diagnostic override — Test B from the live Google Pay
+      // investigation. Only active when ?gpayDiagMerchantName=<value> is
+      // explicitly present in the URL, so normal donor traffic (no query
+      // param) is completely unaffected. merchantName only exists in the
+      // loadPaymentData request (not isReadyToPay), so this is the only
+      // place it can be meaningfully tested — the sheet still must not be
+      // authorized/completed during this test. Remove once resolved.
+      const diagMerchantNameOverride =
+        typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gpayDiagMerchantName") : null;
       const walletResult = await requestGooglePayment(
         {
           environment: googlePayEnvironment,
           gatewayMerchantId: googlePayGatewayMerchantId,
           merchantId: googlePayMerchantId || undefined,
-          merchantName: churchName,
+          merchantName: diagMerchantNameOverride || churchName,
         },
         walletTotalCents
       );

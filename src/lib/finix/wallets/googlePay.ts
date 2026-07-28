@@ -104,14 +104,21 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
     });
     gpayLog("isReadyToPay response:", response);
 
-    // TEMPORARY diagnostic-only second call — existingPaymentMethodRequired
-    // surfaces whether Google recognizes an eligible saved card at all,
-    // which the basic isReadyToPay call above doesn't tell us. This is
-    // fire-and-forget and never affects button visibility (per Google's own
+    // TEMPORARY diagnostics — both calls below are fire-and-forget and never
+    // affect button visibility or the real payment flow (per Google's own
     // guidance: cookies/cross-site tracking can make paymentMethodPresent
-    // unreliable, so it must never be used to permanently hide the button)
-    // — it only reports what Google returned, for diagnosing the live
-    // "opens to Add credit or debit card" report. Remove once resolved.
+    // unreliable, so it must never be used to permanently hide the button).
+    // Report the basic call's own result too (Test C reference point — this
+    // is the "no existingPaymentMethodRequired" comparison; no separate call
+    // is needed since this is already that exact request).
+    reportGooglePayDiagnostic(null, config, {
+      kind: "isReadyToPay_basic",
+      result: Boolean(response?.result),
+      paymentMethodPresent: undefined,
+    });
+
+    // existingPaymentMethodRequired surfaces whether Google recognizes an
+    // eligible saved card at all, which the basic call above doesn't tell us.
     void client
       .isReadyToPay({
         apiVersion: 2,
@@ -122,7 +129,7 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
       .then((existingResponse) => {
         gpayLog("isReadyToPay (existingPaymentMethodRequired) response:", existingResponse);
         reportGooglePayDiagnostic(null, config, {
-          kind: "isReadyToPay",
+          kind: "isReadyToPay_existingRequired",
           result: Boolean(existingResponse?.result),
           paymentMethodPresent: (existingResponse as { paymentMethodPresent?: boolean } | undefined)?.paymentMethodPresent,
         });
@@ -152,7 +159,7 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
 export function reportGooglePayDiagnostic(
   err: unknown,
   config: { environment: string; merchantId?: string; gatewayMerchantId?: string },
-  extra?: { kind: "isReadyToPay"; result: boolean; paymentMethodPresent: boolean | undefined }
+  extra?: { kind: "isReadyToPay_basic" | "isReadyToPay_existingRequired"; result: boolean; paymentMethodPresent: boolean | undefined }
 ) {
   try {
     const asRecord = err && typeof err === "object" ? (err as Record<string, unknown>) : {};
