@@ -15,8 +15,11 @@ import { NextResponse } from "next/server";
  */
 
 interface GooglePayDiagnosticReport {
+  kind?: string;
   statusCode?: string;
   statusMessage?: string;
+  isReadyToPayResult?: boolean;
+  paymentMethodPresent?: boolean;
   environment?: string;
   merchantIdConfigured?: boolean;
   gatewayMerchantIdConfigured?: boolean;
@@ -41,8 +44,11 @@ export async function POST(req: Request) {
 
   const raw = body as Record<string, unknown>;
   const report: GooglePayDiagnosticReport = {
+    kind: isSafeString(raw.kind, 30) ? raw.kind : undefined,
     statusCode: isSafeString(raw.statusCode) ? raw.statusCode : undefined,
     statusMessage: isSafeString(raw.statusMessage, 500) ? raw.statusMessage : undefined,
+    isReadyToPayResult: typeof raw.isReadyToPayResult === "boolean" ? raw.isReadyToPayResult : undefined,
+    paymentMethodPresent: typeof raw.paymentMethodPresent === "boolean" ? raw.paymentMethodPresent : undefined,
     environment: isSafeString(raw.environment, 20) ? raw.environment : undefined,
     merchantIdConfigured: typeof raw.merchantIdConfigured === "boolean" ? raw.merchantIdConfigured : undefined,
     gatewayMerchantIdConfigured: typeof raw.gatewayMerchantIdConfigured === "boolean" ? raw.gatewayMerchantIdConfigured : undefined,

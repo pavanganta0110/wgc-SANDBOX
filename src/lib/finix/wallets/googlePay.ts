@@ -103,6 +103,34 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
       allowedPaymentMethods: [paymentMethodWithGateway(config.gatewayMerchantId)],
     });
     gpayLog("isReadyToPay response:", response);
+
+    // TEMPORARY diagnostic-only second call — existingPaymentMethodRequired
+    // surfaces whether Google recognizes an eligible saved card at all,
+    // which the basic isReadyToPay call above doesn't tell us. This is
+    // fire-and-forget and never affects button visibility (per Google's own
+    // guidance: cookies/cross-site tracking can make paymentMethodPresent
+    // unreliable, so it must never be used to permanently hide the button)
+    // — it only reports what Google returned, for diagnosing the live
+    // "opens to Add credit or debit card" report. Remove once resolved.
+    void client
+      .isReadyToPay({
+        apiVersion: 2,
+        apiVersionMinor: 0,
+        allowedPaymentMethods: [paymentMethodWithGateway(config.gatewayMerchantId)],
+        existingPaymentMethodRequired: true,
+      })
+      .then((existingResponse) => {
+        gpayLog("isReadyToPay (existingPaymentMethodRequired) response:", existingResponse);
+        reportGooglePayDiagnostic(null, config, {
+          kind: "isReadyToPay",
+          result: Boolean(existingResponse?.result),
+          paymentMethodPresent: (existingResponse as { paymentMethodPresent?: boolean } | undefined)?.paymentMethodPresent,
+        });
+      })
+      .catch((err) => {
+        gpayLog("isReadyToPay (existingPaymentMethodRequired) threw:", err);
+      });
+
     return Boolean(response?.result);
   } catch (err) {
     gpayLog("isReadyToPay threw — treating as not available:", err);
@@ -121,14 +149,21 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
  * error object in the first place, since loadPaymentData rejects before
  * returning any of that).
  */
-export function reportGooglePayDiagnostic(err: unknown, config: { environment: string; merchantId?: string; gatewayMerchantId?: string }) {
+export function reportGooglePayDiagnostic(
+  err: unknown,
+  config: { environment: string; merchantId?: string; gatewayMerchantId?: string },
+  extra?: { kind: "isReadyToPay"; result: boolean; paymentMethodPresent: boolean | undefined }
+) {
   try {
     const asRecord = err && typeof err === "object" ? (err as Record<string, unknown>) : {};
     const statusCode = typeof asRecord.statusCode === "string" ? asRecord.statusCode : undefined;
     const statusMessage = typeof asRecord.statusMessage === "string" ? asRecord.statusMessage : undefined;
     const payload = {
+      kind: extra?.kind ?? "loadPaymentData",
       statusCode,
       statusMessage,
+      isReadyToPayResult: extra?.result,
+      paymentMethodPresent: extra?.paymentMethodPresent,
       environment: config.environment,
       merchantIdConfigured: Boolean(config.merchantId),
       gatewayMerchantIdConfigured: Boolean(config.gatewayMerchantId),
