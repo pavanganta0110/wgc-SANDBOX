@@ -8,7 +8,8 @@ export const metadata: Metadata = {
   title: "Terms of Service | WGC Payments",
   description: "Terms governing use of Waypoint Gateway Collective's payment infrastructure and merchant services.",
   alternates: { canonical: "/legal/terms" },
-  openGraph: { title: "Terms of Service | WGC Payments", description: "Terms governing use of Waypoint Gateway Collective's payment infrastructure and merchant services.", url: "https://wgcpayments.com/legal/terms" },
+  openGraph: {
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }], title: "Terms of Service | WGC Payments", description: "Terms governing use of Waypoint Gateway Collective's payment infrastructure and merchant services.", url: "https://wgcpayments.com/legal/terms" },
 };
 
 export default function TermsPage() {

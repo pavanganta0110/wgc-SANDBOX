@@ -137,6 +137,9 @@ export default function Header() {
 
             {/* Desktop CTA */}
             <div className="flex items-center gap-6">
+              <Link href="/resources" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
+                Resources
+              </Link>
               <Link href="/contact" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Contact Sales
               </Link>

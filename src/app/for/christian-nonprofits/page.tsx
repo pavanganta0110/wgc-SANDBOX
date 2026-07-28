@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Donation Software for Missions Organizations & Christian Nonprofits",
   description: "Payment infrastructure for missions organizations, relief ministries, and Christian nonprofits — field-worker support, sponsorship-style giving, and international donor payments.",
   openGraph: {
+    images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Donation Software for Missions Organizations & Christian Nonprofits",
     description: "Field-worker support, sponsorship-style giving, and international donor payments for missions organizations and Christian nonprofits.",
     url: "https://wgcpayments.com/for/christian-nonprofits",

@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "Security & Compliance | WGC",
   description: "Details on WGC's PCI Level 1 compliance, security practices, and audited payment protocols.",
   openGraph: {
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "Security & Compliance | WGC",
     description: "Details on WGC's PCI Level 1 compliance, security practices, and audited payment protocols.",
     url: "https://wgcpayments.com/legal/compliance",

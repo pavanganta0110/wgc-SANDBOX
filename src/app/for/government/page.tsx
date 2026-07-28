@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Donation Processing for Government-Affiliated Foundations & Public Programs",
   description: "Payment processing for parks and library foundations, community funds, and other government-affiliated charitable programs — transparent reporting, low-cost ACH, and public-trust-ready accountability.",
   openGraph: {
+    images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Donation Processing for Government-Affiliated Foundations & Public Programs",
     description: "Transparent reporting, low-cost ACH, and public-trust-ready accountability for government-affiliated charitable programs.",
     url: "https://wgcpayments.com/for/government",

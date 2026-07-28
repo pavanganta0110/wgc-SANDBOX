@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "School Fundraising & Tuition Assistance Payment Software | WGC Payments",
   description: "Accept annual fund gifts, tuition assistance donations, and capital campaign pledges online. Payment processing built for private, religious, and nonprofit schools — with low-cost ACH and card processing.",
   openGraph: {
+    images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "School Fundraising & Tuition Assistance Payment Software | WGC Payments",
     description: "Accept annual fund gifts, tuition assistance donations, and capital campaign pledges online — built for private, religious, and nonprofit schools.",
     url: "https://wgcpayments.com/for/schools",

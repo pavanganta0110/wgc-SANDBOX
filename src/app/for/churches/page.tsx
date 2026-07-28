@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "Church Online Giving Software | Tithe, Offering & Building Fund Payments",
   description: "Take Sunday offerings, weekly tithes, and building-fund gifts online with low-cost ACH and card processing built for churches — text-to-give, recurring tithing, and a real-time giving dashboard.",
   openGraph: {
+    images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
     title: "Church Online Giving Software | Tithe, Offering & Building Fund Payments",
     description: "Take Sunday offerings, weekly tithes, and building-fund gifts online — text-to-give, recurring tithing, and a real-time giving dashboard.",
     url: "https://wgcpayments.com/for/churches",

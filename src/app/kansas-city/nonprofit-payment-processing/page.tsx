@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageGraph, breadcrumbs, kansasCityBusiness } from "@/lib/schema";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CTASection from "@/components/ui/CTASection";
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
   title: "Nonprofit & 501(c) Organization Payment Processing in Kansas City, MO | WGC",
   description: "Secure, low-cost nonprofit and 501(c) organization payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
   openGraph: {
+    images: [{ url: "/og/kansas-city.png", width: 1200, height: 630 }],
     title: "Nonprofit Payment Processing in Kansas City, MO | WGC",
     description: "Secure, low-cost nonprofit payment processing in Kansas City, MO. Maximize your charitable donations with WGC's white-label infrastructure and 25¢ ACH.",
     url: "https://wgcpayments.com/kansas-city/nonprofit-payment-processing",
@@ -55,12 +57,22 @@ const FAQ_SCHEMA = {
   ]
 };
 
+const LOCAL_SCHEMA = pageGraph(kansasCityBusiness, breadcrumbs([
+  { name: "Home", path: "/" },
+  { name: "Kansas City", path: "/kansas-city/nonprofit-payment-processing" },
+  { name: "Nonprofit Payment Processing", path: "/kansas-city/nonprofit-payment-processing" },
+]));
+
 export default function KansasCityNonprofitPayments() {
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(LOCAL_SCHEMA) }}
       />
       <Header />
       <main className="flex-grow bg-white">

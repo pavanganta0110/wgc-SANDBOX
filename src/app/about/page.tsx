@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: "About WGC | Why We Built Payments for Ministries and 501(c) Organizations",
   description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries, other 501(c) organizations, and the software that serves them steward resources better.",
   openGraph: {
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "About WGC | Why We Built Payments for Ministries",
     description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
     url: "https://wgcpayments.com/about",

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageGraph, article, breadcrumbs } from "@/lib/schema";
 import { ChevronLeft, CheckCircle2, BarChart, Zap, RefreshCw, Landmark, Globe, Users, Settings, FileText } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
   title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
   description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
   openGraph: {
+    images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "Stripe vs Tithe.ly vs WGC: Fee Breakdown | WGC",
     description: "Compare payment processing fees across Stripe, Tithe.ly, and WGC for churches, nonprofits, and other 501(c) organizations, with a clear breakdown of costs and ACH rates.",
     url: "https://wgcpayments.com/resources/church-payment-processing-pricing-guide",
@@ -40,9 +42,31 @@ const INCLUSION_LIST = [
   { text: 'Direct Bank Payouts', icon: Landmark }
 ];
 
+const PUBLISHED = "2026-02-10";
+const UPDATED = "2026-07-27";
+
+const ARTICLE_SCHEMA = pageGraph(
+  article({
+    headline: 'Stripe vs Tithe.ly vs WGC: Fee Breakdown',
+    description: 'A side-by-side fee comparison of Stripe, Tithe.ly, and WGC for church and nonprofit donation processing.',
+    path: "/resources/church-payment-processing-pricing-guide",
+    published: PUBLISHED,
+    modified: UPDATED,
+  }),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Resources", path: "/resources" },
+    { name: 'Stripe vs Tithe.ly vs WGC: Fee Breakdown', path: "/resources/church-payment-processing-pricing-guide" },
+  ]),
+);
+
 export default function PricingGuidePage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ARTICLE_SCHEMA) }}
+      />
       <Header />
       <main className="min-h-screen bg-white selection:bg-wgc-gold-100 selection:text-wgc-navy-900">
         {/* Top Navigation */}
@@ -70,6 +94,13 @@ export default function PricingGuidePage() {
               <h1 className="text-4xl md:text-5xl font-bold text-wgc-navy-900 tracking-tighter mb-8 tracking-tight leading-[0.95]">
                 Stripe vs Tithe.ly vs <span className="text-wgc-gold-500">WGC: Fee Breakdown</span>
               </h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-semibold text-wgc-navy-500 mb-8">
+                <span>By <span className="text-wgc-navy-700">Waypoint Gateway Collective</span></span>
+                <span aria-hidden="true">·</span>
+                <time dateTime={PUBLISHED}>Published {new Date(PUBLISHED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+                <span aria-hidden="true">·</span>
+                <time dateTime={UPDATED}>Updated {new Date(UPDATED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+              </div>
               <p className="text-lg md:text-xl text-wgc-navy-600 font-medium leading-relaxed italic border-l-4 border-wgc-gold-500 pl-6 border-opacity-30 opacity-90">
                 A strong payment offering should be transparent, simple to explain, and supported by features like recurring donations, payout visibility, and reporting.
               </p>

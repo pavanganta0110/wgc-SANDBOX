@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageGraph, article, breadcrumbs } from "@/lib/schema";
 import { ChevronLeft, CheckCircle2, Box, UserPlus, CreditCard, BarChart4, Cpu } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
   title: "How to White-Label Payments for Nonprofit & 501(c) Organization Software | WGC",
   description: "A step-by-step look at white-labeling payments inside nonprofit, church, and other 501(c) organization software, from gateway setup to settlement and compliance.",
   openGraph: {
+    images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "How to White-Label Payments for Nonprofit Software | WGC",
     description: "A step-by-step look at white-labeling payments inside nonprofit and church software, from gateway setup to settlement and compliance.",
     url: "https://wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software",
@@ -47,9 +49,31 @@ const FEATURE_BLOCKS = [
 
 const WGC_FEATURES = ['Card Payments', 'ACH Support', 'Recurring Billing', 'Payout Visibility', 'Dashboard Reporting', 'Mission Aligned'];
 
+const PUBLISHED = "2026-03-05";
+const UPDATED = "2026-07-27";
+
+const ARTICLE_SCHEMA = pageGraph(
+  article({
+    headline: 'How to White-Label Payments for Nonprofit & 501(c) Organization Software',
+    description: 'How software platforms serving churches and nonprofits embed branded payments, and what the underlying infrastructure requires.',
+    path: "/resources/white-label-payment-processing-nonprofit-church-software",
+    published: PUBLISHED,
+    modified: UPDATED,
+  }),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Resources", path: "/resources" },
+    { name: 'How to White-Label Payments for Nonprofit & 501(c) Organization Software', path: "/resources/white-label-payment-processing-nonprofit-church-software" },
+  ]),
+);
+
 export default function WhiteLabelGuidePage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ARTICLE_SCHEMA) }}
+      />
       <Header />
       <main className="min-h-screen bg-white selection:bg-wgc-gold-100 selection:text-wgc-navy-900">
         {/* Top Navigation */}
@@ -77,6 +101,13 @@ export default function WhiteLabelGuidePage() {
               <h1 className="text-4xl md:text-5xl font-bold text-wgc-navy-900 tracking-tighter mb-8 tracking-tight leading-[0.95]">
                 How to White-Label Payments for <span className="text-wgc-gold-500">Nonprofit & 501(c) Organization Software</span>
               </h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-semibold text-wgc-navy-500 mb-8">
+                <span>By <span className="text-wgc-navy-700">Waypoint Gateway Collective</span></span>
+                <span aria-hidden="true">·</span>
+                <time dateTime={PUBLISHED}>Published {new Date(PUBLISHED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+                <span aria-hidden="true">·</span>
+                <time dateTime={UPDATED}>Updated {new Date(UPDATED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+              </div>
               <p className="text-lg md:text-xl text-wgc-navy-600 font-medium leading-relaxed italic border-l-4 border-wgc-gold-500 pl-6 border-opacity-30 opacity-90">
                 For nonprofit, church, and other 501(c) organization software platforms, payments should feel native to the product. White-label payment processing makes it possible to offer branded onboarding, embedded donation forms, and payout visibility without a disconnected experience.
               </p>

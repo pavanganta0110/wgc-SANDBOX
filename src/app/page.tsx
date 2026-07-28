@@ -40,19 +40,23 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
-      "@type": "Organization",
-      "name": "Waypoint Gateway Collective (WGC)",
-      "url": "https://wgcpayments.com",
-      "logo": "https://wgcpayments.com/wgc-brand-final.png",
-      "description": "Payment infrastructure for software that serves the Church and other 501(c) organizations."
-    },
-    {
       "@type": "Product",
       "name": "WGC White-Label Payment Processing",
       "description": "White-label payment processing infrastructure designed for church, nonprofit, and other 501(c) organization software platforms.",
-      "brand": {
-        "@type": "Brand",
-        "name": "WGC"
+      "brand": { "@type": "Brand", "name": "WGC" },
+      "offers": {
+        "@type": "Offer",
+        "priceCurrency": "USD",
+        "price": "10.00",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "10.00",
+          "priceCurrency": "USD",
+          "unitText": "per organization per month"
+        },
+        "availability": "https://schema.org/InStock",
+        "url": "https://wgcpayments.com/pricing",
+        "seller": { "@id": "https://wgcpayments.com/#organization" }
       }
     },
     {
