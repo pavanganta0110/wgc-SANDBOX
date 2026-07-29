@@ -30,11 +30,11 @@ function Header() {
           <span className="text-[9px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
         </div>
       </a>
-      <a 
+      <a
         href="#join"
         className="text-xs font-bold uppercase tracking-wider text-[#14213D] border border-[#14213D] rounded-full px-5 py-2 hover:bg-[#14213D] hover:text-[#FFFDF8] transition-colors"
       >
-        Join First Look
+        Join First Look Waitlist
       </a>
     </header>
   );
@@ -69,14 +69,16 @@ export default function FirstLookPage() {
             We're betting your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
           </h1>
           <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-10 leading-relaxed">
-            Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code — and we want church leaders in the room while we do it.
+            Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code. Click below to be one of the first to join us.
           </p>
           <div className="flex flex-col items-center gap-4">
-            <a 
-              href="#join"
+            <a
+              href={CALENDLY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-10 rounded-[3px] text-lg transition-colors shadow-sm"
             >
-              Save my seat
+              Set up a 1-on-1
             </a>
             <span className="text-sm font-mono text-[#41506F]">Free. About 20 minutes. Bring your wish list.</span>
           </div>
