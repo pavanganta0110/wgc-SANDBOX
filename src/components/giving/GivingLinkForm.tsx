@@ -10,7 +10,7 @@ import { formatCents } from "@/lib/format";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
-import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, reportGooglePayDiagnostic, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
+import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 import { trackMetaEvent } from "@/components/common/MetaPixel";
 
@@ -500,21 +500,12 @@ export default function GivingLinkForm({
     if (!googlePayGatewayMerchantId) return;
     setWalletProcessing("google_pay");
     try {
-      // TEMPORARY diagnostic override — Test B from the live Google Pay
-      // investigation. Only active when ?gpayDiagMerchantName=<value> is
-      // explicitly present in the URL, so normal donor traffic (no query
-      // param) is completely unaffected. merchantName only exists in the
-      // loadPaymentData request (not isReadyToPay), so this is the only
-      // place it can be meaningfully tested — the sheet still must not be
-      // authorized/completed during this test. Remove once resolved.
-      const diagMerchantNameOverride =
-        typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("gpayDiagMerchantName") : null;
       const walletResult = await requestGooglePayment(
         {
           environment: googlePayEnvironment,
           gatewayMerchantId: googlePayGatewayMerchantId,
           merchantId: googlePayMerchantId || undefined,
-          merchantName: diagMerchantNameOverride || churchName,
+          merchantName: churchName,
         },
         walletTotalCents
       );
@@ -523,14 +514,6 @@ export default function GivingLinkForm({
       // Donor closed the Google Pay sheet or it failed before authorization —
       // not an error state shown to the donor, just return to the form.
       walletLog("Google Pay: loadPaymentData did not complete (cancel or error)", err);
-      // TEMPORARY — see reportGooglePayDiagnostic's doc comment. Captures
-      // only Google's statusCode/statusMessage + config-presence booleans,
-      // never card data or donor info. Remove once root cause is confirmed.
-      reportGooglePayDiagnostic(err, {
-        environment: googlePayEnvironment,
-        merchantId: googlePayMerchantId || undefined,
-        gatewayMerchantId: googlePayGatewayMerchantId || undefined,
-      });
       setWalletProcessing(null);
     }
   };

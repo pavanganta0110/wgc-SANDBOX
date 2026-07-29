@@ -103,88 +103,10 @@ export async function isGooglePayAvailable(config: GooglePayConfig): Promise<boo
       allowedPaymentMethods: [paymentMethodWithGateway(config.gatewayMerchantId)],
     });
     gpayLog("isReadyToPay response:", response);
-
-    // TEMPORARY diagnostics — both calls below are fire-and-forget and never
-    // affect button visibility or the real payment flow (per Google's own
-    // guidance: cookies/cross-site tracking can make paymentMethodPresent
-    // unreliable, so it must never be used to permanently hide the button).
-    // Report the basic call's own result too (Test C reference point — this
-    // is the "no existingPaymentMethodRequired" comparison; no separate call
-    // is needed since this is already that exact request).
-    reportGooglePayDiagnostic(null, config, {
-      kind: "isReadyToPay_basic",
-      result: Boolean(response?.result),
-      paymentMethodPresent: undefined,
-    });
-
-    // existingPaymentMethodRequired surfaces whether Google recognizes an
-    // eligible saved card at all, which the basic call above doesn't tell us.
-    void client
-      .isReadyToPay({
-        apiVersion: 2,
-        apiVersionMinor: 0,
-        allowedPaymentMethods: [paymentMethodWithGateway(config.gatewayMerchantId)],
-        existingPaymentMethodRequired: true,
-      })
-      .then((existingResponse) => {
-        gpayLog("isReadyToPay (existingPaymentMethodRequired) response:", existingResponse);
-        reportGooglePayDiagnostic(null, config, {
-          kind: "isReadyToPay_existingRequired",
-          result: Boolean(existingResponse?.result),
-          paymentMethodPresent: (existingResponse as { paymentMethodPresent?: boolean } | undefined)?.paymentMethodPresent,
-        });
-      })
-      .catch((err) => {
-        gpayLog("isReadyToPay (existingPaymentMethodRequired) threw:", err);
-      });
-
     return Boolean(response?.result);
   } catch (err) {
     gpayLog("isReadyToPay threw — treating as not available:", err);
     return false;
-  }
-}
-
-/**
- * TEMPORARY diagnostic reporter — see src/app/api/diagnostics/google-pay/route.ts
- * for what's captured and why. Fire-and-forget: a failure to report must
- * never surface to the donor or block the existing cancel/error handling.
- * Extracts only the safe fields Google's PaymentsError already exposes
- * (statusCode/statusMessage) plus config-presence booleans — never the
- * actual merchant ID values, never anything from the payment attempt
- * itself (no card data, token, or billing/contact info ever reaches this
- * error object in the first place, since loadPaymentData rejects before
- * returning any of that).
- */
-export function reportGooglePayDiagnostic(
-  err: unknown,
-  config: { environment: string; merchantId?: string; gatewayMerchantId?: string },
-  extra?: { kind: "isReadyToPay_basic" | "isReadyToPay_existingRequired"; result: boolean; paymentMethodPresent: boolean | undefined }
-) {
-  try {
-    const asRecord = err && typeof err === "object" ? (err as Record<string, unknown>) : {};
-    const statusCode = typeof asRecord.statusCode === "string" ? asRecord.statusCode : undefined;
-    const statusMessage = typeof asRecord.statusMessage === "string" ? asRecord.statusMessage : undefined;
-    const payload = {
-      kind: extra?.kind ?? "loadPaymentData",
-      statusCode,
-      statusMessage,
-      isReadyToPayResult: extra?.result,
-      paymentMethodPresent: extra?.paymentMethodPresent,
-      environment: config.environment,
-      merchantIdConfigured: Boolean(config.merchantId),
-      gatewayMerchantIdConfigured: Boolean(config.gatewayMerchantId),
-      browserType: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 100) : undefined,
-      requestTimestamp: new Date().toISOString(),
-    };
-    void fetch("/api/diagnostics/google-pay", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(() => {});
-  } catch {
-    // Never let diagnostic reporting itself break the donor's flow.
   }
 }
 
