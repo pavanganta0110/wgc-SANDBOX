@@ -17,16 +17,37 @@ import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
 
-const WEBHOOK_SECRET = process.env.FINIX_WEBHOOK_SECRET || process.env.FINIX_WEBHOOK_SIGNING_KEY;
-const BEARER_TOKEN = process.env.FINIX_WEBHOOK_BEARER_TOKEN;
+// Credentials pasted into a dashboard env editor routinely pick up a trailing
+// newline or a wrapping pair of quotes (this repo's own .env.local stores these
+// same keys as a literal `""`). Those survive into process.env and make the
+// strict comparisons below fail against a credential that is otherwise correct,
+// which surfaces as a blanket 401 on every delivery with no other symptom.
+// Normalizing here only strips accidental wrapper characters — it never relaxes
+// the comparison itself.
+function normalizeSecret(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  let v = value.trim();
+  // Content inside explicit quotes is preserved byte-for-byte — a credential
+  // that legitimately ends in a space is why someone quoted it in the first
+  // place, so the outer trim above must not reach inside.
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    v = v.slice(1, -1);
+  }
+  return v === "" ? undefined : v;
+}
+
+const WEBHOOK_SECRET =
+  normalizeSecret(process.env.FINIX_WEBHOOK_SECRET) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_SIGNING_KEY);
+const BEARER_TOKEN = normalizeSecret(process.env.FINIX_WEBHOOK_BEARER_TOKEN);
 const BASIC_AUTH_USERNAME =
-  process.env.FINIX_WEBHOOK_BASIC_USERNAME ||
-  process.env.FINIX_WEBHOOK_USERNAME ||
-  process.env.FINIX_WEBHOOK_BASIC_AUTH_USERNAME;
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_USERNAME) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_USERNAME) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_AUTH_USERNAME);
 const BASIC_AUTH_PASSWORD =
-  process.env.FINIX_WEBHOOK_BASIC_PASSWORD ||
-  process.env.FINIX_WEBHOOK_PASSWORD ||
-  process.env.FINIX_WEBHOOK_BASIC_AUTH_PASSWORD;
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_PASSWORD) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_PASSWORD) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_AUTH_PASSWORD);
 
 async function sendWebhookEmail(
   applicationId: string,
