@@ -1089,10 +1089,6 @@ export async function POST(req: Request) {
 
     if (authConfigured) {
       const authChecks: { name: string; valid: boolean }[] = [];
-      // TEMPORARY diagnostic state — see the console.error below. Records only
-      // whether each half of the credential matched and how long the incoming
-      // values were; never the usernames, passwords, or the header itself.
-      const basicDiag: Record<string, unknown> = {};
 
       if (BEARER_TOKEN) {
         const match = authHeader.match(/^Bearer\s+(.*)$/i);
@@ -1113,13 +1109,6 @@ export async function POST(req: Request) {
             const username = separatorIndex >= 0 ? decoded.slice(0, separatorIndex) : "";
             const password = separatorIndex >= 0 ? decoded.slice(separatorIndex + 1) : "";
 
-            basicDiag.usernameMatched = username === BASIC_AUTH_USERNAME;
-            basicDiag.passwordMatched = password === BASIC_AUTH_PASSWORD;
-            basicDiag.sentUsernameLength = username.length;
-            basicDiag.sentPasswordLength = password.length;
-            basicDiag.configuredUsernameLength = (BASIC_AUTH_USERNAME || "").length;
-            basicDiag.configuredPasswordLength = (BASIC_AUTH_PASSWORD || "").length;
-
             basicValid = username === BASIC_AUTH_USERNAME && password === BASIC_AUTH_PASSWORD;
           } catch {
             basicValid = false;
@@ -1133,25 +1122,6 @@ export async function POST(req: Request) {
       }
 
       if (!authChecks.some((check) => check.valid)) {
-        // TEMPORARY — added to settle whether Finix is sending no Authorization
-        // header at all (webhook configured with authentication type NONE)
-        // versus sending credentials that don't match what's configured here.
-        // Both cases return this same 401, so they're indistinguishable from
-        // outside, and they need opposite fixes. Remove once resolved.
-        // eslint-disable-next-line no-console
-        console.error(
-          "[FinixWebhookAuth:TEMPORARY]",
-          JSON.stringify({
-            authHeaderPresent: Boolean(authHeader),
-            authHeaderScheme: authHeader ? authHeader.split(/\s+/)[0] : null,
-            configuredSchemes: {
-              bearer: Boolean(BEARER_TOKEN),
-              basicUsername: Boolean(BASIC_AUTH_USERNAME),
-              basicPassword: Boolean(BASIC_AUTH_PASSWORD),
-            },
-            ...basicDiag,
-          })
-        );
         return NextResponse.json(
           { error: "Unauthorized: Invalid authentication" },
           { status: 401 }

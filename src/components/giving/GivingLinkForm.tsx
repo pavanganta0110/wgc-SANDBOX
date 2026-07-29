@@ -833,17 +833,29 @@ export default function GivingLinkForm({
             return;
           }
 
+          // Same rule as the wallet path: /donate returns success: true for
+          // any transfer it managed to create, including one Finix declined
+          // outright, so `state` is the only field that says whether money
+          // actually moved. Treating every non-PENDING state as success showed
+          // the donor a completed-donation screen for a declined card.
+          // PENDING is the normal ACH/bank case and keeps its processing
+          // screen; only SUCCEEDED is a completed gift.
           const state = (data.state || "").toUpperCase();
           setSubmitting(false);
           if (state === "PENDING") {
             setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-          } else {
+          } else if (state === "SUCCEEDED") {
             setResult({
               step: "success",
               totalCents: data.totalCents,
               feeCoveredCents: data.feeCoveredCents,
               donationAmountCents: data.donationAmountCents,
               transferId: data.transferId,
+            });
+          } else {
+            setResult({
+              step: "failed",
+              error: "Your payment was declined and you have not been charged. Please check your details or try a different payment method.",
             });
           }
         } catch {
