@@ -234,6 +234,11 @@ export default function GivingLinkForm({
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
+  // Distinct from walletProcessing, which is set the moment the wallet button
+  // is tapped — i.e. while the native Apple/Google sheet is still open. This
+  // one covers only the post-authorization /donate round trip, so the
+  // "Completing your gift…" overlay never renders underneath a payment sheet.
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
   const googlePayButtonRef = useRef<HTMLDivElement>(null);
   const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
@@ -300,6 +305,7 @@ export default function GivingLinkForm({
     method: "apple_pay" | "google_pay",
     walletResult: ApplePayResult | GooglePayResult
   ): Promise<{ success: boolean }> => {
+    setWalletSubmitting(true);
     try {
       walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
       // getFraudSessionId has no internal timeout — on a slow mobile
@@ -396,6 +402,10 @@ export default function GivingLinkForm({
       setWalletProcessing(null);
       setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
       return { success: false };
+    } finally {
+      // Every exit path clears it — a stuck overlay would trap the donor
+      // behind a full-screen, non-dismissible spinner.
+      setWalletSubmitting(false);
     }
   };
 
@@ -929,7 +939,7 @@ export default function GivingLinkForm({
           branch would) — the card path keeps Finix's tokenization iframe
           mounted in this same tree, and unmounting it mid-submit would break
           card payments. */}
-      {walletProcessing !== null && (
+      {walletSubmitting && (
         <div
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center"
           role="status"
