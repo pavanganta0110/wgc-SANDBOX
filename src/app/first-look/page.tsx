@@ -78,7 +78,7 @@ export default function FirstLookPage() {
               rel="noopener noreferrer"
               className="inline-block bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-10 rounded-[3px] text-lg transition-colors shadow-sm"
             >
-              Set up a 1-on-1
+              Join Waitlist
             </a>
             <span className="text-sm font-mono text-[#41506F]">Free. About 20 minutes. Bring your wish list.</span>
           </div>
