@@ -360,10 +360,17 @@ export default function GivingLinkForm({
       }
 
       setWalletProcessing(null);
+      // /donate returns `success: true` for any transfer it managed to create,
+      // including one Finix immediately declined — `state` is the only field
+      // that says whether money actually moved. This previously treated every
+      // non-PENDING state as success, so a FAILED wallet transfer (e.g. a
+      // closed card account) showed the donor a completed-donation screen for
+      // a gift the church never received. Only SUCCEEDED is success; PENDING
+      // keeps its ACH-style processing screen; everything else is a failure.
       const state = (data.state || "").toUpperCase();
       if (state === "PENDING") {
         setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-      } else {
+      } else if (state === "SUCCEEDED") {
         setResult({
           step: "success",
           totalCents: data.totalCents,
@@ -371,6 +378,13 @@ export default function GivingLinkForm({
           donationAmountCents: data.donationAmountCents,
           transferId: data.transferId,
         });
+      } else {
+        walletLog(`${method}: transfer did not succeed`, { state, transferId: data.transferId });
+        setResult({
+          step: "failed",
+          error: "Your payment was declined and you have not been charged. Please try a different card or payment method.",
+        });
+        return { success: false };
       }
       return { success: true };
     } catch (err) {
