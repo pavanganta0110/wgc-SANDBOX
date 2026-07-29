@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { CheckCircle, Clock, AlertCircle, Repeat } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Repeat, Loader2 } from "lucide-react";
 import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
@@ -919,6 +919,27 @@ export default function GivingLinkForm({
 
   return (
     <div className="space-y-6">
+      {/* Once the wallet sheet closes, the donation still needs a fraud
+          session plus the /donate round trip — several seconds on mobile. The
+          only feedback used to be a dimmed wallet button and a text-xs
+          "Processing donation…" line, so donors reported the page "going back
+          to the giving form" and then jumping to the success screen. This
+          overlay makes that wait unmistakable. It deliberately sits on top of
+          the form rather than replacing it (as a step: "processing" render
+          branch would) — the card path keeps Finix's tokenization iframe
+          mounted in this same tree, and unmounting it mid-submit would break
+          card payments. */}
+      {walletProcessing !== null && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-8 h-8 animate-spin text-white" />
+          <p className="text-base font-semibold text-white">Completing your gift…</p>
+          <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
+        </div>
+      )}
       {recurringEnabled && (
         <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
           <button
