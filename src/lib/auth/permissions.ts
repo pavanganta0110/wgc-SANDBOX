@@ -39,6 +39,16 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canExportDonorAddress",
   "canConfirmDonorAddress",
   "canViewAddressAuditHistory",
+  "canViewInvoices",
+  "canCreateInvoices",
+  "canEditInvoices",
+  "canSendInvoices",
+  "canVoidInvoices",
+  "canRecordOfflineInvoicePayments",
+  "canRefundInvoicePayments",
+  "canManageClients",
+  "canManageInvoiceSettings",
+  "canExportInvoices",
 ];
 
 /**
@@ -103,6 +113,16 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canExportDonorAddress: false,
       canConfirmDonorAddress: false,
       canViewAddressAuditHistory: false,
+      canViewInvoices: false,
+      canCreateInvoices: false,
+      canEditInvoices: false,
+      canSendInvoices: false,
+      canVoidInvoices: false,
+      canRecordOfflineInvoicePayments: false,
+      canRefundInvoicePayments: false,
+      canManageClients: false,
+      canManageInvoiceSettings: false,
+      canExportInvoices: false,
     };
   }
 
