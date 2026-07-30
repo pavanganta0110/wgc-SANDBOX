@@ -2,6 +2,16 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import GatewayIcon from "@/components/ui/GatewayIcon";
 
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Privacy Policy | WGC Payments",
+  description: "How Waypoint Gateway Collective collects, uses, and protects data across its payment infrastructure.",
+  alternates: { canonical: "/legal/privacy" },
+  openGraph: {
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }], title: "Privacy Policy | WGC Payments", description: "How Waypoint Gateway Collective collects, uses, and protects data across its payment infrastructure.", url: "https://www.wgcpayments.com/legal/privacy" },
+};
+
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-slate-50 font-sans">

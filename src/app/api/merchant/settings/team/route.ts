@@ -124,7 +124,7 @@ export async function POST(req: Request) {
   });
 
   const roleLabel = requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1);
-  const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+  const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const inviteLink = `${origin}/merchant/set-password/${rawToken}`;
   await sendWgcEmail({
     to: email,

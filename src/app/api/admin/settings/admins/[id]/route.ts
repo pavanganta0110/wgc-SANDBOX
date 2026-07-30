@@ -101,7 +101,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         data: { setPasswordTokenHash: tokenHash, setPasswordTokenExpiresAt: expiresAt },
       });
 
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
       const inviteLink = `${appUrl}/admin/accept-invite?token=${rawToken}`;
       try {
         await sendWgcEmail({

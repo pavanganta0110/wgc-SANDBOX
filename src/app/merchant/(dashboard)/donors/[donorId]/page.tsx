@@ -5,6 +5,8 @@ import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
+import { hasPermission } from "@/lib/auth/permissions";
+import DonorAddressCard from "@/components/merchant/DonorAddressCard";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import { Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
@@ -209,6 +211,9 @@ export default async function DonorProfilePage({
           canMerge={permissions.canMerge}
           canGenerateStatements={permissions.canGenerateStatements}
           canSendStatements={permissions.canSendStatements}
+          canViewDonorAddress={hasPermission(auth, "canViewDonorAddress")}
+          canEditDonorAddress={hasPermission(auth, "canEditDonorAddress")}
+          canConfirmDonorAddress={hasPermission(auth, "canConfirmDonorAddress")}
         />
       )}
       {tab === "donations" && (
@@ -242,7 +247,20 @@ function Card({ title, action, children }: { title: string; action?: React.React
   );
 }
 
-async function OverviewTab({ churchId, donor, aggregates, instruments, notes, canAddNote, canMerge, canGenerateStatements, canSendStatements }: any) {
+async function OverviewTab({
+  churchId,
+  donor,
+  aggregates,
+  instruments,
+  notes,
+  canAddNote,
+  canMerge,
+  canGenerateStatements,
+  canSendStatements,
+  canViewDonorAddress,
+  canEditDonorAddress,
+  canConfirmDonorAddress,
+}: any) {
   const trend = await loadDonationTrend(churchId, undefined, "monthly");
   const primaryInstrument = instruments[0] ?? null;
   const instrumentIds = instruments.map((i: any) => i.finixPaymentInstrumentId);
@@ -321,10 +339,31 @@ async function OverviewTab({ churchId, donor, aggregates, instruments, notes, ca
         <Card title="Contact Information">
           <Row label="Email" value={donor.email || "—"} />
           <Row label="Phone" value={donor.phone || "—"} />
-          {(donor.city || donor.state) && <Row label="Location" value={[donor.city, donor.state].filter(Boolean).join(", ")} />}
           {donor.companyName && <Row label="Organization" value={donor.companyName} />}
           <Row label="Donor Since" value={formatDateCDT(donor.createdAt)} />
         </Card>
+        {canViewDonorAddress && (
+          <Card title="Mailing Address">
+            <DonorAddressCard
+              donor={{
+                id: donor.id,
+                addressLine1: donor.addressLine1,
+                addressLine2: donor.addressLine2,
+                city: donor.city,
+                state: donor.state,
+                postalCode: donor.postalCode,
+                country: donor.country,
+                addressSource: donor.addressSource,
+                addressVerified: donor.addressVerified,
+                lastAddressConfirmedAt: donor.lastAddressConfirmedAt ? donor.lastAddressConfirmedAt.toISOString() : null,
+                addressUpdatedAt: donor.addressUpdatedAt ? donor.addressUpdatedAt.toISOString() : null,
+              }}
+              canEdit={canEditDonorAddress}
+              canConfirm={canConfirmDonorAddress}
+              canViewSource={canViewDonorAddress}
+            />
+          </Card>
+        )}
         {primaryInstrument && (
           <Card title="Primary Payment Method">
             <Row

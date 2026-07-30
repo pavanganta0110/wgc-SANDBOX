@@ -73,7 +73,18 @@ export type PermissionKey =
   | "canViewAsUser"
   | "canManageOrgSettings"
   | "canManageRolesAndPermissions"
-  | "canTransferOwnership";
+  | "canTransferOwnership"
+  | "canCreateExternalDonation"
+  | "canEditExternalDonation"
+  | "canVoidExternalDonation"
+  | "canSendExternalDonationReceipt"
+  | "canViewExternalDonationProof"
+  | "canMatchExternalDonationToDonor"
+  | "canViewDonorAddress"
+  | "canEditDonorAddress"
+  | "canExportDonorAddress"
+  | "canConfirmDonorAddress"
+  | "canViewAddressAuditHistory";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -95,6 +106,17 @@ const ALL_FALSE: PermissionMatrix = {
   canManageOrgSettings: false,
   canManageRolesAndPermissions: false,
   canTransferOwnership: false,
+  canCreateExternalDonation: false,
+  canEditExternalDonation: false,
+  canVoidExternalDonation: false,
+  canSendExternalDonationReceipt: false,
+  canViewExternalDonationProof: false,
+  canMatchExternalDonationToDonor: false,
+  canViewDonorAddress: false,
+  canEditDonorAddress: false,
+  canExportDonorAddress: false,
+  canConfirmDonorAddress: false,
+  canViewAddressAuditHistory: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -118,6 +140,17 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageOrgSettings: true,
     canManageRolesAndPermissions: true,
     canTransferOwnership: true,
+    canCreateExternalDonation: true,
+    canEditExternalDonation: true,
+    canVoidExternalDonation: true,
+    canSendExternalDonationReceipt: true,
+    canViewExternalDonationProof: true,
+    canMatchExternalDonationToDonor: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -134,8 +167,20 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageRecurring: true,
     canViewSettlements: true,
     canManageOrgSettings: true,
+    canCreateExternalDonation: true,
+    canEditExternalDonation: true,
+    canSendExternalDonationReceipt: true,
+    canMatchExternalDonationToDonor: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
-    // canViewAsUser: false by default, override-able.
+    // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
+    // false by default, override-able — voiding a donation record and
+    // viewing a proof-of-payment attachment are treated like a refund
+    // (canIssueRefunds), not a routine edit.
     // canManageRolesAndPermissions, canTransferOwnership: never granted to
     // ADMIN, not override-able (see permissions.ts OVERRIDABLE_PERMISSION_KEYS).
   },
@@ -145,6 +190,15 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditOwnGivingLinks: true,
     canViewOwnTransactions: true,
     canViewDonors: true, // scope-limited to donors tied to their attributed payments; see buildGivingLinkScope/buildPaymentScope
+    canCreateExternalDonation: true, // fundraisers are the ones recording cash/checks received in person
+    canMatchExternalDonationToDonor: true,
+    // Address view/edit follow the same donor-scoping rule as canViewDonors
+    // (limited to donors tied to their attributed payments) — a fundraiser
+    // regularly collects a mailing address while recording a gift in
+    // person, but export/confirm/audit-history are left owner/admin-only
+    // by default, override-able.
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,
@@ -170,3 +224,15 @@ export const WGC_ADMIN_PERMISSIONS: PermissionMatrix = {
   canViewDonors: true,
   canViewSettlements: true,
 };
+
+/** Permission keys that only matter for the "Record External Donation"
+ * feature — reused wherever code needs to enumerate just this feature's
+ * permissions (e.g. the merchant settings team-permissions editor). */
+export const EXTERNAL_DONATION_PERMISSION_KEYS: readonly PermissionKey[] = [
+  "canCreateExternalDonation",
+  "canEditExternalDonation",
+  "canVoidExternalDonation",
+  "canSendExternalDonationReceipt",
+  "canViewExternalDonationProof",
+  "canMatchExternalDonationToDonor",
+];

@@ -43,6 +43,7 @@ export interface DonorsListFilters {
   hasBankReturn?: boolean;
   hasDispute?: boolean;
   hasActiveSubscription?: boolean;
+  addressStatus?: "MISSING" | "UNVERIFIED" | "CONFIRMED";
   archivedStatus?: "active" | "archived" | "all";
   /** Team-access Checkpoint 4A: undefined = organization scope (all
    * church donors). A non-null array restricts to exactly these donor IDs —
@@ -85,6 +86,9 @@ export async function loadDonorsList(
     ...(archivedStatus === "archived" ? { archivedAt: { not: null } } : {}),
     ...(filters.createdDateFilter ? { createdAt: filters.createdDateFilter } : {}),
     ...(filters.donorIdIn ? { id: { in: filters.donorIdIn } } : {}),
+    ...(filters.addressStatus === "MISSING" ? { addressLine1: null } : {}),
+    ...(filters.addressStatus === "UNVERIFIED" ? { addressLine1: { not: null }, addressVerified: "UNVERIFIED" } : {}),
+    ...(filters.addressStatus === "CONFIRMED" ? { addressLine1: { not: null }, addressVerified: { in: ["CONFIRMED_BY_DONOR", "CONFIRMED_BY_ORG"] } } : {}),
   };
 
   if (filters.search) {

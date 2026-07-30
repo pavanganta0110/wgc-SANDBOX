@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageGraph, breadcrumbs, kansasCityBusiness } from "@/lib/schema";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CTASection from "@/components/ui/CTASection";
@@ -6,9 +7,11 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/kansas-city/tithely-alternative" },
   title: "Tithe.ly Alternative for Kansas City Churches & 501(c) Organizations | WGC",
   description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration for churches and other 501(c) organizations.",
   openGraph: {
+    images: [{ url: "/og/kansas-city.png", width: 1200, height: 630 }],
     title: "Tithe.ly Alternative for Kansas City Churches | WGC",
     description: "Looking for a Tithe.ly alternative in Kansas City? WGC offers a white-label donation engine with lower flat-rate ACH fees and superior software integration.",
     url: "https://www.wgcpayments.com/kansas-city/tithely-alternative",
@@ -54,12 +57,22 @@ const FAQ_SCHEMA = {
   ]
 };
 
+const LOCAL_SCHEMA = pageGraph(kansasCityBusiness, breadcrumbs([
+  { name: "Home", path: "/" },
+  { name: "Kansas City", path: "/kansas-city/tithely-alternative" },
+  { name: "Tithe.ly Alternative", path: "/kansas-city/tithely-alternative" },
+]));
+
 export default function KansasCityTithelyAlternative() {
   return (
     <>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_SCHEMA) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(LOCAL_SCHEMA) }}
       />
       <Header />
       <main className="flex-grow bg-white">

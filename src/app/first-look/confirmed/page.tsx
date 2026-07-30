@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import FirstLookPreferencesForm from "@/components/marketing/FirstLookPreferencesForm";
+import GatewayIcon from "@/components/ui/GatewayIcon";
 
 export const metadata = {
   title: "Confirmed | First Look | WGC Payments",
@@ -18,10 +19,13 @@ function DecorativeBar() {
 function Header() {
   return (
     <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
-      <div className="flex flex-col">
-        <span className="font-serif text-xl font-bold text-[#14213D] leading-none">WGC</span>
-        <span className="text-[10px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
-      </div>
+      <a href="/" className="flex items-center gap-3">
+        <GatewayIcon className="h-9 w-auto shrink-0" />
+        <div className="flex flex-col">
+          <span className="font-serif text-xl font-bold text-[#14213D] leading-none">WGC</span>
+          <span className="text-[10px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
+        </div>
+      </a>
     </header>
   );
 }

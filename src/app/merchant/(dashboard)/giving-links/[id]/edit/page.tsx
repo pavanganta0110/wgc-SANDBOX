@@ -59,6 +59,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     fundSelectionEnabled: link.fundSelectionEnabled,
     allowedPaymentMethods: parseAllowedPaymentMethods(link.allowedPaymentMethodsJson),
     donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
+    collectMailingAddress: link.collectMailingAddress,
     feeCoverEnabled: link.feeCoverEnabled,
     feeCoverDefaultOn: link.feeCoverDefaultOn,
     recurringEnabled: link.recurringEnabled,

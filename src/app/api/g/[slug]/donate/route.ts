@@ -14,6 +14,7 @@ import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/err
 import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
+import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import crypto from "crypto";
@@ -79,6 +80,7 @@ async function handleDonate(req: Request, slug: string) {
       paymentMethod,
       fraudSessionId,
       donor,
+      mailingAddress,
       preview = false,
       expectedTotalCents,
       clientAttemptId,
@@ -398,6 +400,31 @@ async function handleDonate(req: Request, slug: string) {
     
     const totalCents = feeStrategy.amountToChargeCents;
     const feeCoveredCents = feeStrategy.supplementalFeeCents;
+
+    // Donor-submitted mailing address — never applied on a preview/estimate
+    // call (no real donation happened), and never blocks the donation if it
+    // fails (a receipt/statement mailing address is not payment-critical).
+    // enteredByDonor: true because the donor themselves typed this in on
+    // the public giving page — per spec, a donor-entered address may become
+    // the current one directly, unlike a merchant/import-entered address.
+    if (!preview && mailingAddress && typeof mailingAddress === "object" && mailingAddress.addressLine1) {
+      try {
+        const cleanedAddress = cleanAddressInput(mailingAddress);
+        if (hasAnyAddressField(cleanedAddress)) {
+          await applyDonorAddressUpdate({
+            donorId: donorRecord.id,
+            churchId: church.id,
+            newAddress: cleanedAddress,
+            source: "ONLINE_DONATION_FORM",
+            enteredByDonor: true,
+            verifiedAs: "CONFIRMED_BY_DONOR",
+            req,
+          });
+        }
+      } catch {
+        // Never fail the donation over an address-save issue.
+      }
+    }
 
     // 3. Return Preview response if requested
     if (preview) {

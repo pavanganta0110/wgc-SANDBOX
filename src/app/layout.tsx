@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { graph } from "@/lib/schema";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
@@ -21,9 +22,6 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://www.wgcpayments.com"),
   title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
   description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
-  alternates: {
-    canonical: "/",
-  },
   robots: {
     index: true,
     follow: true,
@@ -32,31 +30,21 @@ export const metadata: Metadata = {
     title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
     description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
     type: "website",
-    images: ["/wgc-brand-final.png"],
+    images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     url: "https://www.wgcpayments.com/",
   },
   twitter: {
     card: "summary_large_image",
     title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
     description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
-    images: ["/wgc-brand-final.png"],
+    images: ["/og/default.png"],
   },
   icons: {
-    icon: "/favicon.ico?v=3",
+    icon: "/favicon.ico?v=4",
   },
 };
 
-const professionalServiceSchema = {
-  "@context": "https://schema.org",
-  "@type": "ProfessionalService",
-  "name": "Way Point Gateway Collective",
-  "url": "https://www.wgcpayments.com",
-  "logo": "https://www.wgcpayments.com/wgc-brand-final.png",
-  "areaServed": {
-    "@type": "City",
-    "name": "Kansas City"
-  }
-};
+const siteSchema = graph();
 
 export default function RootLayout({
   children,
@@ -68,7 +56,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans bg-wgc-off text-wgc-navy-900">
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(professionalServiceSchema) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(siteSchema) }}
         />
         {children}
         <Toaster 
