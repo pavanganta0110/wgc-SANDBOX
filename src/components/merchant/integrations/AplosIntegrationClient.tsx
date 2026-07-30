@@ -104,7 +104,10 @@ export default function AplosIntegrationClient({ canManage }: { canManage: boole
       </div>
 
       {isConnected ? (
-        <ConnectedPanel status={status!} canManage={canManage} onChanged={refreshStatus} />
+        <>
+          <ConnectedPanel status={status!} canManage={canManage} onChanged={refreshStatus} />
+          <ConfigurationPanel canManage={canManage} />
+        </>
       ) : (
         <ConnectionWizard canManage={canManage} priorStatus={status} onConnected={refreshStatus} />
       )}
@@ -451,6 +454,304 @@ function ConnectionWizard({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Accounting configuration + fund mapping + automatic sync eligibility
+// ---------------------------------------------------------------------------
+
+interface AplosOption {
+  id: string | number;
+  name: string;
+}
+interface FundMappingRow {
+  fundId: string;
+  fundName: string;
+  isActive: boolean;
+  mapping: { aplosPurposeId: string; aplosPurposeName: string; isDefault: boolean } | null;
+}
+interface ConfigurationData {
+  accountConfiguration: {
+    depositAccountId: string;
+    depositAccountName: string;
+    processingFeeExpenseAccountId: string;
+    processingFeeExpenseAccountName: string;
+    defaultPurposeId: string;
+    defaultPurposeName: string;
+  } | null;
+  fundMappings: FundMappingRow[];
+  mappedCount: number;
+  unmappedCount: number;
+  eligibility: { eligible: boolean; reasons: string[] };
+}
+
+function ConfigurationPanel({ canManage }: { canManage: boolean }) {
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<ConfigurationData | null>(null);
+  const [depositOptions, setDepositOptions] = useState<AplosOption[]>([]);
+  const [expenseOptions, setExpenseOptions] = useState<AplosOption[]>([]);
+  const [purposeOptions, setPurposeOptions] = useState<AplosOption[]>([]);
+  const [purposeFilter, setPurposeFilter] = useState("");
+  const [depositAccountId, setDepositAccountId] = useState("");
+  const [expenseAccountId, setExpenseAccountId] = useState("");
+  const [defaultPurposeId, setDefaultPurposeId] = useState("");
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [savingFundId, setSavingFundId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastValidatedAt, setLastValidatedAt] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [configRes, depositRes, expenseRes, purposeRes] = await Promise.all([
+        fetch("/api/merchant/settings/integrations/aplos/configuration"),
+        fetch("/api/merchant/settings/integrations/aplos/accounts?type=deposit"),
+        fetch("/api/merchant/settings/integrations/aplos/accounts?type=expense"),
+        fetch("/api/merchant/settings/integrations/aplos/purposes"),
+      ]);
+      if (configRes.ok) {
+        const data: ConfigurationData = await configRes.json();
+        setConfig(data);
+        if (data.accountConfiguration) {
+          setDepositAccountId(data.accountConfiguration.depositAccountId);
+          setExpenseAccountId(data.accountConfiguration.processingFeeExpenseAccountId);
+          setDefaultPurposeId(data.accountConfiguration.defaultPurposeId);
+        }
+      }
+      if (depositRes.ok) {
+        const d = await depositRes.json();
+        setDepositOptions(d.accounts.map((a: { accountNumber: number; name: string }) => ({ id: a.accountNumber, name: a.name })));
+      }
+      if (expenseRes.ok) {
+        const d = await expenseRes.json();
+        setExpenseOptions(d.accounts.map((a: { accountNumber: number; name: string }) => ({ id: a.accountNumber, name: a.name })));
+      }
+      if (purposeRes.ok) {
+        const d = await purposeRes.json();
+        setPurposeOptions(d.purposes.map((p: { id: number; name: string }) => ({ id: p.id, name: p.name })));
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Wrapped in its own async closure (rather than calling load() directly
+    // in the effect body) to avoid react-hooks' "setState synchronously
+    // within an effect" warning — same pattern used for the mount fetch at
+    // the top of this file. load() itself is also called from several
+    // button handlers below, which is not flagged since those aren't effects.
+    (async () => {
+      await load();
+    })();
+  }, [load]);
+
+  async function handleSaveConfiguration() {
+    setSavingConfig(true);
+    try {
+      const res = await fetch("/api/merchant/settings/integrations/aplos/account-configuration", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ depositAccountId: Number(depositAccountId), processingFeeExpenseAccountId: Number(expenseAccountId), defaultPurposeId: Number(defaultPurposeId) }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Accounting configuration saved.");
+        load();
+      } else {
+        toast.error(data.error || "Could not save configuration.");
+      }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setSavingConfig(false);
+    }
+  }
+
+  async function handleSaveMapping(fundId: string, purposeId: string) {
+    if (!purposeId) return;
+    setSavingFundId(fundId);
+    try {
+      const res = await fetch("/api/merchant/settings/integrations/aplos/mappings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wgcFundId: fundId, aplosPurposeId: Number(purposeId) }),
+      });
+      const data = await res.json();
+      if (data.success) load();
+      else toast.error(data.error || "Could not save mapping.");
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setSavingFundId(null);
+    }
+  }
+
+  async function handleToggleSync(enabled: boolean) {
+    try {
+      const res = await fetch("/api/merchant/settings/integrations/aplos/sync-toggle", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(enabled ? "Automatic sync enabled." : "Automatic sync disabled.");
+        load();
+      } else {
+        toast.error(data.error || "Could not update automatic sync.", { duration: 5000 });
+      }
+    } catch {
+      toast.error("Could not reach the server.");
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/merchant/settings/integrations/aplos/refresh", { method: "POST" });
+      const data = await res.json();
+      setLastValidatedAt(data.lastValidatedAt || null);
+      if (data.errors?.length) toast.error(`Some configured resources are no longer valid: ${data.errors.join(" ")}`, { duration: 6000 });
+      else toast.success("All configured resources are still valid.");
+      load();
+    } catch {
+      toast.error("Could not reach the server to refresh resources.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center gap-2 text-sm text-slate-500">
+        <Loader2 className="w-4 h-4 animate-spin" /> Loading configuration…
+      </div>
+    );
+  }
+
+  const filteredPurposes = purposeOptions.filter((p) => p.name.toLowerCase().includes(purposeFilter.toLowerCase()));
+
+  return (
+    <div className="space-y-6">
+      {/* Accounting configuration */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+        <h4 className="text-sm font-bold text-slate-900">Accounting configuration</h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Deposit account</label>
+            <select value={depositAccountId} onChange={(e) => setDepositAccountId(e.target.value)} disabled={!canManage} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Select…</option>
+              {depositOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Processing-fee expense account</label>
+            <select value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)} disabled={!canManage} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Select…</option>
+              {expenseOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Default Purpose (fallback)</label>
+            <select value={defaultPurposeId} onChange={(e) => setDefaultPurposeId(e.target.value)} disabled={!canManage} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
+              <option value="">Select…</option>
+              {purposeOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {canManage && (
+          <button
+            onClick={handleSaveConfiguration}
+            disabled={savingConfig || !depositAccountId || !expenseAccountId || !defaultPurposeId}
+            className="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            {savingConfig ? "Saving…" : "Save Configuration"}
+          </button>
+        )}
+      </div>
+
+      {/* Fund mapping */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-slate-900">Fund mapping</h4>
+          <span className="text-xs text-slate-500">
+            {config?.mappedCount ?? 0} mapped · {config?.unmappedCount ?? 0} unmapped
+          </span>
+        </div>
+        <input
+          value={purposeFilter}
+          onChange={(e) => setPurposeFilter(e.target.value)}
+          placeholder="Search Aplos Purposes…"
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+        />
+        <div className="divide-y divide-slate-50">
+          {(config?.fundMappings ?? []).map((row) => (
+            <div key={row.fundId} className="flex items-center justify-between py-3 gap-4">
+              <div className="text-sm text-slate-900 font-medium">{row.fundName}</div>
+              <div className="flex items-center gap-2">
+                {!row.mapping && <span className="text-xs text-amber-600 font-semibold">Unmapped</span>}
+                <select
+                  defaultValue={row.mapping?.aplosPurposeId ?? ""}
+                  disabled={!canManage || savingFundId === row.fundId}
+                  onChange={(e) => handleSaveMapping(row.fundId, e.target.value)}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm min-w-[200px]"
+                >
+                  <option value="">Choose an Aplos Purpose…</option>
+                  {filteredPurposes.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+          {(config?.fundMappings ?? []).length === 0 && <p className="text-xs text-slate-400 py-3">No active WGC funds to map yet.</p>}
+        </div>
+      </div>
+
+      {/* Automatic sync eligibility */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-slate-900">Automatic synchronization</h4>
+          {canManage && (
+            <button onClick={handleRefresh} disabled={refreshing} className="text-xs font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-50">
+              {refreshing ? "Refreshing…" : "Refresh resources"}
+            </button>
+          )}
+        </div>
+        {lastValidatedAt && <p className="text-xs text-slate-400">Last validated {new Date(lastValidatedAt).toLocaleString()}</p>}
+
+        {config?.eligibility.eligible ? (
+          <div className="flex items-center gap-2 text-sm text-green-700">
+            <CheckCircle2 className="w-4 h-4" /> Ready — all requirements are met.
+          </div>
+        ) : (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-slate-700">Automatic sync is not yet available:</p>
+            <ul className="list-disc list-inside text-xs text-amber-700 space-y-0.5">
+              {config?.eligibility.reasons.map((r, i) => <li key={i}>{r}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {canManage && (
+          <button
+            onClick={() => handleToggleSync(!config?.eligibility.eligible ? false : true)}
+            disabled={!config?.eligibility.eligible}
+            className="px-4 py-2 rounded-xl text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            Enable Automatic Sync
+          </button>
+        )}
+      </div>
     </div>
   );
 }
