@@ -32,7 +32,7 @@ const BASE_TRANSFER = {
   finixSettlementId: "stl_1",
   state: "SUCCEEDED",
   amountCents: 10000,
-  applicationFeeCents: 100,
+  applicationFeeCents: 100 as number | null,
 };
 
 const BASE_PAYMENT = {
@@ -44,12 +44,12 @@ const BASE_PAYMENT = {
   donationAmountCents: 10000,
   feeCoveredCents: 0,
   amountCents: 10000,
-  actualFinixFeesCents: 320,
+  actualFinixFeesCents: 320 as number | null,
   goodsServicesProvided: false,
-  goodsServicesFairMarketValueCents: null,
+  goodsServicesFairMarketValueCents: null as number | null,
 };
 
-const BASE_ACCOUNT_CONFIG = { churchId: "church-1", depositAccountId: "1000", processingFeeExpenseAccountId: "6000", defaultPurposeId: "55" };
+const BASE_ACCOUNT_CONFIG = { churchId: "church-1", depositAccountId: "1000", processingFeeExpenseAccountId: "6000", defaultPurposeId: "55" as string | null };
 
 async function setup(overrides: {
   settlement?: Partial<typeof BASE_SETTLEMENT> | null;

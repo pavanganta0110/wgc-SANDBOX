@@ -31,7 +31,10 @@ export interface ResourceFetchFailure {
   normalized: NormalizedAplosError;
 }
 
-async function getReadyConnectionToken(churchId: string): Promise<{ token: string; aplosAccountId: string }> {
+/** Exported for reuse by syncEngine.ts (Checkpoint 7), which needs the same
+ * "resolve a church's stored connection to a real, freshly obtained access
+ * token" step before posting a contribution. */
+export async function getReadyConnectionToken(churchId: string): Promise<{ token: string; aplosAccountId: string }> {
   const connection = await prisma.aplosConnection.findUnique({
     where: { churchId },
     select: { status: true, aplosOrganizationId: true },
