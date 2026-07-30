@@ -18,15 +18,18 @@ import { isAplosApiException, isAplosAuthData, type AplosApiEnvelope, type Aplos
  *      the account being flagged for abuse — never poll for a fresh token
  *      faster than that.
  *
- * UNVERIFIED (flagged, not guessed): Aplos's documentation shows their
- * private-key file loaded as raw base64 PKCS8 DER (no PEM headers) in their
- * own Java example, but does not show what format keys generated via the
- * Aplos dashboard today actually download as — a modern download may well
- * be PEM-wrapped. loadPrivateKey() below accepts either, but which one a
- * real Aplos-issued key actually is has not been confirmed against a live
- * account. This must be verified against real pilot credentials before
- * being called production-ready (see docs/integrations/aplos.md "Pilot
- * Verification Checklist").
+ * PRIVATE KEY FORMAT — only ONE format is actually documented by Aplos:
+ * raw base64 PKCS8 DER (no PEM headers), shown in their own Java example.
+ * PEM support in loadPrivateKey() below is NOT documented anywhere by
+ * Aplos — it is this codebase's own defensive addition, on the unconfirmed
+ * guess that a modern dashboard download might be PEM-wrapped, and must be
+ * treated as provisional, not as an officially-supported second format.
+ * Do not present PEM support as Aplos-documented in any UI copy, error
+ * message, or future documentation update. Which format a real Aplos-issued
+ * key actually is has not been confirmed against a live account — this
+ * must be verified against real pilot credentials before being called
+ * production-ready (see docs/integrations/aplos.md "Pilot Verification
+ * Checklist").
  */
 
 export interface AplosCredentials {
@@ -80,11 +83,13 @@ export class AplosAuthError extends Error {
 const EXPIRY_BUFFER_MS = 60_000;
 
 /**
- * Loads an Aplos private key for RSA decryption. Accepts either a
- * PEM-formatted key (`-----BEGIN PRIVATE KEY-----...`) or raw base64 PKCS8
- * DER (matching Aplos's own documented Java example, which reads a key file
- * with no PEM headers) — see the UNVERIFIED note above for why both are
- * supported rather than assuming one.
+ * Loads an Aplos private key for RSA decryption. Two input shapes are
+ * accepted, but they are not equally confirmed — see "PRIVATE KEY FORMAT"
+ * above:
+ *   - raw base64 PKCS8 DER, no PEM headers — the ONLY format Aplos's own
+ *     documentation actually shows (their Java example).
+ *   - PEM-formatted (`-----BEGIN PRIVATE KEY-----...`) — accepted
+ *     defensively, but Aplos does not document this; provisional only.
  */
 function loadPrivateKey(material: string): crypto.KeyObject {
   const trimmed = material.trim();
@@ -121,7 +126,13 @@ export function decryptAccessToken(encryptedTokenBase64: string, privateKeyMater
   const encrypted = Buffer.from(encryptedTokenBase64, "base64");
   try {
     const decrypted = crypto.privateDecrypt({ key, padding: crypto.constants.RSA_PKCS1_PADDING }, encrypted);
-    return decrypted.toString("utf8");
+    const token = decrypted.toString("utf8");
+    // Zero the intermediate Buffers now that the string copy is captured —
+    // the returned token is itself a JS string and cannot be cleared this
+    // way, which is the practical limit of buffer-clearing here.
+    decrypted.fill(0);
+    encrypted.fill(0);
+    return token;
   } catch {
     // Never leak the underlying OpenSSL error (padding/format details) —
     // this always means either the wrong private key or a malformed token.

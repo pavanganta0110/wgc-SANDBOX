@@ -129,12 +129,23 @@ export function encryptSecret(plaintext: string): EncryptedEnvelope {
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
 
-  return {
+  const envelope: EncryptedEnvelope = {
     version: ENVELOPE_VERSION,
     iv: iv.toString("base64"),
     authTag: authTag.toString("base64"),
     ciphertext: ciphertext.toString("base64"),
   };
+
+  // Zero the intermediate Buffers now that their base64 copies are captured
+  // in `envelope` — reduces how long the raw bytes sit in memory. The
+  // `plaintext` parameter itself is a JS string and cannot be cleared this
+  // way (strings are immutable in JS/V8); this is the practical limit of
+  // what "clear sensitive buffers where practical" can mean here.
+  iv.fill(0);
+  ciphertext.fill(0);
+  authTag.fill(0);
+
+  return envelope;
 }
 
 export function decryptSecret(envelope: EncryptedEnvelope): string {
@@ -152,8 +163,18 @@ export function decryptSecret(envelope: EncryptedEnvelope): string {
 
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
-    const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-    return plaintext.toString("utf8");
+    const plaintextBuffer = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    const plaintext = plaintextBuffer.toString("utf8");
+
+    // Zero the intermediate Buffers now that the string copy is captured —
+    // the returned `plaintext` is itself a JS string and cannot be cleared
+    // this way (strings are immutable), which is the practical limit here.
+    plaintextBuffer.fill(0);
+    ciphertext.fill(0);
+    iv.fill(0);
+    authTag.fill(0);
+
+    return plaintext;
   } catch {
     // Never surface the underlying crypto error (could leak timing/format
     // detail) — a GCM auth-tag failure means either tampering or the wrong

@@ -71,10 +71,23 @@ OpenSSL uses "implicit rejection" for RSA-PKCS1 decryption (a Bleichenbacher-att
 countermeasure) — a wrong key can silently produce garbage bytes instead of an error. This is
 proven by `__tests__/authProvider.test.ts` against real RSA keypairs, not assumed.
 
-**Consequence:** decrypt succeeding is not proof a submitted private key is correct. Checkpoint
-3's "Test Connection" step must make one real authenticated Aplos API call (e.g.
-`GET /partners/verify`) to prove the key actually works — never just check that decryption
-didn't throw.
+**Consequence:** decrypt succeeding is not proof a submitted private key is correct.
+
+**Binding requirement for Checkpoint 3's "Test Connection":** a connection may be saved as
+`CONNECTED` only after all of the following succeed, in order — never on decrypt success alone:
+
+1. Obtain and decrypt an Aplos access token.
+2. Make one real, authenticated, **read-only** Aplos API request (e.g. `GET /partners/verify`).
+3. Confirm access to the specific selected Aplos organization/account (not just "some" token
+   worked).
+4. Retrieve one safe resource (organization details, purposes, or accounts) to confirm the
+   response actually corresponds to the expected organization.
+5. Save only safe status metadata (`status`, `lastConnectionTestAt`, `aplosOrganizationId/Name`,
+   fingerprints) — never the token, never any raw response body.
+
+Without pilot credentials, Checkpoint 3 must build this flow, test it fully against mocked Aplos
+responses, and mark real-Aplos verification as externally blocked — never fabricate a successful
+connection result to make the flow appear complete.
 
 ## 3. Security model
 
@@ -218,17 +231,59 @@ unresolved, not guessed around:
   `"expense_amount": 3.2` means $3.20). The future `AplosContributionBuilder` must convert from
   this codebase's integer-cents source-of-truth fields via exact decimal string formatting at the
   API boundary only — never float arithmetic, and never before that final boundary.
-- **Private-key file format is unconfirmed against a real Aplos-issued key.** Aplos's own
-  documented Java example loads a raw base64 PKCS8 DER key (no PEM headers), but the docs don't
-  show what a key downloaded from the Aplos dashboard today actually looks like. `authProvider.ts`
-  accepts either PEM or raw base64 DER, but this must be verified against real pilot credentials
-  (see Pilot Verification Checklist below) before being called production-ready.
+- **Private-key file format: only ONE format is actually documented.** Aplos's own Java example
+  loads a raw base64 PKCS8 DER key (no PEM headers) — that is the only format their documentation
+  shows. `authProvider.ts` additionally accepts PEM-formatted keys, but that is this codebase's own
+  defensive addition, not something Aplos documents — it must not be described anywhere (UI copy,
+  error messages, future docs) as an officially-supported second format. It is provisional and
+  isolated to `loadPrivateKey()`. Which format a real Aplos-issued key actually is must be confirmed
+  against real pilot credentials (see Pilot Verification Checklist below) before either format is
+  called production-ready.
 - **Whether "Purpose" and "Fund" need independent mapping** — confirmed they are distinct Aplos
   objects (a Contribution line references a Purpose; each Purpose itself references exactly one
   Fund), so `AplosPurposeMapping` mapping WGC Funds to Aplos Purposes (not Aplos Funds directly)
   is the correct model. Funds are read via `GET /funds` for display/context only.
 
-## 7. Environment variables
+## 7. Known Aplos API limitation: no idempotency, and the mandatory Checkpoint 7 policy
+
+This is a known, confirmed limitation of Aplos's public API, not a WGC design gap: **`POST
+/contributions` has no idempotency field, and Aplos provides no way to search a created
+contribution by any WGC-supplied reference.** The only documented search filters on `GET
+/contributions` are `f_contact`, `f_contactname`, `f_lastupdated`, `f_rangeend`, and
+`f_rangestart` — none of them are a reference WGC controls or can guarantee is unique to one
+attempt.
+
+**Investigated: does Aplos accept a harmless WGC label a human could use to identify a
+contribution?** Yes, two fields, both confirmed from the real `POST /contributions` request shape:
+
+- `source_url` (contribution-level, top-level field, e.g. `"http://www.sample.org"` in Aplos's own
+  example) — a natural place for a safe WGC dashboard URL referencing the settlement.
+- `note` (per-line field, e.g. `"A sample comment or note."`) — a natural place for a WGC
+  settlement/payment reference string.
+
+**Neither field provides idempotency, automatic lookup, or duplicate detection.** Confirmed:
+neither `source_url` nor `note` appears in the documented list-filter set above, so there is no
+API call that finds a contribution by either value — a WGC admin would have to open the
+contribution in the Aplos UI and read the field visually. **This must never be described,
+documented, or implemented as if it provides idempotency or search capability.** Its only value
+is helping a human who is already looking at a specific contribution confirm which WGC record it
+corresponds to.
+
+**Mandatory policy for Checkpoint 7 (adopted now, binding on that design):**
+
+| Situation | Outcome |
+|---|---|
+| Timeout or connection loss **before** the POST request is sent | May be retried — the request never reached Aplos, so no duplicate risk exists. |
+| A confirmed HTTP response from Aplos (any status) | Classify normally via `errors.ts` — this is not ambiguous; Aplos told us what happened. |
+| Timeout, connection loss, or any unknown/unparseable result **after** a contribution POST was sent | **Must become `NEEDS_REVIEW`. Must never be retried automatically, under any circumstance, including via the merchant-facing retry button.** A WGC administrator must manually reconcile the record against Aplos (using `source_url`/`note` to help locate it, per above) before another POST for that settlement is permitted. |
+
+This is already reflected in `errors.ts`'s `classifyNetworkOrTimeoutError("TIMEOUT")`, which
+returns `AMBIGUOUS_RESULT` with `retryable: false` — Checkpoint 7's retry service and settlement
+sync service must preserve this distinction exactly (pre-send vs. post-send timeout) and must
+never let a "Retry" UI action bypass it. `AplosSyncRecord.requiresManualReview` exists in the
+Checkpoint 2 schema specifically to enforce this at the data layer, not just in application logic.
+
+## 8. Environment variables
 
 | Variable | Required | Purpose |
 |---|---|---|
@@ -239,7 +294,7 @@ unresolved, not guessed around:
 None of these are `NEXT_PUBLIC_*`. Merchant-specific credentials (client ID, private key) are
 never environment variables — they live in encrypted, per-church `AplosConnection` rows.
 
-## 8. Pilot verification checklist (blocked — no Aplos credentials available yet)
+## 9. Pilot verification checklist (blocked — no Aplos credentials available yet)
 
 Everything below requires a real Aplos account and cannot be verified until pilot credentials are
 provided. **Nothing in this codebase claims these work** — the auth provider's HTTP call and
@@ -253,7 +308,7 @@ RSA keypairs, but have never been exercised against Aplos's real servers.
 - [ ] `GET /partners/verify` confirms organization access
 - [ ] `GET /purposes`, `/funds`, `/accounts` return real data in the shapes documented here
 
-## 9. Status by checkpoint
+## 10. Status by checkpoint
 
 - **Checkpoint 1 (audit):** complete.
 - **Checkpoint 2 (this checkpoint):** feature branch, Prisma schema, `canManageIntegrations`
