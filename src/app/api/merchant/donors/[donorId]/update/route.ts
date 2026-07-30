@@ -4,7 +4,11 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { normalizeEmail, normalizePhone, isValidEmail, isValidPhone } from "@/lib/donors/donorContact";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
+import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+
+const ADDRESS_FIELD_NAMES = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"] as const;
 
 function cleanString(value: unknown, maxLength = 200): string | null {
   if (typeof value !== "string") return null;
@@ -74,13 +78,49 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
     }
   }
 
-  for (const field of ["addressLine1", "addressLine2", "city", "state", "postalCode", "country", "companyName"] as const) {
-    if (field in body) {
-      const value = cleanString(body[field], field === "addressLine1" || field === "addressLine2" ? 200 : 100);
-      if (value !== (donor as any)[field]) {
-        data[field] = value;
-        changedFields.push(field);
-      }
+  if ("companyName" in body) {
+    const value = cleanString(body.companyName, 100);
+    if (value !== donor.companyName) {
+      data.companyName = value;
+      changedFields.push("companyName");
+    }
+  }
+
+  // Address fields are routed through applyDonorAddressUpdate below (its
+  // own permission check, non-destructive-overwrite rule, and dedicated
+  // audit event) rather than the generic loop above — never bundled into
+  // the single "donor.updated" audit entry other profile fields share.
+  const addressFieldsSent = ADDRESS_FIELD_NAMES.some((f) => f in body);
+  let addressResult: Awaited<ReturnType<typeof applyDonorAddressUpdate>> | null = null;
+  if (addressFieldsSent) {
+    try {
+      requirePermission(auth, "canEditDonorAddress");
+    } catch {
+      return NextResponse.json({ error: "You do not have permission to edit donor mailing addresses." }, { status: 403 });
+    }
+    const newAddress = cleanAddressInput(body);
+    const source = isAddressSource(body.addressSource) ? body.addressSource : "MERCHANT_MANUAL_ENTRY";
+    addressResult = await applyDonorAddressUpdate({
+      donorId: donor.id,
+      churchId: auth.churchId,
+      newAddress,
+      source,
+      enteredByDonor: false,
+      force: body.forceAddressUpdate === true,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      req,
+    });
+    if (addressResult.status === "needs_confirmation") {
+      return NextResponse.json(
+        {
+          error: "This donor already has a different mailing address on file. Confirm to replace it.",
+          needsConfirmation: true,
+          previousAddress: addressResult.previous,
+        },
+        { status: 409 }
+      );
     }
   }
 
@@ -93,7 +133,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
   }
 
   if (changedFields.length === 0) {
-    return NextResponse.json({ donor, changedFields: [] });
+    // Address may still have been the only thing that changed — its own
+    // audit event was already logged by applyDonorAddressUpdate above.
+    const finalDonor = addressResult?.status === "updated" ? addressResult.donor : donor;
+    return NextResponse.json({ donor: finalDonor, changedFields: addressResult?.status === "updated" ? ADDRESS_FIELD_NAMES.filter((f) => f in body) : [] });
   }
 
   const updated = await prisma.donor.update({ where: { id: donor.id }, data });
@@ -113,5 +156,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
     req,
   });
 
-  return NextResponse.json({ donor: updated, changedFields });
+  // Merge in the address fields applyDonorAddressUpdate already committed,
+  // so the response reflects both in one consistent donor object.
+  const finalDonor = addressResult?.status === "updated" ? { ...updated, ...addressResult.donor } : updated;
+
+  return NextResponse.json({ donor: finalDonor, changedFields: [...changedFields, ...(addressResult?.status === "updated" ? ADDRESS_FIELD_NAMES.filter((f) => f in body) : [])] });
 }

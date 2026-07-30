@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { CheckCircle, Clock, AlertCircle, Repeat } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Repeat, Loader2 } from "lucide-react";
 import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
@@ -12,8 +12,16 @@ import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSe
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
+import { trackMetaEvent } from "@/components/common/MetaPixel";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
+
+const US_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA",
+  "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM",
+  "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
+  "WV", "WI", "WY",
+];
 // This holds the Finix Identity ID (starts "ID...") that Apple Pay's
 // merchant validation is actually performed against server-side — see
 // FINIX_APPLICATION_OWNER_ID in validate-merchant/route.ts, which must
@@ -69,6 +77,7 @@ export default function GivingLinkForm({
   feeCoverEnabled,
   feeCoverDefaultOn,
   donorFieldSettings,
+  collectMailingAddress = true,
   pricing,
   thankYouMessage,
   googlePayGatewayMerchantId,
@@ -97,6 +106,8 @@ export default function GivingLinkForm({
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
   donorFieldSettings: DonorFieldSettings;
+  /** Shows the collapsed "Add mailing address (optional)" accordion when true. Defaults to true so a page rendered from stale/incomplete config still shows it — the actual default lives on GivingLink.collectMailingAddress. */
+  collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
   /** Finix Application Owner Identity ID ("ID..."), used as Google Pay's gatewayMerchantId. Null when not configured. */
@@ -143,6 +154,34 @@ export default function GivingLinkForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  // Mailing address — collapsed by default, never required. Values persist
+  // across close/reopen (plain component state, not reset on toggle) per
+  // spec ("preserve entered address information if the donor closes and
+  // reopens the section").
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [addressOpenedOnce, setAddressOpenedOnce] = useState(false);
+  const [addressLine1, setAddressLine1] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [addressCity, setAddressCity] = useState("");
+  const [addressState, setAddressState] = useState("");
+  const [addressPostalCode, setAddressPostalCode] = useState("");
+  const [addressCountry, setAddressCountry] = useState("US");
+  const [saveAddress, setSaveAddress] = useState(false);
+  // Only sent — and only ever persisted — when the donor both filled it in
+  // AND checked "Save this as my mailing address." Per spec, an address
+  // entered without the checkbox is never stored as the donor's permanent
+  // mailing address.
+  const mailingAddressPayload =
+    saveAddress && addressLine1.trim()
+      ? {
+          addressLine1: addressLine1.trim(),
+          addressLine2: addressLine2.trim() || undefined,
+          city: addressCity.trim() || undefined,
+          state: addressState.trim() || undefined,
+          postalCode: addressPostalCode.trim() || undefined,
+          country: addressCountry.trim() || undefined,
+        }
+      : undefined;
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formReady, setFormReady] = useState(false);
@@ -165,12 +204,41 @@ export default function GivingLinkForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
 
+  // Privacy-safe interaction tracking only — never the donor's actual
+  // street address, city, ZIP, or any other address value.
+  useEffect(() => {
+    if (collectMailingAddress && !previewMode) trackMetaEvent("MailingAddressSectionDisplayed");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (addressOpen && !addressOpenedOnce) {
+      setAddressOpenedOnce(true);
+      if (!previewMode) trackMetaEvent("MailingAddressSectionOpened");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addressOpen]);
+
+  const [addressCompletedTracked, setAddressCompletedTracked] = useState(false);
+  useEffect(() => {
+    if (mailingAddressPayload && !addressCompletedTracked) {
+      setAddressCompletedTracked(true);
+      if (!previewMode) trackMetaEvent("MailingAddressSectionCompleted");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mailingAddressPayload]);
+
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const cardBankMethods = allowedPaymentMethods.filter((m) => m === "CARD" || m === "BANK");
 
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
+  // Distinct from walletProcessing, which is set the moment the wallet button
+  // is tapped — i.e. while the native Apple/Google sheet is still open. This
+  // one covers only the post-authorization /donate round trip, so the
+  // "Completing your gift…" overlay never renders underneath a payment sheet.
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
   const googlePayButtonRef = useRef<HTMLDivElement>(null);
   const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
@@ -237,6 +305,7 @@ export default function GivingLinkForm({
     method: "apple_pay" | "google_pay",
     walletResult: ApplePayResult | GooglePayResult
   ): Promise<{ success: boolean }> => {
+    setWalletSubmitting(true);
     try {
       walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
       // getFraudSessionId has no internal timeout — on a slow mobile
@@ -277,6 +346,7 @@ export default function GivingLinkForm({
             note: note.trim() || undefined,
             isAnonymous,
           },
+          mailingAddress: mailingAddressPayload,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -296,10 +366,17 @@ export default function GivingLinkForm({
       }
 
       setWalletProcessing(null);
+      // /donate returns `success: true` for any transfer it managed to create,
+      // including one Finix immediately declined — `state` is the only field
+      // that says whether money actually moved. This previously treated every
+      // non-PENDING state as success, so a FAILED wallet transfer (e.g. a
+      // closed card account) showed the donor a completed-donation screen for
+      // a gift the church never received. Only SUCCEEDED is success; PENDING
+      // keeps its ACH-style processing screen; everything else is a failure.
       const state = (data.state || "").toUpperCase();
       if (state === "PENDING") {
         setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-      } else {
+      } else if (state === "SUCCEEDED") {
         setResult({
           step: "success",
           totalCents: data.totalCents,
@@ -307,6 +384,13 @@ export default function GivingLinkForm({
           donationAmountCents: data.donationAmountCents,
           transferId: data.transferId,
         });
+      } else {
+        walletLog(`${method}: transfer did not succeed`, { state, transferId: data.transferId });
+        setResult({
+          step: "failed",
+          error: "Your payment was declined and you have not been charged. Please try a different card or payment method.",
+        });
+        return { success: false };
       }
       return { success: true };
     } catch (err) {
@@ -318,6 +402,10 @@ export default function GivingLinkForm({
       setWalletProcessing(null);
       setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
       return { success: false };
+    } finally {
+      // Every exit path clears it — a stuck overlay would trap the donor
+      // behind a full-screen, non-dismissible spinner.
+      setWalletSubmitting(false);
     }
   };
 
@@ -702,6 +790,7 @@ export default function GivingLinkForm({
                 note: note.trim() || undefined,
                 isAnonymous,
               },
+              mailingAddress: mailingAddressPayload,
             }),
           });
 
@@ -727,17 +816,29 @@ export default function GivingLinkForm({
             return;
           }
 
+          // Same rule as the wallet path: /donate returns success: true for
+          // any transfer it managed to create, including one Finix declined
+          // outright, so `state` is the only field that says whether money
+          // actually moved. Treating every non-PENDING state as success showed
+          // the donor a completed-donation screen for a declined card.
+          // PENDING is the normal ACH/bank case and keeps its processing
+          // screen; only SUCCEEDED is a completed gift.
           const state = (data.state || "").toUpperCase();
           setSubmitting(false);
           if (state === "PENDING") {
             setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-          } else {
+          } else if (state === "SUCCEEDED") {
             setResult({
               step: "success",
               totalCents: data.totalCents,
               feeCoveredCents: data.feeCoveredCents,
               donationAmountCents: data.donationAmountCents,
               transferId: data.transferId,
+            });
+          } else {
+            setResult({
+              step: "failed",
+              error: "Your payment was declined and you have not been charged. Please check your details or try a different payment method.",
             });
           }
         } catch {
@@ -823,6 +924,27 @@ export default function GivingLinkForm({
 
   return (
     <div className="space-y-6">
+      {/* Once the wallet sheet closes, the donation still needs a fraud
+          session plus the /donate round trip — several seconds on mobile. The
+          only feedback used to be a dimmed wallet button and a text-xs
+          "Processing donation…" line, so donors reported the page "going back
+          to the giving form" and then jumping to the success screen. This
+          overlay makes that wait unmistakable. It deliberately sits on top of
+          the form rather than replacing it (as a step: "processing" render
+          branch would) — the card path keeps Finix's tokenization iframe
+          mounted in this same tree, and unmounting it mid-submit would break
+          card payments. */}
+      {walletSubmitting && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-8 h-8 animate-spin text-white" />
+          <p className="text-base font-semibold text-white">Completing your gift…</p>
+          <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
+        </div>
+      )}
       {recurringEnabled && (
         <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
           <button
@@ -1007,6 +1129,96 @@ export default function GivingLinkForm({
             style={{ borderColor: light.borderColor }}
           />
         </div>
+        {collectMailingAddress && (
+          <div className="mb-3 rounded-lg border" style={{ borderColor: light.borderColor }}>
+            <button
+              type="button"
+              onClick={() => setAddressOpen((v) => !v)}
+              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+              style={{ color: light.bodyTextColor }}
+              aria-expanded={addressOpen}
+            >
+              <span>Add mailing address (optional)</span>
+              <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
+                ▾
+              </span>
+            </button>
+            {addressOpen && (
+              <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: light.borderColor }}>
+                <p className="text-xs" style={{ color: light.bodyTextColor, opacity: 0.7 }}>
+                  Used for mailed receipts and annual giving statements.
+                </p>
+                <input
+                  placeholder="Address line 1"
+                  value={addressLine1}
+                  onChange={(e) => setAddressLine1(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                />
+                <input
+                  placeholder="Address line 2 (optional)"
+                  value={addressLine2}
+                  onChange={(e) => setAddressLine2(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    placeholder="City"
+                    value={addressCity}
+                    onChange={(e) => setAddressCity(e.target.value)}
+                    className="px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ borderColor: light.borderColor }}
+                  />
+                  {addressCountry === "US" ? (
+                    <select
+                      value={addressState}
+                      onChange={(e) => setAddressState(e.target.value)}
+                      className="px-3 py-2 rounded-lg border text-sm outline-none"
+                      style={{ borderColor: light.borderColor }}
+                    >
+                      <option value="">State</option>
+                      {US_STATES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      placeholder="State / Province"
+                      value={addressState}
+                      onChange={(e) => setAddressState(e.target.value)}
+                      className="px-3 py-2 rounded-lg border text-sm outline-none"
+                      style={{ borderColor: light.borderColor }}
+                    />
+                  )}
+                  <input
+                    placeholder={addressCountry === "US" ? "ZIP code" : "Postal code"}
+                    value={addressPostalCode}
+                    onChange={(e) => setAddressPostalCode(e.target.value)}
+                    className="px-3 py-2 rounded-lg border text-sm outline-none"
+                    style={{ borderColor: light.borderColor }}
+                  />
+                </div>
+                <select
+                  value={addressCountry}
+                  onChange={(e) => setAddressCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                  style={{ borderColor: light.borderColor }}
+                >
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
+                  <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
+                  Save this as my mailing address for receipts and annual statements
+                </label>
+              </div>
+            )}
+          </div>
+        )}
         {isFieldVisible("donorNote") && (
           <input
             placeholder="Note (optional)"

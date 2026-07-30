@@ -522,3 +522,62 @@ export async function getDepositsInsights(churchId: string, dateFilter: { gte: D
 
   return { summary, trendData, hasData: deposits.length > 0 };
 }
+
+/**
+ * Reporting for "Record External Donation" entries — deliberately never
+ * joins Finix transfer/settlement/fee tables, so this can never contribute
+ * to Finix processing volume or WGC processing-fee totals. The WGC total
+ * is a separate, minimal query (same eligibility rule as getPaymentsInsights'
+ * successful-transfer total) included only so the two can be shown side by
+ * side without conflating them.
+ */
+export async function getExternalDonationsInsights(churchId: string, dateFilter: { gte: Date; lte?: Date } | undefined, attributedUserId?: string) {
+  const rows = await prisma.externalDonation.findMany({
+    where: {
+      churchId,
+      status: { not: "VOIDED" },
+      ...(dateFilter ? { donationDate: dateFilter } : {}),
+      // scopedUserId (passed as attributedUserId, same param name the other
+      // getXInsights functions in this file use) restricts a FUNDRAISER/
+      // VIEWER without canViewAllTransactions to donations they personally
+      // recorded — same rule as every other tab on this page.
+      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
+    },
+  });
+  const active = rows.filter((d) => d.depositStatus !== "RETURNED");
+
+  const bySource = new Map<string, { totalCents: number; count: number }>();
+  for (const d of active) {
+    const acc = bySource.get(d.source) ?? { totalCents: 0, count: 0 };
+    acc.totalCents += d.donationAmountCents;
+    acc.count += 1;
+    bySource.set(d.source, acc);
+  }
+  const totalExternalCents = active.reduce((sum, d) => sum + d.donationAmountCents, 0);
+
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
+  const transfers = await prisma.finixTransfer.findMany({
+    where: {
+      churchId,
+      ...EXCLUDE_NON_DONATION_TRANSFERS,
+      state: "SUCCEEDED",
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
+    select: { amountCents: true },
+  });
+  const totalWgcCents = transfers.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+
+  const summary = [
+    { label: "WGC-Processed Donations", value: formatCents(totalWgcCents) },
+    { label: "External Donations", value: formatCents(totalExternalCents) },
+    { label: "Combined Total Donations", value: formatCents(totalWgcCents + totalExternalCents) },
+    { label: "External Donation Count", value: String(active.length) },
+  ];
+
+  const bySourceTable = [...bySource.entries()]
+    .map(([source, v]) => ({ source, totalCents: v.totalCents, count: v.count }))
+    .sort((a, b) => b.totalCents - a.totalCents);
+
+  return { summary, bySourceTable, totalWgcCents, totalExternalCents, hasData: active.length > 0 };
+}

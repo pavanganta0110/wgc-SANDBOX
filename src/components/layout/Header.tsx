@@ -9,16 +9,24 @@ import GatewayIcon from "@/components/ui/GatewayIcon";
 
 const NAV_LINKS = [
   { name: "Home", href: "/" },
-  { name: "Churches, Nonprofits & 501(c) Orgs", href: "/churches" },
   { name: "Partners", href: "/software-partners" },
   { name: "Pricing", href: "/pricing" },
   { name: "Developers", href: "/developers" },
   { name: "Demo", href: "/demo/donation" },
 ];
 
+const WHO_WE_SERVE_LINKS = [
+  { name: "Churches", href: "/for/churches" },
+  { name: "Christian Nonprofits", href: "/for/christian-nonprofits" },
+  { name: "Schools", href: "/for/schools" },
+  { name: "Government & Public Sector", href: "/for/government" },
+  { name: "Nonprofits", href: "/for/nonprofits" },
+];
+
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [whoWeServeOpen, setWhoWeServeOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -60,14 +68,65 @@ export default function Header() {
           {/* Right Align: Navigation + CTA */}
           <div className="hidden lg:flex items-center gap-12">
             <nav className="flex items-center gap-10">
-              {NAV_LINKS.map((link) => (
-                <Link 
+              <Link
+                href="/"
+                className={cn(
+                  "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
+                  pathname === "/" ? "text-[#eab308]" : "text-[#010409]"
+                )}
+              >
+                Home
+              </Link>
+
+              <div
+                className="relative"
+                onMouseEnter={() => setWhoWeServeOpen(true)}
+                onMouseLeave={() => setWhoWeServeOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => setWhoWeServeOpen((v) => !v)}
+                  className={cn(
+                    "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
+                    WHO_WE_SERVE_LINKS.some((l) => l.href === pathname) ? "text-[#eab308]" : "text-[#010409]"
+                  )}
+                >
+                  Who We Serve
+                </button>
+                <div
+                  className={cn(
+                    "absolute left-0 top-full pt-4 transition-all duration-150",
+                    whoWeServeOpen ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-1"
+                  )}
+                >
+                  <div className="w-64 rounded-2xl border border-wgc-navy-100 bg-white shadow-2xl p-2">
+                    {WHO_WE_SERVE_LINKS.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setWhoWeServeOpen(false)}
+                        className={cn(
+                          "block px-4 py-3 rounded-xl text-[12px] font-bold tracking-[0.05em] transition-all",
+                          pathname === link.href
+                            ? "bg-wgc-off text-[#eab308]"
+                            : "text-[#010409] hover:bg-wgc-off"
+                        )}
+                      >
+                        {link.name}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {NAV_LINKS.slice(1).map((link) => (
+                <Link
                   key={link.href}
                   href={link.href}
                   className={cn(
                     "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
-                    pathname === link.href 
-                      ? "text-[#eab308]" 
+                    pathname === link.href
+                      ? "text-[#eab308]"
                       : "text-[#010409]"
                   )}
                 >
@@ -78,6 +137,9 @@ export default function Header() {
 
             {/* Desktop CTA */}
             <div className="flex items-center gap-6">
+              <Link href="/resources" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
+                Resources
+              </Link>
               <Link href="/contact" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Contact Sales
               </Link>
@@ -113,6 +175,27 @@ export default function Header() {
         isMobileMenuOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0 pointer-events-none"
       )}>
         <div className="px-8 pt-8 pb-12 space-y-4">
+          <div className="mb-6">
+            <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">Who We Serve</span>
+            <div className="flex flex-col gap-4">
+              {WHO_WE_SERVE_LINKS.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={closeMenu}
+                  className={cn(
+                    "text-xl font-bold tracking-tight transition-all",
+                    pathname === link.href
+                      ? "text-[#eab308]"
+                      : "text-white hover:text-[#eab308]"
+                  )}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+
           <div className="mb-6">
             <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">Platform</span>
             <div className="flex flex-col gap-4">

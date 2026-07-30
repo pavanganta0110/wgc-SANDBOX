@@ -20,6 +20,8 @@ interface Row {
   generatedAt: string | null;
   sentAt: string | null;
   hasMissingInfo: boolean;
+  addressStatus: "MISSING" | "UNVERIFIED" | "CONFIRMED";
+  readyToMail: boolean;
 }
 
 interface Summary {
@@ -333,6 +335,7 @@ export default function AnnualStatementsClient() {
                 <th className="px-4 py-3"><input type="checkbox" checked={selected.size === rows.length && rows.length > 0} onChange={toggleAll} /></th>
                 <th className="px-4 py-3">Donor</th>
                 <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Mailing Address</th>
                 <th className="px-4 py-3 text-right">Donations</th>
                 <th className="px-4 py-3 text-right">Recorded Total</th>
                 <th className="px-4 py-3">Statement Status</th>
@@ -349,6 +352,15 @@ export default function AnnualStatementsClient() {
                     <Link href={`/merchant/donors/${r.donorId}`} className="font-semibold text-slate-800 hover:underline">{r.donorName}</Link>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{r.donorEmail || <span className="text-amber-600">Missing</span>}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        r.addressStatus === "MISSING" ? "bg-slate-100 text-slate-500" : r.addressStatus === "CONFIRMED" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {r.addressStatus === "MISSING" ? "Missing address" : r.addressStatus === "CONFIRMED" ? "Confirmed — ready to mail" : "Unverified"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-right text-slate-600">{r.donationCount}</td>
                   <td className="px-4 py-3 text-right font-semibold text-slate-900">{formatCents(r.recordedTotalCents)}</td>
                   <td className="px-4 py-3"><StateBadge state={r.statementStatus} /></td>

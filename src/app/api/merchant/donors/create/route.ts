@@ -4,7 +4,9 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { normalizeEmail, normalizePhone, isValidEmail, isValidPhone } from "@/lib/donors/donorContact";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
+import { cleanAddressInput, hasAnyAddressField, isAddressSource } from "@/lib/donors/donorAddress";
 
 function cleanString(value: unknown, maxLength = 200): string | null {
   if (typeof value !== "string") return null;
@@ -60,6 +62,17 @@ export async function POST(req: Request) {
     }
   }
 
+  const address = cleanAddressInput(body);
+  const addressProvided = hasAnyAddressField(address);
+  if (addressProvided) {
+    try {
+      requirePermission(auth, "canEditDonorAddress");
+    } catch {
+      return NextResponse.json({ error: "You do not have permission to add a donor mailing address." }, { status: 403 });
+    }
+  }
+  const addressSource = addressProvided ? (isAddressSource(body.addressSource) ? body.addressSource : "MERCHANT_MANUAL_ENTRY") : null;
+
   const donor = await prisma.donor.create({
     data: {
       churchId: auth.churchId,
@@ -68,12 +81,10 @@ export async function POST(req: Request) {
       normalizedEmail,
       phone,
       normalizedPhone,
-      addressLine1: cleanString(body.addressLine1),
-      addressLine2: cleanString(body.addressLine2),
-      city: cleanString(body.city, 100),
-      state: cleanString(body.state, 100),
-      postalCode: cleanString(body.postalCode, 20),
-      country: cleanString(body.country, 100),
+      ...address,
+      addressSource,
+      addressUpdatedAt: addressProvided ? new Date() : null,
+      addressUpdatedByUserId: addressProvided ? auth.userId : null,
       companyName: cleanString(body.companyName, 200),
       anonymousPreference: body.anonymousPreference === true,
     },

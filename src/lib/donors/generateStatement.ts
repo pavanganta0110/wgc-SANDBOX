@@ -99,6 +99,8 @@ export async function generateYearEndStatement(
     data: calc.lines.map((l) => ({
       annualStatementId: statement.id,
       paymentId: l.paymentId,
+      externalDonationId: l.externalDonationId ?? null,
+      paymentMethodLabel: l.paymentMethodLabel,
       donationDate: l.donationDate,
       reference: l.reference,
       fundOrCampaignName: l.fundName,
@@ -127,6 +129,12 @@ export async function renderStatementPdf(statementId: string, churchId: string):
   const church = await prisma.church.findUnique({ where: { id: churchId } });
 
   const orgAddress = statement.organizationAddressSnapshot as any;
+  const donorAddressSnapshot = statement.donorAddressSnapshot as { line1?: string; line2?: string; city?: string; state?: string; postalCode?: string; country?: string } | null;
+  const donorAddress = donorAddressSnapshot?.line1
+    ? [donorAddressSnapshot.line1, donorAddressSnapshot.line2, [donorAddressSnapshot.city, donorAddressSnapshot.state, donorAddressSnapshot.postalCode].filter(Boolean).join(", ")]
+        .filter(Boolean)
+        .join(", ")
+    : null;
   const settings = resolveStatementPdfSettings(church);
 
   // A statement covers many contributions — when any of them individually
@@ -156,6 +164,7 @@ export async function renderStatementPdf(statementId: string, churchId: string):
       organizationTaxId: settings.organizationTaxId,
       donorName: statement.donorNameSnapshot || "Donor",
       donorEmail: statement.donorEmailSnapshot,
+      donorAddress,
       taxYear: statement.taxYear,
       donationCount: statement.donationCount,
       grossDonatedCents: statement.grossDonatedCents,
@@ -174,7 +183,7 @@ export async function renderStatementPdf(statementId: string, churchId: string):
         refundedAmountCents: l.refundedAmountCents,
         returnedAmountCents: l.returnedAmountCents,
         finalRecordedAmountCents: l.eligibleAmountCents,
-        paymentMethodLabel: "",
+        paymentMethodLabel: l.paymentMethodLabel || "",
         goodsServicesProvided: l.goodsServicesProvided,
         goodsServicesDescription: l.goodsServicesDescription,
         goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,

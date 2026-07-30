@@ -24,6 +24,7 @@ export default async function GivingSettingsPage() {
           givingTermsUrl: church.givingTermsUrl || "",
           givingPrivacyUrl: church.givingPrivacyUrl || "",
           givingSupportEmail: church.givingSupportEmail || "",
+          defaultCollectMailingAddressOnNewLinks: church.defaultCollectMailingAddressOnNewLinks,
         }}
         givingLinks={givingLinks}
       />

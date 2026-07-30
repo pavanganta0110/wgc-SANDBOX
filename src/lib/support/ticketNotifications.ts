@@ -12,7 +12,7 @@ function escapeHtml(value: string): string {
 }
 
 function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+  return process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
 }
 
 /**

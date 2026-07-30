@@ -22,6 +22,7 @@ import TopDonorsCard from "@/components/merchant/TopDonorsCard";
 import { formatDateCDT, formatTimeCDT } from "@/lib/formatDateTimeCDT";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { loadDonorsList, type DonorsListSort } from "@/lib/donors/donorsList";
+import { computeAddressStatus } from "@/lib/donors/donorAddress";
 import { loadDonorSummary } from "@/lib/donors/donorSummary";
 import { loadDonationTrend, loadTopDonors, type TopDonorMetric } from "@/lib/donors/donorAnalytics";
 import { loadDonorAnalyticsExtended, loadDonorGrowth } from "@/lib/donors/donorAnalyticsExtended";
@@ -70,6 +71,7 @@ export default async function DonorsPage({
     hasBankReturn?: string;
     hasDispute?: string;
     hasActiveSubscription?: string;
+    addressStatus?: string;
     archived?: string;
     range?: string;
     from?: string;
@@ -162,6 +164,7 @@ export default async function DonorsPage({
       hasBankReturn: sp.hasBankReturn === "1",
       hasDispute: sp.hasDispute === "1",
       hasActiveSubscription: sp.hasActiveSubscription === "1",
+      addressStatus: sp.addressStatus === "MISSING" || sp.addressStatus === "UNVERIFIED" || sp.addressStatus === "CONFIRMED" ? sp.addressStatus : undefined,
       archivedStatus: (sp.archived as "active" | "archived" | "all") || "active",
       donorIdIn: scopedDonorIds,
     },
@@ -260,6 +263,7 @@ export default async function DonorsPage({
                   )}
                   {visibleCols.has("contact") && <th className="px-6 py-3">Contact</th>}
                   {visibleCols.has("status") && <th className="px-6 py-3">Status</th>}
+                  {visibleCols.has("addressStatus") && <th className="px-6 py-3">Mailing Address</th>}
                   {visibleCols.has("totalDonated") && (
                     <th className="px-6 py-3 text-right">
                       <Link href={sortLink("totalDonatedCents")} className="flex items-center justify-end gap-1 hover:text-slate-800">
@@ -345,6 +349,21 @@ export default async function DonorsPage({
                       {visibleCols.has("status") && (
                         <td className="px-6 py-3">
                           <StateBadge state={status} />
+                        </td>
+                      )}
+                      {visibleCols.has("addressStatus") && (
+                        <td className="px-6 py-3">
+                          {(() => {
+                            const addrStatus = computeAddressStatus(donor);
+                            const label = addrStatus === "MISSING" ? "Missing address" : addrStatus === "CONFIRMED" ? "Confirmed" : "Unverified";
+                            const cls =
+                              addrStatus === "MISSING"
+                                ? "bg-slate-100 text-slate-500"
+                                : addrStatus === "CONFIRMED"
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-amber-100 text-amber-700";
+                            return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>;
+                          })()}
                         </td>
                       )}
                       {visibleCols.has("totalDonated") && (

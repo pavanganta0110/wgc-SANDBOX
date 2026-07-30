@@ -23,7 +23,7 @@ interface WgcEmailOptions {
   attachments?: { filename: string; content: Buffer }[];
 }
 
-const WGC_LOGO_URL = "https://wgcpayments.com/wgc-logo.png";
+const WGC_LOGO_URL = "https://www.wgcpayments.com/wgc-logo.png";
 
 export function generateWgcEmailHtml(options: WgcEmailOptions) {
   const { title, previewText, bodyHtml, badgeText, badgeColor = "#0B5DBC" } = options;
@@ -291,7 +291,7 @@ export async function sendWgcAdminOnboardingNotification(options: WgcAdminOnboar
   } = options;
 
   const last4Ein = businessTaxId ? businessTaxId.slice(-4) : "N/A";
-  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://wgcpayments.com'}/admin/merchant-applications/${applicationId}`;
+  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://www.wgcpayments.com'}/admin/merchant-applications/${applicationId}`;
 
   const bodyHtml = `
     <p>A new merchant onboarding application has been successfully submitted.</p>
@@ -333,7 +333,7 @@ export async function sendFirstLookConfirmationEmail(lead: any) {
     <p>You’re on the list. We’re locking the session schedule based on what works for the people who have registered, and we’ll email you as soon as it’s set.</p>
     <p>In the meantime, if you want to see exactly how we’re building this platform—what’s working, what’s breaking, and the decisions we’re making behind the scenes—you can opt into our weekly build updates below.</p>
     <div style="margin-top: 30px; margin-bottom: 30px;">
-      <a href="https://wgcpayments.com/first-look/confirmed?ref=${lead.publicReference}" style="display: inline-block; padding: 12px 24px; background-color: #14213D; color: #FFFFFF; text-decoration: none; border-radius: 4px; font-weight: 600;">Manage Preferences</a>
+      <a href="https://www.wgcpayments.com/first-look/confirmed?ref=${lead.publicReference}" style="display: inline-block; padding: 12px 24px; background-color: #14213D; color: #FFFFFF; text-decoration: none; border-radius: 4px; font-weight: 600;">Manage Preferences</a>
     </div>
     <p>We’ll talk soon.</p>
   `;
@@ -349,7 +349,7 @@ export async function sendFirstLookConfirmationEmail(lead: any) {
 
 export async function sendFirstLookInternalNotification(lead: any) {
   const adminEmail = process.env.SUPPORT_EMAIL || "support@wgcpayments.com";
-  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com"}/admin/first-look-leads/${lead.id}`;
+  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/admin/first-look-leads/${lead.id}`;
 
   const bodyHtml = `
     <p>A new registration just came in for the First Look campaign.</p>
@@ -376,4 +376,3 @@ export async function sendFirstLookInternalNotification(lead: any) {
     bodyHtml,
   });
 }
-

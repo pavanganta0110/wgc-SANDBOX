@@ -10,6 +10,7 @@ interface FormValues {
   givingTermsUrl: string;
   givingPrivacyUrl: string;
   givingSupportEmail: string;
+  defaultCollectMailingAddressOnNewLinks: boolean;
 }
 
 const inputClass = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400";
@@ -30,6 +31,7 @@ export default function GivingSettingsForm({
   useUnsavedChangesWarning(isDirty);
 
   const set = (field: keyof FormValues, value: string) => setValues((v) => ({ ...v, [field]: value }));
+  const setBool = (field: keyof FormValues, value: boolean) => setValues((v) => ({ ...v, [field]: value }));
 
   const save = async () => {
     setSaving(true);
@@ -87,6 +89,19 @@ export default function GivingSettingsForm({
           <label className="block text-xs font-semibold text-slate-500 mb-1">Giving Page Support Email</label>
           <input className={inputClass} value={values.givingSupportEmail} onChange={(e) => set("givingSupportEmail", e.target.value)} />
           {fieldErrors.givingSupportEmail && <p className="text-xs text-red-600 mt-1">{fieldErrors.givingSupportEmail}</p>}
+        </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.defaultCollectMailingAddressOnNewLinks}
+              onChange={(e) => setBool("defaultCollectMailingAddressOnNewLinks", e.target.checked)}
+            />
+            Include mailing-address option on new giving links
+          </label>
+          <p className="text-xs text-slate-400 mt-1 ml-6">
+            Controls the starting value only for giving links created after this change — existing links keep whatever they're already set to.
+          </p>
         </div>
       </div>
       <SettingsSaveBar isDirty={isDirty} saving={saving} error={error} onSave={save} onReset={() => setValues(initial)} />

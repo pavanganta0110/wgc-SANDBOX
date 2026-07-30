@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import CTASection from "@/components/ui/CTASection";
@@ -77,9 +78,11 @@ export default function DevelopersPage() {
               <ScrollFade delay={200}>
                 <div className="mt-16 lg:mt-0 relative group">
                   <div className="relative rounded-[3rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 aspect-[4/5] lg:aspect-auto lg:h-[600px]">
-                    <img 
-                      src="/images/dev.png" 
+                    <Image
+                      src="/images/dev.webp"
                       alt="Developer Impact"
+                      fill
+                      sizes="(max-width: 1024px) 100vw, 45vw"
                       className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105 brightness-[1.02]"
                     />
                     

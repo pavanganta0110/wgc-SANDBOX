@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       documentsUploaded: file.name,
       whatHappened: "Admin successfully uploaded missing documents to Finix and triggered a new verification.",
       actionNeeded: "Wait for Finix to review the new verification.",
-      adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications",
+      adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",
       customSubject: `Merchant documents submitted — ${safeOrgName}`
     });
 

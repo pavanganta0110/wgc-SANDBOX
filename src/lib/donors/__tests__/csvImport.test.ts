@@ -62,6 +62,8 @@ describe("validateImportRowInput", () => {
       postalCode: null,
       country: null,
       companyName: null,
+      addressSource: null,
+      addressConfirmedDate: null,
     });
     expect(errors).toContain("Missing donor name");
   });
@@ -78,6 +80,8 @@ describe("validateImportRowInput", () => {
       postalCode: null,
       country: null,
       companyName: null,
+      addressSource: null,
+      addressConfirmedDate: null,
     });
     expect(errors).toContain("At least one of email or phone is required");
   });
@@ -94,6 +98,8 @@ describe("validateImportRowInput", () => {
       postalCode: null,
       country: null,
       companyName: null,
+      addressSource: null,
+      addressConfirmedDate: null,
     });
     expect(errors).toContain("Invalid email");
   });
@@ -110,6 +116,8 @@ describe("validateImportRowInput", () => {
       postalCode: null,
       country: null,
       companyName: null,
+      addressSource: null,
+      addressConfirmedDate: null,
     });
     expect(errors).toEqual([]);
   });

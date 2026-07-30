@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pageGraph, article, breadcrumbs } from "@/lib/schema";
 import { ChevronLeft, CheckCircle2, ShieldCheck, CreditCard, Landmark, TrendingUp } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -8,9 +9,11 @@ import ScrollFade from "@/components/ui/ScrollFade";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/resources/church-payment-processing-guide-2026" },
   title: "Best Payment Processor for Churches and 501(c) Organizations in 2026 | WGC",
   description: "A practical guide to choosing a church and 501(c) organization payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
   openGraph: {
+    images: [{ url: "/og/resources.png", width: 1200, height: 630 }],
     title: "Best Payment Processor for Churches in 2026 | WGC",
     description: "A practical guide to choosing a church payment processor in 2026 — fees, ACH, white-label options, and what to look for when comparing providers.",
     url: "https://www.wgcpayments.com/resources/church-payment-processing-guide-2026",
@@ -29,9 +32,31 @@ const PILLARS = [
   'Ease of setup'
 ];
 
+const PUBLISHED = "2026-01-15";
+const UPDATED = "2026-07-27";
+
+const ARTICLE_SCHEMA = pageGraph(
+  article({
+    headline: 'Best Payment Processor for Churches and 501(c) Organizations in 2026',
+    description: 'A practical guide to choosing a church and 501(c) organization payment processor in 2026 — fees, ACH, white-label options, and what to look for.',
+    path: "/resources/church-payment-processing-guide-2026",
+    published: PUBLISHED,
+    modified: UPDATED,
+  }),
+  breadcrumbs([
+    { name: "Home", path: "/" },
+    { name: "Resources", path: "/resources" },
+    { name: 'Best Payment Processor for Churches and 501(c) Organizations in 2026', path: "/resources/church-payment-processing-guide-2026" },
+  ]),
+);
+
 export default function ChurchPaymentGuidePage() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(ARTICLE_SCHEMA) }}
+      />
       <Header />
       <main className="min-h-screen bg-white selection:bg-wgc-gold-100 selection:text-wgc-navy-900">
         {/* Top Navigation */}
@@ -59,6 +84,13 @@ export default function ChurchPaymentGuidePage() {
               <h1 className="text-4xl md:text-5xl font-bold text-wgc-navy-900 tracking-tighter mb-8 tracking-tight uppercase leading-[1.05]">
                 Best Payment Processor <span className="text-wgc-gold-500">For Churches and 501(c) Organizations in 2026</span>
               </h1>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] font-semibold text-wgc-navy-500 mb-8">
+                <span>By <span className="text-wgc-navy-700">Waypoint Gateway Collective</span></span>
+                <span aria-hidden="true">·</span>
+                <time dateTime={PUBLISHED}>Published {new Date(PUBLISHED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+                <span aria-hidden="true">·</span>
+                <time dateTime={UPDATED}>Updated {new Date(UPDATED + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</time>
+              </div>
               <p className="text-lg md:text-xl text-wgc-navy-600 font-medium leading-relaxed italic border-l-4 border-wgc-gold-500 pl-6 border-opacity-30 opacity-90">
                 Churches and other 501(c) organizations need more than a way to accept donations online. A modern payment setup should support card payments, ACH transfers, recurring giving, branded donation experiences, payout visibility, and simple reporting.
               </p>

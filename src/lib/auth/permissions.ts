@@ -28,6 +28,17 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canManageBankAccount",
   "canManageBilling",
   "canViewAsUser",
+  "canCreateExternalDonation",
+  "canEditExternalDonation",
+  "canVoidExternalDonation",
+  "canSendExternalDonationReceipt",
+  "canViewExternalDonationProof",
+  "canMatchExternalDonationToDonor",
+  "canViewDonorAddress",
+  "canEditDonorAddress",
+  "canExportDonorAddress",
+  "canConfirmDonorAddress",
+  "canViewAddressAuditHistory",
 ];
 
 /**
@@ -81,6 +92,17 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canManageOrgSettings: false,
       canManageRolesAndPermissions: false,
       canTransferOwnership: false,
+      canCreateExternalDonation: false,
+      canEditExternalDonation: false,
+      canVoidExternalDonation: false,
+      canSendExternalDonationReceipt: false,
+      canViewExternalDonationProof: false,
+      canMatchExternalDonationToDonor: false,
+      canViewDonorAddress: false,
+      canEditDonorAddress: false,
+      canExportDonorAddress: false,
+      canConfirmDonorAddress: false,
+      canViewAddressAuditHistory: false,
     };
   }
 
