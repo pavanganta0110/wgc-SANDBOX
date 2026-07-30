@@ -20,7 +20,8 @@ export async function GET(req: Request) {
   }
 
   const { searchParams } = new URL(req.url);
-  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
+  const parsedLimit = parseInt(searchParams.get("limit") || "25", 10);
+  const limit = Math.min(100, Math.max(1, Number.isNaN(parsedLimit) ? 25 : parsedLimit));
 
   const records = await prisma.aplosSyncRecord.findMany({
     where: { churchId: auth.churchId },

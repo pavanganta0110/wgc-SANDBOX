@@ -4,6 +4,7 @@ const mockCookieStore = { get: vi.fn(), set: vi.fn(), delete: vi.fn() };
 vi.mock("next/headers", () => ({ cookies: vi.fn(async () => mockCookieStore) }));
 vi.mock("@/lib/prisma", () => ({ prisma: { user: { findUnique: vi.fn() } } }));
 vi.mock("@/lib/integrations/aplos/syncEngine", () => ({ requestManualRetry: vi.fn() }));
+vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: vi.fn().mockResolvedValue(undefined) }));
 
 process.env.AUTH_SESSION_SECRET = "test-secret-at-least-32-characters-long";
 

@@ -142,13 +142,22 @@ export function decryptAccessToken(encryptedTokenBase64: string, privateKeyMater
   }
 }
 
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+
 async function requestEncryptedToken(clientId: string): Promise<AplosAuthData> {
   const url = `${getAplosApiBaseUrl()}/auth/${encodeURIComponent(clientId)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AUTH_REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await fetch(url, { method: "GET" });
+    response = await fetch(url, { method: "GET", signal: controller.signal });
   } catch {
+    // A hung Aplos auth endpoint must not stall the caller indefinitely —
+    // this is a GET with no side effects, so a plain retryable network
+    // classification (not AMBIGUOUS_RESULT) is correct either way.
     throw new AplosAuthError(classifyNetworkOrTimeoutError("NETWORK_ERROR"));
+  } finally {
+    clearTimeout(timeout);
   }
 
   let body: unknown;

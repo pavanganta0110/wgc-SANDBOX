@@ -5,6 +5,7 @@ import { postAplosContribution, AplosContributionPostError } from "./contributio
 import { getReadyConnectionToken, AplosConnectionNotReadyError } from "./resourceService";
 import { computeNextAttemptAt, MAX_AUTOMATIC_RETRY_ATTEMPTS } from "./retryPolicy";
 import { APLOS_AUDIT_EVENTS } from "./auditEvents";
+import { notifySyncNeedsReview, notifySyncFailed } from "./notifications";
 
 /**
  * AplosSettlementSyncService — orchestrates one settlement's sync attempt,
@@ -64,6 +65,35 @@ export interface SyncSettlementResult {
   safeMessage: string;
 }
 
+/**
+ * Every write from this point in an attempt onward is conditioned on the
+ * record still being PROCESSING (an `updateMany` with that in its WHERE
+ * clause, never a plain `update`). This closes a real race: a concurrent
+ * cron/manual-retry run can freeze this same record to NEEDS_REVIEW via
+ * claimSyncRecord's stale-PROCESSING check while this attempt is still
+ * in flight (e.g. a slow Aplos response). Without this guard, this
+ * attempt's own finalize step would silently overwrite that freeze back to
+ * RETRY_SCHEDULED/FAILED/SYNCED — re-enabling exactly the double-POST risk
+ * the NEEDS_REVIEW freeze exists to prevent. When the guarded write loses
+ * the race (count !== 1), this attempt stops immediately and returns the
+ * record's real current state rather than pretending its own transition
+ * happened.
+ */
+async function updateWhileProcessing(syncRecordId: string, data: Parameters<typeof prisma.aplosSyncRecord.update>[0]["data"]): Promise<boolean> {
+  const result = await prisma.aplosSyncRecord.updateMany({ where: { id: syncRecordId, status: "PROCESSING" }, data });
+  return result.count === 1;
+}
+
+async function reportLostLock(syncRecordId: string): Promise<SyncSettlementResult> {
+  const current = await prisma.aplosSyncRecord.findUnique({ where: { id: syncRecordId }, select: { status: true, blockedReason: true, lastErrorMessage: true } });
+  const status = (current?.status as SyncSettlementOutcome | undefined) ?? "NEEDS_REVIEW";
+  return {
+    outcome: status,
+    syncRecordId,
+    safeMessage: current?.blockedReason || current?.lastErrorMessage || "This settlement was concurrently updated by another sync attempt.",
+  };
+}
+
 function parseConfirmed(raw: string | null): ConfirmedContribution[] {
   if (!raw) return [];
   try {
@@ -93,15 +123,16 @@ async function claimSyncRecord(
   finixSettlementId: string,
   syncVersion: number
 ): Promise<{ record: { id: string; attemptCount: number }; claimed: true } | { result: SyncSettlementResult; claimed: false }> {
-  let record = await prisma.aplosSyncRecord.findUnique({
+  // upsert (not find-then-create) — two concurrent cron ticks calling this
+  // for the same settlement at the same time must not both see "not found"
+  // and both attempt a create, which would violate the
+  // (churchId, settlementId, syncVersion) unique constraint. `update: {}`
+  // makes this pure find-or-create: an existing row is never modified here.
+  const record = await prisma.aplosSyncRecord.upsert({
     where: { churchId_settlementId_syncVersion: { churchId, settlementId: finixSettlementId, syncVersion } },
+    create: { churchId, sourceType: "FINIX_SETTLEMENT", sourceId: finixSettlementId, settlementId: finixSettlementId, syncVersion, status: "PENDING" },
+    update: {},
   });
-
-  if (!record) {
-    record = await prisma.aplosSyncRecord.create({
-      data: { churchId, sourceType: "FINIX_SETTLEMENT", sourceId: finixSettlementId, settlementId: finixSettlementId, syncVersion, status: "PENDING" },
-    });
-  }
 
   if (record.status === "SYNCED") {
     return { claimed: false, result: { outcome: "ALREADY_SYNCED", syncRecordId: record.id, safeMessage: "This settlement has already been synchronized to Aplos." } };
@@ -133,10 +164,9 @@ async function claimSyncRecord(
       entityId: record.id,
       metadata: { reason: "STALE_PROCESSING", settlementId: finixSettlementId },
     });
-    return {
-      claimed: false,
-      result: { outcome: "NEEDS_REVIEW", syncRecordId: record.id, safeMessage: "A previous sync attempt was interrupted and requires manual review." },
-    };
+    const safeMessage = "A previous sync attempt was interrupted and requires manual review.";
+    await notifySyncNeedsReview(churchId, finixSettlementId, safeMessage);
+    return { claimed: false, result: { outcome: "NEEDS_REVIEW", syncRecordId: record.id, safeMessage } };
   }
   if (record.status === "RETRY_SCHEDULED" && record.nextAttemptAt && record.nextAttemptAt.getTime() > Date.now()) {
     return { claimed: false, result: { outcome: "SKIPPED_NOT_DUE", syncRecordId: record.id, safeMessage: "This settlement is scheduled for a later retry attempt." } };
@@ -169,7 +199,22 @@ async function claimSyncRecord(
   return { claimed: true, record: { id: record.id, attemptCount: record.attemptCount } };
 }
 
-export async function processSettlement(churchId: string, finixSettlementId: string): Promise<SyncSettlementResult> {
+/**
+ * `preAuth`, when supplied, skips this call's own getReadyConnectionToken()
+ * fetch — used by the cron route to fetch one church's Aplos access token
+ * once per cron tick and reuse it across every settlement for that church,
+ * rather than re-authenticating (and re-decrypting the stored private key)
+ * per settlement. Aplos's own documented guidance warns against requesting
+ * a new token more than once per 30 minutes; without this, a cron tick
+ * processing N pending settlements for one church would do exactly that.
+ * If `preAuth` is omitted (the normal single-settlement call path, e.g.
+ * from requestManualRetry), behavior is unchanged.
+ */
+export async function processSettlement(
+  churchId: string,
+  finixSettlementId: string,
+  preAuth?: { token: string; aplosAccountId: string }
+): Promise<SyncSettlementResult> {
   const connection = await prisma.aplosConnection.findUnique({ where: { churchId }, select: { syncVersion: true } });
   if (!connection) {
     throw new Error(`processSettlement called for church ${churchId} with no AplosConnection row.`);
@@ -183,10 +228,8 @@ export async function processSettlement(churchId: string, finixSettlementId: str
 
   if (!build.eligible) {
     const status = build.awaitingFees ? "BLOCKED_AWAITING_FEES" : "BLOCKED";
-    await prisma.aplosSyncRecord.update({
-      where: { id: syncRecordId },
-      data: { status, blockedReason: build.safeMessage, lastAttemptAt: new Date() },
-    });
+    const ok = await updateWhileProcessing(syncRecordId, { status, blockedReason: build.safeMessage, lastAttemptAt: new Date() });
+    if (!ok) return reportLostLock(syncRecordId);
     await logDashboardAction({
       churchId,
       action: APLOS_AUDIT_EVENTS.SYNC_BLOCKED,
@@ -210,13 +253,18 @@ export async function processSettlement(churchId: string, finixSettlementId: str
   }
 
   let token: string, aplosAccountId: string;
-  try {
-    ({ token, aplosAccountId } = await getReadyConnectionToken(churchId));
-  } catch (err) {
-    const message = err instanceof AplosConnectionNotReadyError ? err.message : "Unable to obtain an Aplos access token.";
-    await prisma.aplosSyncRecord.update({ where: { id: syncRecordId }, data: { status: "BLOCKED", blockedReason: message, lastAttemptAt: new Date() } });
-    await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_BLOCKED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, reason: "CONNECTION_NOT_READY" } });
-    return { outcome: "BLOCKED", syncRecordId, safeMessage: message };
+  if (preAuth) {
+    ({ token, aplosAccountId } = preAuth);
+  } else {
+    try {
+      ({ token, aplosAccountId } = await getReadyConnectionToken(churchId));
+    } catch (err) {
+      const message = err instanceof AplosConnectionNotReadyError ? err.message : "Unable to obtain an Aplos access token.";
+      const ok = await updateWhileProcessing(syncRecordId, { status: "BLOCKED", blockedReason: message, lastAttemptAt: new Date() });
+      if (!ok) return reportLostLock(syncRecordId);
+      await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_BLOCKED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, reason: "CONNECTION_NOT_READY" } });
+      return { outcome: "BLOCKED", syncRecordId, safeMessage: message };
+    }
   }
 
   const attemptNumber = attemptCountBefore + 1;
@@ -226,10 +274,35 @@ export async function processSettlement(churchId: string, finixSettlementId: str
     const startedAt = new Date();
     try {
       const posted = await postAplosContribution(contribution.payload, token, aplosAccountId);
+
+      // Sanity check: the amount Aplos actually recorded must match what
+      // was submitted. A well-formed 200 response with a mismatched amount
+      // means something was mis-applied on Aplos's side (or a mis-routed
+      // response) — a case isAplosContribution()'s shape check can't catch,
+      // since the shape is valid, just the value is wrong. Never silently
+      // trusted: treated exactly like an ambiguous outcome, since blindly
+      // retrying could produce a second, differently-wrong record.
+      const expectedAmount = contribution.totalContributionAmountCents / 100;
+      if (Math.abs(posted.amount - expectedAmount) > 0.01) {
+        newlyConfirmed.push({ payloadHash: contribution.payloadHash, aplosContributionId: String(posted.id) });
+        await prisma.aplosSyncAttempt.create({
+          data: { syncRecordId, attemptNumber, startedAt, completedAt: new Date(), result: "AMBIGUOUS_TIMEOUT", safeErrorCode: "AMOUNT_MISMATCH", safeErrorMessage: "Aplos recorded a different amount than was submitted." },
+        });
+        return finalizeNeedsReview(churchId, syncRecordId, finixSettlementId, [...confirmed, ...newlyConfirmed], remaining.length - newlyConfirmed.length);
+      }
+
       newlyConfirmed.push({ payloadHash: contribution.payloadHash, aplosContributionId: String(posted.id) });
       await prisma.aplosSyncAttempt.create({
         data: { syncRecordId, attemptNumber, startedAt, completedAt: new Date(), result: "SUCCEEDED", httpStatus: 200 },
       });
+      // Persisted immediately, not just at the end of this attempt — a
+      // process crash right after Aplos confirms success must not lose
+      // track of a contribution that genuinely exists there. See the
+      // updateWhileProcessing() header comment for why this write (like
+      // every other one below) is conditioned on the record still being
+      // PROCESSING.
+      const persisted = await updateWhileProcessing(syncRecordId, { aplosContributionId: JSON.stringify([...confirmed, ...newlyConfirmed]) });
+      if (!persisted) return reportLostLock(syncRecordId);
     } catch (err) {
       const postError = err instanceof AplosContributionPostError ? err : null;
       const normalized = postError?.normalized ?? { category: "UNKNOWN_ERROR" as const, retryable: false, safeMessage: "An unexpected error occurred posting to Aplos." };
@@ -263,10 +336,15 @@ export async function processSettlement(churchId: string, finixSettlementId: str
 }
 
 async function finalizeSynced(churchId: string, syncRecordId: string, finixSettlementId: string, confirmed: ConfirmedContribution[]): Promise<SyncSettlementResult> {
-  await prisma.aplosSyncRecord.update({
-    where: { id: syncRecordId },
-    data: { status: "SYNCED", syncedAt: new Date(), aplosContributionId: JSON.stringify(confirmed), blockedReason: null, lastErrorCode: null, lastErrorMessage: null },
+  const ok = await updateWhileProcessing(syncRecordId, {
+    status: "SYNCED",
+    syncedAt: new Date(),
+    aplosContributionId: JSON.stringify(confirmed),
+    blockedReason: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
   });
+  if (!ok) return reportLostLock(syncRecordId);
   await prisma.aplosConnection.updateMany({ where: { churchId }, data: { lastSuccessfulSyncAt: new Date() } });
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_SUCCEEDED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, contributionCount: confirmed.length } });
   return { outcome: "SYNCED", syncRecordId, safeMessage: "Settlement synchronized to Aplos." };
@@ -282,11 +360,10 @@ async function finalizeNeedsReview(
   const safeMessage =
     `The result of the last Aplos contribution submission could not be confirmed. ${confirmed.length} contribution(s) for this settlement are confirmed created in Aplos; ` +
     `${unconfirmedRemainingCount} remain unconfirmed. This settlement will not be retried automatically. A WGC administrator must verify the outcome directly in Aplos before proceeding.`;
-  await prisma.aplosSyncRecord.update({
-    where: { id: syncRecordId },
-    data: { status: "NEEDS_REVIEW", requiresManualReview: true, blockedReason: safeMessage, aplosContributionId: JSON.stringify(confirmed) },
-  });
+  const ok = await updateWhileProcessing(syncRecordId, { status: "NEEDS_REVIEW", requiresManualReview: true, blockedReason: safeMessage, aplosContributionId: JSON.stringify(confirmed) });
+  if (!ok) return reportLostLock(syncRecordId);
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_NEEDS_REVIEW, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, confirmedCount: confirmed.length } });
+  await notifySyncNeedsReview(churchId, finixSettlementId, safeMessage);
   return { outcome: "NEEDS_REVIEW", syncRecordId, safeMessage };
 }
 
@@ -300,17 +377,15 @@ async function finalizeRetryScheduled(
   errorCode: string
 ): Promise<SyncSettlementResult> {
   const nextAttemptAt = computeNextAttemptAt(attemptNumber);
-  await prisma.aplosSyncRecord.update({
-    where: { id: syncRecordId },
-    data: {
-      status: "RETRY_SCHEDULED",
-      attemptCount: attemptNumber,
-      nextAttemptAt,
-      lastErrorCode: errorCode,
-      lastErrorMessage: safeMessage,
-      aplosContributionId: JSON.stringify(confirmed),
-    },
+  const ok = await updateWhileProcessing(syncRecordId, {
+    status: "RETRY_SCHEDULED",
+    attemptCount: attemptNumber,
+    nextAttemptAt,
+    lastErrorCode: errorCode,
+    lastErrorMessage: safeMessage,
+    aplosContributionId: JSON.stringify(confirmed),
   });
+  if (!ok) return reportLostLock(syncRecordId);
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_RETRIED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, attemptNumber, nextAttemptAt } });
   return { outcome: "RETRY_SCHEDULED", syncRecordId, safeMessage };
 }
@@ -324,17 +399,16 @@ async function finalizeFailed(
   safeMessage: string,
   errorCode: string
 ): Promise<SyncSettlementResult> {
-  await prisma.aplosSyncRecord.update({
-    where: { id: syncRecordId },
-    data: {
-      status: "FAILED",
-      attemptCount: attemptNumber,
-      lastErrorCode: errorCode,
-      lastErrorMessage: safeMessage,
-      aplosContributionId: JSON.stringify(confirmed),
-    },
+  const ok = await updateWhileProcessing(syncRecordId, {
+    status: "FAILED",
+    attemptCount: attemptNumber,
+    lastErrorCode: errorCode,
+    lastErrorMessage: safeMessage,
+    aplosContributionId: JSON.stringify(confirmed),
   });
+  if (!ok) return reportLostLock(syncRecordId);
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_FAILED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, attemptNumber } });
+  await notifySyncFailed(churchId, finixSettlementId, safeMessage);
   return { outcome: "FAILED", syncRecordId, safeMessage };
 }
 

@@ -308,11 +308,71 @@ RSA keypairs, but have never been exercised against Aplos's real servers.
 - [ ] `GET /partners/verify` confirms organization access
 - [ ] `GET /purposes`, `/funds`, `/accounts` return real data in the shapes documented here
 
+## 11. Checkpoint 9 additions: notifications, audit coverage, and security-review fixes
+
+**Notifications** (`notifications.ts`) — best-effort email, following the exact pattern in
+`src/lib/support/ticketNotifications.ts` (every attempt logged to `EmailLog`, a failed send never
+throws back into the sync flow):
+
+- `notifySyncNeedsReview` — sent to the organization's owner/admin users, plus `SUPPORT_EMAIL` (if
+  configured) for WGC awareness. The single most important notification in this integration, since
+  only the organization's own Aplos administrator can verify a `NEEDS_REVIEW` outcome.
+- `notifySyncFailed` — sent to the organization's owner/admin users only, once a settlement becomes
+  terminally `FAILED`.
+
+**Audit coverage** — added `APLOS_MANUAL_RETRY_REQUESTED`, logged by the retry route with the
+acting user's identity before calling `requestManualRetry()`, so a manually-triggered retry is
+attributable to a specific user (previously only the automated `SYNC_STARTED` event fired, with no
+actor).
+
+**Security review fixes** (full findings from an independent review are in the Checkpoint 9
+report; the following were confirmed and fixed in this checkpoint, not just noted):
+
+- **Lost-lock race on concurrent freeze.** Every write from `buildSettlementContributions()`
+  onward in `processSettlement()` is now a conditional `updateMany` gated on `status: "PROCESSING"`
+  (`updateWhileProcessing()` in `syncEngine.ts`), not a plain `update`. Without this, a slow attempt
+  could silently overwrite a concurrent stale-`PROCESSING` freeze (from another cron tick) back to
+  `RETRY_SCHEDULED`/`FAILED`/`SYNCED` — re-enabling the exact double-POST risk `NEEDS_REVIEW`
+  exists to prevent. A lost race now returns the record's real current state instead
+  (`reportLostLock()`).
+- **Confirmed-contribution bookkeeping persisted incrementally**, not only at the end of an
+  attempt — a process crash immediately after Aplos confirms a contribution was created no longer
+  loses track of it.
+- **Atomic claim.** `claimSyncRecord()`'s find-then-create was replaced with a single `upsert`
+  (`update: {}`), closing a race where two concurrent invocations could both attempt to create the
+  same row and violate the unique constraint.
+- **No back-posting a church's entire settlement history on first enable.** The cron route now
+  only considers `FinixSettlement`s with `settledAt >= AplosConnection.connectedAt` — a WGC-side
+  policy decision (not an Aplos-documented behavior) to prevent enabling automatic sync from
+  silently submitting years of already-manually-entered history as duplicate contributions.
+- **Aplos access token reused across a cron tick's settlements for the same church**, instead of
+  being re-minted (and the private key re-decrypted) per settlement — Aplos's own auth
+  documentation warns against requesting a new token more than once per 30 minutes.
+- **Manual-retry route no longer relays raw internal error messages** (e.g. encryption-config or
+  Prisma error text) to the client — only `requestManualRetry()`'s two known, fixed safe messages
+  are ever returned; anything else becomes a generic message, logged server-side.
+- **Auth token fetch now has a 15s timeout**, matching every other Aplos HTTP client in this
+  integration (previously unbounded).
+- **`sync-history?limit=` no longer 500s on a non-numeric value.**
+- **Posted-amount sanity check** — the amount Aplos actually records for a contribution is now
+  compared against what was submitted; a mismatch (a well-formed response with the wrong value) is
+  treated exactly like an ambiguous outcome (`NEEDS_REVIEW`), never silently accepted as success.
+
 ## 10. Status by checkpoint
 
 - **Checkpoint 1 (audit):** complete.
-- **Checkpoint 2 (this checkpoint):** feature branch, Prisma schema, `canManageIntegrations`
+- **Checkpoint 2:** feature branch, Prisma schema, `canManageIntegrations`
   permission, AES-256-GCM encryption + fingerprinting, `AplosAuthenticationProvider` interface,
-  `ManualCredentialAuthProvider`, error classification, strict types, tests. See the Checkpoint 2
-  report for exact file list, test results, and build/lint/typecheck output.
-- **Checkpoints 3–10:** not started.
+  `ManualCredentialAuthProvider`, error classification, strict types, tests.
+- **Checkpoint 3:** connection wizard, Test Connection flow, connect/disconnect/status routes.
+- **Checkpoint 4:** read-only Purposes/Accounts/Funds retrieval and routes.
+- **Checkpoint 5:** fund-to-Purpose mapping, deposit/expense/default-Purpose account configuration,
+  sync eligibility computation.
+- **Checkpoint 6:** settlement reconciliation and contribution-payload builder (network-free);
+  isolates the donor-covered-fee accounting-policy ambiguity behind `contributionPolicy.ts`.
+- **Checkpoint 7:** `AplosSettlementSyncService`, `/api/cron/aplos-sync`, retry backoff policy, and
+  the mandatory ambiguous-POST handling from section 7 above.
+- **Checkpoint 8:** merchant sync-activity UI + manual retry action; WGC admin read-only per-church
+  and platform-wide `NEEDS_REVIEW`/`FAILED` triage views.
+- **Checkpoint 9:** notifications, audit coverage, and security-review fixes — see section 11.
+- **Checkpoint 10:** not started.
