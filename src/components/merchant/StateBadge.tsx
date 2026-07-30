@@ -96,6 +96,12 @@ const STATE_STYLES: Record<string, string> = {
   REAUTHENTICATION_REQUIRED: "bg-amber-50 text-amber-700",
   ERROR: "bg-red-50 text-red-700",
   DISCONNECTED: "bg-slate-100 text-slate-500",
+  // Aplos sync record status (AplosSyncRecord.status)
+  SYNCED: "bg-green-50 text-green-700",
+  RETRY_SCHEDULED: "bg-amber-50 text-amber-700",
+  BLOCKED: "bg-red-50 text-red-700",
+  BLOCKED_AWAITING_FEES: "bg-amber-50 text-amber-700",
+  CANCELLED: "bg-slate-100 text-slate-500",
 };
 
 export default function StateBadge({ state, label }: { state: string | null | undefined; label?: string }) {

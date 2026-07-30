@@ -107,6 +107,7 @@ export default function AplosIntegrationClient({ canManage }: { canManage: boole
         <>
           <ConnectedPanel status={status!} canManage={canManage} onChanged={refreshStatus} />
           <ConfigurationPanel canManage={canManage} />
+          <SyncHistoryPanel canManage={canManage} />
         </>
       ) : (
         <ConnectionWizard canManage={canManage} priorStatus={status} onConnected={refreshStatus} />
@@ -752,6 +753,117 @@ function ConfigurationPanel({ canManage }: { canManage: boolean }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sync history (Checkpoint 7's AplosSyncRecord, read-only + manual retry)
+// ---------------------------------------------------------------------------
+
+interface SyncRecordRow {
+  id: string;
+  settlementId: string | null;
+  status: string;
+  attemptCount: number;
+  nextAttemptAt: string | null;
+  syncedAt: string | null;
+  lastAttemptAt: string | null;
+  blockedReason: string | null;
+  lastErrorMessage: string | null;
+  requiresManualReview: boolean;
+  updatedAt: string;
+}
+
+/** FAILED and BLOCKED are the only statuses a merchant can retry from here.
+ * NEEDS_REVIEW is deliberately never retryable from this UI — the backend
+ * (requestManualRetry) refuses it anyway, but the button is hidden here too
+ * so this never looks like an available action, per the mandatory
+ * ambiguous-result policy in docs/integrations/aplos.md section 7. */
+const RETRYABLE_STATUSES = new Set(["FAILED", "BLOCKED"]);
+
+function SyncHistoryPanel({ canManage }: { canManage: boolean }) {
+  const [loading, setLoading] = useState(true);
+  const [records, setRecords] = useState<SyncRecordRow[]>([]);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/merchant/settings/integrations/aplos/sync-history");
+      if (res.ok) {
+        const data = await res.json();
+        setRecords(data.records ?? []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      await load();
+    })();
+  }, [load]);
+
+  async function handleRetry(id: string) {
+    setRetryingId(id);
+    try {
+      const res = await fetch(`/api/merchant/settings/integrations/aplos/sync-records/${id}/retry`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) toast.success(data.safeMessage || "Retry started.");
+      else toast.error(data.error || "Could not retry this settlement.");
+    } catch {
+      toast.error("Could not reach the server to retry.");
+    } finally {
+      setRetryingId(null);
+      load();
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+      <h4 className="text-sm font-bold text-slate-900">Sync activity</h4>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading sync history…
+        </div>
+      ) : records.length === 0 ? (
+        <p className="text-xs text-slate-400">No settlements have been synchronized to Aplos yet.</p>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {records.map((r) => (
+            <div key={r.id} className="py-3 flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <StateBadge state={r.status} />
+                  <span className="text-xs text-slate-500 font-mono">{r.settlementId || "—"}</span>
+                </div>
+                {(r.blockedReason || r.lastErrorMessage) && (
+                  <p className="text-xs text-slate-500 max-w-xl">{r.blockedReason || r.lastErrorMessage}</p>
+                )}
+                {r.status === "NEEDS_REVIEW" && (
+                  <p className="text-xs text-red-600 font-medium">Requires manual verification in Aplos — contact WGC support.</p>
+                )}
+                <p className="text-xs text-slate-400">
+                  {r.status === "SYNCED" && r.syncedAt ? `Synced ${new Date(r.syncedAt).toLocaleString()}` : `Updated ${new Date(r.updatedAt).toLocaleString()}`}
+                  {r.attemptCount > 0 && ` · ${r.attemptCount} attempt${r.attemptCount === 1 ? "" : "s"}`}
+                </p>
+              </div>
+              {canManage && RETRYABLE_STATUSES.has(r.status) && (
+                <button
+                  onClick={() => handleRetry(r.id)}
+                  disabled={retryingId === r.id}
+                  className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  {retryingId === r.id ? "Retrying…" : "Retry"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
