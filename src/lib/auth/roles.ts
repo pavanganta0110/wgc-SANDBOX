@@ -84,7 +84,13 @@ export type PermissionKey =
   | "canEditDonorAddress"
   | "canExportDonorAddress"
   | "canConfirmDonorAddress"
-  | "canViewAddressAuditHistory";
+  | "canViewAddressAuditHistory"
+  // Aplos (and future third-party accounting) integration management:
+  // connect/disconnect, configure accounts, map funds, enable/disable
+  // automatic sync, retry failed syncs. Read-only integration status is
+  // governed separately (any authenticated org member can view it; see
+  // the Aplos status route) — this key gates every state-changing action.
+  | "canManageIntegrations";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -117,6 +123,7 @@ const ALL_FALSE: PermissionMatrix = {
   canExportDonorAddress: false,
   canConfirmDonorAddress: false,
   canViewAddressAuditHistory: false,
+  canManageIntegrations: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -151,6 +158,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportDonorAddress: true,
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -176,6 +184,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportDonorAddress: true,
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and

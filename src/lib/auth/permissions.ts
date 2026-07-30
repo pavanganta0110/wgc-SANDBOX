@@ -39,6 +39,7 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canExportDonorAddress",
   "canConfirmDonorAddress",
   "canViewAddressAuditHistory",
+  "canManageIntegrations",
 ];
 
 /**
@@ -103,6 +104,7 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canExportDonorAddress: false,
       canConfirmDonorAddress: false,
       canViewAddressAuditHistory: false,
+      canManageIntegrations: false,
     };
   }
 
