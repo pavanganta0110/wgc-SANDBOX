@@ -88,6 +88,14 @@ const STATE_STYLES: Record<string, string> = {
   PENDING_VERIFICATION: "bg-amber-50 text-amber-700",
   APPROVED: "bg-green-50 text-green-700",
   HISTORICAL: "bg-slate-100 text-slate-400",
+  // Aplos integration connection status (AplosConnection.status)
+  NOT_CONNECTED: "bg-slate-100 text-slate-500",
+  TESTING: "bg-amber-50 text-amber-700",
+  CONNECTED: "bg-green-50 text-green-700",
+  INVALID_CREDENTIALS: "bg-red-50 text-red-700",
+  REAUTHENTICATION_REQUIRED: "bg-amber-50 text-amber-700",
+  ERROR: "bg-red-50 text-red-700",
+  DISCONNECTED: "bg-slate-100 text-slate-500",
 };
 
 export default function StateBadge({ state, label }: { state: string | null | undefined; label?: string }) {
