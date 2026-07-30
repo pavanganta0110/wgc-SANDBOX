@@ -48,7 +48,7 @@ export default async function IntegrationsSettingsPage() {
           <IntegrationRow name="Text Message Sharing" description="Send Giving Link shares by text message." enabled={smsConfigured} />
         </div>
         <p className="text-xs text-slate-400 mt-6">
-          Need a different integration? <a href="/merchant/support/tickets/new" className="text-blue-600 hover:underline">Contact Support</a>.
+          Need a different integration? <Link href="/merchant/support/tickets/new" className="text-blue-600 hover:underline">Contact Support</Link>.
         </p>
       </div>
 

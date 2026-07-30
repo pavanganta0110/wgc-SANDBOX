@@ -307,8 +307,28 @@ RSA keypairs, but have never been exercised against Aplos's real servers.
 - [ ] Token decryption succeeds against a real encrypted token
 - [ ] `GET /partners/verify` confirms organization access
 - [ ] `GET /purposes`, `/funds`, `/accounts` return real data in the shapes documented here
+- [ ] Connect a real pilot organization through the Checkpoint 3 wizard end-to-end; confirm Test
+      Connection reports success only after all 5 steps in section 2 above genuinely pass
+- [ ] Save a real accounting configuration (deposit account, expense account, default Purpose) and
+      at least one real fund-to-Purpose mapping; confirm `computeSyncEligibility()` reports eligible
+- [ ] With automatic sync still **disabled**, manually trigger `AplosSettlementSyncService
+      .processSettlement()` (not the cron) against one real, small, already-SETTLED Finix
+      settlement for the pilot org, with a human watching — this is the first real `POST
+      /contributions` call this codebase will ever make. Confirm in the Aplos UI that exactly one
+      contribution was created, with the expected amount, Purpose, and accounts
+- [ ] Confirm the donor-covered-fee accounting policy (see `contributionPolicy.ts`) has been
+      resolved by a human decision before enabling sync for any organization with fee-covering
+      donors — until then, any affected settlement will correctly report `POLICY_UNRESOLVED` and
+      stay `BLOCKED`, which itself should be confirmed to happen as expected
+- [ ] Only after the single manual test above is confirmed correct: enable
+      `AplosConnection.automaticSyncEnabled` for the pilot org and set `APLOS_SYNC_ENABLED=true`,
+      then add `/api/cron/aplos-sync` to `vercel.json`'s `crons` array (deliberately not done yet)
+- [ ] Confirm `notifySyncNeedsReview` / `notifySyncFailed` emails actually arrive and render
+      correctly (RESEND_API_KEY must be configured; these are unverified against a real send)
+- [ ] Confirm the merchant "Retry" button and the WGC admin triage view both reflect a real
+      settlement's state correctly end-to-end
 
-## 11. Checkpoint 9 additions: notifications, audit coverage, and security-review fixes
+## 10. Checkpoint 9 additions: notifications, audit coverage, and security-review fixes
 
 **Notifications** (`notifications.ts`) — best-effort email, following the exact pattern in
 `src/lib/support/ticketNotifications.ts` (every attempt logged to `EmailLog`, a failed send never
@@ -358,7 +378,7 @@ report; the following were confirmed and fixed in this checkpoint, not just note
   compared against what was submitted; a mismatch (a well-formed response with the wrong value) is
   treated exactly like an ambiguous outcome (`NEEDS_REVIEW`), never silently accepted as success.
 
-## 10. Status by checkpoint
+## 11. Status by checkpoint
 
 - **Checkpoint 1 (audit):** complete.
 - **Checkpoint 2:** feature branch, Prisma schema, `canManageIntegrations`
@@ -375,4 +395,8 @@ report; the following were confirmed and fixed in this checkpoint, not just note
 - **Checkpoint 8:** merchant sync-activity UI + manual retry action; WGC admin read-only per-church
   and platform-wide `NEEDS_REVIEW`/`FAILED` triage views.
 - **Checkpoint 9:** notifications, audit coverage, and security-review fixes — see section 11.
-- **Checkpoint 10:** not started.
+- **Checkpoint 10:** full-suite verification (typecheck/lint/tests/build/secret-scan across the
+  whole branch), pilot verification checklist expanded (section 9), this status section brought
+  current, and the final consolidated report delivered to the requester. Code-complete for the
+  full WGC → Aplos integration scope defined at project start; real contribution posting remains
+  gated on pilot credentials and the donor-covered-fee policy decision (see section 5 / section 9).
