@@ -5,6 +5,7 @@ import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import InvoiceBuilderForm from "@/components/merchant/InvoiceBuilderForm";
 import { emptyInvoiceForm } from "@/lib/invoices/invoiceFormDefaults";
+import { findOrCreateClientForDonor } from "@/lib/clients/findOrCreateClientForDonor";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   let auth;
@@ -26,6 +27,15 @@ export default async function NewInvoicePage({ searchParams }: { searchParams: P
 
   if (sp.clientId) {
     const client = await prisma.client.findFirst({ where: { id: sp.clientId, churchId: auth.churchId } });
+    if (client) {
+      initial.client = { id: client.id, displayName: client.displayName, email: client.email, phone: client.phone, organizationName: client.organizationName, clientType: client.clientType };
+    }
+  } else if (sp.donorId) {
+    // Started from a Donor's "Send Invoice" button — reuses (or creates)
+    // the Client already linked to this donor rather than billing the
+    // Donor record directly; see findOrCreateClientForDonor's doc comment
+    // for why invoices never attach straight to a Donor.
+    const client = await findOrCreateClientForDonor(sp.donorId, auth.churchId);
     if (client) {
       initial.client = { id: client.id, displayName: client.displayName, email: client.email, phone: client.phone, organizationName: client.organizationName, clientType: client.clientType };
     }

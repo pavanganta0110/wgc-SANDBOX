@@ -263,6 +263,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return toSafePaymentErrorResponse(err, "PAYMENT_FAILED", "We couldn't complete your payment. No charge was made.", true, { action: "createTransfer" });
   }
 
+  // Snapshots the card/bank display info (last four, brand) onto
+  // FinixPaymentInstrumentSnapshot so this transfer shows correctly in the
+  // merchant's Transactions > Payments list — that list joins through this
+  // table for its "Payment Instrument"/"Instrument Type" columns. Never
+  // passes a donorId: invoice payers are deliberately never turned into
+  // Donor records (see the module doc comment above), so this snapshot is
+  // instrument-only, matching how it shows "—" for Donor by design.
+  try {
+    const { syncPaymentInstrument } = await import("@/lib/finix/sync/syncPaymentInstruments");
+    await syncPaymentInstrument(instrumentId, { churchId: invoice.churchId });
+  } catch (err) {
+    console.error("Failed to snapshot payment instrument for invoice payment:", err);
+  }
+
   const transferState = (transfer.state || "PENDING").toUpperCase();
   const succeeded = transferState === "SUCCEEDED";
   const paymentStatus = succeeded ? "SUCCEEDED" : transferState === "FAILED" || transferState === "CANCELED" ? "FAILED" : "PENDING";
