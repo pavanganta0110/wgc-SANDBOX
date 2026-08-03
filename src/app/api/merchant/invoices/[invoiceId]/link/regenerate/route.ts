@@ -31,6 +31,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
+  if (auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId) {
+    return NextResponse.json({ error: "You do not have permission to manage this invoice's payment link." }, { status: 403 });
+  }
   if (!canAcceptPayment(invoice.status as InvoiceStatus)) {
     return NextResponse.json({ error: "This invoice cannot have a payment link generated in its current state." }, { status: 409 });
   }

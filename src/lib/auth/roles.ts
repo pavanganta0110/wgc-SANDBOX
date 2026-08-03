@@ -241,8 +241,11 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewDonorAddress: true,
     canEditDonorAddress: true,
     // Invoices they created only — canViewInvoices/canEditInvoices/
-    // canSendInvoices are enforced scoped-to-own by buildInvoiceScope
-    // (mirroring canViewOwnTransactions), not by the permission flag alone.
+    // canSendInvoices are enforced scoped-to-own by an inline
+    // `auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId`
+    // check in every invoice route that reads/mutates a specific existing
+    // invoice (list/export routes scope via a `createdByUserId` filter
+    // instead), not by the permission flag alone.
     // canManageClients is granted so a fundraiser can select/create a
     // client while building an invoice, the same way they get
     // canCreateExternalDonation to do their donation-recording job.

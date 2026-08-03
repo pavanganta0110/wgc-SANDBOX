@@ -38,6 +38,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
+  // A fundraiser's canSendInvoices grant is scoped to invoices they
+  // created (see roles.ts) — enforced here since requirePermission alone
+  // only checks the flag, not ownership.
+  if (auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId) {
+    return NextResponse.json({ error: "You do not have permission to send this invoice." }, { status: 403 });
+  }
 
   const isResend = invoice.status !== "DRAFT" && invoice.status !== "SCHEDULED";
   if (!isResend && !canSend(invoice.status as InvoiceStatus)) {
