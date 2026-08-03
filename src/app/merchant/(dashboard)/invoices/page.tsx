@@ -65,12 +65,19 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-slate-900">Invoices</h2>
-        {canCreate && (
-          <Link href="/merchant/invoices/new" className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700">
-            <Plus className="w-4 h-4" />
-            New Invoice
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {hasPermission(auth, "canExportInvoices") && (
+            <a href={`/api/merchant/invoices/export${sp.status ? `?status=${encodeURIComponent(sp.status)}` : ""}`} className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50">
+              Export CSV
+            </a>
+          )}
+          {canCreate && (
+            <Link href="/merchant/invoices/new" className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700">
+              <Plus className="w-4 h-4" />
+              New Invoice
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">

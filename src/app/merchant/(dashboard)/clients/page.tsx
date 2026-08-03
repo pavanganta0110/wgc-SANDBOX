@@ -65,15 +65,22 @@ export default async function ClientsPage({
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold text-slate-900">Clients</h2>
-        {canManage && (
-          <Link
-            href="/merchant/clients/new"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            New Client
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {canManage && (
+            <a href="/api/merchant/clients/export" className="px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50">
+              Export CSV
+            </a>
+          )}
+          {canManage && (
+            <Link
+              href="/merchant/clients/new"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4" />
+              New Client
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm mb-4 p-4 flex flex-wrap items-center gap-3">
