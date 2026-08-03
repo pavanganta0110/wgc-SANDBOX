@@ -3,7 +3,8 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
-import InvoiceBuilderForm, { emptyInvoiceForm } from "@/components/merchant/InvoiceBuilderForm";
+import InvoiceBuilderForm from "@/components/merchant/InvoiceBuilderForm";
+import { emptyInvoiceForm } from "@/lib/invoices/invoiceFormDefaults";
 
 export default async function NewInvoicePage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   let auth;
