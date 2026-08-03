@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { canAcceptPayment, type InvoiceStatus } from "./invoiceStatus";
 import { regenerateInvoicePublicToken } from "./invoicePublicToken";
 import { sendInvoiceReminderEmail } from "./invoiceEmails";
+import { sendInvoiceReminderSms } from "./invoiceSms";
 
 function dayKey(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -85,6 +86,9 @@ export async function sendDueInvoiceReminders(now: Date = new Date()) {
     try {
       const token = await regenerateInvoicePublicToken(invoice.id, invoice.churchId);
       const result = await sendInvoiceReminderEmail(invoice.id, token, reminder.reminderType);
+      // Best-effort — off by default (see invoiceSms.ts), and a no-op/
+      // failed SMS never blocks the (mandatory) email reminder above.
+      await sendInvoiceReminderSms(invoice.id, token, reminder.reminderType).catch((err) => console.error("Failed to send invoice reminder SMS:", err));
       await prisma.invoiceReminder.update({
         where: { id: reminder.id },
         data: { status: result.success ? "SENT" : "SCHEDULED", sentAt: result.success ? now : undefined },
