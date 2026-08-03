@@ -8,7 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import StateBadge from "@/components/merchant/StateBadge";
 import InvoiceDetailActions from "@/components/merchant/InvoiceDetailActions";
-import { canEditFinancials, type InvoiceStatus } from "@/lib/invoices/invoiceStatus";
+import InvoicePaymentsPanel from "@/components/merchant/InvoicePaymentsPanel";
+import { canEditFinancials, canAcceptPayment, type InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ invoiceId: string }> }) {
   let auth;
@@ -136,39 +137,23 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         </table>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-6">
-        <div className="px-6 py-4 border-b border-slate-50">
-          <h4 className="text-sm font-bold text-slate-900">Payment history</h4>
-        </div>
-        {payments.length === 0 ? (
-          <p className="px-6 py-8 text-center text-slate-400 text-sm">No payments recorded yet.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              <tr>
-                <th className="px-6 py-3 text-left">Date</th>
-                <th className="px-6 py-3 text-left">Method</th>
-                <th className="px-6 py-3 text-left">Status</th>
-                <th className="px-6 py-3 text-right">Gross</th>
-                <th className="px-6 py-3 text-right">Fee</th>
-                <th className="px-6 py-3 text-right">Refunded</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {payments.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-6 py-3">{p.createdAt.toLocaleDateString()}</td>
-                  <td className="px-6 py-3">{p.method.replace(/_/g, " ")}</td>
-                  <td className="px-6 py-3"><StateBadge state={p.status} /></td>
-                  <td className="px-6 py-3 text-right">{formatCents(p.grossAmountCents)}</td>
-                  <td className="px-6 py-3 text-right">{formatCents(p.processingFeeCents)}</td>
-                  <td className="px-6 py-3 text-right">{formatCents(p.refundedCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <InvoicePaymentsPanel
+        invoiceId={invoice.id}
+        payments={payments.map((p) => ({
+          id: p.id,
+          createdAt: p.createdAt.toISOString(),
+          method: p.method,
+          status: p.status,
+          grossAmountCents: p.grossAmountCents,
+          processingFeeCents: p.processingFeeCents,
+          refundedCents: p.refundedCents,
+          source: p.source,
+        }))}
+        balanceCents={invoice.balanceCents}
+        canRecordOffline={hasPermission(auth, "canRecordOfflineInvoicePayments")}
+        canRefund={hasPermission(auth, "canRefundInvoicePayments")}
+        canAcceptPayment={canAcceptPayment(invoice.status as InvoiceStatus)}
+      />
 
       {invoice.internalNotes && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6">
