@@ -67,7 +67,7 @@ type ViewState =
   | { step: "loading" }
   | { step: "error"; message: string }
   | { step: "ready"; data: InvoiceData }
-  | { step: "paid" };
+  | { step: "paid"; data: InvoiceData };
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
@@ -124,6 +124,14 @@ export default function InvoicePublicView({ token }: { token: string }) {
 
   useEffect(() => {
     if (!data?.finixApplicationId) return;
+    // The #invoice-finix-form target only exists in the DOM when the
+    // invoice can still accept payment (see the `canPay` render guard
+    // below) — without this check, an invoice that's already PAID (e.g.
+    // reached zero balance in this same session) throws "element must be
+    // an HTMLElement" from Finix.PaymentForm since the div was never
+    // rendered.
+    const canStillPay = data.status !== "VOID" && data.status !== "DRAFT" && data.status !== "SCHEDULED" && data.status !== "UNCOLLECTIBLE" && data.balanceCents > 0;
+    if (!canStillPay) return;
     let cancelled = false;
     setFormReady(false);
     mountFinixPaymentForm("invoice-finix-form", data.finixApplicationId, { paymentMethods: [payMethod], showAddress: false }, data.finixEnvironment)
@@ -215,6 +223,19 @@ export default function InvoicePublicView({ token }: { token: string }) {
       </div>
     );
   }
+  if (state.step === "paid") {
+    const paidData = state.data;
+    const paidAccent = paidData.branding.accentColor || "#1d4ed8";
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: paidAccent }} />
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Payment Successful</h1>
+          <p className="text-sm text-slate-500">{paidData.branding.thankYouMessage || `Thank you for your payment to ${paidData.branding.organizationDisplayName}.`}</p>
+        </div>
+      </div>
+    );
+  }
   if (!data) return null;
 
   const accent = data.branding.accentColor || "#1d4ed8";
@@ -297,7 +318,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
           clientAttemptId: attemptId,
           payer: { name: payerName.trim(), email: payerEmail.trim(), phone: payerPhone.trim() || undefined },
         });
-        setState({ step: "paid" });
+        setState({ step: "paid", data });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Payment failed.");
       } finally {
@@ -320,7 +341,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
           phone: payerPhone.trim() || undefined,
         },
       });
-      setState({ step: "paid" });
+      setState({ step: "paid", data });
       return { success: true };
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Payment failed.");
@@ -379,18 +400,6 @@ export default function InvoicePublicView({ token }: { token: string }) {
       setWalletProcessing(null);
     }
   };
-
-  if (state.step === "paid") {
-    return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
-        <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-          <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: accent }} />
-          <h1 className="text-xl font-bold text-slate-900 mb-2">Payment Successful</h1>
-          <p className="text-sm text-slate-500">{data.branding.thankYouMessage || `Thank you for your payment to ${data.branding.organizationDisplayName}.`}</p>
-        </div>
-      </div>
-    );
-  }
 
   const canPay = data.status !== "VOID" && data.status !== "DRAFT" && data.status !== "SCHEDULED" && data.status !== "UNCOLLECTIBLE" && data.balanceCents > 0;
 
