@@ -19,6 +19,7 @@ import {
   LifeBuoy,
   Building2,
   ShieldCheck,
+  FileText,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -58,6 +59,15 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Donors", href: "/merchant/donors", icon: Users },
   { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
+  {
+    name: "Invoices",
+    href: "/merchant/invoices",
+    icon: FileText,
+    children: [
+      { name: "All Invoices", href: "/merchant/invoices" },
+      { name: "Clients", href: "/merchant/clients" },
+    ],
+  },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
   { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true },

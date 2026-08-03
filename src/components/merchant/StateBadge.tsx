@@ -47,6 +47,13 @@ const STATE_STYLES: Record<string, string> = {
   // Subscription Setup Links
   OPENED: "bg-blue-50 text-blue-700",
   REVOKED: "bg-slate-100 text-slate-500",
+  // Invoices (Invoice.status)
+  DRAFT: "bg-slate-100 text-slate-600",
+  SCHEDULED: "bg-blue-50 text-blue-700",
+  VIEWED: "bg-blue-50 text-blue-700",
+  PARTIALLY_PAID: "bg-amber-50 text-amber-700",
+  UNCOLLECTIBLE: "bg-red-100 text-red-800",
+  VOID: "bg-slate-100 text-slate-500",
   COMPLETING: "bg-amber-50 text-amber-700",
   // Payment methods / verification / organization capability status
   ENABLED: "bg-green-50 text-green-700",
