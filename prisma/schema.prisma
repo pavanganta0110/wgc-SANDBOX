@@ -1996,9 +1996,19 @@ model AnnualDonationStatementLine {
   paymentId          String?
   // Set instead of paymentId for a line sourced from a Record External
   // Donation entry (cash, check, Cash App, etc.) rather than a Finix
-  // transfer — see ExternalDonation. Exactly one of paymentId/
-  // externalDonationId is set per line, never both.
+  // transfer — see ExternalDonation. Set instead of both for a line
+  // sourced from an invoice payment (see InvoicePayment; only invoices
+  // with classification CHARITABLE_DONATION/PARTIAL_DONATION and a
+  // linkedDonorId ever produce one). Exactly one of paymentId/
+  // externalDonationId/invoicePaymentId is set per line, never more than one.
   externalDonationId String?
+  invoicePaymentId   String?
+  // Preserved alongside `reference` (which holds the Finix transfer/
+  // transaction ID for an invoice-sourced line, same as every other
+  // source) so the statement can reconcile back to the specific invoice
+  // even after the invoice itself is edited/renumbered — this is a
+  // point-in-time snapshot, not a live lookup.
+  invoiceNumberSnapshot String?
   paymentMethodLabel String?
 
   donationDate       DateTime?
@@ -2567,6 +2577,14 @@ model InvoicePayment {
   // derived, so receipts/reports never have to reconstruct it.
   totalChargedCents    Int     @default(0)
   customerCoveredFee   Boolean @default(false)
+  // Tracked separately from refundedCents (which reduces grossAmountCents,
+  // the invoice-principal side) — a refund issued specifically against the
+  // fee-contribution portion never reduces the invoice's own balance or
+  // its annual-statement principal amount, only this figure. Not yet
+  // populated by the merchant refund route (which currently only refunds
+  // against the principal); reserved so the annual-statement calculator
+  // and reporting are correct the moment a fee-only refund path is added.
+  feeContributionRefundedCents Int @default(0)
 
   // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED — PENDING
   // is used for ACH while it clears; never treated as a settled reduction

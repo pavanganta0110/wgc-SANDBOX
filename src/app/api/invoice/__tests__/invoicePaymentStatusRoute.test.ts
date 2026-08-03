@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mockCheckRateLimit = vi.fn(() => true);
+const mockCheckRateLimit = vi.fn((_key: string) => true);
 vi.mock("@/lib/invoices/invoicePublicRateLimit", () => ({ checkInvoiceViewRateLimit: (key: string) => mockCheckRateLimit(key) }));
 
 const mockResolveToken = vi.fn();

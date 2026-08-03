@@ -100,6 +100,8 @@ export async function generateYearEndStatement(
       annualStatementId: statement.id,
       paymentId: l.paymentId,
       externalDonationId: l.externalDonationId ?? null,
+      invoicePaymentId: l.invoicePaymentId ?? null,
+      invoiceNumberSnapshot: l.invoiceNumber ?? null,
       paymentMethodLabel: l.paymentMethodLabel,
       donationDate: l.donationDate,
       reference: l.reference,
@@ -176,7 +178,12 @@ export async function renderStatementPdf(statementId: string, churchId: string):
       totalRecordedContributionAmountCents,
       lines: lines.map((l) => ({
         donationDate: l.donationDate!,
-        reference: l.reference || "",
+        // Invoice-sourced lines append the invoice number onto the same
+        // reference column used for the transaction ID everywhere else —
+        // "preserve the invoice number and transaction ID for
+        // reconciliation" without a separate PDF column for what's a rare
+        // line type on most statements.
+        reference: l.invoiceNumberSnapshot ? `${l.reference || ""} (Invoice ${l.invoiceNumberSnapshot})`.trim() : l.reference || "",
         fundName: l.fundOrCampaignName,
         grossAmountCents: l.grossAmountCents,
         donorCoveredFeeCents: l.donorCoveredFeeCents,
