@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, AlertTriangle } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, AlertTriangle, FileText } from "lucide-react";
 import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
@@ -162,6 +162,14 @@ export default async function DonorProfilePage({
             />
           )}
           {permissions.canSendStatements && donor.email && <SendGivingLinkButton donorEmail={donor.email} />}
+          {hasPermission(auth, "canCreateInvoices") && (
+            <Link
+              href={`/merchant/invoices/new?donorId=${donor.id}`}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <FileText className="w-4 h-4" /> Send Invoice
+            </Link>
+          )}
           <a
             href={`/api/merchant/donors/export?donorId=${donor.id}`}
             className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
