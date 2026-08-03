@@ -16,6 +16,7 @@ import { syncAllChurchesPricing, syncChurchPricingForMerchantProfile } from "@/l
 import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
+import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
 const WEBHOOK_SECRET = process.env.FINIX_WEBHOOK_SECRET || process.env.FINIX_WEBHOOK_SIGNING_KEY;
 const BEARER_TOKEN = process.env.FINIX_WEBHOOK_BEARER_TOKEN;
@@ -107,6 +108,66 @@ async function resolveChurchIdForMerchant(finixMerchantId: string | null | undef
   return church?.id ?? null;
 }
 
+/**
+ * Applies a refund/reversal (merchant-initiated) or ACH return
+ * (bank-initiated) against the InvoicePayment tied to `originalTransferId`,
+ * if any — a no-op for transfers that aren't invoice payments. Shared by
+ * both the REVERSAL and RETURN branches below since both represent "money
+ * came back," just with a different `disputeStatus`-adjacent cause; the
+ * dispute field itself is untouched here (see the DISPUTE branch instead).
+ * Never rewrites grossAmountCents/netAmountCents — only refundedCents and
+ * status, per the schema's "a dispute/refund must never silently rewrite
+ * grossAmountCents" rule.
+ */
+async function reconcileInvoicePaymentReversal(originalTransferId: string, amountCents: number) {
+  const invoicePayment = await prisma.invoicePayment.findFirst({ where: { finixTransferId: originalTransferId } });
+  if (!invoicePayment) return;
+
+  const newRefundedCents = Math.min(invoicePayment.grossAmountCents, invoicePayment.refundedCents + (amountCents || 0));
+  const newStatus = newRefundedCents >= invoicePayment.grossAmountCents ? "REFUNDED" : "PARTIALLY_REFUNDED";
+
+  await prisma.invoicePayment.update({
+    where: { id: invoicePayment.id },
+    data: { refundedCents: newRefundedCents, status: newStatus },
+  });
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoicePayment.invoiceId } });
+  if (!invoice) return;
+
+  const { calculateInvoiceBalance } = await import("@/lib/invoices/invoiceMoney");
+  const { computeDerivedInvoiceStatus } = await import("@/lib/invoices/invoiceStatus");
+  const payments = await prisma.invoicePayment.findMany({
+    where: { invoiceId: invoice.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+  });
+  const balance = calculateInvoiceBalance({ totalCents: invoice.totalCents, payments });
+  const derivedStatus = computeDerivedInvoiceStatus({
+    currentStatus: invoice.status as InvoiceStatus,
+    balanceCents: balance.balanceCents,
+    totalCents: invoice.totalCents,
+    hasBeenViewed: Boolean(invoice.firstViewedAt),
+    dueDate: invoice.dueDate,
+  });
+
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: {
+      amountPaidCents: balance.amountPaidCents,
+      refundedCents: balance.refundedCents,
+      balanceCents: balance.balanceCents,
+      status: derivedStatus,
+    },
+  });
+
+  await prisma.invoiceActivity.create({
+    data: {
+      invoiceId: invoice.id,
+      churchId: invoice.churchId,
+      activityType: "invoice.payment_refunded",
+      metadata: { finixTransferId: originalTransferId, amountCents, newRefundedCents, newStatus },
+    },
+  });
+}
+
 async function findOnboardingApplicationForFinixEvent(data: any) {
   const finixIds = [
     data?.id,
@@ -155,7 +216,7 @@ export async function syncFinixDataFromWebhookEvent(
   if (entity === "TRANSFER" && data?.id) {
     const tags = data.tags ?? {};
     const source =
-      tags.source === "wgc_giving_page" || tags.source === "wgc_giving_link" || tags.source === "wgc_admin_payment"
+      tags.source === "wgc_giving_page" || tags.source === "wgc_giving_link" || tags.source === "wgc_admin_payment" || tags.source === "wgc_invoice_payment"
         ? tags.source
         : "finix_dashboard";
 
@@ -241,6 +302,58 @@ export async function syncFinixDataFromWebhookEvent(
           } catch (err) {
             console.error("Failed to send async donation receipt:", err);
           }
+        }
+      }
+    }
+
+    // Invoice payments (source === "wgc_invoice_payment") settle on their
+    // own async schedule — an ACH InvoicePayment created PENDING by the
+    // /api/invoice/[token]/pay route only becomes a real reduction of the
+    // invoice balance once this webhook reports SUCCEEDED (see
+    // calculateInvoiceBalance's "PENDING excluded from amountPaidCents"
+    // rule), and a later FAILED/CANCELED must never have already been
+    // counted. applyState's out-of-order protection (above) already
+    // guarantees a terminal state is never regressed by a stale replay.
+    if (churchId && data.id && applyState && source === "wgc_invoice_payment") {
+      const priorInvoicePayment = await prisma.invoicePayment.findFirst({ where: { finixTransferId: data.id } });
+      const newState = (data.state || "PENDING").toUpperCase();
+      const newStatus = newState === "SUCCEEDED" ? "SUCCEEDED" : newState === "FAILED" || newState === "CANCELED" ? "FAILED" : "PENDING";
+
+      if (priorInvoicePayment && priorInvoicePayment.status !== newStatus) {
+        await prisma.invoicePayment.update({ where: { id: priorInvoicePayment.id }, data: { status: newStatus } });
+
+        const invoice = await prisma.invoice.findUnique({ where: { id: priorInvoicePayment.invoiceId } });
+        if (invoice) {
+          const { calculateInvoiceBalance } = await import("@/lib/invoices/invoiceMoney");
+          const { computeDerivedInvoiceStatus } = await import("@/lib/invoices/invoiceStatus");
+          const payments = await prisma.invoicePayment.findMany({
+            where: { invoiceId: invoice.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+          });
+          const balance = calculateInvoiceBalance({ totalCents: invoice.totalCents, payments });
+          const derivedStatus = computeDerivedInvoiceStatus({
+            currentStatus: invoice.status as InvoiceStatus,
+            balanceCents: balance.balanceCents,
+            totalCents: invoice.totalCents,
+            hasBeenViewed: Boolean(invoice.firstViewedAt),
+            dueDate: invoice.dueDate,
+          });
+          await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: {
+              amountPaidCents: balance.amountPaidCents,
+              balanceCents: balance.balanceCents,
+              status: derivedStatus,
+              paidAt: derivedStatus === "PAID" && !invoice.paidAt ? new Date() : invoice.paidAt,
+            },
+          });
+          await prisma.invoiceActivity.create({
+            data: {
+              invoiceId: invoice.id,
+              churchId: invoice.churchId,
+              activityType: newStatus === "SUCCEEDED" ? "invoice.payment_settled" : "invoice.payment_failed",
+              metadata: { finixTransferId: data.id, previousStatus: priorInvoicePayment.status, newStatus },
+            },
+          });
         }
       }
     }
@@ -450,6 +563,11 @@ export async function syncFinixDataFromWebhookEvent(
             data: { refundedCents: { increment: data.amount ?? 0 } },
           });
         }
+        try {
+          await reconcileInvoicePaymentReversal(data.parent_transfer, data.amount ?? 0);
+        } catch (err) {
+          console.error("Failed to reconcile invoice payment refund:", err);
+        }
       }
     }
 
@@ -541,6 +659,11 @@ export async function syncFinixDataFromWebhookEvent(
               data: { returnedCents: { increment: data.amount ?? 0 } },
             });
           }
+          try {
+            await reconcileInvoicePaymentReversal(originalTransferId, data.amount ?? 0);
+          } catch (err) {
+            console.error("Failed to reconcile invoice payment ACH return:", err);
+          }
         }
       }
     }
@@ -597,6 +720,20 @@ export async function syncFinixDataFromWebhookEvent(
         badgeColor: "#DC2626",
         bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://wgcpayments.com/merchant/disputes">View disputes</a></p>`,
       });
+    }
+
+    // Display-only sync onto InvoicePayment.disputeStatus — per the schema
+    // comment, a dispute must never silently rewrite grossAmountCents/
+    // netAmountCents/refundedCents; only this one field is touched here.
+    if (data.transfer) {
+      try {
+        await prisma.invoicePayment.updateMany({
+          where: { finixTransferId: data.transfer },
+          data: { disputeStatus: mapFinixDisputeStateToWgcStatus(data.state) },
+        });
+      } catch (err) {
+        console.error("Failed to sync dispute status onto invoice payment:", err);
+      }
     }
     return;
   }
