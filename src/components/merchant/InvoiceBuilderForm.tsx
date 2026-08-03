@@ -74,6 +74,7 @@ export default function InvoiceBuilderForm({ mode, initial }: { mode: "create" |
         allowGooglePay: values.allowGooglePay,
         allowPartialPayments: values.allowPartialPayments,
         minimumPartialPaymentCents: values.minimumPartialPaymentCents,
+        allowFeeCoverage: values.allowFeeCoverage,
         feeCoveredBy: values.feeCoveredBy,
         autoCloseWhenPaid: values.autoCloseWhenPaid,
         templateName: values.templateName,
@@ -245,15 +246,24 @@ export default function InvoiceBuilderForm({ mode, initial }: { mode: "create" |
             </div>
           )}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Processing fee covered by</label>
-            <div className="flex gap-2">
-              {(["MERCHANT", "CLIENT"] as const).map((v) => (
-                <button key={v} type="button" onClick={() => set("feeCoveredBy", v)} className={`px-3 py-1.5 rounded-full border text-xs font-medium ${values.feeCoveredBy === v ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600"}`}>
-                  {v === "MERCHANT" ? "Organization" : "Client"}
-                </button>
-              ))}
-            </div>
-            {values.feeCoveredBy === "CLIENT" && <p className="text-xs text-slate-400 mt-1">The fee will be shown clearly before payment, and included in the final amount before authorization.</p>}
+            <label className="flex items-center gap-2 text-sm text-slate-700 mb-2">
+              <input type="checkbox" checked={values.allowFeeCoverage} onChange={(e) => set("allowFeeCoverage", e.target.checked)} /> Allow the client to cover processing fees
+            </label>
+            {values.allowFeeCoverage ? (
+              <>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Default selection</label>
+                <div className="flex gap-2">
+                  {(["MERCHANT", "CLIENT"] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => set("feeCoveredBy", v)} className={`px-3 py-1.5 rounded-full border text-xs font-medium ${values.feeCoveredBy === v ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600"}`}>
+                      {v === "MERCHANT" ? "Off by default" : "On by default"}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1">The client sees a checkbox on the payment page and can change this before paying — the fee is always shown clearly and included in the final amount before authorization.</p>
+              </>
+            ) : (
+              <p className="text-xs text-slate-400">No fee-coverage option will be shown — you cover the processing fee on every payment.</p>
+            )}
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={values.autoCloseWhenPaid} onChange={(e) => set("autoCloseWhenPaid", e.target.checked)} /> Automatically close when fully paid

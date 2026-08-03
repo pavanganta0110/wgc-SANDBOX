@@ -2406,9 +2406,18 @@ model Invoice {
   allowGooglePay             Boolean @default(true)
   allowPartialPayments       Boolean @default(false)
   minimumPartialPaymentCents Int?
-  // MERCHANT | CLIENT — mirrors the existing WGC donor-covered-fee toggle;
-  // uses the existing fee-profile/fee-calculation system, never a second one.
+  // MERCHANT | CLIENT — the DEFAULT selection shown to the payer for the
+  // fee-coverage checkbox when allowFeeCoverage is true (CLIENT = checkbox
+  // starts checked). When allowFeeCoverage is false the checkbox is never
+  // shown and this value is ignored — the payer always pays exactly the
+  // invoice amount, matching "the merchant handles the processing fee."
+  // Uses the existing WGC fee-calculation system (calculateWgcFeeAmounts /
+  // resolveWgcTransferFeeStrategy), never a second one.
   feeCoveredBy               String  @default("MERCHANT")
+  // Whether the public payment page shows the payer a choice at all. When
+  // false, fee coverage is not offered — this is an optional customer
+  // contribution toggle, never a mandatory surcharge.
+  allowFeeCoverage           Boolean @default(true)
   autoCloseWhenPaid          Boolean @default(true)
 
   // CLASSIC | MODERN | MINIMAL | PROFESSIONAL
@@ -2538,10 +2547,26 @@ model InvoicePayment {
   // CASH_APP | EXTERNAL_TERMINAL | OTHER
   method String
 
+  // The amount applied toward the invoice balance — never includes the fee
+  // contribution below, so a fee-covering payment can never make the
+  // invoice appear overpaid.
   grossAmountCents   Int
+  // WGC's own actual/expected processing cost for this payment — merchant
+  // accounting only, distinct from feeContributionCents (what the payer
+  // chose to add on top). Unaffected by who covers the fee.
   processingFeeCents Int @default(0)
   netAmountCents     Int
   refundedCents      Int @default(0)
+  // The additional amount the payer chose to add on top of grossAmountCents
+  // to cover processing costs — 0 when customerCoveredFee is false. Uses
+  // the existing calculateWgcFeeAmounts gross-up formula's supplementalFeeCents,
+  // never a separately-invented percentage.
+  feeContributionCents Int     @default(0)
+  // grossAmountCents + feeContributionCents — the actual amount charged to
+  // the payer's card/bank/wallet. Stored explicitly rather than only
+  // derived, so receipts/reports never have to reconstruct it.
+  totalChargedCents    Int     @default(0)
+  customerCoveredFee   Boolean @default(false)
 
   // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED — PENDING
   // is used for ACH while it clears; never treated as a settled reduction

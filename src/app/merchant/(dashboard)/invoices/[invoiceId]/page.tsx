@@ -146,6 +146,9 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           status: p.status,
           grossAmountCents: p.grossAmountCents,
           processingFeeCents: p.processingFeeCents,
+          feeContributionCents: p.feeContributionCents,
+          totalChargedCents: p.totalChargedCents,
+          customerCoveredFee: p.customerCoveredFee,
           refundedCents: p.refundedCents,
           source: p.source,
         }))}

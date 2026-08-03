@@ -110,6 +110,7 @@ export async function POST(req: Request) {
           allowGooglePay: body.allowGooglePay !== false,
           allowPartialPayments: Boolean(body.allowPartialPayments),
           minimumPartialPaymentCents: Number.isFinite(Number(body.minimumPartialPaymentCents)) ? Number(body.minimumPartialPaymentCents) : null,
+          allowFeeCoverage: body.allowFeeCoverage !== false,
           feeCoveredBy: body.feeCoveredBy === "CLIENT" ? "CLIENT" : "MERCHANT",
           autoCloseWhenPaid: body.autoCloseWhenPaid !== false,
           templateName: typeof body.templateName === "string" ? body.templateName : "CLASSIC",

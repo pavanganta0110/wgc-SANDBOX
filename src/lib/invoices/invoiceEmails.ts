@@ -127,6 +127,11 @@ export async function sendInvoicePaymentReceiptEmail(invoiceId: string, paymentI
       bodyHtml: `
         <p>Hi ${client.displayName},</p>
         <p>${orgName} has received your payment of <strong>${formatCents(payment.grossAmountCents)}</strong> (${payment.method.replace(/_/g, " ")}) toward invoice <strong>${invoice.invoiceNumber}</strong>.</p>
+        ${
+          payment.customerCoveredFee && payment.feeContributionCents > 0
+            ? `<p>Processing fee contribution: <strong>${formatCents(payment.feeContributionCents)}</strong><br/>Total charged: <strong>${formatCents(payment.totalChargedCents)}</strong></p>`
+            : ""
+        }
         <p>Remaining balance: <strong>${formatCents(invoice.balanceCents)}</strong>.</p>
         ${branding.thankYouMessage ? `<p>${branding.thankYouMessage}</p>` : ""}
       `,

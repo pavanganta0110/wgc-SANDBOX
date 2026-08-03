@@ -10,6 +10,8 @@ import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 type InvoiceExportRow = {
   invoice: Awaited<ReturnType<typeof prisma.invoice.findMany>>[number];
   client: { displayName: string; email: string | null } | undefined;
+  feeContributionCents: number;
+  totalChargedCents: number;
 };
 
 function columns(): CsvColumn<InvoiceExportRow>[] {
@@ -25,7 +27,11 @@ function columns(): CsvColumn<InvoiceExportRow>[] {
     { header: "Discount", value: (r) => formatCents(r.invoice.discountCents) },
     { header: "Tax", value: (r) => formatCents(r.invoice.taxCents) },
     { header: "Total", value: (r) => formatCents(r.invoice.totalCents) },
-    { header: "Paid", value: (r) => formatCents(r.invoice.amountPaidCents) },
+    // Invoice-amount paid — never includes any customer fee contribution,
+    // so this can never make the invoice look overpaid.
+    { header: "Paid (Invoice Amount)", value: (r) => formatCents(r.invoice.amountPaidCents) },
+    { header: "Customer Fee Contributions", value: (r) => formatCents(r.feeContributionCents) },
+    { header: "Total Charged to Customer", value: (r) => formatCents(r.totalChargedCents) },
     { header: "Refunded", value: (r) => formatCents(r.invoice.refundedCents) },
     { header: "Balance", value: (r) => formatCents(r.invoice.balanceCents) },
     { header: "Created By", value: (r) => r.invoice.createdByEmail || "" },
@@ -64,7 +70,22 @@ export async function GET(req: Request) {
   const clients = await prisma.client.findMany({ where: { id: { in: clientIds } }, select: { id: true, displayName: true, email: true } });
   const clientById = new Map(clients.map((c) => [c.id, c]));
 
-  const rows: InvoiceExportRow[] = invoices.map((invoice) => ({ invoice, client: clientById.get(invoice.clientId) }));
+  const invoiceIds = invoices.map((i) => i.id);
+  const feeTotals = invoiceIds.length
+    ? await prisma.invoicePayment.groupBy({
+        by: ["invoiceId"],
+        where: { invoiceId: { in: invoiceIds }, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+        _sum: { feeContributionCents: true, totalChargedCents: true },
+      })
+    : [];
+  const feeTotalsByInvoice = new Map(feeTotals.map((f) => [f.invoiceId, f]));
+
+  const rows: InvoiceExportRow[] = invoices.map((invoice) => ({
+    invoice,
+    client: clientById.get(invoice.clientId),
+    feeContributionCents: feeTotalsByInvoice.get(invoice.id)?._sum.feeContributionCents ?? 0,
+    totalChargedCents: feeTotalsByInvoice.get(invoice.id)?._sum.totalChargedCents ?? 0,
+  }));
   const csv = buildCsvExport(rows, columns());
 
   await logDashboardAction({
