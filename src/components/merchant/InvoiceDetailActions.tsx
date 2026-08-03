@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { canVoid, canMarkUncollectible, type InvoiceStatus } from "@/lib/invoices/invoiceStatus";
+import { canVoid, canMarkUncollectible, canSend, type InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
 export default function InvoiceDetailActions({
   invoiceId,
   status,
   canVoid: hasVoidPermission,
   canDuplicate,
+  canSend: hasSendPermission,
 }: {
   invoiceId: string;
   status: string;
   canVoid: boolean;
   canDuplicate: boolean;
+  canSend: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -57,8 +59,17 @@ export default function InvoiceDetailActions({
     }
   }
 
+  const resendableStatuses: InvoiceStatus[] = ["SENT", "VIEWED", "PARTIALLY_PAID", "PAST_DUE"];
+  const showSend = hasSendPermission && canSend(status as InvoiceStatus);
+  const showResend = hasSendPermission && resendableStatuses.includes(status as InvoiceStatus);
+
   return (
     <div className="flex items-center gap-2">
+      {(showSend || showResend) && (
+        <button onClick={() => post("send")} disabled={busy} className="px-3 py-2 rounded-xl text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50">
+          {showSend ? "Send Invoice" : "Resend"}
+        </button>
+      )}
       {canDuplicate && (
         <button onClick={handleDuplicate} disabled={busy} className="px-3 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
           Duplicate

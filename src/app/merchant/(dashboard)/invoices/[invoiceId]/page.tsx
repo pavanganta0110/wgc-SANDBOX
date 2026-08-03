@@ -59,7 +59,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               <Pencil className="w-4 h-4" /> Edit
             </Link>
           )}
-          <InvoiceDetailActions invoiceId={invoice.id} status={invoice.status} canVoid={hasPermission(auth, "canVoidInvoices")} canDuplicate={hasPermission(auth, "canCreateInvoices")} />
+          <InvoiceDetailActions invoiceId={invoice.id} status={invoice.status} canVoid={hasPermission(auth, "canVoidInvoices")} canDuplicate={hasPermission(auth, "canCreateInvoices")} canSend={hasPermission(auth, "canSendInvoices")} />
         </div>
       </div>
 

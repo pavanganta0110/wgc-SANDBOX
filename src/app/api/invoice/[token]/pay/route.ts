@@ -279,13 +279,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       })
     : status;
 
+  let createdPaymentId: string | null = null;
   await prisma.$transaction(async (tx) => {
     await tx.invoicePaymentAttempt.update({
       where: { id: attempt.id },
       data: { status: paymentStatus, finixTransferId: transfer.id },
     });
 
-    await tx.invoicePayment.create({
+    const createdPayment = await tx.invoicePayment.create({
       data: {
         invoiceId: invoice.id,
         churchId: invoice.churchId,
@@ -299,6 +300,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         invoicePaymentAttemptId: attempt.id,
       },
     });
+    createdPaymentId = createdPayment.id;
 
     if (paymentStatus === "SUCCEEDED") {
       const newAmountPaidCents = balance.amountPaidCents + amountCents;
@@ -363,6 +365,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       entityId: invoice.id,
       metadata: { amountCents, method: finixMethod, finixTransferId: transfer.id, payerEmail: payer.email },
     });
+    if (createdPaymentId) {
+      const { sendInvoicePaymentReceiptEmail } = await import("@/lib/invoices/invoiceEmails");
+      await sendInvoicePaymentReceiptEmail(invoice.id, createdPaymentId);
+    }
   }
 
   return NextResponse.json({

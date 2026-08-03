@@ -137,5 +137,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     req,
   });
 
+  const { sendInvoicePaymentReceiptEmail } = await import("@/lib/invoices/invoiceEmails");
+  await sendInvoicePaymentReceiptEmail(invoiceId, payment.id);
+
   return NextResponse.json({ success: true, payment: { id: payment.id }, status: derivedStatus, balanceCents: newBalanceCents });
 }

@@ -354,6 +354,20 @@ export async function syncFinixDataFromWebhookEvent(
               metadata: { finixTransferId: data.id, previousStatus: priorInvoicePayment.status, newStatus },
             },
           });
+
+          // The public pay route only sends a payment-receipt email
+          // immediately for payment methods that come back SUCCEEDED at
+          // charge time (card, wallets) — an ACH payment is created
+          // PENDING and only reaches SUCCEEDED here, asynchronously, so
+          // this is the only place its receipt email gets sent.
+          if (newStatus === "SUCCEEDED" && priorInvoicePayment.method === "ACH") {
+            try {
+              const { sendInvoicePaymentReceiptEmail } = await import("@/lib/invoices/invoiceEmails");
+              await sendInvoicePaymentReceiptEmail(invoice.id, priorInvoicePayment.id);
+            } catch (err) {
+              console.error("Failed to send invoice ACH settlement receipt email:", err);
+            }
+          }
         }
       }
     }
