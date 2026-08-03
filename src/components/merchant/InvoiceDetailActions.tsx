@@ -70,6 +70,9 @@ export default function InvoiceDetailActions({
           {showSend ? "Send Invoice" : "Resend"}
         </button>
       )}
+      <a href={`/api/merchant/invoices/${invoiceId}/pdf`} target="_blank" rel="noreferrer" className="px-3 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50">
+        Download PDF
+      </a>
       {canDuplicate && (
         <button onClick={handleDuplicate} disabled={busy} className="px-3 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
           Duplicate

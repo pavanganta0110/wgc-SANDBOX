@@ -56,6 +56,19 @@ export async function sendInvoiceEmail(invoiceId: string, token: string): Promis
   const payUrl = `${APP_URL}/invoice/${token}`;
   const orgName = branding.organizationDisplayName;
 
+  // Attaches the same PDF (with the same pay-link QR code) the public page
+  // and the merchant dashboard can generate — "consistency across
+  // outputs" — built with this send's own fresh token rather than a second
+  // regeneration, so it doesn't invalidate the link this same email uses.
+  let pdfAttachment: { filename: string; content: Buffer }[] | undefined;
+  try {
+    const { generateInvoicePdf } = await import("./generateInvoicePdf");
+    const pdf = await generateInvoicePdf(invoiceId, token);
+    pdfAttachment = [{ filename: `invoice-${invoice.invoiceNumber}.pdf`, content: pdf }];
+  } catch (err) {
+    console.error("Failed to generate invoice PDF for email attachment:", err);
+  }
+
   const result = await sendWgcEmail({
     to: client.email,
     subject: `Invoice ${invoice.invoiceNumber} from ${orgName} — ${formatCents(invoice.balanceCents)} due`,
@@ -71,6 +84,7 @@ export async function sendInvoiceEmail(invoiceId: string, token: string): Promis
       </p>
       <p style="font-size:13px;color:#8A94A6;">If the button doesn't work, copy and paste this link: ${payUrl}</p>
     `,
+    attachments: pdfAttachment,
   });
 
   await recordDelivery({

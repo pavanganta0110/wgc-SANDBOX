@@ -409,9 +409,14 @@ export default function InvoicePublicView({ token }: { token: string }) {
               <p className="text-sm text-slate-500">Invoice #{data.invoiceNumber}</p>
               {data.title && <p className="text-sm text-slate-500">{data.title}</p>}
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: `${accent}1a`, color: accent }}>
-              {STATUS_LABELS[data.status] || data.status}
-            </span>
+            <div className="flex flex-col items-end gap-2">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: `${accent}1a`, color: accent }}>
+                {STATUS_LABELS[data.status] || data.status}
+              </span>
+              <a href={`/api/invoice/${token}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-slate-600 underline">
+                Download PDF
+              </a>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-sm mb-6">
