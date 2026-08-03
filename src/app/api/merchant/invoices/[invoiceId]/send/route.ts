@@ -90,6 +90,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     data: { status: derivedStatus, sentAt: invoice.sentAt ?? now },
   });
 
+  if (!isResend) {
+    const { scheduleInvoiceReminders } = await import("@/lib/invoices/invoiceReminders");
+    await scheduleInvoiceReminders(invoiceId, auth.churchId);
+  }
+
   await prisma.invoiceActivity.create({
     data: {
       invoiceId,
