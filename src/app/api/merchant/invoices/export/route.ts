@@ -1,15 +1,36 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
+import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 
-function csvEscape(value: string) {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
+type InvoiceExportRow = {
+  invoice: Awaited<ReturnType<typeof prisma.invoice.findMany>>[number];
+  client: { displayName: string; email: string | null } | undefined;
+};
+
+function columns(): CsvColumn<InvoiceExportRow>[] {
+  return [
+    { header: "Invoice Number", value: (r) => r.invoice.invoiceNumber },
+    { header: "Status", value: (r) => r.invoice.status },
+    { header: "Client", value: (r) => r.client?.displayName || "" },
+    { header: "Client Email", value: (r) => r.client?.email || "" },
+    { header: "Classification", value: (r) => r.invoice.classification },
+    { header: "Issue Date", value: (r) => r.invoice.issueDate.toISOString().slice(0, 10) },
+    { header: "Due Date", value: (r) => r.invoice.dueDate.toISOString().slice(0, 10) },
+    { header: "Subtotal", value: (r) => formatCents(r.invoice.subtotalCents) },
+    { header: "Discount", value: (r) => formatCents(r.invoice.discountCents) },
+    { header: "Tax", value: (r) => formatCents(r.invoice.taxCents) },
+    { header: "Total", value: (r) => formatCents(r.invoice.totalCents) },
+    { header: "Paid", value: (r) => formatCents(r.invoice.amountPaidCents) },
+    { header: "Refunded", value: (r) => formatCents(r.invoice.refundedCents) },
+    { header: "Balance", value: (r) => formatCents(r.invoice.balanceCents) },
+    { header: "Created By", value: (r) => r.invoice.createdByEmail || "" },
+    { header: "Created", value: (r) => r.invoice.createdAt.toISOString() },
+  ];
 }
 
 export async function GET(req: Request) {
@@ -43,54 +64,19 @@ export async function GET(req: Request) {
   const clients = await prisma.client.findMany({ where: { id: { in: clientIds } }, select: { id: true, displayName: true, email: true } });
   const clientById = new Map(clients.map((c) => [c.id, c]));
 
-  const header = [
-    "Invoice Number",
-    "Status",
-    "Client",
-    "Client Email",
-    "Classification",
-    "Issue Date",
-    "Due Date",
-    "Subtotal",
-    "Discount",
-    "Tax",
-    "Total",
-    "Paid",
-    "Refunded",
-    "Balance",
-    "Created By",
-    "Created",
-  ];
-  const lines = [header.join(",")];
+  const rows: InvoiceExportRow[] = invoices.map((invoice) => ({ invoice, client: clientById.get(invoice.clientId) }));
+  const csv = buildCsvExport(rows, columns());
 
-  for (const inv of invoices) {
-    const client = clientById.get(inv.clientId);
-    lines.push(
-      [
-        csvEscape(inv.invoiceNumber),
-        csvEscape(inv.status),
-        csvEscape(client?.displayName || ""),
-        csvEscape(client?.email || ""),
-        csvEscape(inv.classification),
-        csvEscape(inv.issueDate.toISOString().slice(0, 10)),
-        csvEscape(inv.dueDate.toISOString().slice(0, 10)),
-        csvEscape(formatCents(inv.subtotalCents)),
-        csvEscape(formatCents(inv.discountCents)),
-        csvEscape(formatCents(inv.taxCents)),
-        csvEscape(formatCents(inv.totalCents)),
-        csvEscape(formatCents(inv.amountPaidCents)),
-        csvEscape(formatCents(inv.refundedCents)),
-        csvEscape(formatCents(inv.balanceCents)),
-        csvEscape(inv.createdByEmail || ""),
-        csvEscape(inv.createdAt.toISOString()),
-      ].join(",")
-    );
-  }
-
-  return new NextResponse(lines.join("\n"), {
-    headers: {
-      "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="invoices.csv"`,
-    },
+  await logDashboardAction({
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
+    action: "invoice.exported",
+    entityType: "invoice",
+    metadata: { rowCount: rows.length, status: status ?? null },
+    req,
   });
+
+  return csvResponse(csv, "invoices.csv");
 }

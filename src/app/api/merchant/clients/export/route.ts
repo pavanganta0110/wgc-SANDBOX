@@ -1,16 +1,35 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
+import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
-import { loadClientAggregatesBatch } from "@/lib/clients/clientsList";
+import { loadClientAggregatesBatch, type ClientAggregates } from "@/lib/clients/clientsList";
 
-function csvEscape(value: string) {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
+type ClientExportRow = {
+  client: Awaited<ReturnType<typeof prisma.client.findMany>>[number];
+  aggregates: ClientAggregates | undefined;
+};
+
+function columns(): CsvColumn<ClientExportRow>[] {
+  return [
+    { header: "Name", value: (r) => r.client.displayName },
+    { header: "Type", value: (r) => r.client.clientType },
+    { header: "Email", value: (r) => r.client.email || "" },
+    { header: "Phone", value: (r) => r.client.phone || "" },
+    {
+      header: "Billing Address",
+      value: (r) => [r.client.billingAddressLine1, r.client.billingCity, r.client.billingState, r.client.billingPostalCode].filter(Boolean).join(", "),
+    },
+    { header: "Total Invoiced", value: (r) => formatCents(r.aggregates?.totalInvoicedCents ?? 0) },
+    { header: "Total Paid", value: (r) => formatCents(r.aggregates?.totalPaidCents ?? 0) },
+    { header: "Outstanding Balance", value: (r) => formatCents(r.aggregates?.outstandingBalanceCents ?? 0) },
+    { header: "Invoice Count", value: (r) => String(r.aggregates?.invoiceCount ?? 0) },
+    { header: "Status", value: (r) => (r.client.archivedAt ? "Archived" : "Active") },
+    { header: "Created", value: (r) => r.client.createdAt.toISOString() },
+  ];
 }
 
 export async function GET(req: Request) {
@@ -37,45 +56,19 @@ export async function GET(req: Request) {
   });
   const aggregates = await loadClientAggregatesBatch(clients.map((c) => c.id));
 
-  const header = [
-    "Name",
-    "Type",
-    "Email",
-    "Phone",
-    "Billing Address",
-    "Total Invoiced",
-    "Total Paid",
-    "Outstanding Balance",
-    "Invoice Count",
-    "Status",
-    "Created",
-  ];
-  const lines = [header.join(",")];
+  const rows: ClientExportRow[] = clients.map((client) => ({ client, aggregates: aggregates.get(client.id) }));
+  const csv = buildCsvExport(rows, columns());
 
-  for (const client of clients) {
-    const agg = aggregates.get(client.id);
-    const address = [client.billingAddressLine1, client.billingCity, client.billingState, client.billingPostalCode].filter(Boolean).join(", ");
-    lines.push(
-      [
-        csvEscape(client.displayName),
-        csvEscape(client.clientType),
-        csvEscape(client.email || ""),
-        csvEscape(client.phone || ""),
-        csvEscape(address),
-        csvEscape(formatCents(agg?.totalInvoicedCents ?? 0)),
-        csvEscape(formatCents(agg?.totalPaidCents ?? 0)),
-        csvEscape(formatCents(agg?.outstandingBalanceCents ?? 0)),
-        csvEscape(String(agg?.invoiceCount ?? 0)),
-        csvEscape(client.archivedAt ? "Archived" : "Active"),
-        csvEscape(client.createdAt.toISOString()),
-      ].join(",")
-    );
-  }
-
-  return new NextResponse(lines.join("\n"), {
-    headers: {
-      "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="clients.csv"`,
-    },
+  await logDashboardAction({
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
+    action: "client.exported",
+    entityType: "client",
+    metadata: { rowCount: rows.length, includeArchived },
+    req,
   });
+
+  return csvResponse(csv, "clients.csv");
 }
