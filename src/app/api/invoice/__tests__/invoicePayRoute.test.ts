@@ -231,6 +231,13 @@ describe("POST /api/invoice/[token]/pay — happy path", () => {
     expect((mockPrisma as Record<string, unknown>).donor).toBeUndefined();
   });
 
+  it("passes skipDonorMatch: true to syncPaymentInstrument — without this, syncPaymentInstrument's own donor-matching fallback silently creates/links a Donor from the payer's identity whenever churchId is present, which then leaks a GOODS_OR_SERVICES invoice payment into that donor's year-end statement via yearEndStatements.ts's separate instrument/transfer scan (bypassing its CHARITABLE_DONATION/PARTIAL_DONATION classification gate entirely)", async () => {
+    const { syncPaymentInstrument } = await import("@/lib/finix/sync/syncPaymentInstruments");
+    const { POST } = await load();
+    await POST(postReq(validBody()), params());
+    expect(syncPaymentInstrument).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ skipDonorMatch: true }));
+  });
+
   it("routes a wallet payment through third_party_token instead of token", async () => {
     const { POST } = await load();
     const res = await POST(

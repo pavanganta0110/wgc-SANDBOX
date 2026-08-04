@@ -312,13 +312,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // Snapshots the card/bank display info (last four, brand) onto
   // FinixPaymentInstrumentSnapshot so this transfer shows correctly in the
   // merchant's Transactions > Payments list — that list joins through this
-  // table for its "Payment Instrument"/"Instrument Type" columns. Never
-  // passes a donorId: invoice payers are deliberately never turned into
-  // Donor records (see the module doc comment above), so this snapshot is
-  // instrument-only, matching how it shows "—" for Donor by design.
+  // table for its "Payment Instrument"/"Instrument Type" columns.
+  // skipDonorMatch is required, not optional: invoice payers are
+  // deliberately never turned into Donor records (see the module doc
+  // comment above) — without it, syncPaymentInstrument's own fallback
+  // would upsert a Donor from the payer's identity whenever churchId is
+  // present, which would then let this transfer leak into that donor's
+  // year-end statement via the instrument/transfer scan in
+  // yearEndStatements.ts, bypassing computeInvoicePaymentLines' own
+  // CHARITABLE_DONATION/PARTIAL_DONATION classification gate entirely —
+  // including for GOODS_OR_SERVICES invoices that were never a donation.
   try {
     const { syncPaymentInstrument } = await import("@/lib/finix/sync/syncPaymentInstruments");
-    await syncPaymentInstrument(instrumentId, { churchId: invoice.churchId });
+    await syncPaymentInstrument(instrumentId, { churchId: invoice.churchId, skipDonorMatch: true });
   } catch (err) {
     console.error("Failed to snapshot payment instrument for invoice payment:", err);
   }
