@@ -2203,9 +2203,37 @@ model ExternalDonation {
 
   includeInAnnualStatement Boolean @default(true)
 
+  // Tax-deductibility. deductibleAmountCents is null when the full
+  // donationAmountCents is deductible (the common case); set explicitly
+  // only when goods/services reduce the deductible portion below the full
+  // gift amount. Mirrors Payment/DonationReceipt's existing
+  // goodsServices*Snapshot fields on the receipt side, kept here directly
+  // since ExternalDonation (unlike Payment) has no separate versioned
+  // receipt table to snapshot into.
+  isTaxDeductible            Boolean @default(true)
+  deductibleAmountCents      Int?
+  goodsOrServicesProvided    Boolean @default(false)
+  goodsOrServicesDescription String?
+  goodsOrServicesValueCents  Int?
+
+  // NOT_SENT | QUEUED | SENT | FAILED | RESENT | SUPPRESSED_MISSING_EMAIL |
+  // SUPPRESSED_BY_USER — see src/lib/donations/externalDonationTypes.ts.
   receiptStatus String?
   receiptSentAt DateTime?
   receiptNumber String?
+
+  // Set only when this row was created by the CSV import pipeline — null
+  // for every manually-recorded donation. importFingerprint is a
+  // deterministic hash of the row's identifying fields (see
+  // src/lib/donations/importFingerprint.ts), checked against existing
+  // rows at commit time so re-uploading the same file is safe: matching
+  // rows are flagged as probable duplicates rather than silently
+  // re-imported, without blocking a genuinely repeated gift that a
+  // merchant confirms is real.
+  importBatchId     String?
+  importRowNumber   Int?
+  importFingerprint String?
+  importBatch       ExternalDonationImportBatch? @relation(fields: [importBatchId], references: [id])
 
   // RECEIVED | PENDING_CONFIRMATION | DEPOSITED | CLEARED | RETURNED |
   // CORRECTED | VOIDED. Returned/voided rows are excluded from active
@@ -2242,6 +2270,91 @@ model ExternalDonation {
   @@index([churchId, status])
   @@index([churchId, donationDate])
   @@index([churchId, donorMatchStatus])
+  @@index([churchId, importFingerprint])
+  @@index([importBatchId])
+}
+
+/// A single CSV/spreadsheet upload of external donations. One batch per
+/// uploaded file — row-level detail lives on ExternalDonationImportRow.
+/// Never deleted (see Import History, external-donations.md rollback
+/// policy note) so the audit trail of what was imported, by whom, and
+/// when survives indefinitely.
+model ExternalDonationImportBatch {
+  id               String  @id @default(cuid())
+  churchId         String
+  fileName         String
+  uploadedByUserId String?
+
+  // UPLOADED | VALIDATING | READY | IMPORTING | COMPLETED |
+  // COMPLETED_WITH_ERRORS | FAILED | CANCELLED
+  status String @default("UPLOADED")
+
+  totalRows        Int @default(0)
+  successRows      Int @default(0)
+  failedRows       Int @default(0)
+  skippedRows      Int @default(0)
+  totalAmountCents Int @default(0)
+
+  // NONE | AFTER_IMPORT | ONLY_FLAGGED | REVIEW_BEFORE_SENDING — the
+  // organization's bulk-receipt choice for this batch (spec §7).
+  receiptOption  String?
+  receiptsQueued Int     @default(0)
+  receiptsSent   Int     @default(0)
+  receiptsFailed Int     @default(0)
+
+  // The confirmed column -> field mapping used for this import, kept for
+  // the batch's own audit record (not reused across batches automatically —
+  // each upload is mapped explicitly, per spec §3 Step 2).
+  columnMappingJson Json?
+  errorSummary      String?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  rows      ExternalDonationImportRow[]
+  donations ExternalDonation[]
+
+  @@index([churchId])
+  @@index([churchId, status])
+  @@index([churchId, createdAt])
+}
+
+/// One source row from an import batch's file, kept regardless of outcome
+/// (imported, skipped, or failed) so a merchant can always see exactly
+/// what happened to every row they uploaded.
+model ExternalDonationImportRow {
+  id            String @id @default(cuid())
+  importBatchId String
+  rowNumber     Int
+
+  // The raw mapped field values for this row (post column-mapping,
+  // pre-validation) — never the untouched raw CSV text, so no unmapped
+  // spreadsheet column ever gets stored verbatim.
+  rawDataJson Json
+
+  fingerprint String
+
+  // PENDING | VALID | WARNING | INVALID | DUPLICATE | IMPORTED | SKIPPED | FAILED
+  status String @default("PENDING")
+
+  errorsJson   Json?
+  warningsJson Json?
+
+  // MATCHED_EXISTING | CREATED_NEW | AMBIGUOUS | ANONYMOUS | UNMATCHED
+  donorResolution String?
+
+  externalDonationId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  importBatch ExternalDonationImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@unique([importBatchId, rowNumber])
+  @@index([importBatchId])
+  @@index([fingerprint])
 }
 
 /// Append-only trail of donor-assignment changes on an ExternalDonation —
