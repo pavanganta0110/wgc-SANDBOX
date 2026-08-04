@@ -272,7 +272,7 @@ export default function FirstLookPage() {
             
             <div className="mt-12 text-center">
               <p className="text-sm font-mono text-[#41506F]">
-                See our <Link href="/legal/privacy-policy" className="text-[#8C5A33] hover:underline">Privacy Policy</Link> and <Link href="/legal/terms-of-service" className="text-[#8C5A33] hover:underline">Terms</Link>.
+                See our <Link href="/legal/privacy" className="text-[#8C5A33] hover:underline">Privacy Policy</Link> and <Link href="/legal/terms" className="text-[#8C5A33] hover:underline">Terms</Link>.
               </p>
             </div>
           </div>
