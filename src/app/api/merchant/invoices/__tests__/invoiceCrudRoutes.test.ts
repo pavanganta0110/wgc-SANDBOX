@@ -237,4 +237,15 @@ describe("POST /api/merchant/invoices/[invoiceId]/duplicate", () => {
     expect(createCall.data.status).toBe("DRAFT");
     expect(createCall.data.invoiceNumber).toBe("INV-000001");
   });
+
+  it("blocks a fundraiser from duplicating an invoice they didn't create", async () => {
+    const { POST } = await loadDuplicate();
+    mockAuth.mockResolvedValue(fundraiserAuth("church-a", "u2"));
+    mockPrisma.invoice.findFirst.mockResolvedValue({
+      id: "inv-1", createdByUserId: "someone-else", clientId: "c1", classification: "GOODS_OR_SERVICES",
+    });
+    const res = await POST(new Request("http://x", { method: "POST" }), { params: Promise.resolve({ invoiceId: "inv-1" }) });
+    expect(res.status).toBe(403);
+    expect(mockPrisma.invoice.create).not.toHaveBeenCalled();
+  });
 });

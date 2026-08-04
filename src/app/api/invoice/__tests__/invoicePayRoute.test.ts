@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/invoices/invoiceEmails", () => ({ sendInvoicePaymentReceiptEmail: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/finix/sync/syncPaymentInstruments", () => ({ syncPaymentInstrument: vi.fn().mockResolvedValue(undefined) }));
 
 const mockCheckRateLimit = vi.fn((_key: string) => true);
 vi.mock("@/lib/invoices/invoicePublicRateLimit", () => ({ checkInvoicePaymentRateLimit: (key: string) => mockCheckRateLimit(key) }));
@@ -22,7 +23,7 @@ vi.mock("@/lib/giving/serverFeeStrategy", () => ({ resolveWgcTransferFeeStrategy
 const mockPrisma = {
   invoice: { findUnique: vi.fn(), update: vi.fn() },
   church: { findUnique: vi.fn() },
-  invoicePayment: { findMany: vi.fn(), create: vi.fn() },
+  invoicePayment: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
   invoicePaymentAttempt: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   invoiceActivity: { create: vi.fn() },
   finixTransfer: { upsert: vi.fn() },
@@ -34,6 +35,7 @@ function baseInvoice(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: "inv1",
     churchId: "church-a",
+    invoiceNumber: "INV-000001",
     status: "SENT",
     totalCents: 10000,
     balanceCents: 10000,
@@ -45,6 +47,7 @@ function baseInvoice(overrides: Partial<Record<string, unknown>> = {}) {
     allowGooglePay: true,
     allowPartialPayments: false,
     minimumPartialPaymentCents: null,
+    allowFeeCoverage: true,
     feeCoveredBy: "MERCHANT",
     classification: "GOODS_OR_SERVICES",
     charitablePortionCents: null,
@@ -81,6 +84,7 @@ beforeEach(() => {
   mockPrisma.invoice.findUnique.mockResolvedValue(baseInvoice());
   mockPrisma.church.findUnique.mockResolvedValue({ id: "church-a", finixMerchantId: "MU123", name: "Test Church" });
   mockPrisma.invoicePayment.findMany.mockResolvedValue([]);
+  mockPrisma.invoicePayment.findFirst.mockResolvedValue(null);
   mockPrisma.invoicePayment.create.mockResolvedValue({ id: "invpay-1" });
   mockPrisma.invoicePaymentAttempt.findUnique.mockResolvedValue(null);
   mockPrisma.invoicePaymentAttempt.create.mockResolvedValue({ id: "attempt-row-1" });
@@ -235,6 +239,97 @@ describe("POST /api/invoice/[token]/pay — happy path", () => {
     expect(res.status).toBe(200);
     expect(mockFinixClient.createPaymentInstrument).toHaveBeenCalledWith(
       expect.objectContaining({ type: "APPLE_PAY", third_party_token: "WALLETTOK" })
+    );
+  });
+});
+
+describe("POST /api/invoice/[token]/pay — customer fee coverage", () => {
+  it("passes donorCoversFee: true to the fee strategy when the customer opts in and the invoice allows it", async () => {
+    mockFeeStrategy.mockReturnValue({
+      amountToChargeCents: 10300,
+      expectedFeeCents: 300,
+      supplementalFeeCents: 300,
+      feePaidBy: "DONOR",
+      feeProfileId: "FP_ZERO",
+      normalizedCardBrand: "VISA",
+      percentageBasisPoints: 300,
+      fixedFeeCents: 0,
+    });
+    const { POST } = await load();
+    const res = await POST(postReq(validBody({ coverFee: true, expectedTotalCents: 10300 })), params());
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mockFeeStrategy).toHaveBeenCalledWith(expect.objectContaining({ donorCoversFee: true }));
+    expect(data.feeContributionCents).toBe(300);
+    expect(data.totalCents).toBe(10300);
+    expect(data.customerCoveredFee).toBe(true);
+    expect(mockPrisma.invoicePayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          grossAmountCents: 10000, // the invoice-amount-applied figure never includes the fee contribution
+          feeContributionCents: 300,
+          totalChargedCents: 10300,
+          customerCoveredFee: true,
+        }),
+      })
+    );
+  });
+
+  it("ignores a customer's coverFee: true when the invoice has fee coverage disabled", async () => {
+    mockPrisma.invoice.findUnique.mockResolvedValue(baseInvoice({ allowFeeCoverage: false }));
+    const { POST } = await load();
+    await POST(postReq(validBody({ coverFee: true })), params());
+
+    expect(mockFeeStrategy).toHaveBeenCalledWith(expect.objectContaining({ donorCoversFee: false }));
+  });
+
+  it("defaults to donorCoversFee: false when the customer declines fee coverage", async () => {
+    const { POST } = await load();
+    await POST(postReq(validBody({ coverFee: false })), params());
+    expect(mockFeeStrategy).toHaveBeenCalledWith(expect.objectContaining({ donorCoversFee: false }));
+  });
+
+  it("rejects the charge when the client's expected total no longer matches the server-computed total", async () => {
+    // Server computes 10000 (no fee, MERCHANT-paid by default), but the
+    // client submits a total that assumes fee coverage was still on —
+    // simulates a stale UI (e.g. the payer toggled the checkbox off after
+    // the wallet sheet already captured an old amount).
+    const { POST } = await load();
+    const res = await POST(postReq(validBody({ expectedTotalCents: 10300 })), params());
+    const data = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(data.success).toBe(false);
+    expect(mockFinixClient.createTransfer).not.toHaveBeenCalled();
+  });
+
+  it("accepts a matching expectedTotalCents within a one-cent rounding tolerance", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq(validBody({ expectedTotalCents: 10001 })), params());
+    expect(res.status).toBe(200);
+  });
+
+  it("never lets the fee contribution inflate the amount applied toward the invoice balance", async () => {
+    mockFeeStrategy.mockReturnValue({
+      amountToChargeCents: 10300,
+      expectedFeeCents: 300,
+      supplementalFeeCents: 300,
+      feePaidBy: "DONOR",
+      feeProfileId: "FP_ZERO",
+      normalizedCardBrand: "VISA",
+      percentageBasisPoints: 300,
+      fixedFeeCents: 0,
+    });
+    const { POST } = await load();
+    const res = await POST(postReq(validBody({ coverFee: true, expectedTotalCents: 10300 })), params());
+    const data = await res.json();
+    // amountCents (what reduces the invoice balance) stays the original
+    // 10000 invoice amount — never 10300 — so the invoice can never appear
+    // overpaid just because the payer covered the fee.
+    expect(data.amountCents).toBe(10000);
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amountPaidCents: 10000 }) })
     );
   });
 });

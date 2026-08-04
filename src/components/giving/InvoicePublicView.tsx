@@ -2,13 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { CheckCircle2, Clock, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Clock, ShieldCheck, Loader2, XCircle } from "lucide-react";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { formatCents } from "@/lib/format";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
+// Pure, framework-agnostic function — its own doc comment says it's "safe
+// for frontend previews." Used here only to show the payer a live estimate
+// before the card is tokenized (the exact card-brand rate isn't known
+// until then); the backend always recomputes and validates independently,
+// never trusting this client-side number.
+import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 
 interface LineItem {
   description: string;
@@ -46,7 +52,8 @@ interface InvoiceData {
   allowPartialPayments: boolean;
   minimumPartialPaymentCents: number | null;
   feeCoveredBy: string;
-  paymentHistory: { date: string; method: string; grossAmountCents: number; refundedCents: number; status: string }[];
+  allowFeeCoverage: boolean;
+  paymentHistory: { date: string; method: string; grossAmountCents: number; feeContributionCents: number; totalChargedCents: number; refundedCents: number; status: string }[];
   branding: {
     logoUrl: string | null;
     organizationDisplayName: string;
@@ -63,11 +70,23 @@ interface InvoiceData {
   googlePayEnvironment: "TEST" | "PRODUCTION";
 }
 
+interface PaymentResult {
+  amountCents: number;
+  feeContributionCents: number;
+  totalCents: number;
+  customerCoveredFee: boolean;
+  method: string;
+  paidAt: string | null;
+  transferId: string | null;
+}
+
 type ViewState =
   | { step: "loading" }
   | { step: "error"; message: string }
   | { step: "ready"; data: InvoiceData }
-  | { step: "paid"; data: InvoiceData };
+  | { step: "processing"; data: InvoiceData; result: PaymentResult }
+  | { step: "paid"; data: InvoiceData; result: PaymentResult }
+  | { step: "failed"; data: InvoiceData; message: string };
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Draft",
@@ -93,6 +112,8 @@ export default function InvoicePublicView({ token }: { token: string }) {
   const [attemptId, setAttemptId] = useState("");
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [coverFee, setCoverFee] = useState(false);
+  const coverFeeInitializedRef = useRef(false);
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const [formReady, setFormReady] = useState(false);
@@ -111,6 +132,10 @@ export default function InvoicePublicView({ token }: { token: string }) {
           return;
         }
         setState({ step: "ready", data: json });
+        if (!coverFeeInitializedRef.current) {
+          coverFeeInitializedRef.current = true;
+          setCoverFee(Boolean(json.allowFeeCoverage) && json.feeCoveredBy === "CLIENT");
+        }
       })
       .catch(() => {
         if (!cancelled) setState({ step: "error", message: "A network error occurred. Please refresh and try again." });
@@ -210,6 +235,49 @@ export default function InvoicePublicView({ token }: { token: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleAvailable]);
 
+  // Polls the server-authoritative payment-status endpoint while a payment
+  // (typically ACH) is still settling — never trusts a client-side timer
+  // alone to decide the outcome, always re-verifies against Finix via the
+  // backend. Stops once the attempt reaches a terminal state.
+  useEffect(() => {
+    if (state.step !== "processing") return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/invoice/${token}/payment-status?attemptId=${attemptId}`);
+        const json = await res.json();
+        if (cancelled || !res.ok) return;
+        if (json.state === "SUCCEEDED") {
+          setState({
+            step: "paid",
+            data: state.data,
+            result: {
+              amountCents: json.amountCents ?? state.result.amountCents,
+              feeContributionCents: json.feeContributionCents ?? state.result.feeContributionCents,
+              totalCents: json.totalCents ?? state.result.totalCents,
+              customerCoveredFee: json.customerCoveredFee ?? state.result.customerCoveredFee,
+              method: json.method || state.result.method,
+              paidAt: json.paidAt || new Date().toISOString(),
+              transferId: json.transferId || state.result.transferId,
+            },
+          });
+        } else if (json.state === "FAILED") {
+          setState({ step: "failed", data: state.data, message: json.failureMessage || "Your payment could not be completed. Please try again." });
+        }
+      } catch {
+        // A network hiccup while polling isn't a payment failure — just
+        // try again on the next tick.
+      }
+    };
+    const interval = setInterval(poll, 4000);
+    poll();
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.step === "processing" ? attemptId : null]);
+
   if (state.step === "loading") {
     return <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">Loading invoice…</div>;
   }
@@ -223,15 +291,59 @@ export default function InvoicePublicView({ token }: { token: string }) {
       </div>
     );
   }
-  if (state.step === "paid") {
-    const paidData = state.data;
-    const paidAccent = paidData.branding.accentColor || "#1d4ed8";
+  if (state.step === "processing") {
+    const pAccent = state.data.branding.accentColor || "#1d4ed8";
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
         <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <Loader2 className="w-12 h-12 mx-auto mb-3 animate-spin" style={{ color: pAccent }} />
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Payment Processing</h1>
+          <p className="text-sm text-slate-500">
+            Your {state.result.method.replace(/_/g, " ").toLowerCase()} payment of {formatCents(state.result.totalCents)} is being confirmed. This page will update automatically.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.step === "failed") {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
+          <XCircle className="w-12 h-12 mx-auto mb-3 text-red-500" />
+          <h1 className="text-xl font-bold text-slate-900 mb-2">Payment Failed</h1>
+          <p className="text-sm text-slate-500 mb-4">{state.message}</p>
+          <button
+            onClick={() => setState({ step: "ready", data: state.data })}
+            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (state.step === "paid") {
+    const paidData = state.data;
+    const paidAccent = paidData.branding.accentColor || "#1d4ed8";
+    const r = state.result;
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+        <div className="max-w-md w-full text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
           <CheckCircle2 className="w-12 h-12 mx-auto mb-3" style={{ color: paidAccent }} />
           <h1 className="text-xl font-bold text-slate-900 mb-2">Payment Successful</h1>
-          <p className="text-sm text-slate-500">{paidData.branding.thankYouMessage || `Thank you for your payment to ${paidData.branding.organizationDisplayName}.`}</p>
+          <p className="text-sm text-slate-500 mb-5">{paidData.branding.thankYouMessage || `Thank you for your payment to ${paidData.branding.organizationDisplayName}.`}</p>
+          <div className="bg-slate-50 rounded-xl p-4 text-sm text-left space-y-2">
+            <div className="flex justify-between"><span className="text-slate-500">Amount Paid</span><span className="font-semibold text-slate-900">{formatCents(r.amountCents)}</span></div>
+            {r.customerCoveredFee && r.feeContributionCents > 0 && (
+              <div className="flex justify-between"><span className="text-slate-500">Processing Fee Contribution</span><span className="font-semibold text-slate-900">{formatCents(r.feeContributionCents)}</span></div>
+            )}
+            <div className="flex justify-between"><span className="text-slate-500">Invoice Number</span><span className="font-semibold text-slate-900">{paidData.invoiceNumber}</span></div>
+            {r.paidAt && <div className="flex justify-between"><span className="text-slate-500">Payment Date</span><span className="font-semibold text-slate-900">{new Date(r.paidAt).toLocaleString("en-US")}</span></div>}
+            <div className="flex justify-between"><span className="text-slate-500">Payment Method</span><span className="font-semibold text-slate-900">{r.method.replace(/_/g, " ")}</span></div>
+            {r.transferId && <div className="flex justify-between"><span className="text-slate-500">Confirmation #</span><span className="font-semibold text-slate-900 text-xs">{r.transferId}</span></div>}
+          </div>
         </div>
       </div>
     );
@@ -242,6 +354,21 @@ export default function InvoicePublicView({ token }: { token: string }) {
   const requestedAmountCents = data.allowPartialPayments
     ? Math.round((parseFloat(payAmountInput || "0") || 0) * 100)
     : data.balanceCents;
+
+  // Live estimate only — recalculated on every render from the current
+  // amount/method/coverFee selection, exactly the inputs the spec requires
+  // triggering a recalculation. The exact card-brand rate isn't known until
+  // after tokenization, so this uses cardBrand: null the same way the
+  // existing GivingLinkForm wallet-fee preview does; the backend
+  // independently recomputes and is the only value ever charged.
+  const feeEstimate = calculateWgcFeeAmounts({
+    donationAmountCents: requestedAmountCents || 0,
+    paymentMethod: payMethod === "bank" ? "ACH" : "CARD",
+    cardBrand: null,
+    donorCoversFee: data.allowFeeCoverage && coverFee,
+  });
+  const estimatedTotalCents = feeEstimate.amountToChargeCents;
+  const estimatedFeeContributionCents = data.allowFeeCoverage && coverFee ? feeEstimate.supplementalFeeCents : 0;
 
   function validateAmount(): string | null {
     if (!data) return "Invoice not loaded.";
@@ -269,6 +396,34 @@ export default function InvoicePublicView({ token }: { token: string }) {
       throw new Error(json?.message || "We couldn't complete your payment. Please try again.");
     }
     return json;
+  }
+
+  // The single place a payment API response turns into a UI state — never
+  // assumes success just because the HTTP call didn't throw. SUCCEEDED and
+  // PENDING/FAILED (and their "duplicate" re-delivery equivalents) are
+  // treated identically to a first-time response, since a duplicate
+  // request for an already-succeeded attempt must show the exact same
+  // success screen, not a bare "already paid" message.
+  function applyPaymentResult(json: Record<string, unknown>) {
+    const result: PaymentResult = {
+      amountCents: (json.amountCents as number) ?? requestedAmountCents,
+      feeContributionCents: (json.feeContributionCents as number) ?? 0,
+      totalCents: (json.totalCents as number) ?? estimatedTotalCents,
+      customerCoveredFee: Boolean(json.customerCoveredFee),
+      method: (json.method as string) || payMethod,
+      paidAt: (json.paidAt as string) || null,
+      transferId: (json.transferId as string) || null,
+    };
+    if (json.state === "SUCCEEDED") {
+      setState({ step: "paid", data: data as InvoiceData, result: { ...result, paidAt: result.paidAt || new Date().toISOString() } });
+    } else if (json.state === "FAILED") {
+      setState({ step: "failed", data: data as InvoiceData, message: "Your payment could not be completed. Please try again." });
+    } else {
+      // PENDING (or PROCESSING) — never shown as a success; the processing
+      // screen's poll (above) is the only thing allowed to promote this to
+      // "paid" once Finix/the webhook actually confirms it.
+      setState({ step: "processing", data: data as InvoiceData, result });
+    }
   }
 
   const handleCardBankSubmit = async () => {
@@ -310,15 +465,17 @@ export default function InvoicePublicView({ token }: { token: string }) {
         return;
       }
       try {
-        await submitPayment({
+        const json = await submitPayment({
           amountCents: requestedAmountCents,
           paymentMethod: payMethod,
           finixToken: response.data.id,
           fraudSessionId,
           clientAttemptId: attemptId,
+          coverFee: data.allowFeeCoverage && coverFee,
+          expectedTotalCents: estimatedTotalCents,
           payer: { name: payerName.trim(), email: payerEmail.trim(), phone: payerPhone.trim() || undefined },
         });
-        setState({ step: "paid", data });
+        applyPaymentResult(json);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Payment failed.");
       } finally {
@@ -329,19 +486,21 @@ export default function InvoicePublicView({ token }: { token: string }) {
 
   const submitWallet = async (method: "apple_pay" | "google_pay", walletResult: ApplePayResult | GooglePayResult) => {
     try {
-      await submitPayment({
+      const json = await submitPayment({
         amountCents: requestedAmountCents,
         paymentMethod: method,
         walletToken: walletResult.walletToken,
         walletBillingContact: walletResult.billingContact,
         clientAttemptId: attemptId,
+        coverFee: data.allowFeeCoverage && coverFee,
+        expectedTotalCents: estimatedTotalCents,
         payer: {
           name: payerName.trim() || walletResult.billingContact.name,
           email: payerEmail.trim() || walletResult.billingContact.email,
           phone: payerPhone.trim() || undefined,
         },
       });
-      setState({ step: "paid", data });
+      applyPaymentResult(json);
       return { success: true };
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Payment failed.");
@@ -351,6 +510,13 @@ export default function InvoicePublicView({ token }: { token: string }) {
     }
   };
 
+  // Apple Pay's sheet is built fresh on every click (a new
+  // ApplePaySession every time, per beginApplePaySession's own doc
+  // comment), so it always reflects whatever coverFee/amount is selected
+  // at the moment the button is pressed — there's no separately-initialized
+  // wallet request that could go stale if the payer toggles the checkbox
+  // first. The amount shown in the sheet is estimatedTotalCents, the exact
+  // same number rendered in the on-page summary below.
   handleApplePayClickRef.current = () => {
     const amountError = validateAmount();
     if (amountError) {
@@ -360,7 +526,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
     if (!data.finixMerchantId || walletProcessing) return;
     setWalletProcessing("apple_pay");
     beginApplePaySession({
-      amountCents: requestedAmountCents,
+      amountCents: estimatedTotalCents,
       totalLabel: data.churchName,
       onValidateMerchant: async (validationURL) => {
         const res = await fetch("/api/wallet/apple-pay/validate-merchant", {
@@ -377,6 +543,8 @@ export default function InvoicePublicView({ token }: { token: string }) {
     });
   };
 
+  // Same principle for Google Pay — requestGooglePayment() opens a fresh
+  // sheet each click with whatever total is current at click-time.
   handleGooglePayClickRef.current = async () => {
     const amountError = validateAmount();
     if (amountError) {
@@ -393,7 +561,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
           merchantId: data.googlePayMerchantId || undefined,
           merchantName: data.churchName,
         },
-        requestedAmountCents
+        estimatedTotalCents
       );
       await submitWallet("google_pay", result);
     } catch {
@@ -515,6 +683,29 @@ export default function InvoicePublicView({ token }: { token: string }) {
             </div>
             <input placeholder="Phone (Optional)" value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none mb-4" />
 
+            <div className="bg-slate-50 rounded-xl p-4 mb-4 text-sm">
+              <div className="flex justify-between text-slate-600 mb-1">
+                <span>Invoice amount</span>
+                <span>{formatCents(requestedAmountCents)}</span>
+              </div>
+              {data.allowFeeCoverage && (
+                <label className="flex items-center justify-between gap-3 py-2 cursor-pointer">
+                  <span className="flex items-center gap-2 text-slate-700">
+                    <input type="checkbox" checked={coverFee} onChange={(e) => setCoverFee(e.target.checked)} className="rounded" />
+                    Add {formatCents(estimatedFeeContributionCents)} to help cover the processing fee
+                  </span>
+                </label>
+              )}
+              <div className="flex justify-between text-slate-600 mb-1">
+                <span>Processing fee contribution</span>
+                <span>{formatCents(estimatedFeeContributionCents)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-slate-900 pt-2 mt-1 border-t border-slate-200">
+                <span>Total</span>
+                <span>{formatCents(estimatedTotalCents)}</span>
+              </div>
+            </div>
+
             {(appleAvailable || googleAvailable) && (
               <div className="flex gap-3 mb-4">
                 {appleAvailable && <div ref={applePayButtonRef} className="flex-1 h-11 [&_apple-pay-button]:w-full [&_apple-pay-button]:h-11" dangerouslySetInnerHTML={{ __html: `<apple-pay-button buttonstyle="black" type="pay" locale="en-US"></apple-pay-button>` }} />}
@@ -541,7 +732,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
                   className="w-full px-4 py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
                   style={{ backgroundColor: accent }}
                 >
-                  {submitting ? "Processing…" : `Pay ${formatCents(requestedAmountCents || data.balanceCents)}`}
+                  {submitting ? "Processing…" : `Pay ${formatCents(estimatedTotalCents)}`}
                 </button>
               </>
             )}

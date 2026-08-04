@@ -71,6 +71,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ in
     allowGooglePay: invoice.allowGooglePay,
     allowPartialPayments: invoice.allowPartialPayments,
     minimumPartialPaymentCents: invoice.minimumPartialPaymentCents,
+    allowFeeCoverage: invoice.allowFeeCoverage,
     feeCoveredBy: invoice.feeCoveredBy as "MERCHANT" | "CLIENT",
     autoCloseWhenPaid: invoice.autoCloseWhenPaid,
     templateName: invoice.templateName,

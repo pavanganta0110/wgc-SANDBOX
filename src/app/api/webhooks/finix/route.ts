@@ -309,67 +309,15 @@ export async function syncFinixDataFromWebhookEvent(
     // Invoice payments (source === "wgc_invoice_payment") settle on their
     // own async schedule — an ACH InvoicePayment created PENDING by the
     // /api/invoice/[token]/pay route only becomes a real reduction of the
-    // invoice balance once this webhook reports SUCCEEDED (see
-    // calculateInvoiceBalance's "PENDING excluded from amountPaidCents"
-    // rule), and a later FAILED/CANCELED must never have already been
-    // counted. applyState's out-of-order protection (above) already
-    // guarantees a terminal state is never regressed by a stale replay.
+    // invoice balance once this webhook reports SUCCEEDED. Shared with the
+    // public payment-status endpoint (invoicePaymentReconciliation.ts) so
+    // there's exactly one place this state transition is applied — a
+    // webhook and a payer's return-page verification racing each other
+    // both call the same idempotent function, so neither can double-apply
+    // a payment or send a duplicate receipt.
     if (churchId && data.id && applyState && source === "wgc_invoice_payment") {
-      const priorInvoicePayment = await prisma.invoicePayment.findFirst({ where: { finixTransferId: data.id } });
-      const newState = (data.state || "PENDING").toUpperCase();
-      const newStatus = newState === "SUCCEEDED" ? "SUCCEEDED" : newState === "FAILED" || newState === "CANCELED" ? "FAILED" : "PENDING";
-
-      if (priorInvoicePayment && priorInvoicePayment.status !== newStatus) {
-        await prisma.invoicePayment.update({ where: { id: priorInvoicePayment.id }, data: { status: newStatus } });
-
-        const invoice = await prisma.invoice.findUnique({ where: { id: priorInvoicePayment.invoiceId } });
-        if (invoice) {
-          const { calculateInvoiceBalance } = await import("@/lib/invoices/invoiceMoney");
-          const { computeDerivedInvoiceStatus } = await import("@/lib/invoices/invoiceStatus");
-          const payments = await prisma.invoicePayment.findMany({
-            where: { invoiceId: invoice.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } },
-          });
-          const balance = calculateInvoiceBalance({ totalCents: invoice.totalCents, payments });
-          const derivedStatus = computeDerivedInvoiceStatus({
-            currentStatus: invoice.status as InvoiceStatus,
-            balanceCents: balance.balanceCents,
-            totalCents: invoice.totalCents,
-            hasBeenViewed: Boolean(invoice.firstViewedAt),
-            dueDate: invoice.dueDate,
-          });
-          await prisma.invoice.update({
-            where: { id: invoice.id },
-            data: {
-              amountPaidCents: balance.amountPaidCents,
-              balanceCents: balance.balanceCents,
-              status: derivedStatus,
-              paidAt: derivedStatus === "PAID" && !invoice.paidAt ? new Date() : invoice.paidAt,
-            },
-          });
-          await prisma.invoiceActivity.create({
-            data: {
-              invoiceId: invoice.id,
-              churchId: invoice.churchId,
-              activityType: newStatus === "SUCCEEDED" ? "invoice.payment_settled" : "invoice.payment_failed",
-              metadata: { finixTransferId: data.id, previousStatus: priorInvoicePayment.status, newStatus },
-            },
-          });
-
-          // The public pay route only sends a payment-receipt email
-          // immediately for payment methods that come back SUCCEEDED at
-          // charge time (card, wallets) — an ACH payment is created
-          // PENDING and only reaches SUCCEEDED here, asynchronously, so
-          // this is the only place its receipt email gets sent.
-          if (newStatus === "SUCCEEDED" && priorInvoicePayment.method === "ACH") {
-            try {
-              const { sendInvoicePaymentReceiptEmail } = await import("@/lib/invoices/invoiceEmails");
-              await sendInvoicePaymentReceiptEmail(invoice.id, priorInvoicePayment.id);
-            } catch (err) {
-              console.error("Failed to send invoice ACH settlement receipt email:", err);
-            }
-          }
-        }
-      }
+      const { applyInvoicePaymentTransferState } = await import("@/lib/invoices/invoicePaymentReconciliation");
+      await applyInvoicePaymentTransferState(data.id, data.state);
     }
 
     // Non-blocking: pull the buyer's payment instrument (+ linked donor

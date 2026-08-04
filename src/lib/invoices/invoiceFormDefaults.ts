@@ -62,6 +62,7 @@ export interface InvoiceFormValues {
   allowGooglePay: boolean;
   allowPartialPayments: boolean;
   minimumPartialPaymentCents: number | null;
+  allowFeeCoverage: boolean;
   feeCoveredBy: "MERCHANT" | "CLIENT";
   autoCloseWhenPaid: boolean;
   templateName: string;
@@ -101,6 +102,7 @@ export function emptyInvoiceForm(): InvoiceFormValues {
     allowGooglePay: true,
     allowPartialPayments: false,
     minimumPartialPaymentCents: null,
+    allowFeeCoverage: true,
     feeCoveredBy: "MERCHANT",
     autoCloseWhenPaid: true,
     templateName: "CLASSIC",

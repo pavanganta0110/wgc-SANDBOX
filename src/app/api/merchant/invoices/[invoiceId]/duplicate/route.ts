@@ -32,6 +32,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
   if (!original) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
+  if (auth.role === "fundraiser" && original.createdByUserId !== auth.userId) {
+    return NextResponse.json({ error: "You do not have permission to duplicate this invoice." }, { status: 403 });
+  }
 
   const invoiceNumber = await generateNextInvoiceNumber(auth.churchId);
   const today = new Date();

@@ -34,6 +34,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ invoiceI
   if (!invoice) {
     return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
   }
+  if (auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId) {
+    return NextResponse.json({ error: "You do not have permission to view this invoice." }, { status: 403 });
+  }
 
   const pdf = await generateInvoicePdf(invoice.id, null);
   return new NextResponse(new Uint8Array(pdf), {

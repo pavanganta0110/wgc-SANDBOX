@@ -13,6 +13,9 @@ interface InvoicePaymentRow {
   status: string;
   grossAmountCents: number;
   processingFeeCents: number;
+  feeContributionCents: number;
+  totalChargedCents: number;
+  customerCoveredFee: boolean;
   refundedCents: number;
   source: string;
 }
@@ -138,8 +141,10 @@ export default function InvoicePaymentsPanel({
               <th className="px-6 py-3 text-left">Date</th>
               <th className="px-6 py-3 text-left">Method</th>
               <th className="px-6 py-3 text-left">Status</th>
-              <th className="px-6 py-3 text-right">Gross</th>
-              <th className="px-6 py-3 text-right">Fee</th>
+              <th className="px-6 py-3 text-right">Invoice Amount</th>
+              <th className="px-6 py-3 text-right">Customer Fee</th>
+              <th className="px-6 py-3 text-right">Total Charged</th>
+              <th className="px-6 py-3 text-right">Processing Cost</th>
               <th className="px-6 py-3 text-right">Refunded</th>
               {canRefund && <th className="px-6 py-3 text-right">Actions</th>}
             </tr>
@@ -153,6 +158,8 @@ export default function InvoicePaymentsPanel({
                   <td className="px-6 py-3">{p.method.replace(/_/g, " ")} <span className="text-xs text-slate-400">({p.source})</span></td>
                   <td className="px-6 py-3"><StateBadge state={p.status} /></td>
                   <td className="px-6 py-3 text-right">{formatCents(p.grossAmountCents)}</td>
+                  <td className="px-6 py-3 text-right">{p.customerCoveredFee ? formatCents(p.feeContributionCents) : "—"}</td>
+                  <td className="px-6 py-3 text-right">{formatCents(p.totalChargedCents || p.grossAmountCents)}</td>
                   <td className="px-6 py-3 text-right">{formatCents(p.processingFeeCents)}</td>
                   <td className="px-6 py-3 text-right">{formatCents(p.refundedCents)}</td>
                   {canRefund && (

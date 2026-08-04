@@ -48,6 +48,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     fraudSessionId,
     clientAttemptId,
     payer,
+    coverFee, // payer's fee-coverage checkbox selection — advisory only, re-gated below
+    expectedTotalCents, // what the client's UI displayed as the total — validated, never trusted as authoritative
   } = body;
 
   const method: "card" | "bank" | "apple_pay" | "google_pay" =
@@ -131,11 +133,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   // creates a second Finix transfer.
   const existingAttempt = await prisma.invoicePaymentAttempt.findUnique({ where: { clientAttemptId } });
   if (existingAttempt && (existingAttempt.status === "SUCCEEDED" || existingAttempt.status === "PROCESSING" || existingAttempt.status === "PENDING")) {
+    // A refresh, double-click, or returning wallet flow for an attempt
+    // already in flight/settled — never re-charges. Re-fetches the linked
+    // InvoicePayment (if the transaction that creates it has already
+    // committed) so a page reload gets the same rich success/processing
+    // details as the original request, not just a bare "duplicate" flag.
+    const existingPayment = existingAttempt.finixTransferId
+      ? await prisma.invoicePayment.findFirst({ where: { finixTransferId: existingAttempt.finixTransferId } })
+      : null;
     return NextResponse.json({
       success: true,
       duplicate: true,
       transferId: existingAttempt.finixTransferId,
       state: existingAttempt.status,
+      amountCents: existingPayment?.grossAmountCents ?? undefined,
+      feeContributionCents: existingPayment?.feeContributionCents ?? undefined,
+      totalCents: existingPayment?.totalChargedCents ?? existingAttempt.amountCents,
+      customerCoveredFee: existingPayment?.customerCoveredFee ?? undefined,
+      method: existingAttempt.method,
+      invoiceNumber: invoice.invoiceNumber,
     });
   }
 
@@ -191,19 +207,49 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     return toSafePaymentErrorResponse(new Error("Failed to create payment instrument"), "PAYMENT_FAILED", "Could not process payment instrument. No charge was made.", true, { action: "createPaymentInstrument" });
   }
 
+  // The payer's checkbox selection is only ever advisory — if the merchant
+  // has turned fee coverage off for this invoice (allowFeeCoverage: false),
+  // it's ignored entirely and the payer is charged exactly the invoice
+  // amount, no matter what the client submits. Uses the same
+  // calculateWgcFeeAmounts gross-up formula as every other payment surface
+  // in this codebase (donations, subscriptions) — never a second,
+  // invoice-specific fee calculation.
+  const effectiveCoverFee = invoice.allowFeeCoverage && Boolean(coverFee);
+
   let feeStrategy;
   try {
     feeStrategy = resolveWgcTransferFeeStrategy({
       donationAmountCents: amountCents,
       paymentMethod: method === "bank" ? "ACH" : "CARD",
       cardBrand: instrument.card?.brand,
-      donorCoversFee: invoice.feeCoveredBy === "CLIENT",
+      donorCoversFee: effectiveCoverFee,
     });
   } catch (err) {
     return toSafePaymentErrorResponse(err, "PAYMENT_CONFIGURATION_ERROR", "Pricing configuration error for this organization.", true, { action: "resolveFeeStrategy" });
   }
 
   const totalCents = feeStrategy.amountToChargeCents;
+  const feeContributionCents = effectiveCoverFee ? feeStrategy.supplementalFeeCents : 0;
+
+  // The frontend's displayed total is only an estimate (it can't know the
+  // exact card-brand rate before tokenization) — but if a client submits
+  // one at all, it must match what the server just computed within a
+  // one-cent rounding tolerance, or the charge is rejected outright rather
+  // than silently charging a different amount than what the payer saw on
+  // screen.
+  if (typeof expectedTotalCents === "number" && Math.abs(expectedTotalCents - totalCents) > 1) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "VALIDATION_ERROR",
+        message: "The payment total has changed. Please review the updated amount and try again.",
+        reference: null,
+        retryable: true,
+        totalCents,
+      },
+      { status: 409 }
+    );
+  }
   const idempotencyId = existingAttempt?.idempotencyKey ?? crypto.randomUUID();
   const finixMethod: "CARD" | "ACH" | "APPLE_PAY" | "GOOGLE_PAY" = method === "bank" ? "ACH" : method === "apple_pay" ? "APPLE_PAY" : method === "google_pay" ? "GOOGLE_PAY" : "CARD";
 
@@ -309,6 +355,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
         grossAmountCents: amountCents,
         processingFeeCents: feeStrategy.expectedFeeCents,
         netAmountCents: totalCents - feeStrategy.expectedFeeCents,
+        feeContributionCents,
+        totalChargedCents: totalCents,
+        customerCoveredFee: effectiveCoverFee,
         status: paymentStatus,
         finixTransferId: transfer.id,
         invoicePaymentAttemptId: attempt.id,
@@ -390,7 +439,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     transferId: transfer.id,
     state: paymentStatus,
     amountCents,
+    feeContributionCents,
     totalCents,
+    customerCoveredFee: effectiveCoverFee,
+    method: finixMethod,
+    paidAt: paymentStatus === "SUCCEEDED" ? now.toISOString() : null,
+    invoiceNumber: invoice.invoiceNumber,
     status: derivedStatus,
   });
 }
