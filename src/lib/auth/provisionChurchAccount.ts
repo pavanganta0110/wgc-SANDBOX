@@ -7,8 +7,11 @@ import { sendWgcEmail } from "@/lib/email";
  * Church row — which nothing else in the codebase populates today — and
  * provisions a church_admin User account with a set-password link, then
  * sends the "secure dashboard access email" referenced in the approval
- * email copy. Idempotent: safe to call again on webhook retries (won't
- * re-send if a User already exists for this email).
+ * email copy. Idempotent: safe to call again on webhook retries — but
+ * "safe" means "won't re-invite someone who already finished setup," not
+ * "won't retry a failed send." A User row existing is not proof the email
+ * ever arrived, so re-invoking this only skips the email once the user has
+ * actually set a password or logged in.
  */
 export async function provisionChurchAccount(app: {
   id: string;
@@ -63,9 +66,16 @@ export async function provisionChurchAccount(app: {
 
   const existingUser = await prisma.user.findUnique({ where: { email: app.contactEmail } });
 
-  if (existingUser) {
-    // Account already exists (e.g. webhook retry) — just make sure it's
-    // linked to this church, don't re-send the invite email.
+  // A User row existing does NOT mean the invite email ever actually
+  // arrived — if sendWgcEmail failed or threw on a prior attempt (a
+  // transient Resend error, for example), the User row is already
+  // created by the time that happens, so every later webhook retry used
+  // to hit this branch and return immediately without ever retrying the
+  // email. That permanently strands a merchant with an account that
+  // exists but no way to ever receive the link. Only skip re-sending
+  // once the merchant has actually completed setup (set a password or
+  // logged in) — never just because a row exists.
+  if (existingUser && (existingUser.passwordHash || existingUser.lastLoginAt)) {
     if (existingUser.churchId !== church.id) {
       await prisma.user.update({ where: { id: existingUser.id }, data: { churchId: church.id } });
     }
@@ -77,19 +87,24 @@ export async function provisionChurchAccount(app: {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7);
 
-  const user = await prisma.user.create({
-    data: {
-      email: app.contactEmail,
-      role: "church_admin",
-      churchId: church.id,
-      setPasswordTokenHash: tokenHash,
-      setPasswordTokenExpiresAt: expiresAt,
-    },
-  });
+  const user = existingUser
+    ? await prisma.user.update({
+        where: { id: existingUser.id },
+        data: { churchId: church.id, setPasswordTokenHash: tokenHash, setPasswordTokenExpiresAt: expiresAt },
+      })
+    : await prisma.user.create({
+        data: {
+          email: app.contactEmail,
+          role: "church_admin",
+          churchId: church.id,
+          setPasswordTokenHash: tokenHash,
+          setPasswordTokenExpiresAt: expiresAt,
+        },
+      });
 
   const setPasswordLink = `https://www.wgcpayments.com/merchant/set-password/${rawToken}`;
 
-  await sendWgcEmail({
+  const result = await sendWgcEmail({
     to: app.contactEmail,
     subject: "Your WGC Payments dashboard access",
     title: "Set up your dashboard access",
@@ -101,5 +116,21 @@ export async function provisionChurchAccount(app: {
                <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`,
   });
 
-  return { church, user, emailSent: true };
+  // Logged unconditionally (success or failure) so this is visible in the
+  // admin email-log UI and resendable via the existing DASHBOARD_ACCESS
+  // resend action — previously this send was entirely untracked, so a
+  // failure here left no trace anywhere but a server console log.
+  await prisma.emailLog.create({
+    data: {
+      onboardingApplicationId: app.id,
+      type: "DASHBOARD_ACCESS",
+      to: app.contactEmail,
+      subject: "Your WGC Payments dashboard access",
+      status: result.success ? "SENT" : "ERROR",
+      sentAt: result.success ? new Date() : null,
+      error: result.success ? null : String(result.error ?? "unknown error"),
+    },
+  });
+
+  return { church, user, emailSent: result.success };
 }

@@ -711,55 +711,55 @@ model SupportTicketAttachment {
 }
 
 model Donor {
-  id                  String    @id @default(cuid())
-  churchId            String
-  name                String?
-  email               String?
+  id                     String    @id @default(cuid())
+  churchId               String
+  name                   String?
+  email                  String?
   // Lowercased/trimmed copy of `email`, indexed for matching/dedup — `email`
   // itself stays exactly as entered for display.
-  normalizedEmail     String?
-  phone               String?
+  normalizedEmail        String?
+  phone                  String?
   // E.164-normalized copy of `phone` where the input is a recognizable US
   // number — `phone` itself stays exactly as entered for display.
-  normalizedPhone     String?
-  addressLine1        String?
-  addressLine2        String?
-  city                String?
-  state               String?
-  postalCode          String?
-  country             String?
+  normalizedPhone        String?
+  addressLine1           String?
+  addressLine2           String?
+  city                   String?
+  state                  String?
+  postalCode             String?
+  country                String?
   // How this address was obtained — ONLINE_DONATION_FORM |
   // MERCHANT_MANUAL_ENTRY | EXTERNAL_DONATION | DONOR_PORTAL | CRM_IMPORT |
   // CSV_IMPORT | DONATION_ENVELOPE | CHECK | PLEDGE_FORM |
   // EXISTING_ORGANIZATION_RECORD | OTHER. Merchant-facing only — never
   // shown on a donor receipt or statement.
-  addressSource            String?
+  addressSource          String?
   // UNVERIFIED | CONFIRMED_BY_DONOR | CONFIRMED_BY_ORG. Never set to a
   // confirmed value merely because the address passed format validation —
   // only an explicit donor submission or merchant confirmation action sets
   // this away from UNVERIFIED.
-  addressVerified          String    @default("UNVERIFIED")
-  lastAddressConfirmedAt   DateTime?
+  addressVerified        String    @default("UNVERIFIED")
+  lastAddressConfirmedAt DateTime?
   // Set automatically whenever any address field changes — distinct from
   // the row-level `updatedAt` so "when did the mailing address last change"
   // survives edits to unrelated donor fields (name, phone, notes, etc.).
-  addressUpdatedAt         DateTime?
-  addressUpdatedByUserId   String?
-  companyName         String?
+  addressUpdatedAt       DateTime?
+  addressUpdatedByUserId String?
+  companyName            String?
   // Donor-level display preference, distinct from Payment.isAnonymous
   // (a per-payment flag) — this is "always show this donor as anonymous."
-  anonymousPreference Boolean   @default(false)
-  finixIdentityId     String?   @unique
-  archivedAt          DateTime?
-  archivedByUserId    String?
-  archivedByEmail     String?
+  anonymousPreference    Boolean   @default(false)
+  finixIdentityId        String?   @unique
+  archivedAt             DateTime?
+  archivedByUserId       String?
+  archivedByEmail        String?
   // Set when this donor record was merged into another (the survivor).
   // A merged donor is archived and never deleted — financial history stays
   // attached to it, so nothing here is ever hard-deleted.
-  mergedIntoDonorId   String?
-  mergedAt            DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  mergedIntoDonorId      String?
+  mergedAt               DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([churchId])
   @@index([normalizedEmail])
@@ -1992,15 +1992,25 @@ model BulkStatementJob {
 }
 
 model AnnualDonationStatementLine {
-  id                String  @id @default(cuid())
-  annualStatementId String
-  paymentId         String?
+  id                    String  @id @default(cuid())
+  annualStatementId     String
+  paymentId             String?
   // Set instead of paymentId for a line sourced from a Record External
   // Donation entry (cash, check, Cash App, etc.) rather than a Finix
-  // transfer — see ExternalDonation. Exactly one of paymentId/
-  // externalDonationId is set per line, never both.
-  externalDonationId String?
-  paymentMethodLabel String?
+  // transfer — see ExternalDonation. Set instead of both for a line
+  // sourced from an invoice payment (see InvoicePayment; only invoices
+  // with classification CHARITABLE_DONATION/PARTIAL_DONATION and a
+  // linkedDonorId ever produce one). Exactly one of paymentId/
+  // externalDonationId/invoicePaymentId is set per line, never more than one.
+  externalDonationId    String?
+  invoicePaymentId      String?
+  // Preserved alongside `reference` (which holds the Finix transfer/
+  // transaction ID for an invoice-sourced line, same as every other
+  // source) so the statement can reconcile back to the specific invoice
+  // even after the invoice itself is edited/renumbered — this is a
+  // point-in-time snapshot, not a live lookup.
+  invoiceNumberSnapshot String?
+  paymentMethodLabel    String?
 
   donationDate       DateTime?
   reference          String?
@@ -2134,12 +2144,12 @@ model ExternalDonation {
   id       String @id @default(cuid())
   churchId String
 
-  donorId           String?
+  donorId          String?
   // MATCHED | ANONYMOUS | UNMATCHED — UNMATCHED donations show up in the
   // "Unmatched External Donations" section until an authorized user
   // connects them to a donor, marks them anonymous, or adds contact info.
-  donorMatchStatus  String  @default("MATCHED")
-  isAnonymous       Boolean @default(false)
+  donorMatchStatus String  @default("MATCHED")
+  isAnonymous      Boolean @default(false)
 
   donationAmountCents Int
   donationDate        DateTime
@@ -2154,11 +2164,11 @@ model ExternalDonation {
   // EXTERNAL_CARD_PAYMENT | OTHER_OFFLINE_PAYMENT
   source String
 
-  fundId           String?
-  fundName         String?
-  campaign         String?
-  givingPageLabel  String?
-  donationPurpose  String?
+  fundId          String?
+  fundName        String?
+  campaign        String?
+  givingPageLabel String?
+  donationPurpose String?
 
   // Never usernames, passwords, full card/bank numbers — see field-level
   // notes below and the form-layer validation that enforces this.
@@ -2168,11 +2178,11 @@ model ExternalDonation {
   providerFeeCents          Int?
   netAmountReceivedCents    Int?
   // Staff-only — never included on the donor receipt or annual statement.
-  internalNote               String?
+  internalNote              String?
   // Supabase private-storage key (see uploadPrivateFile) — never a public
   // URL, never surfaced to the donor, gated by canViewExternalDonationProof.
-  proofOfPaymentStorageKey   String?
-  proofOfPaymentFileName     String?
+  proofOfPaymentStorageKey  String?
+  proofOfPaymentFileName    String?
 
   // Cash-specific
   receivedByUserId String?
@@ -2188,14 +2198,14 @@ model ExternalDonation {
 
   // External card terminal specific — never full PAN, expiry, or CVV.
   terminalOrProviderName String?
-  lastFourDigits          String?
-  cardType                 String?
+  lastFourDigits         String?
+  cardType               String?
 
   includeInAnnualStatement Boolean @default(true)
 
-  receiptStatus   String?
-  receiptSentAt   DateTime?
-  receiptNumber   String?
+  receiptStatus String?
+  receiptSentAt DateTime?
+  receiptNumber String?
 
   // RECEIVED | PENDING_CONFIRMATION | DEPOSITED | CLEARED | RETURNED |
   // CORRECTED | VOIDED. Returned/voided rows are excluded from active
@@ -2205,11 +2215,11 @@ model ExternalDonation {
 
   // Fixed invariants for every row in this table — never written any other
   // way, enforced at the API layer, not just defaulted here.
-  processedByWgc     Boolean @default(false)
-  finixTransferId     String?
-  finixSettlementId   String?
-  processingFeeCents  Int     @default(0)
-  supplementalFeeCents Int    @default(0)
+  processedByWgc       Boolean @default(false)
+  finixTransferId      String?
+  finixSettlementId    String?
+  processingFeeCents   Int     @default(0)
+  supplementalFeeCents Int     @default(0)
 
   // Set by the pre-save duplicate check (same donor + amount + nearby date,
   // or same external transaction/reference number) — a soft warning flag,
@@ -2332,10 +2342,10 @@ model AplosConnection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  church        Church                 @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  purposeMappings AplosPurposeMapping[]
+  church               Church                     @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  purposeMappings      AplosPurposeMapping[]
   accountConfiguration AplosAccountConfiguration?
-  syncRecords   AplosSyncRecord[]
+  syncRecords          AplosSyncRecord[]
 
   @@index([status])
   @@index([automaticSyncEnabled])
@@ -2501,8 +2511,8 @@ model AplosSyncAttempt {
   startedAt   DateTime  @default(now())
   completedAt DateTime?
 
-  httpStatus      Int?
-  safeErrorCode   String?
+  httpStatus       Int?
+  safeErrorCode    String?
   safeErrorMessage String?
 
   // SUCCEEDED | FAILED | AMBIGUOUS_TIMEOUT — the raw outcome of this one
@@ -2516,4 +2526,509 @@ model AplosSyncAttempt {
   syncRecord AplosSyncRecord @relation(fields: [syncRecordId], references: [id], onDelete: Cascade)
 
   @@index([syncRecordId])
+}
+
+// ---------------------------------------------------------------------------
+// Invoicing & Client Payments (feature/invoicing-system)
+//
+// A Client is deliberately a separate identity from a Donor — an invoice
+// client is paying for goods/services, not necessarily making a charitable
+// gift. `linkedDonorId` is an optional, non-merging cross-reference (plain
+// string, matching this schema's convention of no Prisma relations between
+// unrelated top-level entities) so the same real-world person/org can be
+// both a donor and a client without collapsing the two records.
+//
+// Money follows the existing convention: integer cents, `...Cents` suffix,
+// never float. Status fields are plain strings with the allowed values
+// listed in a trailing comment, matching every other status field in this
+// schema (GivingLink.status, PaymentAttempt.status, etc.) — no Prisma enums
+// are introduced here, consistent with the rest of the file.
+//
+// Sent invoices are never destructively edited: InvoiceRevision preserves
+// the exact snapshot (line items, totals, and branding) in effect at send
+// time, mirroring the DonationReceipt/AnnualDonationStatement versioned-
+// snapshot pattern already used elsewhere in this schema.
+// ---------------------------------------------------------------------------
+
+/// Merchant-scoped client directory, separate from Donor. A client paying
+/// for goods/services is not automatically a charitable donor — see the
+/// header comment above.
+model Client {
+  id       String @id @default(cuid())
+  churchId String
+
+  // INDIVIDUAL | ORGANIZATION
+  clientType String @default("INDIVIDUAL")
+
+  firstName        String?
+  lastName         String?
+  organizationName String?
+  // What's actually shown in lists/invoices — computed at write time from
+  // the individual/organization fields above, never recomputed on read.
+  displayName      String
+
+  email           String?
+  normalizedEmail String?
+  phone           String?
+  normalizedPhone String?
+
+  billingAddressLine1 String?
+  billingAddressLine2 String?
+  billingCity         String?
+  billingState        String?
+  billingPostalCode   String?
+  billingCountry      String?
+
+  shippingAddressLine1 String?
+  shippingAddressLine2 String?
+  shippingCity         String?
+  shippingState        String?
+  shippingPostalCode   String?
+  shippingCountry      String?
+
+  contactPersonName String?
+  // Merchant's own internal/tax reference (e.g. a customer ID from another
+  // system) — never validated or interpreted by WGC.
+  taxOrReferenceId  String?
+  notes             String?
+
+  // Optional, non-merging cross-reference to an existing Donor — see header
+  // comment. Never used to auto-classify a payment as a donation.
+  linkedDonorId String?
+
+  archivedAt       DateTime?
+  archivedByUserId String?
+  archivedByEmail  String?
+
+  createdByUserId String?
+  createdByEmail  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId])
+  @@index([churchId, archivedAt])
+  @@index([churchId, normalizedEmail])
+  @@index([churchId, normalizedPhone])
+  @@index([linkedDonorId])
+}
+
+/// One invoice. `invoiceNumber` is unique per church (e.g. INV-000001), not
+/// globally — sequence state lives on InvoiceSettings.nextInvoiceSequence.
+model Invoice {
+  id       String @id @default(cuid())
+  churchId String
+
+  invoiceNumber String
+  clientId      String
+
+  // DRAFT | SCHEDULED | SENT | VIEWED | PARTIALLY_PAID | PAID | PAST_DUE |
+  // VOID | UNCOLLECTIBLE — see docs/invoicing.md for the full state machine
+  // and which transitions are allowed. Never set directly from client input;
+  // always computed/transitioned server-side.
+  status String @default("DRAFT")
+
+  // GOODS_OR_SERVICES | CHARITABLE_DONATION | PARTIAL_DONATION — required.
+  // Determines whether (and how much of) this invoice's payments flow into
+  // charitable-giving totals and year-end statements. See docs/invoicing.md
+  // "Payment classification" — WGC does not provide tax advice; this only
+  // controls WGC's own internal accounting/reporting behavior.
+  classification String
+
+  // PARTIAL_DONATION only: the goods/services fair-market-value portion and
+  // the eligible charitable portion, in cents. goodsServicesValueCents +
+  // charitablePortionCents must equal totalCents at send time. Only
+  // charitablePortionCents ever flows into contribution reporting.
+  goodsServicesValueCents    Int?
+  charitablePortionCents     Int?
+  // CHARITABLE_DONATION / PARTIAL_DONATION only — optional link to the payer's
+  // Donor record for receipting/statement purposes.
+  linkedDonorId              String?
+  // CHARITABLE_DONATION only — merchant's explicit confirmation that no
+  // goods or services were provided in exchange, required before this
+  // classification can be used, per existing WGC charitable-receipt policy.
+  noGoodsOrServicesConfirmed Boolean @default(false)
+
+  title               String?
+  poReference         String?
+  internalNotes       String?
+  clientMemo          String?
+  paymentInstructions String?
+  termsAndConditions  String?
+
+  issueDate       DateTime
+  dueDate         DateTime
+  // Optional hard cutoff after which the public page no longer accepts
+  // payment, independent of dueDate (which only drives PAST_DUE status).
+  paymentDeadline DateTime?
+
+  subtotalCents   Int    @default(0)
+  discountCents   Int    @default(0)
+  taxCents        Int    @default(0)
+  serviceFeeCents Int    @default(0)
+  totalCents      Int    @default(0)
+  // Denormalized running totals, recalculated server-side on every payment/
+  // refund event — never trusted from client input, never computed in the
+  // browser for anything that affects money movement.
+  amountPaidCents Int    @default(0)
+  refundedCents   Int    @default(0)
+  balanceCents    Int    @default(0)
+  currency        String @default("USD")
+
+  allowCard                  Boolean @default(true)
+  allowAch                   Boolean @default(true)
+  allowApplePay              Boolean @default(true)
+  allowGooglePay             Boolean @default(true)
+  allowPartialPayments       Boolean @default(false)
+  minimumPartialPaymentCents Int?
+  // MERCHANT | CLIENT — the DEFAULT selection shown to the payer for the
+  // fee-coverage checkbox when allowFeeCoverage is true (CLIENT = checkbox
+  // starts checked). When allowFeeCoverage is false the checkbox is never
+  // shown and this value is ignored — the payer always pays exactly the
+  // invoice amount, matching "the merchant handles the processing fee."
+  // Uses the existing WGC fee-calculation system (calculateWgcFeeAmounts /
+  // resolveWgcTransferFeeStrategy), never a second one.
+  feeCoveredBy               String  @default("MERCHANT")
+  // Whether the public payment page shows the payer a choice at all. When
+  // false, fee coverage is not offered — this is an optional customer
+  // contribution toggle, never a mandatory surcharge.
+  allowFeeCoverage           Boolean @default(true)
+  autoCloseWhenPaid          Boolean @default(true)
+
+  // CLASSIC | MODERN | MINIMAL | PROFESSIONAL
+  templateName String  @default("CLASSIC")
+  accentColor  String?
+
+  scheduledSendAt       DateTime?
+  sentAt                DateTime?
+  firstViewedAt         DateTime?
+  lastViewedAt          DateTime?
+  paidAt                DateTime?
+  voidedAt              DateTime?
+  voidedByUserId        String?
+  uncollectibleAt       DateTime?
+  uncollectibleByUserId String?
+
+  createdByUserId String?
+  createdByEmail  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([churchId, invoiceNumber])
+  @@index([churchId, status])
+  @@index([churchId, createdAt])
+  @@index([churchId, dueDate])
+  @@index([churchId, createdByUserId])
+  @@index([clientId])
+}
+
+/// Line items for an invoice. Money calculated server-side only — see
+/// docs/invoicing.md "Money handling."
+model InvoiceLineItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  description         String
+  detailedDescription String?
+  quantity            Int     @default(1)
+  unitPriceCents      Int
+  // FIXED (cents) | PERCENTAGE (basis points) — discountValue is interpreted
+  // according to discountType.
+  discountType        String  @default("FIXED")
+  discountValue       Int     @default(0)
+  taxRateBasisPoints  Int?
+  taxAmountCents      Int     @default(0)
+  // Final line total after discount + tax, in cents — server-computed.
+  totalCents          Int
+  sortOrder           Int     @default(0)
+  productCode         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([churchId])
+}
+
+/// A cryptographically random public-page token for one invoice. Only the
+/// SHA-256 hash is ever stored, matching SubscriptionSetupLink.tokenHash —
+/// the raw token exists only in the emailed/texted URL. Revoked and
+/// regenerated (never reused) whenever an invoice is voided or a merchant
+/// explicitly regenerates the link.
+model InvoicePublicToken {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  tokenHash String    @unique
+  // ACTIVE | REVOKED
+  status    String    @default("ACTIVE")
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+/// One payment attempt against an invoice's public page — mirrors
+/// PaymentAttempt's role for donations: idempotency + attempt-level audit
+/// trail, independent of whether it ever becomes a successful InvoicePayment.
+model InvoicePaymentAttempt {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  // Client-supplied, deduplicates double-clicks/refreshes/retries — the
+  // server generates its own idempotencyKey exactly once per clientAttemptId,
+  // matching the take-payment route's existing pattern.
+  clientAttemptId String @unique
+  idempotencyKey  String @unique
+
+  amountCents Int
+  // CARD | ACH | APPLE_PAY | GOOGLE_PAY
+  method      String
+
+  // PENDING | PROCESSING | SUCCEEDED | FAILED | CANCELED
+  status String @default("PENDING")
+
+  finixTransferId String?
+  failureCode     String?
+  failureMessage  String?
+
+  payerName  String?
+  payerEmail String?
+  payerPhone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([churchId])
+}
+
+/// A confirmed movement of money against an invoice — either a real Finix
+/// transfer or a manually recorded offline payment. This is the ledger the
+/// invoice balance is computed from.
+model InvoicePayment {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  // FINIX | OFFLINE
+  source String
+  // CARD | ACH | APPLE_PAY | GOOGLE_PAY | CASH | CHECK | BANK_TRANSFER |
+  // CASH_APP | EXTERNAL_TERMINAL | OTHER
+  method String
+
+  // The amount applied toward the invoice balance — never includes the fee
+  // contribution below, so a fee-covering payment can never make the
+  // invoice appear overpaid.
+  grossAmountCents             Int
+  // WGC's own actual/expected processing cost for this payment — merchant
+  // accounting only, distinct from feeContributionCents (what the payer
+  // chose to add on top). Unaffected by who covers the fee.
+  processingFeeCents           Int     @default(0)
+  netAmountCents               Int
+  refundedCents                Int     @default(0)
+  // The additional amount the payer chose to add on top of grossAmountCents
+  // to cover processing costs — 0 when customerCoveredFee is false. Uses
+  // the existing calculateWgcFeeAmounts gross-up formula's supplementalFeeCents,
+  // never a separately-invented percentage.
+  feeContributionCents         Int     @default(0)
+  // grossAmountCents + feeContributionCents — the actual amount charged to
+  // the payer's card/bank/wallet. Stored explicitly rather than only
+  // derived, so receipts/reports never have to reconstruct it.
+  totalChargedCents            Int     @default(0)
+  customerCoveredFee           Boolean @default(false)
+  // Tracked separately from refundedCents (which reduces grossAmountCents,
+  // the invoice-principal side) — a refund issued specifically against the
+  // fee-contribution portion never reduces the invoice's own balance or
+  // its annual-statement principal amount, only this figure. Not yet
+  // populated by the merchant refund route (which currently only refunds
+  // against the principal); reserved so the annual-statement calculator
+  // and reporting are correct the moment a fee-only refund path is added.
+  feeContributionRefundedCents Int     @default(0)
+
+  // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED — PENDING
+  // is used for ACH while it clears; never treated as a settled reduction
+  // of the invoice balance until it moves to SUCCEEDED.
+  status String @default("SUCCEEDED")
+
+  finixTransferId         String?
+  invoicePaymentAttemptId String?
+
+  // OFFLINE only
+  offlinePaymentDate     DateTime?
+  offlineReferenceNumber String?
+  offlineNotes           String?
+  recordedByUserId       String?
+  recordedByEmail        String?
+
+  // Set from FinixDispute sync when a disputed transfer is linked here —
+  // display-only; a dispute must never silently rewrite grossAmountCents/
+  // netAmountCents/refundedCents.
+  disputeStatus String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([churchId])
+  @@index([finixTransferId])
+}
+
+/// One delivery attempt (email or SMS) of an invoice or a reminder.
+model InvoiceDelivery {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  // EMAIL | SMS
+  channel   String
+  recipient String
+
+  // PENDING | SENT | FAILED
+  status            String    @default("PENDING")
+  providerMessageId String?
+  errorMessage      String?
+  sentAt            DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([churchId])
+}
+
+/// A scheduled or sent reminder for an invoice. `idempotencyKey` prevents
+/// the reminder cron from ever double-sending the same scheduled reminder.
+model InvoiceReminder {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  // BEFORE_DUE | ON_DUE | AFTER_DUE | MANUAL
+  reminderType String
+  scheduledFor DateTime
+
+  // SCHEDULED | SENT | SKIPPED | CANCELED — SKIPPED covers e.g. the invoice
+  // being paid/voided before this reminder's scheduled time.
+  status String    @default("SCHEDULED")
+  sentAt DateTime?
+
+  idempotencyKey String @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([churchId, status, scheduledFor])
+}
+
+/// Append-only activity timeline for an invoice (distinct from
+/// DashboardAuditLog, which is cross-feature — this is the invoice-detail-
+/// page-facing timeline).
+model InvoiceActivity {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  activityType String
+  actorUserId  String?
+  actorEmail   String?
+  metadata     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId, createdAt])
+  @@index([churchId])
+}
+
+/// Immutable snapshot of an invoice's line items, totals, and branding at
+/// the moment it was sent (or re-sent after an edit) — mirrors the
+/// DonationReceipt/AnnualDonationStatement versioned-snapshot pattern.
+/// Later edits to a paid/sent invoice, or later changes to the merchant's
+/// branding/logo, must never alter what a previously issued revision shows.
+model InvoiceRevision {
+  id        String @id @default(cuid())
+  invoiceId String
+  churchId  String
+
+  version      Int     @default(1)
+  // Full line items + totals + branding (logo URL, colors, terms, etc.) in
+  // effect at the moment this revision was issued.
+  snapshotJson Json
+  reason       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([churchId])
+}
+
+/// Optional named tax rate a merchant can reuse across invoices/line items.
+model InvoiceTaxRate {
+  id       String @id @default(cuid())
+  churchId String
+
+  name        String
+  basisPoints Int
+  isDefault   Boolean   @default(false)
+  archivedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId])
+}
+
+/// One row per church — invoice numbering state, defaults, branding, and
+/// reminder configuration. `nextInvoiceSequence` is only ever advanced via
+/// a guarded, race-safe increment (see docs/invoicing.md "Invoice
+/// numbering") — never edited directly to a lower value once invoices exist
+/// at or above it.
+model InvoiceSettings {
+  id       String @id @default(cuid())
+  churchId String @unique
+
+  invoiceNumberPrefix String @default("INV-")
+  nextInvoiceSequence Int    @default(1)
+
+  defaultDueDays             Int     @default(30)
+  defaultMemo                String?
+  defaultTerms               String?
+  defaultPaymentInstructions String?
+
+  defaultAllowCard            Boolean @default(true)
+  defaultAllowAch             Boolean @default(true)
+  defaultAllowApplePay        Boolean @default(true)
+  defaultAllowGooglePay       Boolean @default(true)
+  defaultAllowPartialPayments Boolean @default(false)
+  defaultFeeCoveredBy         String  @default("MERCHANT")
+
+  remindersEnabledByDefault Boolean @default(true)
+  reminderBeforeDueDays     Int     @default(3)
+  reminderOnDueDate         Boolean @default(true)
+  // JSON array of ints, e.g. [3, 7] — days after due date to send recurring
+  // past-due reminders.
+  reminderAfterDueDaysJson  Json    @default("[3, 7]")
+
+  defaultTemplateName      String  @default("CLASSIC")
+  accentColor              String?
+  invoiceLogoUrl           String?
+  organizationDisplayName  String?
+  organizationLegalName    String?
+  organizationAddress      String?
+  organizationPhone        String?
+  organizationSupportEmail String?
+  organizationWebsite      String?
+  taxRegistrationNumber    String?
+  footerMessage            String?
+  thankYouMessage          String?
+  replyToEmail             String?
+  showWgcBranding          Boolean @default(true)
+  defaultClassification    String  @default("GOODS_OR_SERVICES")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

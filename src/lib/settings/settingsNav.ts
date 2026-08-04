@@ -10,6 +10,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { key: "payment-methods", label: "Payment Methods", href: "/merchant/settings/payment-methods" },
   { key: "fees", label: "Fees", href: "/merchant/settings/fees" },
   { key: "receipts", label: "Receipts", href: "/merchant/settings/receipts" },
+  { key: "invoicing", label: "Invoicing", href: "/merchant/settings/invoicing" },
   { key: "annual-statements", label: "Annual Statements", href: "/merchant/settings/annual-statements" },
   { key: "notifications", label: "Notifications", href: "/merchant/settings/notifications" },
   { key: "team", label: "Team & Access", href: "/merchant/settings/team" },

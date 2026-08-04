@@ -90,7 +90,17 @@ export type PermissionKey =
   // automatic sync, retry failed syncs. Read-only integration status is
   // governed separately (any authenticated org member can view it; see
   // the Aplos status route) — this key gates every state-changing action.
-  | "canManageIntegrations";
+  | "canManageIntegrations"
+  | "canViewInvoices"
+  | "canCreateInvoices"
+  | "canEditInvoices"
+  | "canSendInvoices"
+  | "canVoidInvoices"
+  | "canRecordOfflineInvoicePayments"
+  | "canRefundInvoicePayments"
+  | "canManageClients"
+  | "canManageInvoiceSettings"
+  | "canExportInvoices";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -124,6 +134,16 @@ const ALL_FALSE: PermissionMatrix = {
   canConfirmDonorAddress: false,
   canViewAddressAuditHistory: false,
   canManageIntegrations: false,
+  canViewInvoices: false,
+  canCreateInvoices: false,
+  canEditInvoices: false,
+  canSendInvoices: false,
+  canVoidInvoices: false,
+  canRecordOfflineInvoicePayments: false,
+  canRefundInvoicePayments: false,
+  canManageClients: false,
+  canManageInvoiceSettings: false,
+  canExportInvoices: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -159,6 +179,16 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
     canManageIntegrations: true,
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canVoidInvoices: true,
+    canRecordOfflineInvoicePayments: true,
+    canRefundInvoicePayments: true,
+    canManageClients: true,
+    canManageInvoiceSettings: true,
+    canExportInvoices: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -185,11 +215,22 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
     canManageIntegrations: true,
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canManageClients: true,
+    canManageInvoiceSettings: true,
+    canExportInvoices: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and
     // viewing a proof-of-payment attachment are treated like a refund
     // (canIssueRefunds), not a routine edit.
+    // canVoidInvoices, canRecordOfflineInvoicePayments,
+    // canRefundInvoicePayments: false by default, override-able, for the
+    // same reason — voiding an invoice, recording a manual payment, and
+    // refunding are treated like canIssueRefunds, not routine invoice edits.
     // canManageRolesAndPermissions, canTransferOwnership: never granted to
     // ADMIN, not override-able (see permissions.ts OVERRIDABLE_PERMISSION_KEYS).
   },
@@ -208,6 +249,22 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     // by default, override-able.
     canViewDonorAddress: true,
     canEditDonorAddress: true,
+    // Invoices they created only — canViewInvoices/canEditInvoices/
+    // canSendInvoices are enforced scoped-to-own by an inline
+    // `auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId`
+    // check in every invoice route that reads/mutates a specific existing
+    // invoice (list/export routes scope via a `createdByUserId` filter
+    // instead), not by the permission flag alone.
+    // canManageClients is granted so a fundraiser can select/create a
+    // client while building an invoice, the same way they get
+    // canCreateExternalDonation to do their donation-recording job.
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canManageClients: true,
+    // No refunds, no voiding, no offline-payment recording, no invoice
+    // settings, no export by default — override-able per the approved spec.
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,
@@ -220,6 +277,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewOwnTransactions: true,
     // Explicitly no mutations of any kind (no create/edit links, no refunds,
     // no bank/billing/team management) per the approved spec.
+    // Invoice access (including read-only canViewInvoices) is NOT a default
+    // grant for VIEWER — "read-only invoice access where granted" per the
+    // approved spec means it can only come from an explicit permissionsJson
+    // override, same as canViewAllTransactions/canViewDonors above.
   },
 };
 
@@ -244,4 +305,21 @@ export const EXTERNAL_DONATION_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canSendExternalDonationReceipt",
   "canViewExternalDonationProof",
   "canMatchExternalDonationToDonor",
+];
+
+/** Permission keys for the Invoicing & Client Payments feature — reused
+ * wherever code needs to enumerate just this feature's permissions (e.g.
+ * the merchant settings team-permissions editor). Mirrors
+ * EXTERNAL_DONATION_PERMISSION_KEYS above. */
+export const INVOICE_PERMISSION_KEYS: readonly PermissionKey[] = [
+  "canViewInvoices",
+  "canCreateInvoices",
+  "canEditInvoices",
+  "canSendInvoices",
+  "canVoidInvoices",
+  "canRecordOfflineInvoicePayments",
+  "canRefundInvoicePayments",
+  "canManageClients",
+  "canManageInvoiceSettings",
+  "canExportInvoices",
 ];

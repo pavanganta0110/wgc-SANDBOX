@@ -249,7 +249,12 @@ export default async function PaymentsListPage({
                       {last4Value ? `••••${last4Value}` : "—"}
                     </td>
                     <td className="px-6 py-3 text-slate-500 text-xs">{instrumentLabel || "Unknown"}</td>
-                    <td className="px-6 py-3 text-slate-600">{payment?.fundName || "Unspecified"}</td>
+                    <td className="px-6 py-3 text-slate-600">
+                      {payment?.fundName ||
+                        ((t.tagsJson as Record<string, string> | null)?.source === "wgc_invoice_payment"
+                          ? `Invoice ${(t.tagsJson as Record<string, string>).invoiceNumber || ""}`
+                          : "Unspecified")}
+                    </td>
                   </ClickableTableRow>
                 );
               })}

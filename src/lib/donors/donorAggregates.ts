@@ -74,6 +74,99 @@ export interface DateRangeFilter {
  * refundedAmountCents on its own, so there's no separate dispute-loss term
  * to add without double-counting.
  */
+interface InvoiceContribution {
+  totalCents: number;
+  count: number;
+  largestCents: number;
+  refundedCents: number;
+  dates: number[];
+}
+
+/**
+ * Folds each donor's linked charitable invoice payments (Invoice.linkedDonorId,
+ * classification CHARITABLE_DONATION/PARTIAL_DONATION only — a
+ * GOODS_OR_SERVICES invoice is a commercial transaction, never counted as
+ * a donation) into the same totals this function already produces from
+ * Finix transfers, so "Total Donated" never diverges between an invoice
+ * payment and a giving-page donation. Mirrors the fee-inclusion and
+ * refund handling in computeInvoicePaymentLines (yearEndStatements.ts) —
+ * the same rules, not a second set invented here.
+ *
+ * Deliberately skipped when `attributedUserId` is set (a fundraiser-scoped
+ * view): InvoicePayment has no attribution column to bridge through (unlike
+ * Payment.attributedUserId), so there's no correct way to attribute an
+ * invoice payment to a specific team member — omitting it here is safer
+ * than guessing wrong and either over- or under-reporting a scoped user's
+ * numbers.
+ */
+async function loadInvoiceContributionsByDonor(
+  donorIds: string[],
+  churchId: string,
+  dateFilter?: DateRangeFilter,
+  attributedUserId?: string,
+): Promise<Map<string, InvoiceContribution>> {
+  const byDonor = new Map<string, InvoiceContribution>();
+  if (attributedUserId || donorIds.length === 0) return byDonor;
+
+  const invoices = await prisma.invoice.findMany({
+    where: { churchId, linkedDonorId: { in: donorIds }, classification: { in: ["CHARITABLE_DONATION", "PARTIAL_DONATION"] } },
+    select: { id: true, linkedDonorId: true, classification: true, totalCents: true, charitablePortionCents: true },
+  });
+  if (invoices.length === 0) return byDonor;
+  const invoiceById = new Map(invoices.map((i) => [i.id, i]));
+
+  const payments = await prisma.invoicePayment.findMany({
+    where: {
+      churchId,
+      invoiceId: { in: invoices.map((i) => i.id) },
+      status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] },
+      ...(dateFilter ? { createdAt: dateFilter } : {}),
+    },
+    select: { invoiceId: true, grossAmountCents: true, refundedCents: true, feeContributionCents: true, feeContributionRefundedCents: true, customerCoveredFee: true, createdAt: true },
+  });
+
+  for (const p of payments) {
+    const invoice = invoiceById.get(p.invoiceId);
+    if (!invoice?.linkedDonorId) continue;
+    const netPrincipalCents = Math.max(0, p.grossAmountCents - p.refundedCents);
+    const netFeeCents = p.customerCoveredFee ? Math.max(0, p.feeContributionCents - p.feeContributionRefundedCents) : 0;
+    const finalCents = netPrincipalCents + netFeeCents;
+    if (finalCents <= 0) continue;
+
+    const acc = byDonor.get(invoice.linkedDonorId) ?? { totalCents: 0, count: 0, largestCents: 0, refundedCents: 0, dates: [] };
+    acc.totalCents += finalCents;
+    acc.count += 1;
+    acc.largestCents = Math.max(acc.largestCents, finalCents);
+    acc.refundedCents += p.refundedCents;
+    acc.dates.push(p.createdAt.getTime());
+    byDonor.set(invoice.linkedDonorId, acc);
+  }
+
+  return byDonor;
+}
+
+function mergeInvoiceContribution(aggregates: DonorAggregates, contribution: InvoiceContribution | undefined): DonorAggregates {
+  if (!contribution) return aggregates;
+  const totalDonatedCents = aggregates.totalDonatedCents + contribution.totalCents;
+  const donationCount = aggregates.donationCount + contribution.count;
+  const allDates = [
+    ...(aggregates.firstDonationAt ? [aggregates.firstDonationAt.getTime()] : []),
+    ...(aggregates.lastDonationAt ? [aggregates.lastDonationAt.getTime()] : []),
+    ...contribution.dates,
+  ];
+  return {
+    ...aggregates,
+    totalDonatedCents,
+    donationCount,
+    averageDonationCents: donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
+    largestDonationCents: Math.max(aggregates.largestDonationCents, contribution.largestCents),
+    firstDonationAt: allDates.length ? new Date(Math.min(...allDates)) : null,
+    lastDonationAt: allDates.length ? new Date(Math.max(...allDates)) : null,
+    refundedAmountCents: aggregates.refundedAmountCents + contribution.refundedCents,
+    netDonatedCents: aggregates.netDonatedCents + contribution.totalCents - contribution.refundedCents,
+  };
+}
+
 export async function loadDonorAggregatesBatch(
   donorIds: string[],
   churchId: string,
@@ -111,9 +204,13 @@ export async function loadDonorAggregatesBatch(
     : null;
 
   if (instrumentIds.length === 0) {
-    const activeSubs = await loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId);
+    const [activeSubs, invoiceContributions] = await Promise.all([
+      loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
+      loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+    ]);
     for (const donorId of donorIds) {
-      result.set(donorId, { ...EMPTY_DONOR_AGGREGATES, activeSubscriptionCount: activeSubs.get(donorId) ?? 0 });
+      const base = { ...EMPTY_DONOR_AGGREGATES, activeSubscriptionCount: activeSubs.get(donorId) ?? 0 };
+      result.set(donorId, mergeInvoiceContribution(base, invoiceContributions.get(donorId)));
     }
     return result;
   }
@@ -161,7 +258,7 @@ export async function loadDonorAggregatesBatch(
   const transferIds = [...transferIdToDonor.keys()];
   const paymentIds = transfers.map((t) => t.paymentId).filter((id): id is string => Boolean(id));
 
-  const [refunds, bankReturns, disputes, activeSubs, givingLinkPayments] = await Promise.all([
+  const [refunds, bankReturns, disputes, activeSubs, givingLinkPayments, invoiceContributions] = await Promise.all([
     transferIds.length
       ? prisma.finixRefundOrReversal.findMany({
           where: { churchId, finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" },
@@ -191,6 +288,7 @@ export async function loadDonorAggregatesBatch(
           select: { finixTransferId: true, givingLinkId: true },
         })
       : Promise.resolve([]),
+    loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
   ]);
 
   const refundedByDonor = new Map<string, { amount: number; count: number }>();
@@ -242,7 +340,7 @@ export async function loadDonorAggregatesBatch(
     const returned = returnedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     const disputed = disputedByDonor.get(donorId) ?? { amount: 0, count: 0 };
 
-    result.set(donorId, {
+    const base: DonorAggregates = {
       totalDonatedCents,
       donationCount,
       averageDonationCents: donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
@@ -259,7 +357,8 @@ export async function loadDonorAggregatesBatch(
       bankReturnCount: returned.count,
       disputeCount: disputed.count,
       givingLinkCount: givingLinkCountByDonor.get(donorId)?.size ?? 0,
-    });
+    };
+    result.set(donorId, mergeInvoiceContribution(base, invoiceContributions.get(donorId)));
   }
 
   return result;

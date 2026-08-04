@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 import { RECEIPT_METHOD_LABELS, SOURCE_LABELS, isExcludedFromTotals, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
+import { calculateCharitablePortionForPayment, type InvoiceClassification } from "@/lib/invoices/invoiceClassification";
 
 /** A statement can't be generated/sent with confidence until the donor has a valid email and a resolvable display name (anonymous donors are exempt from the name check by design). */
 export function hasMissingStatementInfo(donor: { email: string | null; name: string | null }, displayName: string, isAnonymous: boolean): boolean {
@@ -17,6 +18,8 @@ export function hasMissingStatementInfo(donor: { email: string | null; name: str
 export interface StatementLine {
   paymentId: string | null;
   externalDonationId?: string | null;
+  invoicePaymentId?: string | null;
+  invoiceNumber?: string | null;
   transferId: string;
   donationDate: Date;
   reference: string;
@@ -71,6 +74,7 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
   const { gte, lte } = yearBoundsCentral(taxYear);
 
   const externalLines = await computeExternalDonationLines(donorId, churchId, gte, lte);
+  const invoicePaymentLines = await computeInvoicePaymentLines(donorId, churchId, gte, lte);
 
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
     where: { churchId, donorId },
@@ -80,16 +84,19 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
   const instrumentById = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
   if (instrumentIds.length === 0) {
     const externalTotal = externalLines.reduce((s, l) => s + l.finalRecordedAmountCents, 0);
+    const invoiceTotal = invoicePaymentLines.reduce((s, l) => s + l.finalRecordedAmountCents, 0);
+    const invoiceRecordedTotal = invoicePaymentLines.reduce((s, l) => s + l.recordedContributionAmountCents, 0);
+    const combinedLines = [...externalLines, ...invoicePaymentLines].sort((a, b) => a.donationDate.getTime() - b.donationDate.getTime());
     return {
       taxYear,
-      donationCount: externalLines.length,
-      grossDonatedCents: externalTotal,
-      refundedAmountCents: 0,
+      donationCount: combinedLines.length,
+      grossDonatedCents: externalTotal + invoiceTotal,
+      refundedAmountCents: invoicePaymentLines.reduce((s, l) => s + l.refundedAmountCents, 0),
       returnedAmountCents: 0,
-      recordedTotalCents: externalTotal,
+      recordedTotalCents: externalTotal + invoiceTotal,
       totalGoodsServicesValueCents: 0,
-      totalRecordedContributionAmountCents: externalTotal,
-      lines: externalLines,
+      totalRecordedContributionAmountCents: externalTotal + invoiceRecordedTotal,
+      lines: combinedLines,
     };
   }
 
@@ -186,17 +193,20 @@ export async function computeYearEndStatement(donorId: string, churchId: string,
   }
 
   const externalTotal = externalLines.reduce((s, l) => s + l.finalRecordedAmountCents, 0);
-  const allLines = [...lines, ...externalLines].sort((a, b) => a.donationDate.getTime() - b.donationDate.getTime());
+  const invoiceTotal = invoicePaymentLines.reduce((s, l) => s + l.finalRecordedAmountCents, 0);
+  const invoiceRecordedTotal = invoicePaymentLines.reduce((s, l) => s + l.recordedContributionAmountCents, 0);
+  const invoiceRefundedTotal = invoicePaymentLines.reduce((s, l) => s + l.refundedAmountCents, 0);
+  const allLines = [...lines, ...externalLines, ...invoicePaymentLines].sort((a, b) => a.donationDate.getTime() - b.donationDate.getTime());
 
   return {
     taxYear,
     donationCount: allLines.length,
     totalGoodsServicesValueCents,
-    totalRecordedContributionAmountCents: totalRecordedContributionAmountCents + externalTotal,
-    grossDonatedCents: grossDonatedCents + externalTotal,
-    refundedAmountCents,
+    totalRecordedContributionAmountCents: totalRecordedContributionAmountCents + externalTotal + invoiceRecordedTotal,
+    grossDonatedCents: grossDonatedCents + externalTotal + invoiceTotal,
+    refundedAmountCents: refundedAmountCents + invoiceRefundedTotal,
     returnedAmountCents,
-    recordedTotalCents: grossDonatedCents - refundedAmountCents - returnedAmountCents + externalTotal,
+    recordedTotalCents: grossDonatedCents - refundedAmountCents - returnedAmountCents + externalTotal + invoiceTotal,
     lines: allLines,
   };
 }
@@ -233,6 +243,87 @@ async function computeExternalDonationLines(donorId: string, churchId: string, g
       goodsServicesFairMarketValueCents: null,
       recordedContributionAmountCents: d.donationAmountCents,
     }));
+}
+
+/**
+ * Invoice payment lines for a donor's statement. Only invoices explicitly
+ * linked to this donor (Invoice.linkedDonorId — never inferred/auto-matched,
+ * per the invoicing system's "Client is a separate identity from Donor"
+ * rule) and classified CHARITABLE_DONATION or PARTIAL_DONATION are
+ * considered; a GOODS_OR_SERVICES invoice is a commercial transaction, not
+ * a donation, and never appears here regardless of who paid it. Both FINIX
+ * and OFFLINE (cash/check recorded by the merchant) payment sources count
+ * — "successfully completed" isn't limited to card/ACH.
+ *
+ * Fee-coverage treatment: mirrors this file's own existing precedent for
+ * Finix donations, where a donor-covered fee (`t.amountCents`, which
+ * already includes the supplemental fee) flows straight into
+ * `finalRecordedAmountCents` with no special exclusion — the fee is
+ * additional money given to the organization with nothing received in
+ * return, so it counts the same way here. `recordedContributionAmountCents`
+ * further narrows this to only the classification's charitable-eligible
+ * share of the *principal* (via calculateCharitablePortionForPayment,
+ * the exact same helper the invoice payment routes use — never a second
+ * eligibility calculation) plus the full fee contribution, since covering
+ * a processing fee is never "goods or services."
+ */
+async function computeInvoicePaymentLines(donorId: string, churchId: string, gte: Date, lte: Date): Promise<StatementLine[]> {
+  const invoices = await prisma.invoice.findMany({
+    where: { churchId, linkedDonorId: donorId, classification: { in: ["CHARITABLE_DONATION", "PARTIAL_DONATION"] } },
+    select: { id: true, invoiceNumber: true, classification: true, totalCents: true, charitablePortionCents: true },
+  });
+  if (invoices.length === 0) return [];
+  const invoiceById = new Map(invoices.map((i) => [i.id, i]));
+
+  const payments = await prisma.invoicePayment.findMany({
+    where: {
+      churchId,
+      invoiceId: { in: invoices.map((i) => i.id) },
+      status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] },
+      createdAt: { gte, lte },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return payments
+    .map((p) => {
+    const invoice = invoiceById.get(p.invoiceId)!;
+    const netPrincipalCents = Math.max(0, p.grossAmountCents - p.refundedCents);
+    const netFeeCents = p.customerCoveredFee ? Math.max(0, p.feeContributionCents - p.feeContributionRefundedCents) : 0;
+    const eligiblePrincipalCents = calculateCharitablePortionForPayment({
+      classification: invoice.classification as InvoiceClassification,
+      totalCents: invoice.totalCents,
+      charitablePortionCents: invoice.charitablePortionCents,
+      paymentGrossCents: netPrincipalCents,
+    });
+
+    return {
+      paymentId: null,
+      invoicePaymentId: p.id,
+      invoiceNumber: invoice.invoiceNumber,
+      transferId: p.finixTransferId || `invoice-payment:${p.id}`,
+      donationDate: p.createdAt,
+      reference: p.finixTransferId || p.offlineReferenceNumber || p.id,
+      fundName: null,
+      grossAmountCents: netPrincipalCents,
+      donorCoveredFeeCents: netFeeCents,
+      refundedAmountCents: p.refundedCents,
+      returnedAmountCents: 0,
+      finalRecordedAmountCents: netPrincipalCents + netFeeCents,
+      paymentMethodLabel: p.method.replace(/_/g, " "),
+      source: p.source === "OFFLINE" ? "Invoice (Offline)" : "Invoice",
+      goodsServicesProvided: false,
+      goodsServicesDescription: null,
+      goodsServicesFairMarketValueCents: null,
+      recordedContributionAmountCents: eligiblePrincipalCents + netFeeCents,
+    };
+    })
+    // A fully-refunded principal with an untouched fee contribution is a
+    // real, if unusual, case (see feeContributionRefundedCents' own doc
+    // comment) — only drop the line when there's truly nothing left to
+    // record, matching the "fully refunded excluded entirely" rule used
+    // for Finix transfers above.
+    .filter((l) => l.finalRecordedAmountCents > 0);
 }
 
 /** All donors in the organization with at least one qualifying donation in
@@ -289,6 +380,34 @@ export async function findEligibleDonorsForYear(churchId: string, taxYear: numbe
     acc.count += 1;
     acc.total += d.donationAmountCents;
     byDonor.set(d.donorId, acc);
+  }
+
+  // A donor whose only activity this year was a linked invoice payment
+  // (no Finix instrument, no external-donation entry) must still surface
+  // here — otherwise "Generate statements for all eligible donors" would
+  // silently skip them.
+  const linkedInvoices = await prisma.invoice.findMany({
+    where: { churchId, linkedDonorId: { not: null }, classification: { in: ["CHARITABLE_DONATION", "PARTIAL_DONATION"] } },
+    select: { id: true, linkedDonorId: true, classification: true, totalCents: true, charitablePortionCents: true },
+  });
+  if (linkedInvoices.length > 0) {
+    const invoiceById = new Map(linkedInvoices.map((i) => [i.id, i]));
+    const invoicePayments = await prisma.invoicePayment.findMany({
+      where: { churchId, invoiceId: { in: linkedInvoices.map((i) => i.id) }, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] }, createdAt: { gte, lte } },
+      select: { invoiceId: true, grossAmountCents: true, refundedCents: true, feeContributionCents: true, feeContributionRefundedCents: true, customerCoveredFee: true },
+    });
+    for (const p of invoicePayments) {
+      const invoice = invoiceById.get(p.invoiceId);
+      if (!invoice?.linkedDonorId) continue;
+      const netPrincipalCents = Math.max(0, p.grossAmountCents - p.refundedCents);
+      const netFeeCents = p.customerCoveredFee ? Math.max(0, p.feeContributionCents - p.feeContributionRefundedCents) : 0;
+      const final = netPrincipalCents + netFeeCents;
+      if (final <= 0) continue;
+      const acc = byDonor.get(invoice.linkedDonorId) ?? { count: 0, total: 0 };
+      acc.count += 1;
+      acc.total += final;
+      byDonor.set(invoice.linkedDonorId, acc);
+    }
   }
 
   return [...byDonor.entries()].map(([donorId, v]) => ({ donorId, donationCount: v.count, recordedTotalCents: v.total }));

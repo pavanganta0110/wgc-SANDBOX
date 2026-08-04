@@ -91,6 +91,18 @@ export default async function PaymentFullDetailPage({
     }),
   ]);
 
+  // Invoice payments never create a `payment` row (invoice payers are
+  // deliberately never turned into Donor records — see invoicePay
+  // route's own doc comment), so without this the Donation Breakdown
+  // section below silently returns null for every invoice payment
+  // (payment is null and there's usually no supplemental_fee tag either),
+  // and the Donor panel shows blank name/email/phone.
+  const invoicePayment = await prisma.invoicePayment.findFirst({
+    where: { finixTransferId: transfer.finixTransferId, churchId },
+  });
+  const invoiceForPayment = invoicePayment ? await prisma.invoice.findUnique({ where: { id: invoicePayment.invoiceId } }) : null;
+  const invoiceClient = invoiceForPayment ? await prisma.client.findUnique({ where: { id: invoiceForPayment.clientId } }) : null;
+
   if (payment && !payment.feeCalculationVersion) {
     const reconciled = await reconcilePaymentFees(payment.id);
     if (reconciled) {
@@ -99,6 +111,9 @@ export default async function PaymentFullDetailPage({
   }
 
   const donor = instrument?.donorId ? await prisma.donor.findUnique({ where: { id: instrument.donorId } }) : null;
+  const contactName = donor?.name || invoiceClient?.displayName || null;
+  const contactEmail = donor?.email || invoiceClient?.email || null;
+  const contactPhone = donor?.phone || invoiceClient?.phone || null;
   const settlement = transfer.finixSettlementId
     ? await prisma.finixSettlement.findUnique({ where: { finixSettlementId: transfer.finixSettlementId } })
     : null;
@@ -196,7 +211,7 @@ export default async function PaymentFullDetailPage({
               </div>
             )}
             <p className="text-sm text-slate-600">
-              Donor: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
+              Donor: <span className="font-semibold text-slate-900">{formatPersonName(contactName, instrument?.accountHolderName)}</span>
               {" · "}
               Payment Instrument:{" "}
               <span className="font-semibold text-slate-900">
@@ -207,6 +222,47 @@ export default async function PaymentFullDetailPage({
           </div>
 
           {(() => {
+            // Invoice-originated transfers never have a `payment` row, so
+            // this reads straight from the InvoicePayment record instead
+            // — never recalculated, matching every other invoice surface
+            // (public page, PDF, receipt email) that already uses these
+            // exact stored fields.
+            if (invoicePayment) {
+              const netPrincipalCents = Math.max(0, invoicePayment.grossAmountCents - invoicePayment.refundedCents);
+              const netFeeCents = invoicePayment.customerCoveredFee
+                ? Math.max(0, invoicePayment.feeContributionCents - invoicePayment.feeContributionRefundedCents)
+                : 0;
+              return (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                  <h3 className="text-sm font-bold text-slate-900 mb-4">Donation Breakdown</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Invoice Amount</span>
+                      <span className="font-semibold text-slate-900">{formatCents(netPrincipalCents)}</span>
+                    </div>
+                    {invoicePayment.customerCoveredFee && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Processing Fee</span>
+                        <span className="font-semibold text-slate-900">{formatCents(netFeeCents)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Paid By</span>
+                      <span className="font-semibold text-slate-900">{invoicePayment.customerCoveredFee ? "Donor" : "Organization"}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold">
+                      <span className="text-slate-900">Total Charged to Donor</span>
+                      <span className="text-slate-900">{formatCents(netPrincipalCents + netFeeCents)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold text-slate-900">
+                      <span className="text-slate-600">Net Amount</span>
+                      <span className="text-slate-900">{formatCents(invoicePayment.netAmountCents)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             const rawTransfer = transfer.rawJsonRedacted as any;
             const rawSupplementalFee = rawTransfer?.supplemental_fee || 0;
             const supplementalFeeCents = payment?.feeCoveredCents ?? rawSupplementalFee ?? 0;
@@ -418,9 +474,9 @@ export default async function PaymentFullDetailPage({
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
-            <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
-            <Row label="Email" value={donor?.email || "—"} />
-            <Row label="Phone" value={donor?.phone || "—"} />
+            <Row label="Name" value={formatPersonName(contactName, instrument?.accountHolderName)} />
+            <Row label="Email" value={contactEmail || "—"} />
+            <Row label="Phone" value={contactPhone || "—"} />
           </div>
 
           {instrument && (
