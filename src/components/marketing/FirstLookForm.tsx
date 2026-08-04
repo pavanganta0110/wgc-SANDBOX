@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { trackMetaEvent } from "@/components/common/MetaPixel";
+import { trackEvent } from "@/lib/analytics/metaPixel";
 
 type FirstLookFormData = {
   firstName: string;
@@ -106,8 +106,9 @@ export default function FirstLookForm() {
         throw new Error(result.error || "We couldn't save your registration. Please try again.");
       }
 
-      // Fire Meta Pixel event
-      trackMetaEvent("Lead", { content_name: "First Look Registration" }, metaEventId);
+      // Fire Meta Pixel event — a standard Lead conversion, only after the
+      // registration actually succeeded server-side.
+      trackEvent("Lead", { content_name: "First Look Registration" }, metaEventId);
 
       // Redirect to confirmation page
       router.push(`/first-look/confirmed?ref=${result.registrationReference}`);

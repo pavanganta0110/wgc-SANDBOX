@@ -27,13 +27,17 @@ const securityHeaders = [
       // cdn.sift.com: Finix's own fraud-detection SDK (Finix.Auth, wraps
       // Sift Science), loaded by finix.js itself to produce fraud_session_id
       // — required for every donation, wallet or card, not wallet-specific.
-      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
+      // connect.facebook.net: loads the Meta Pixel's fbevents.js on public
+      // marketing pages (see src/components/common/MetaPixel.tsx).
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://connect.facebook.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
       // pay.google.com: Google Pay's client makes XHR calls to its own
       // origin during isReadyToPay/loadPaymentData.
-      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
+      // connect.facebook.net / www.facebook.com: the Meta Pixel's own beacon
+      // calls (fbq track/trackCustom) and its noscript <img> fallback.
+      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com https://connect.facebook.net https://www.facebook.com",
       // Google Pay's payment sheet renders inside an iframe from pay.google.com.
       // js.finix.com: the Finix card-tokenization form itself is mounted as
       // an iframe (application/index.html) — adding an explicit frame-src
