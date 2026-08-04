@@ -76,9 +76,9 @@ export default function FirstLookPage() {
               href={CALENDLY_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-10 rounded-[3px] text-lg transition-colors shadow-sm"
+              className="inline-block text-center bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-6 sm:px-10 rounded-[3px] text-base sm:text-lg transition-colors shadow-sm"
             >
-              Be the First to Schedule Time
+              Schedule a Time to Hear More
             </a>
             <span className="text-sm font-mono text-[#41506F]">Free. About 20 minutes. Bring your wish list.</span>
           </div>
