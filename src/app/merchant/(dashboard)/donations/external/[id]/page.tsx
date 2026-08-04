@@ -42,7 +42,12 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           ← External Donations
         </Link>
         <div className="flex items-center justify-between mt-2">
-          <h1 className="text-2xl font-bold text-slate-900">{formatCents(donation.donationAmountCents)}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900">{formatCents(donation.donationAmountCents)}</h1>
+            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800" title="Recorded outside WGC Payments — never processed by Finix, never included in settlements or processing totals.">
+              External / Offline
+            </span>
+          </div>
           <span className="text-sm text-slate-500">{donation.donationDate.toLocaleDateString()}</span>
         </div>
         <p className="text-sm text-slate-500 mt-1">
@@ -83,6 +88,11 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           includeInAnnualStatement: donation.includeInAnnualStatement,
           proofOfPaymentFileName: donation.proofOfPaymentFileName,
           possibleDuplicate: donation.possibleDuplicate,
+          isTaxDeductible: donation.isTaxDeductible,
+          deductibleAmountCents: donation.deductibleAmountCents,
+          goodsOrServicesProvided: donation.goodsOrServicesProvided,
+          goodsOrServicesDescription: donation.goodsOrServicesDescription,
+          goodsOrServicesValueCents: donation.goodsOrServicesValueCents,
         }}
         canEdit={canEdit}
         canVoid={canVoid}

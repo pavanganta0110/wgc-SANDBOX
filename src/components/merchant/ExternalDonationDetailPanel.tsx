@@ -23,6 +23,11 @@ interface Donation {
   includeInAnnualStatement: boolean;
   proofOfPaymentFileName: string | null;
   possibleDuplicate: boolean;
+  isTaxDeductible: boolean;
+  deductibleAmountCents: number | null;
+  goodsOrServicesProvided: boolean;
+  goodsOrServicesDescription: string | null;
+  goodsOrServicesValueCents: number | null;
 }
 
 export default function ExternalDonationDetailPanel({
@@ -45,12 +50,32 @@ export default function ExternalDonationDetailPanel({
   const [internalNote, setInternalNote] = useState(donation.internalNote || "");
   const [providerFee, setProviderFee] = useState(donation.providerFeeCents ? (donation.providerFeeCents / 100).toFixed(2) : "");
   const [includeInAnnualStatement, setIncludeInAnnualStatement] = useState(donation.includeInAnnualStatement);
+  const [isTaxDeductible, setIsTaxDeductible] = useState(donation.isTaxDeductible);
+  const [deductibleAmount, setDeductibleAmount] = useState(
+    donation.deductibleAmountCents != null ? (donation.deductibleAmountCents / 100).toFixed(2) : ""
+  );
+  const [goodsOrServicesProvided, setGoodsOrServicesProvided] = useState(donation.goodsOrServicesProvided);
+  const [goodsOrServicesDescription, setGoodsOrServicesDescription] = useState(donation.goodsOrServicesDescription || "");
+  const [goodsOrServicesValue, setGoodsOrServicesValue] = useState(
+    donation.goodsOrServicesValueCents != null ? (donation.goodsOrServicesValueCents / 100).toFixed(2) : ""
+  );
 
   const isCheck = donation.paymentMethod === "CHECK";
   const statusOptions = isCheck ? CHECK_DEPOSIT_STATUSES : EXTERNAL_DONATION_STATUSES;
   const currentStatus = isCheck ? donation.depositStatus || "RECEIVED" : donation.status;
 
   async function saveEdits() {
+    const deductibleAmountCents = isTaxDeductible && deductibleAmount ? Math.round(parseFloat(deductibleAmount) * 100) : null;
+    if (deductibleAmountCents != null && deductibleAmountCents > donation.donationAmountCents) {
+      toast.error("Deductible amount cannot be greater than the donation amount");
+      return;
+    }
+    const goodsOrServicesValueCents = goodsOrServicesProvided && goodsOrServicesValue ? Math.round(parseFloat(goodsOrServicesValue) * 100) : null;
+    if (goodsOrServicesValueCents != null && goodsOrServicesValueCents > donation.donationAmountCents) {
+      toast.error("Value of goods or services cannot be greater than the donation amount");
+      return;
+    }
+
     setBusy(true);
     try {
       const res = await fetch(`/api/merchant/donations/external/${donation.id}`, {
@@ -63,6 +88,11 @@ export default function ExternalDonationDetailPanel({
           internalNote: internalNote || null,
           providerFeeCents: providerFee ? Math.round(parseFloat(providerFee) * 100) : null,
           includeInAnnualStatement,
+          isTaxDeductible,
+          deductibleAmountCents,
+          goodsOrServicesProvided,
+          goodsOrServicesDescription: goodsOrServicesProvided ? goodsOrServicesDescription || null : null,
+          goodsOrServicesValueCents,
         }),
       });
       const json = await res.json();
@@ -213,6 +243,24 @@ export default function ExternalDonationDetailPanel({
               <dt className="text-xs text-slate-400">Include in annual statement</dt>
               <dd className="text-slate-900">{donation.includeInAnnualStatement ? "Yes" : "No"}</dd>
             </div>
+            <div>
+              <dt className="text-xs text-slate-400">Tax-deductible</dt>
+              <dd className="text-slate-900">
+                {donation.isTaxDeductible
+                  ? donation.deductibleAmountCents != null
+                    ? `Yes — $${(donation.deductibleAmountCents / 100).toFixed(2)} of $${(donation.donationAmountCents / 100).toFixed(2)}`
+                    : "Yes — full amount"
+                  : "No"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-slate-400">Goods or services provided</dt>
+              <dd className="text-slate-900">
+                {donation.goodsOrServicesProvided
+                  ? `${donation.goodsOrServicesDescription || "Yes"}${donation.goodsOrServicesValueCents != null ? ` — $${(donation.goodsOrServicesValueCents / 100).toFixed(2)}` : ""}`
+                  : "No"}
+              </dd>
+            </div>
           </dl>
         ) : (
           <div className="space-y-3">
@@ -227,6 +275,54 @@ export default function ExternalDonationDetailPanel({
               <input type="checkbox" checked={includeInAnnualStatement} onChange={(e) => setIncludeInAnnualStatement(e.target.checked)} />
               Include in annual statement
             </label>
+
+            <div className="border-t border-slate-100 pt-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={isTaxDeductible} onChange={(e) => setIsTaxDeductible(e.target.checked)} />
+                Tax-deductible
+              </label>
+              {isTaxDeductible && (
+                <div>
+                  <label htmlFor="edit-deductible" className="block text-xs font-medium text-slate-600 mb-1">
+                    Deductible amount (leave blank for the full amount)
+                  </label>
+                  <input
+                    id="edit-deductible"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={deductibleAmount}
+                    onChange={(e) => setDeductibleAmount(e.target.value)}
+                    className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={goodsOrServicesProvided} onChange={(e) => setGoodsOrServicesProvided(e.target.checked)} />
+                Goods or services provided
+              </label>
+              {goodsOrServicesProvided && (
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    placeholder="Description"
+                    value={goodsOrServicesDescription}
+                    onChange={(e) => setGoodsOrServicesDescription(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                  <input
+                    placeholder="Fair market value"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={goodsOrServicesValue}
+                    onChange={(e) => setGoodsOrServicesValue(e.target.value)}
+                    className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+
             <button onClick={saveEdits} disabled={busy} className="rounded-lg bg-[#010409] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
               Save
             </button>
