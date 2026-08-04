@@ -20,9 +20,12 @@ interface Props {
   canSendReceipt: boolean;
   canMatch: boolean;
   hasDonorEmail: boolean;
+  /** Whether a receipt has already been sent at least once — flips the
+   * action label between "Send receipt" and "Resend receipt". */
+  receiptAlreadySent?: boolean;
 }
 
-export default function ExternalDonationRowActions({ id, status, donorMatchStatus, canVoid, canSendReceipt, canMatch, hasDonorEmail }: Props) {
+export default function ExternalDonationRowActions({ id, status, donorMatchStatus, canVoid, canSendReceipt, canMatch, hasDonorEmail, receiptAlreadySent }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [matching, setMatching] = useState(false);
@@ -86,8 +89,13 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
         )}
         {canSendReceipt && hasDonorEmail && status !== "VOIDED" && (
           <button onClick={handleSendReceipt} disabled={busy} className="text-xs font-semibold text-slate-600 hover:underline">
-            Send receipt
+            {receiptAlreadySent ? "Resend receipt" : "Send receipt"}
           </button>
+        )}
+        {canSendReceipt && hasDonorEmail && receiptAlreadySent && (
+          <a href={`/api/merchant/donations/external/${id}/receipt`} className="text-xs font-semibold text-slate-600 hover:underline">
+            Download receipt
+          </a>
         )}
         {canVoid && status !== "VOIDED" && (
           <button onClick={handleVoid} disabled={busy} className="text-xs font-semibold text-red-600 hover:underline">

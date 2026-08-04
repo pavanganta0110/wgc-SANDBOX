@@ -107,6 +107,33 @@ export type CheckDepositStatus = (typeof CHECK_DEPOSIT_STATUSES)[number];
 export const DONOR_MATCH_STATUSES = ["MATCHED", "ANONYMOUS", "UNMATCHED"] as const;
 export type DonorMatchStatus = (typeof DONOR_MATCH_STATUSES)[number];
 
+export const RECEIPT_STATUSES = [
+  "NOT_SENT",
+  "QUEUED",
+  "SENT",
+  "FAILED",
+  "RESENT",
+  "SUPPRESSED_MISSING_EMAIL",
+  "SUPPRESSED_BY_USER",
+] as const;
+export type ReceiptStatus = (typeof RECEIPT_STATUSES)[number];
+
+export const RECEIPT_STATUS_LABELS: Record<ReceiptStatus, string> = {
+  NOT_SENT: "Not sent",
+  QUEUED: "Queued",
+  SENT: "Sent",
+  FAILED: "Failed",
+  RESENT: "Resent",
+  SUPPRESSED_MISSING_EMAIL: "Suppressed — no email",
+  SUPPRESSED_BY_USER: "Suppressed",
+};
+
+/** ExternalDonation.receiptStatus is nullable (never sent yet) — this
+ * normalizes null to the explicit NOT_SENT label everywhere it's displayed. */
+export function receiptStatusLabel(status: string | null): string {
+  return RECEIPT_STATUS_LABELS[status as ReceiptStatus] || "Not sent";
+}
+
 export function isExternalPaymentMethod(value: unknown): value is ExternalPaymentMethod {
   return typeof value === "string" && (EXTERNAL_PAYMENT_METHODS as readonly string[]).includes(value);
 }
