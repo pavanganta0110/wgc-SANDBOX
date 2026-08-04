@@ -159,7 +159,17 @@ export default function InvoicePublicView({ token }: { token: string }) {
     const canStillPay = data.status !== "VOID" && data.status !== "DRAFT" && data.status !== "SCHEDULED" && data.status !== "UNCOLLECTIBLE" && data.balanceCents > 0;
     if (!canStillPay) return;
     let cancelled = false;
+
+    // Finix.PaymentForm appends into the target element rather than
+    // replacing its contents — without clearing it first, every re-mount
+    // (switching Card/Bank, or a data refetch) stacks another form
+    // instance into the same container instead of replacing the old one.
+    // Mirrors GivingLinkForm.tsx's identical fix for the donation form.
+    const container = document.getElementById("invoice-finix-form");
+    if (container) container.innerHTML = "";
+    formInstanceRef.current = null;
     setFormReady(false);
+
     mountFinixPaymentForm("invoice-finix-form", data.finixApplicationId, { paymentMethods: [payMethod], showAddress: false }, data.finixEnvironment)
       .then((instance) => {
         if (cancelled) return;
