@@ -750,7 +750,22 @@ export default function InvoicePublicView({ token }: { token: string }) {
             </div>
 
             {(appleAvailable || googleAvailable) && (
-              <div className="flex gap-3 mb-4 print:hidden">
+              <div className="relative flex gap-3 mb-4 print:hidden">
+                {/* Apple Pay's/Google Pay's own sheet closes as soon as the
+                 * payer authorizes — everything after that (creating the
+                 * buyer identity, payment instrument, and transfer) is a
+                 * real, multi-second server round trip with no wallet UI
+                 * of its own to show progress. Without this overlay the
+                 * payer just sees the same invoice page sit there with no
+                 * feedback until the success/failure screen appears, which
+                 * reads as "did my payment go through?" — this covers that
+                 * gap the same way the Card/Bank submit button's own
+                 * "Processing…" label already does. */}
+                {walletProcessing && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-white/90 text-sm font-medium text-slate-600">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Processing your payment…
+                  </div>
+                )}
                 {appleAvailable && <div ref={applePayButtonRef} data-testid="apple-pay-button" className="flex-1 h-11 [&_apple-pay-button]:w-full [&_apple-pay-button]:h-11" dangerouslySetInnerHTML={{ __html: `<apple-pay-button buttonstyle="black" type="pay" locale="en-US"></apple-pay-button>` }} />}
                 {googleAvailable && <div ref={googlePayButtonRef} data-testid="google-pay-button" className="flex-1 h-11" />}
               </div>
