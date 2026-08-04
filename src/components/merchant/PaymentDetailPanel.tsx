@@ -58,7 +58,7 @@ export default async function PaymentDetailPanel({
     );
   }
 
-  const [instrument, refunds, disputes, fees, payment, bankReturns] = await Promise.all([
+  const [instrument, refunds, disputes, fees, payment, bankReturns, invoicePayment] = await Promise.all([
     transfer.finixPaymentInstrumentId
       ? prisma.finixPaymentInstrumentSnapshot.findUnique({
           where: { finixPaymentInstrumentId: transfer.finixPaymentInstrumentId },
@@ -81,11 +81,33 @@ export default async function PaymentDetailPanel({
     prisma.bankReturn.findMany({
       where: { originalTransferId: transfer.finixTransferId, churchId },
     }),
+    // Invoice payments never create a `Payment` row (see invoicePay
+    // route's own doc comment — invoice payers are deliberately never
+    // turned into Donor records, and this mirrors that same separation).
+    // Without this, every field below that reads from `payment` silently
+    // falls back to wrong defaults for an invoice-originated transfer —
+    // donorCoversFee reads as false even when the customer covered the
+    // fee, and Donation Amount falls back to the full charged total
+    // instead of the real invoice amount.
+    prisma.invoicePayment.findFirst({
+      where: { finixTransferId: transfer.finixTransferId, churchId },
+    }),
   ]);
 
   const donor = instrument?.donorId
     ? await prisma.donor.findUnique({ where: { id: instrument.donorId } })
     : null;
+
+  const invoice = invoicePayment ? await prisma.invoice.findUnique({ where: { id: invoicePayment.invoiceId } }) : null;
+  const invoiceClient = invoice ? await prisma.client.findUnique({ where: { id: invoice.clientId } }) : null;
+
+  // Falls back to the invoice's billed-to Client when there's no linked
+  // Donor — invoice payers deliberately never become Donor records, so
+  // without this the Donor section would just show blanks for every
+  // invoice payment even though the payer's name/email are known.
+  const contactName = donor?.name || invoiceClient?.displayName || null;
+  const contactEmail = donor?.email || invoiceClient?.email || null;
+  const contactPhone = donor?.phone || invoiceClient?.phone || null;
 
   const feesTotal = fees.reduce((sum, f) => sum + (f.amountCents || 0), 0);
 
@@ -226,7 +248,7 @@ export default async function PaymentDetailPanel({
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Donor</span>
             <span className="font-semibold text-slate-700">
-              {formatPersonName(donor?.name, instrument?.accountHolderName)}
+              {formatPersonName(contactName, instrument?.accountHolderName)}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -271,6 +293,33 @@ export default async function PaymentDetailPanel({
       {/* ── Fee Section ── */}
       <Section title="Fee">
         {(() => {
+          // Invoice-originated transfers never have a `payment` row, so
+          // this branch reads straight from the InvoicePayment record
+          // instead — never recalculated, matching every other invoice
+          // surface (public page, PDF, receipt email) that already uses
+          // these exact stored fields.
+          if (invoicePayment) {
+            const netPrincipalCents = Math.max(0, invoicePayment.grossAmountCents - invoicePayment.refundedCents);
+            const netFeeCents = invoicePayment.customerCoveredFee
+              ? Math.max(0, invoicePayment.feeContributionCents - invoicePayment.feeContributionRefundedCents)
+              : 0;
+            return (
+              <div className="space-y-1">
+                <Row label="Invoice Amount" value={formatCents(netPrincipalCents)} />
+                {invoicePayment.customerCoveredFee ? (
+                  <>
+                    <Row label="Donor-Paid Processing Fee" value={formatCents(netFeeCents)} />
+                    <Row label="Total Charged to Donor" value={formatCents(netPrincipalCents + netFeeCents)} />
+                  </>
+                ) : (
+                  <Row label="Organization-Paid Processing Fee" value={formatCents(invoicePayment.processingFeeCents)} />
+                )}
+                <Row label="Net Amount" value={formatCents(invoicePayment.netAmountCents)} />
+                <Row label="Donor Covers Fee" value={invoicePayment.customerCoveredFee ? "Yes" : "No"} />
+              </div>
+            );
+          }
+
           const tags =
             transfer.tagsJson && typeof transfer.tagsJson === "object" && !Array.isArray(transfer.tagsJson)
               ? (transfer.tagsJson as Record<string, string>)
@@ -379,9 +428,9 @@ export default async function PaymentDetailPanel({
       </Section>
 
       <Section title="Donor">
-        <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
-        <Row label="Email" value={donor?.email || "—"} />
-        <Row label="Phone" value={donor?.phone || "—"} />
+        <Row label="Name" value={formatPersonName(contactName, instrument?.accountHolderName)} />
+        <Row label="Email" value={contactEmail || "—"} />
+        <Row label="Phone" value={contactPhone || "—"} />
       </Section>
 
       {instrument && (
