@@ -49,7 +49,7 @@ const BASIC_AUTH_PASSWORD =
   normalizeSecret(process.env.FINIX_WEBHOOK_PASSWORD) ||
   normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_AUTH_PASSWORD);
 
-async function sendWebhookEmail(
+export async function sendWebhookEmail(
   applicationId: string,
   type: string,
   to: string,
@@ -59,12 +59,41 @@ async function sendWebhookEmail(
   badgeColor: string,
   bodyHtml: string
 ) {
-  const existingLog = await prisma.emailLog.findFirst({
-    where: { onboardingApplicationId: applicationId, type: type },
+  // Finix redelivers webhooks (retries, or two events landing close
+  // together), and the old check-then-send-then-log sequence had a real
+  // race window: the "does a log already exist" check and the eventual
+  // emailLog.create() were separated by an entire external Resend API
+  // call, so two near-simultaneous deliveries could both pass the check
+  // before either had written its row — sending the same email twice.
+  // pg_try_advisory_xact_lock makes the check-and-claim atomic without
+  // needing a schema migration (no unique index exists on EmailLog, and
+  // one can't be added here — DASHBOARD_ACCESS intentionally allows more
+  // than one row per applicationId when a prior send never completed).
+  // A losing concurrent caller sees locked=false and returns immediately
+  // rather than blocking, since the winner already owns this send.
+  const lockKey = `${applicationId}:${type}`;
+  const claimed = await prisma.$transaction(async (tx) => {
+    const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS locked`;
+    if (!locked) return null;
+
+    const existingLog = await tx.emailLog.findFirst({
+      where: { onboardingApplicationId: applicationId, type: type },
+    });
+    if (existingLog) return null;
+
+    return tx.emailLog.create({
+      data: {
+        onboardingApplicationId: applicationId,
+        type: type,
+        to: to,
+        subject: subject,
+        status: "PENDING",
+      },
+    });
   });
 
-  if (existingLog) {
-    console.log(`Email of type ${type} already sent for application ${applicationId}`);
+  if (!claimed) {
+    console.log(`Email of type ${type} already sent (or in flight) for application ${applicationId}`);
     return;
   }
 
@@ -73,12 +102,9 @@ async function sendWebhookEmail(
     const error = response.success ? null : response.error;
     const data = response.data;
 
-    await prisma.emailLog.create({
+    await prisma.emailLog.update({
+      where: { id: claimed.id },
       data: {
-        onboardingApplicationId: applicationId,
-        type: type,
-        to: to,
-        subject: subject,
         status: error ? "ERROR" : "SENT",
         providerMessageId: (data as any)?.data?.id || (data as any)?.id || null,
         error: error ? JSON.stringify(error) : null,
@@ -87,6 +113,9 @@ async function sendWebhookEmail(
     });
   } catch (err) {
     console.error("Failed to send email:", err);
+    await prisma.emailLog
+      .update({ where: { id: claimed.id }, data: { status: "ERROR", error: String(err) } })
+      .catch(() => {});
   }
 }
 
