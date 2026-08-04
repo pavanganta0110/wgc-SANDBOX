@@ -80,6 +80,13 @@ export type PermissionKey =
   | "canSendExternalDonationReceipt"
   | "canViewExternalDonationProof"
   | "canMatchExternalDonationToDonor"
+  // Bulk CSV import of external donations and viewing that import's
+  // history/row-level results — deliberately separate from
+  // canCreateExternalDonation (a single manual entry) since importing
+  // hundreds of financial records at once is a higher-trust bulk
+  // operation, not a routine per-gift edit.
+  | "canImportExternalDonations"
+  | "canExportExternalDonations"
   | "canViewDonorAddress"
   | "canEditDonorAddress"
   | "canExportDonorAddress"
@@ -122,6 +129,8 @@ const ALL_FALSE: PermissionMatrix = {
   canSendExternalDonationReceipt: false,
   canViewExternalDonationProof: false,
   canMatchExternalDonationToDonor: false,
+  canImportExternalDonations: false,
+  canExportExternalDonations: false,
   canViewDonorAddress: false,
   canEditDonorAddress: false,
   canExportDonorAddress: false,
@@ -166,6 +175,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canSendExternalDonationReceipt: true,
     canViewExternalDonationProof: true,
     canMatchExternalDonationToDonor: true,
+    canImportExternalDonations: true,
+    canExportExternalDonations: true,
     canViewDonorAddress: true,
     canEditDonorAddress: true,
     canExportDonorAddress: true,
@@ -201,6 +212,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditExternalDonation: true,
     canSendExternalDonationReceipt: true,
     canMatchExternalDonationToDonor: true,
+    canExportExternalDonations: true,
     canViewDonorAddress: true,
     canEditDonorAddress: true,
     canExportDonorAddress: true,
@@ -218,6 +230,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     // false by default, override-able — voiding a donation record and
     // viewing a proof-of-payment attachment are treated like a refund
     // (canIssueRefunds), not a routine edit.
+    // canImportExternalDonations: false by default, override-able — bulk
+    // CSV import can create/modify hundreds of financial records and donor
+    // profiles in one action, treated like canManageBankAccount, not like
+    // the single-record canCreateExternalDonation admin already has.
     // canVoidInvoices, canRecordOfflineInvoicePayments,
     // canRefundInvoicePayments: false by default, override-able, for the
     // same reason — voiding an invoice, recording a manual payment, and
@@ -296,6 +312,8 @@ export const EXTERNAL_DONATION_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canSendExternalDonationReceipt",
   "canViewExternalDonationProof",
   "canMatchExternalDonationToDonor",
+  "canImportExternalDonations",
+  "canExportExternalDonations",
 ];
 
 /** Permission keys for the Invoicing & Client Payments feature — reused
