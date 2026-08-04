@@ -6,10 +6,10 @@ import UpdateForm from "./UpdateForm"; // We will create this client component n
 export default async function SecureUpdatePage({
   params
 }: {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }) {
-  const token = params.token;
-  
+  const { token } = await params;
+
   if (!token) {
     notFound();
   }
