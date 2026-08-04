@@ -1,10 +1,23 @@
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import BarChart from "@/components/merchant/BarChart";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import TrendFilter from "@/components/merchant/TrendFilter";
 import CustomizeSummaryPanel from "@/components/merchant/CustomizeSummaryPanel";
 import { computeSummaryMetrics, DEFAULT_METRICS, METRIC_LABELS } from "@/lib/reports/summaryMetrics";
+import {
+  aggregateTransfers,
+  aggregateDisputes,
+  aggregateRefunds,
+  aggregateAuthorizations,
+  aggregateDeposits,
+  getTransferVolumeTrend,
+  getSettlementTrend,
+  getDepositTrend,
+  type DisputeAggregate,
+  type AuthorizationAggregate,
+  type DepositAggregate,
+  type TrendBucket,
+} from "@/lib/reports/dashboardAggregates";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import QuickLinksPanel from "@/components/merchant/QuickLinksPanel";
 import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
@@ -21,13 +34,17 @@ const TREND_CONFIG: Record<string, { buckets: number; stepDays: number; format: 
   monthly: { buckets: 6, stepDays: 30, format: { month: "short" } },
 };
 
-function groupByPeriod(
-  records: { createdAtFinix: Date | null; amountCents: number | null }[],
-  trend: string
-) {
+/**
+ * Bucket windows for the trend charts — always "last N days/weeks/months
+ * from now," independent of the summary section's own date-range picker
+ * (which only bounds the summary tiles). Each window is handed to the
+ * database as its own indexed aggregate query (see dashboardAggregates.ts)
+ * rather than fetched as rows and summed in JS.
+ */
+function computeTrendBuckets(trend: string): TrendBucket[] {
   const config = TREND_CONFIG[trend] ?? TREND_CONFIG.weekly;
   const now = new Date();
-  const buckets: { label: string; value: number }[] = [];
+  const buckets: TrendBucket[] = [];
 
   for (let i = config.buckets - 1; i >= 0; i--) {
     const dayOffset = new Date(now);
@@ -36,20 +53,25 @@ function groupByPeriod(
     const periodEnd = new Date(periodStart);
     periodEnd.setDate(periodEnd.getDate() + config.stepDays);
 
-    const total = records
-      .filter(
-        (r) => r.createdAtFinix && r.createdAtFinix >= periodStart && r.createdAtFinix < periodEnd
-      )
-      .reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
-
     buckets.push({
+      start: periodStart,
+      end: periodEnd,
       label: periodStart.toLocaleDateString("en-US", { ...config.format, timeZone: CENTRAL_TIME_ZONE }),
-      value: total / 100,
     });
   }
 
   return buckets;
 }
+
+const ZERO_DISPUTES: DisputeAggregate = { totalCount: 0, activeCount: 0, totalVolumeCents: 0 };
+const ZERO_AUTHORIZATIONS: AuthorizationAggregate = {
+  totalCount: 0,
+  succeededCount: 0,
+  requestedVolumeCents: 0,
+  voidedCount: 0,
+  voidedVolumeCents: 0,
+};
+const ZERO_DEPOSITS: DepositAggregate = { totalVolumeCents: 0 };
 
 export default async function MerchantDashboardPage({
   searchParams,
@@ -91,63 +113,33 @@ export default async function MerchantDashboardPage({
     buildRefundScope(auth, viewScope),
   ]);
 
-  const [transfers, disputes, refunds, authorizations, settlements, deposits] = await Promise.all([
-    prisma.finixTransfer.findMany({
-      where: { ...transferScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-      select: { state: true, amountCents: true, createdAtFinix: true },
-    }),
-    scopedUserId
-      ? Promise.resolve([])
-      : prisma.finixDispute.findMany({
-          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { state: true, amountCents: true, createdAtFinix: true },
-        }),
-    prisma.finixRefundOrReversal.findMany({
-      where: { ...refundScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-      select: { state: true, amountCents: true, createdAtFinix: true },
-    }),
-    scopedUserId
-      ? Promise.resolve([])
-      : prisma.finixAuthorization.findMany({
-          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { state: true, amountCents: true, amountRequestedCents: true, isVoid: true, createdAtFinix: true },
-        }),
-    scopedUserId
-      ? Promise.resolve([])
-      : prisma.finixSettlement.findMany({
-          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { totalAmountCents: true, createdAtFinix: true },
-        }),
-    scopedUserId
-      ? Promise.resolve([])
-      : prisma.finixFundingTransferAttempt.findMany({
-          where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { amountCents: true, createdAtFinix: true },
-        }),
+  const orgScopeWithDate = { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) };
+
+  const [transfers, disputes, refunds, authorizations, deposits] = await Promise.all([
+    aggregateTransfers({ ...transferScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) }),
+    scopedUserId ? Promise.resolve(ZERO_DISPUTES) : aggregateDisputes(orgScopeWithDate),
+    aggregateRefunds({ ...refundScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) }),
+    scopedUserId ? Promise.resolve(ZERO_AUTHORIZATIONS) : aggregateAuthorizations(orgScopeWithDate),
+    scopedUserId ? Promise.resolve(ZERO_DEPOSITS) : aggregateDeposits(orgScopeWithDate),
   ]);
 
-  const succeeded = transfers.filter((t) => (t.state || "").toUpperCase() === "SUCCEEDED");
-
-  const approvedAuths = authorizations.filter((a) => (a.state || "").toUpperCase() === "SUCCEEDED");
-  const authorizationRate =
-    authorizations.length > 0 ? (approvedAuths.length / authorizations.length) * 100 : null;
-
-  const metricValues = computeSummaryMetrics({
-    transfers,
-    disputes,
-    refunds,
-    authorizations,
-    deposits,
-  });
+  const metricValues = computeSummaryMetrics({ transfers, disputes, refunds, authorizations, deposits });
   const row1Metrics = selectedMetrics.slice(0, 4);
   const row2Metrics = selectedMetrics.slice(4, 8);
 
-  const volumeTrend = groupByPeriod(succeeded, trend);
-  const settlementTrend = groupByPeriod(
-    settlements.map((s) => ({ createdAtFinix: s.createdAtFinix, amountCents: s.totalAmountCents })),
-    trend
-  );
-  const depositTrend = groupByPeriod(deposits, trend);
+  const trendBuckets = computeTrendBuckets(trend);
+  const [volumeSums, settlementSums, depositSums] = await Promise.all([
+    getTransferVolumeTrend(transferScope, trendBuckets),
+    scopedUserId
+      ? Promise.resolve(trendBuckets.map(() => 0))
+      : getSettlementTrend({ churchId }, trendBuckets),
+    scopedUserId
+      ? Promise.resolve(trendBuckets.map(() => 0))
+      : getDepositTrend({ churchId }, trendBuckets),
+  ]);
+  const volumeTrend = trendBuckets.map((b, i) => ({ label: b.label, value: volumeSums[i] }));
+  const settlementTrend = trendBuckets.map((b, i) => ({ label: b.label, value: settlementSums[i] }));
+  const depositTrend = trendBuckets.map((b, i) => ({ label: b.label, value: depositSums[i] }));
 
   const lastUpdated = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -208,15 +200,17 @@ export default async function MerchantDashboardPage({
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-900 mb-4">Authorization Rate</h3>
-        {authorizations.length === 0 ? (
+        {authorizations.totalCount === 0 ? (
           <div className="flex items-center justify-center h-24 text-sm text-slate-400">
             No results yet
           </div>
         ) : (
           <div className="flex items-center gap-6">
-            <p className="text-3xl font-bold text-slate-900">{authorizationRate!.toFixed(1)}%</p>
+            <p className="text-3xl font-bold text-slate-900">
+              {((authorizations.succeededCount / authorizations.totalCount) * 100).toFixed(1)}%
+            </p>
             <p className="text-sm text-slate-500">
-              {approvedAuths.length} of {authorizations.length} authorizations approved
+              {authorizations.succeededCount} of {authorizations.totalCount} authorizations approved
             </p>
           </div>
         )}
