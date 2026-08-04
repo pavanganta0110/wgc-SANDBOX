@@ -22,9 +22,9 @@ function DecorativeBar() {
 
 function Header() {
   return (
-    <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
+    <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-3 flex justify-between items-center">
       <a href="/" className="flex items-center gap-3">
-        <GatewayIcon className="h-10 w-auto shrink-0" />
+        <GatewayIcon className="h-9 w-auto shrink-0" />
         <div className="flex flex-col">
           <span className="font-serif text-lg font-bold text-[#14213D] leading-none">WGC</span>
           <span className="text-[9px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
@@ -34,7 +34,7 @@ function Header() {
         href="#join"
         className="text-xs font-bold uppercase tracking-wider text-[#14213D] border border-[#14213D] rounded-full px-5 py-2 hover:bg-[#14213D] hover:text-[#FFFDF8] transition-colors"
       >
-        Join First Look Waitlist
+        Schedule a Call
       </a>
     </header>
   );
@@ -61,14 +61,14 @@ export default function FirstLookPage() {
 
       <main>
         {/* HERO SECTION */}
-        <section className="px-6 pt-20 pb-16 md:pt-32 md:pb-24 max-w-[1120px] mx-auto text-center">
-          <span className="inline-block text-[11px] uppercase font-mono font-bold text-[#8C5A33] mb-6 tracking-widest border-b-2 border-[#C9992E] pb-1">
+        <section className="px-6 pt-10 pb-16 md:pt-14 md:pb-20 max-w-[1120px] mx-auto text-center">
+          <span className="inline-block text-[11px] uppercase font-mono font-bold text-[#8C5A33] mb-4 tracking-widest border-b-2 border-[#C9992E] pb-1">
             First Look — Live Working Session
           </span>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-medium leading-[1.1] mb-8 text-[#14213D] max-w-4xl mx-auto">
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-medium leading-[1.1] mb-6 text-[#14213D] max-w-4xl mx-auto">
             We're betting your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
           </h1>
-          <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-8 leading-relaxed">
             Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code. Click below to be one of the first to join us.
           </p>
           <div className="flex flex-col items-center gap-4">
@@ -78,7 +78,7 @@ export default function FirstLookPage() {
               rel="noopener noreferrer"
               className="inline-block bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-10 rounded-[3px] text-lg transition-colors shadow-sm"
             >
-              Join Waitlist
+              Be the First to Schedule Time
             </a>
             <span className="text-sm font-mono text-[#41506F]">Free. About 20 minutes. Bring your wish list.</span>
           </div>
