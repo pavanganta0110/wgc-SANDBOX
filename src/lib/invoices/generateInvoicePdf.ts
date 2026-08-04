@@ -22,9 +22,10 @@ export async function generateInvoicePdf(invoiceId: string, payUrlToken?: string
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) throw new Error("Invoice not found");
 
-  const [client, lineItems] = await Promise.all([
+  const [client, lineItems, payments] = await Promise.all([
     prisma.client.findUnique({ where: { id: invoice.clientId } }),
     prisma.invoiceLineItem.findMany({ where: { invoiceId }, orderBy: { sortOrder: "asc" } }),
+    prisma.invoicePayment.findMany({ where: { invoiceId, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } }, orderBy: { createdAt: "asc" } }),
   ]);
 
   const branding = applyInvoiceOverrides(await resolveInvoiceBranding(invoice.churchId), invoice);
@@ -60,6 +61,16 @@ export async function generateInvoicePdf(invoiceId: string, payUrlToken?: string
     totalCents: invoice.totalCents,
     amountPaidCents: invoice.amountPaidCents,
     balanceCents: invoice.balanceCents,
+    payments: payments.map((p) => ({
+      date: p.createdAt,
+      method: p.method,
+      grossAmountCents: p.grossAmountCents,
+      feeContributionCents: p.feeContributionCents,
+      customerCoveredFee: p.customerCoveredFee,
+      totalChargedCents: p.totalChargedCents,
+      refundedCents: p.refundedCents,
+      status: p.status,
+    })),
     clientMemo: invoice.clientMemo,
     paymentInstructions: invoice.paymentInstructions,
     termsAndConditions: invoice.termsAndConditions,

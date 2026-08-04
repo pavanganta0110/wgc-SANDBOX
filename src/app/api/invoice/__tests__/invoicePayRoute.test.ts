@@ -125,6 +125,15 @@ describe("POST /api/invoice/[token]/pay — validation", () => {
     expect(res.status).toBe(404);
   });
 
+  it("rejects payment when the invoice's own churchId doesn't match the token's resolved churchId — cross-church/sub-account scoping can never be bypassed by an invoiceId collision", async () => {
+    mockResolveToken.mockResolvedValue({ invoiceId: "inv1", churchId: "church-b" });
+    mockPrisma.invoice.findUnique.mockResolvedValue(baseInvoice({ churchId: "church-a" }));
+    const { POST } = await load();
+    const res = await POST(postReq(validBody()), params());
+    expect(res.status).toBe(404);
+    expect(mockFinixClient.createBuyerIdentity).not.toHaveBeenCalled();
+  });
+
   it("rejects an amount below the $1.00 minimum", async () => {
     const { POST } = await load();
     const res = await POST(postReq(validBody({ amountCents: 50 })), params());

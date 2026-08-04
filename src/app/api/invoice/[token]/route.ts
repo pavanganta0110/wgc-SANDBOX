@@ -121,6 +121,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
       grossAmountCents: p.grossAmountCents,
       feeContributionCents: p.feeContributionCents,
       totalChargedCents: p.totalChargedCents,
+      customerCoveredFee: p.customerCoveredFee,
       refundedCents: p.refundedCents,
       status: p.status,
     })),

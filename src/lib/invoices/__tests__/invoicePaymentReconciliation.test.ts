@@ -63,6 +63,46 @@ describe("applyInvoicePaymentTransferState", () => {
       expect.objectContaining({ data: expect.objectContaining({ balanceCents: 0, status: "PAID" }) })
     );
   });
+
+  it("collapses a raw FAILED transfer state to InvoicePayment status FAILED, recomputes the (unchanged) balance, logs invoice.payment_failed, and never sends a receipt email", async () => {
+    const { sendInvoicePaymentReceiptEmail } = await import("@/lib/invoices/invoiceEmails");
+    mockPrisma.invoicePayment.findFirst.mockResolvedValue({ id: "p1", status: "PENDING", invoiceId: "inv1", method: "ACH" });
+    mockPrisma.invoice.findUnique.mockResolvedValue({
+      id: "inv1", churchId: "church-a", totalCents: 10000, status: "SENT", firstViewedAt: new Date(), dueDate: new Date("2099-01-01"), paidAt: null,
+    });
+    mockPrisma.invoicePayment.findMany.mockResolvedValue([]);
+    const { applyInvoicePaymentTransferState } = await load();
+    const result = await applyInvoicePaymentTransferState("TR1", "FAILED");
+
+    expect(result).toEqual({ status: "FAILED", applied: true });
+    expect(mockPrisma.invoicePayment.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { status: "FAILED" } });
+    expect(mockPrisma.invoiceActivity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ activityType: "invoice.payment_failed" }) })
+    );
+    expect(sendInvoicePaymentReceiptEmail).not.toHaveBeenCalled();
+  });
+
+  it("collapses a raw CANCELED transfer state to the same FAILED InvoicePayment status as an explicit FAILED transfer", async () => {
+    mockPrisma.invoicePayment.findFirst.mockResolvedValue({ id: "p1", status: "PENDING", invoiceId: "inv1", method: "CARD" });
+    mockPrisma.invoice.findUnique.mockResolvedValue({
+      id: "inv1", churchId: "church-a", totalCents: 10000, status: "SENT", firstViewedAt: new Date(), dueDate: new Date("2099-01-01"), paidAt: null,
+    });
+    mockPrisma.invoicePayment.findMany.mockResolvedValue([]);
+    const { applyInvoicePaymentTransferState } = await load();
+    const result = await applyInvoicePaymentTransferState("TR1", "CANCELED");
+
+    expect(result).toEqual({ status: "FAILED", applied: true });
+    expect(mockPrisma.invoicePayment.update).toHaveBeenCalledWith({ where: { id: "p1" }, data: { status: "FAILED" } });
+  });
+
+  it("is idempotent against a duplicate webhook delivery for the same already-FAILED transfer", async () => {
+    mockPrisma.invoicePayment.findFirst.mockResolvedValue({ id: "p1", status: "FAILED", invoiceId: "inv1", method: "CARD" });
+    const { applyInvoicePaymentTransferState } = await load();
+    const result = await applyInvoicePaymentTransferState("TR1", "FAILED");
+    expect(result.applied).toBe(false);
+    expect(mockPrisma.invoicePayment.update).not.toHaveBeenCalled();
+    expect(mockPrisma.invoiceActivity.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("reconcileInvoicePaymentAttempt", () => {
