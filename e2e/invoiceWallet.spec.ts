@@ -91,6 +91,12 @@ test.describe("Invoice wallet payment — amount fidelity and request rebuilding
     await expect(page.getByText("Make a Payment")).toBeVisible();
 
     await page.getByTestId("apple-pay-button").click();
+    // The wallet sheet closes the instant it authorizes, but the real
+    // server round trip (identity -> instrument -> transfer) still takes
+    // real time — this checks the payer sees a visible "processing" state
+    // during that gap rather than the page just sitting there looking
+    // unresponsive until the failure toast eventually appears.
+    await expect(page.getByText("Processing your payment…")).toBeVisible();
     // toSafePaymentErrorResponse's message for a rejected identity/instrument
     // ("Could not verify identity with processor...", "Could not process
     // payment instrument...") is surfaced via a react-hot-toast toast, not a
