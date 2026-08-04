@@ -55,11 +55,21 @@ export default function RecordExternalDonationForm() {
   const [sendReceipt, setSendReceipt] = useState(false);
 
   // Optional/common
+  const [funds, setFunds] = useState<{ id: string; name: string; isActive: boolean }[] | null>(null);
+  const [selectedFundId, setSelectedFundId] = useState("");
   const [fundName, setFundName] = useState("");
   const [campaign, setCampaign] = useState("");
   const [givingPageLabel, setGivingPageLabel] = useState("");
   const [donationPurpose, setDonationPurpose] = useState("");
   const [internalNote, setInternalNote] = useState("");
+
+  // Tax deductibility / goods & services
+  const [isTaxDeductible, setIsTaxDeductible] = useState(true);
+  const [deductibleAmountDiffers, setDeductibleAmountDiffers] = useState(false);
+  const [deductibleAmount, setDeductibleAmount] = useState("");
+  const [goodsOrServicesProvided, setGoodsOrServicesProvided] = useState(false);
+  const [goodsOrServicesDescription, setGoodsOrServicesDescription] = useState("");
+  const [goodsOrServicesValue, setGoodsOrServicesValue] = useState("");
 
   // Digital provider (Cash App / Zelle / Venmo / PayPal)
   const [externalTransactionId, setExternalTransactionId] = useState("");
@@ -90,6 +100,21 @@ export default function RecordExternalDonationForm() {
   useEffect(() => {
     setDonorAddress((prev) => ({ ...prev, source: defaultAddressSourceForMethod(paymentMethod) }));
   }, [paymentMethod]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/funds")
+      .then((res) => (res.ok ? res.json() : { funds: [] }))
+      .then((json) => {
+        if (!cancelled) setFunds((json.funds || []).filter((f: { isActive: boolean }) => f.isActive));
+      })
+      .catch(() => {
+        if (!cancelled) setFunds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (donorMode !== "existing" || !selectedDonor) {
@@ -129,6 +154,16 @@ export default function RecordExternalDonationForm() {
       toast.error("Search for and select an existing donor, or switch to Add a new donor");
       return;
     }
+    const deductibleAmountCents = deductibleAmountDiffers && deductibleAmount ? Math.round(parseFloat(deductibleAmount) * 100) : undefined;
+    if (typeof deductibleAmountCents === "number" && deductibleAmountCents > donationAmountCents) {
+      toast.error("Deductible amount cannot be greater than the donation amount");
+      return;
+    }
+    const goodsOrServicesValueCents = goodsOrServicesProvided && goodsOrServicesValue ? Math.round(parseFloat(goodsOrServicesValue) * 100) : undefined;
+    if (typeof goodsOrServicesValueCents === "number" && goodsOrServicesValueCents > donationAmountCents) {
+      toast.error("Value of goods or services cannot be greater than the donation amount");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -142,8 +177,14 @@ export default function RecordExternalDonationForm() {
         donorName: donorMode === "new" ? donorName : undefined,
         donorEmail: donorMode === "new" ? donorEmail : undefined,
         donorPhone: donorMode === "new" ? donorPhone : undefined,
+        isTaxDeductible,
+        deductibleAmountCents,
+        goodsOrServicesProvided,
+        goodsOrServicesDescription: goodsOrServicesProvided ? goodsOrServicesDescription || undefined : undefined,
+        goodsOrServicesValueCents,
         donorAddress: donorMode === "new" && donorAddress.addressLine1.trim() ? donorAddress : undefined,
-        fundName: fundName || undefined,
+        fundId: selectedFundId || undefined,
+        fundName: selectedFundId ? funds?.find((f) => f.id === selectedFundId)?.name : fundName || undefined,
         campaign: campaign || undefined,
         givingPageLabel: givingPageLabel || undefined,
         donationPurpose: donationPurpose || undefined,
@@ -410,13 +451,125 @@ export default function RecordExternalDonationForm() {
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">Optional details</h2>
         <div className="grid grid-cols-2 gap-4">
-          <input placeholder="Fund" value={fundName} onChange={(e) => setFundName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <div>
+            <label htmlFor="ext-donation-fund" className="block text-xs font-medium text-slate-600 mb-1">
+              Fund or purpose
+            </label>
+            <select
+              id="ext-donation-fund"
+              value={selectedFundId}
+              onChange={(e) => setSelectedFundId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">
+                {funds === null ? "Loading funds…" : "Select a fund (optional)"}
+              </option>
+              {funds?.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+              <option value="__other__" disabled hidden>
+                Other
+              </option>
+            </select>
+          </div>
+          {!selectedFundId && (
+            <div>
+              <label htmlFor="ext-donation-fund-other" className="block text-xs font-medium text-slate-600 mb-1">
+                Or type a fund name
+              </label>
+              <input
+                id="ext-donation-fund-other"
+                placeholder="e.g. Building Fund"
+                value={fundName}
+                onChange={(e) => setFundName(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
           <input placeholder="Campaign" value={campaign} onChange={(e) => setCampaign(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input placeholder="Giving page" value={givingPageLabel} onChange={(e) => setGivingPageLabel(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
           <input placeholder="Donation purpose" value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
         </div>
         {!isCash && (
           <textarea placeholder="Internal note (never shown to the donor)" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
+        )}
+      </section>
+
+      <section className="space-y-4 rounded-lg bg-slate-50 p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Tax deductibility</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={isTaxDeductible}
+            onChange={(e) => {
+              setIsTaxDeductible(e.target.checked);
+              if (!e.target.checked) {
+                setDeductibleAmountDiffers(false);
+                setDeductibleAmount("");
+              }
+            }}
+          />
+          This donation is tax-deductible
+        </label>
+        {isTaxDeductible && (
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={deductibleAmountDiffers} onChange={(e) => setDeductibleAmountDiffers(e.target.checked)} />
+            The deductible amount is different from the full donation amount
+          </label>
+        )}
+        {isTaxDeductible && deductibleAmountDiffers && (
+          <div>
+            <label htmlFor="ext-donation-deductible" className="block text-xs font-medium text-slate-600 mb-1">
+              Deductible amount
+            </label>
+            <input
+              id="ext-donation-deductible"
+              type="number"
+              step="0.01"
+              min="0"
+              value={deductibleAmount}
+              onChange={(e) => setDeductibleAmount(e.target.value)}
+              className="w-full max-w-xs rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              placeholder="0.00"
+            />
+          </div>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={goodsOrServicesProvided} onChange={(e) => setGoodsOrServicesProvided(e.target.checked)} />
+          Goods or services were provided in exchange for this donation
+        </label>
+        {goodsOrServicesProvided && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="ext-donation-gs-desc" className="block text-xs font-medium text-slate-600 mb-1">
+                Description
+              </label>
+              <input
+                id="ext-donation-gs-desc"
+                value={goodsOrServicesDescription}
+                onChange={(e) => setGoodsOrServicesDescription(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="e.g. Banquet dinner"
+              />
+            </div>
+            <div>
+              <label htmlFor="ext-donation-gs-value" className="block text-xs font-medium text-slate-600 mb-1">
+                Fair market value
+              </label>
+              <input
+                id="ext-donation-gs-value"
+                type="number"
+                step="0.01"
+                min="0"
+                value={goodsOrServicesValue}
+                onChange={(e) => setGoodsOrServicesValue(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
         )}
       </section>
 

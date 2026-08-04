@@ -92,6 +92,11 @@ export async function POST(req: Request) {
     cardType,
     includeInAnnualStatement,
     sendReceipt,
+    isTaxDeductible,
+    deductibleAmountCents,
+    goodsOrServicesProvided,
+    goodsOrServicesDescription,
+    goodsOrServicesValueCents,
   } = body ?? {};
 
   if (typeof donationAmountCents !== "number" || donationAmountCents < 1) {
@@ -120,6 +125,13 @@ export async function POST(req: Request) {
   const parsedDonationDate = new Date(donationDate);
   if (Number.isNaN(parsedDonationDate.getTime())) {
     return NextResponse.json({ error: "Invalid donation date" }, { status: 400 });
+  }
+
+  if (typeof deductibleAmountCents === "number" && deductibleAmountCents > donationAmountCents) {
+    return NextResponse.json({ error: "Deductible amount cannot be greater than the donation amount" }, { status: 400 });
+  }
+  if (typeof goodsOrServicesValueCents === "number" && goodsOrServicesValueCents > donationAmountCents) {
+    return NextResponse.json({ error: "Value of goods or services cannot be greater than the donation amount" }, { status: 400 });
   }
 
   // Donor resolution — never auto-merge on name alone (resolveOrCreateDonor
@@ -219,6 +231,11 @@ export async function POST(req: Request) {
       lastFourDigits: lastFourDigits || null,
       cardType: cardType || null,
       includeInAnnualStatement: includeInAnnualStatement !== false,
+      isTaxDeductible: isTaxDeductible !== false,
+      deductibleAmountCents: typeof deductibleAmountCents === "number" ? deductibleAmountCents : null,
+      goodsOrServicesProvided: Boolean(goodsOrServicesProvided),
+      goodsOrServicesDescription: goodsOrServicesProvided ? goodsOrServicesDescription || null : null,
+      goodsOrServicesValueCents: goodsOrServicesProvided && typeof goodsOrServicesValueCents === "number" ? goodsOrServicesValueCents : null,
       status: "RECEIVED",
       processedByWgc: false,
       finixTransferId: null,

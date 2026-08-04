@@ -51,6 +51,11 @@ const EDITABLE_FIELDS = [
   "cardType",
   "includeInAnnualStatement",
   "status",
+  "isTaxDeductible",
+  "deductibleAmountCents",
+  "goodsOrServicesProvided",
+  "goodsOrServicesDescription",
+  "goodsOrServicesValueCents",
 ] as const;
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -90,6 +95,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
+
+  const effectiveAmountCents = (data.donationAmountCents as number | undefined) ?? existing.donationAmountCents;
+  const effectiveDeductible = "deductibleAmountCents" in data ? (data.deductibleAmountCents as number | null) : existing.deductibleAmountCents;
+  if (typeof effectiveDeductible === "number" && effectiveDeductible > effectiveAmountCents) {
+    return NextResponse.json({ error: "Deductible amount cannot be greater than the donation amount" }, { status: 400 });
+  }
+  const effectiveGoodsValue = "goodsOrServicesValueCents" in data ? (data.goodsOrServicesValueCents as number | null) : existing.goodsOrServicesValueCents;
+  if (typeof effectiveGoodsValue === "number" && effectiveGoodsValue > effectiveAmountCents) {
+    return NextResponse.json({ error: "Value of goods or services cannot be greater than the donation amount" }, { status: 400 });
+  }
+
   // Edits never touch the fixed WGC-processing invariants.
   delete data.processedByWgc;
   delete data.finixTransferId;

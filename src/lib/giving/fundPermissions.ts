@@ -13,3 +13,19 @@ import type { MerchantAuthContext } from "@/lib/auth/requireMerchantSession";
 export function canManageFunds(auth: MerchantAuthContext): boolean {
   return hasPermission(auth, "canManageOrgSettings");
 }
+
+/**
+ * Read-only access to the fund catalog for populating a fund picker —
+ * deliberately broader than canManageFunds. Fund names/ids are not
+ * sensitive (they're already shown on public, unauthenticated giving
+ * pages); a fundraiser recording or importing external donations needs to
+ * select a fund without being able to create/archive/reorder the catalog.
+ */
+export function canReadFundCatalog(auth: MerchantAuthContext): boolean {
+  return (
+    canManageFunds(auth) ||
+    hasPermission(auth, "canCreateExternalDonation") ||
+    hasPermission(auth, "canEditExternalDonation") ||
+    hasPermission(auth, "canImportExternalDonations")
+  );
+}

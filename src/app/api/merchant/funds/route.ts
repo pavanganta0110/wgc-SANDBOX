@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
-import { canManageFunds } from "@/lib/giving/fundPermissions";
+import { canManageFunds, canReadFundCatalog } from "@/lib/giving/fundPermissions";
 
-/** The church's full Gift Designation catalog — active and archived, for
- * the "Manage Funds" admin UI. Public/giving-link-facing reads only ever
- * select active funds (see loadPublicGivingPageData.ts). */
+/** The church's full Gift Designation catalog — active and archived. Read
+ * access is shared by the "Manage Funds" admin UI and any external-donation
+ * fund picker (see canReadFundCatalog) — fund names/ids aren't sensitive,
+ * they're already shown on public giving pages. Public/giving-link-facing
+ * reads only ever select active funds (see loadPublicGivingPageData.ts). */
 export async function GET() {
   let auth;
   try {
@@ -15,7 +17,7 @@ export async function GET() {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  if (!canManageFunds(auth)) {
+  if (!canReadFundCatalog(auth)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
