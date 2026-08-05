@@ -25,9 +25,14 @@ export default async function MerchantDashboardLayout({
   // Checkpoint 2 backfill was redirected to /merchant/login here. Migrated
   // to requireMerchantSession(), which accepts every normalized org role
   // and still fails closed for wgc_admin and disabled/stale sessions.
+  // allowRestrictedAccess=true: the layout shell (nav, banner, logout) must
+  // always render regardless of billing-access state — it's the enforcing
+  // pages underneath (the default requireMerchantSession() call, gate ON)
+  // that actually block feature access. See requireMerchantSession.ts and
+  // the (dashboard)/error.tsx segment boundary.
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true);
   } catch (err) {
     if (isAuthError(err)) redirect("/merchant/login");
     throw err;
@@ -48,12 +53,11 @@ export default async function MerchantDashboardLayout({
     redirect("/merchant/login");
   }
 
-  // WGC platform-billing gate: approved by Finix but billing/subscription
-  // setup not yet complete. A full per-route hard-block (e.g. via
-  // middleware) is not yet implemented — this renders a persistent,
-  // non-dismissable banner and redirects the dashboard home page, which
-  // covers the primary post-login entry point. See BillingGateBanner.
-  const billingGateActive = church.billingSetupStatus === "APPROVED_BILLING_REQUIRED";
+  // WGC platform-billing gate — the actual enforcement happens server-side
+  // in requireMerchantSession() for every other page in this segment (see
+  // (dashboard)/error.tsx); this banner is purely informational, shown
+  // here because the layout always renders regardless of access state.
+  const billingGateActive = auth.orgAccessState !== "NO_GATE" && auth.orgAccessState !== "TRIALING_OR_ACTIVE";
 
   const { after } = require("next/server");
   after(async () => {
@@ -101,7 +105,7 @@ export default async function MerchantDashboardLayout({
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       <ComplianceBanner status={complianceStatus} />
-      {billingGateActive && <BillingGateBanner />}
+      {billingGateActive && <BillingGateBanner state={auth.orgAccessState ?? "NO_GATE"} />}
       <div className="flex-grow flex">
         <Sidebar role={auth.role ?? undefined} />
         <div className="flex-grow flex flex-col min-w-0">

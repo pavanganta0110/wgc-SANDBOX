@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockCookieStore = { get: vi.fn(), set: vi.fn(), delete: vi.fn() };
 vi.mock("next/headers", () => ({ cookies: vi.fn(async () => mockCookieStore) }));
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
+  prisma: { church: { findUnique: vi.fn().mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE" }) }, wgcSubscription: { findUnique: vi.fn().mockResolvedValue(null) }, 
     user: { findUnique: vi.fn() },
     supportTicket: { findMany: vi.fn(), count: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
     supportTicketMessage: { create: vi.fn() },

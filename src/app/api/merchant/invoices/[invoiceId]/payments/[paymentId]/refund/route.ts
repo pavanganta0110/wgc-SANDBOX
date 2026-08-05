@@ -160,5 +160,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     req,
   });
 
+  const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+  await recordInvoiceUsageEvent({
+    organizationId: auth.churchId,
+    invoiceId,
+    invoicePaymentId: payment.id,
+    eventType: newPaymentStatus === "REFUNDED" ? "INVOICE_REFUNDED" : "INVOICE_PARTIALLY_PAID",
+    amountPaidCents: requestedCents,
+    // Idempotent per refund-amount-application, not per route call — a
+    // retried request with the same resulting refundedCents never
+    // double-counts, but two genuinely separate partial refunds each get
+    // their own key.
+    idempotencyKey: `${payment.id}:REFUND:${newRefundedCents}`,
+  }).catch((err) => console.error("Invoice usage ledger recording failed (non-fatal):", err));
+
   return NextResponse.json({ success: true, ...result });
 }

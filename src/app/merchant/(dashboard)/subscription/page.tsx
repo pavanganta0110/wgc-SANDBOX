@@ -22,7 +22,7 @@ const formatDate = formatDateCDT;
 export default async function SubscriptionPage() {
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: billing setup/management must remain reachable while restricted
   } catch (err) {
     if (isAuthError(err)) redirect("/merchant/login");
     throw err;

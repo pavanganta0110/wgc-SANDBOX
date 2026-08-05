@@ -6,13 +6,12 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
+  prisma: { church: { findUnique: vi.fn().mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE" }) }, wgcSubscription: { findUnique: vi.fn().mockResolvedValue(null) }, 
     user: { findUnique: vi.fn() },
     subscriptionAction: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     finixSubscription: { findFirst: vi.fn(), update: vi.fn(), create: vi.fn() },
     subscriptionSetupLink: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), create: vi.fn() },
     donor: { findFirst: vi.fn(), findMany: vi.fn() },
-    church: { findUnique: vi.fn() },
     fund: { findFirst: vi.fn() },
     givingLink: { findFirst: vi.fn() },
     subscriptionConsent: { create: vi.fn() },

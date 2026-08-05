@@ -6,9 +6,8 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: {
+  prisma: { church: { findUnique: vi.fn().mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE" }) }, wgcSubscription: { findUnique: vi.fn().mockResolvedValue(null) }, 
     user: { findUnique: vi.fn() },
-    church: { findUnique: vi.fn() },
     finixAuthorization: { findMany: vi.fn() },
     finixPaymentInstrumentSnapshot: { findMany: vi.fn() },
     finixTransfer: { findMany: vi.fn() },

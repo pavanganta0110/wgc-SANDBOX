@@ -8,10 +8,10 @@ import { cancelWgcSubscription, WgcSubscriptionCancellationError } from "@/lib/b
  * cancel — enforced server-side via requirePermission, never only hidden
  * in the UI. Never accepts an organizationId or subscriptionId from the
  * request body; both are always derived from the authenticated session. */
-export async function POST(req: Request) {
+export async function POST() {
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: billing setup/management must remain reachable while restricted
     requirePermission(auth, "canCancelSubscription");
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });

@@ -49,5 +49,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     req,
   });
 
+  const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+  await recordInvoiceUsageEvent({
+    organizationId: auth.churchId,
+    invoiceId,
+    eventType: "INVOICE_VOIDED",
+    invoiceAmountCents: invoice.totalCents,
+    idempotencyKey: `${invoiceId}:INVOICE_VOIDED`,
+  }).catch((err) => console.error("Invoice usage ledger recording failed (non-fatal):", err));
+
   return NextResponse.json({ success: true });
 }

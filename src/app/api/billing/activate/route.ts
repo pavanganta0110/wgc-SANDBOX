@@ -24,7 +24,7 @@ export const BILLING_AUTHORIZATION_TERMS_VERSION = "billing-authorization-v1";
 export async function POST(req: Request) {
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: billing setup/management must remain reachable while restricted
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
@@ -71,8 +71,8 @@ export async function POST(req: Request) {
     // completely separate identity from the organization's own Finix
     // identity/merchant used for donations.
     const identity = await finixClient.createBuyerIdentity({
-      entity: { business_name: undefined, email: auth.email },
-    } as any);
+      entity: { email: auth.email },
+    });
     const instrument = await finixClient.createPaymentInstrument({
       identity: identity.id,
       token: financeInstrumentToken,

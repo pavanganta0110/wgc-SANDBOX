@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME } from "./sessionConstants";
 import { verifySessionToken } from "./session";
 import { normalizeMerchantRole, type NormalizedOrgRole, type RawUserRole } from "./roles";
-import { UnauthorizedError } from "./errors";
+import { UnauthorizedError, BillingAccessRestrictedError } from "./errors";
+import { resolveOrgAccessState, type OrgAccessState } from "@/lib/billing/accessGate";
 
 export interface MerchantAuthContext {
   userId: string;
@@ -16,7 +17,26 @@ export interface MerchantAuthContext {
   isWgcAdmin: boolean;
   permissionsJson: unknown;
   authVersion: number;
+  /** The resolved WGC platform-billing access state — present even when
+   * fullAccessAllowed is true, so callers that DO allow restricted access
+   * (via allowRestrictedAccess=true) can still show an accurate banner.
+   * Optional (rather than required) purely so the many existing tests that
+   * construct a MerchantAuthContext literal for permission-matrix testing
+   * don't all need updating — treat a missing value as "no gate." */
+  orgAccessState?: OrgAccessState;
 }
+
+const ACCESS_STATE_MESSAGES: Record<OrgAccessState, string> = {
+  NO_GATE: "",
+  TRIALING_OR_ACTIVE: "",
+  APPROVED_BILLING_REQUIRED:
+    "Finish setting up your WGC Platform subscription billing to unlock full dashboard access.",
+  PAST_DUE_IN_GRACE: "",
+  PAST_DUE_EXPIRED:
+    "Your WGC subscription payment is past due and the grace period has ended. Update your billing method to restore full access.",
+  CANCELED: "Your WGC Platform subscription has been canceled. Reactivate to restore full dashboard access.",
+  SUSPENDED: "This organization's account has been suspended. Contact WGC Payments support for assistance.",
+};
 
 /**
  * The single centralized entry point for "is there a valid, current
@@ -37,8 +57,23 @@ export interface MerchantAuthContext {
  * Throws UnauthorizedError (never returns null) — callers should let it
  * propagate to a top-level catch that maps AuthError -> 401/403 response,
  * or catch it directly where a custom message is needed.
+ *
+ * WGC platform-billing access gate: by default (allowRestrictedAccess
+ * false/omitted — every existing call site, unchanged), also throws
+ * BillingAccessRestrictedError when the organization's billing/subscription
+ * state restricts dashboard access (billing setup incomplete, past-due
+ * beyond grace, canceled, suspended) — see accessGate.ts. This is what
+ * makes the gate centrally enforced across every page/API/server action
+ * that already calls this function, without retrofitting each one.
+ *
+ * The small allowlist of routes that must remain reachable in a restricted
+ * state (billing setup/management, support, logout, minimal account info)
+ * pass allowRestrictedAccess=true explicitly and are individually
+ * responsible for only exposing the narrow allowed functionality — this
+ * function still resolves and returns orgAccessState so they can react to
+ * it (e.g. show a banner, or further restrict what they render).
  */
-export const requireMerchantSession = cache(async (): Promise<MerchantAuthContext> => {
+export const requireMerchantSession = cache(async (allowRestrictedAccess: boolean = false): Promise<MerchantAuthContext> => {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) throw new UnauthorizedError("No session cookie present.");
@@ -87,6 +122,11 @@ export const requireMerchantSession = cache(async (): Promise<MerchantAuthContex
     throw new UnauthorizedError("Session is stale — please log in again.");
   }
 
+  const access = await resolveOrgAccessState(user.churchId);
+  if (!access.fullAccessAllowed && !allowRestrictedAccess) {
+    throw new BillingAccessRestrictedError(access.state, ACCESS_STATE_MESSAGES[access.state] || "Dashboard access is currently restricted.");
+  }
+
   return {
     userId: user.id,
     email: user.email,
@@ -101,5 +141,6 @@ export const requireMerchantSession = cache(async (): Promise<MerchantAuthContex
     isWgcAdmin: false,
     permissionsJson: user.permissionsJson,
     authVersion: user.authVersion,
+    orgAccessState: access.state,
   };
 });
