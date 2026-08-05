@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/format";
 import { EXTERNAL_PAYMENT_METHOD_LABELS, SOURCE_LABELS, receiptStatusLabel, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import ExternalDonationRowActions from "@/components/merchant/ExternalDonationRowActions";
 import ExternalDonationsFilterBar from "@/components/merchant/ExternalDonationsFilterBar";
+import SendQueuedReceiptsButton from "@/components/merchant/SendQueuedReceiptsButton";
 import Pagination from "@/components/merchant/Pagination";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 import { loadExternalDonationsList, loadExternalDonationSummary } from "@/lib/donations/externalDonationsList";
@@ -69,7 +70,7 @@ export default async function ExternalDonationsPage({
     scopedToUserId: scopedUserId || undefined,
   };
 
-  const [{ rows: donations, totalCount }, summary, unmatched] = await Promise.all([
+  const [{ rows: donations, totalCount }, summary, unmatched, queuedCount] = await Promise.all([
     loadExternalDonationsList(auth.churchId, filters, page, PAGE_SIZE),
     loadExternalDonationSummary(auth.churchId, filters),
     prisma.externalDonation.findMany({
@@ -77,6 +78,7 @@ export default async function ExternalDonationsPage({
       orderBy: { donationDate: "desc" },
       take: 25,
     }),
+    prisma.externalDonation.count({ where: { churchId: auth.churchId, receiptStatus: "QUEUED", status: { not: "VOIDED" } } }),
   ]);
 
   const donorIds = [...new Set([...donations, ...unmatched].map((d) => d.donorId).filter((id): id is string => Boolean(id)))];
@@ -109,6 +111,7 @@ export default async function ExternalDonationsPage({
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {canSendReceipt && <SendQueuedReceiptsButton queuedCount={queuedCount} />}
           {canImport && (
             <Link href="/merchant/donations/external/import/history" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Import History
