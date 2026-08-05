@@ -531,7 +531,20 @@ export async function getDepositsInsights(churchId: string, dateFilter: { gte: D
  * successful-transfer total) included only so the two can be shown side by
  * side without conflating them.
  */
-export async function getExternalDonationsInsights(churchId: string, dateFilter: { gte: Date; lte?: Date } | undefined, attributedUserId?: string) {
+export interface ExternalDonationsInsightsFilters {
+  paymentMethod?: string;
+  receiptStatus?: string;
+  fundId?: string;
+  /** "manual" | "imported" | undefined (both) */
+  source?: string;
+}
+
+export async function getExternalDonationsInsights(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  attributedUserId?: string,
+  filters: ExternalDonationsInsightsFilters = {}
+) {
   const rows = await prisma.externalDonation.findMany({
     where: {
       churchId,
@@ -542,19 +555,34 @@ export async function getExternalDonationsInsights(churchId: string, dateFilter:
       // VIEWER without canViewAllTransactions to donations they personally
       // recorded — same rule as every other tab on this page.
       ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
+      ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
+      ...(filters.receiptStatus ? { receiptStatus: filters.receiptStatus === "NOT_SENT" ? null : filters.receiptStatus } : {}),
+      ...(filters.fundId ? { fundId: filters.fundId } : {}),
+      ...(filters.source === "manual" ? { importBatchId: null } : filters.source === "imported" ? { importBatchId: { not: null } } : {}),
     },
   });
   const active = rows.filter((d) => d.depositStatus !== "RETURNED");
 
   const bySource = new Map<string, { totalCents: number; count: number }>();
+  const byFund = new Map<string, { totalCents: number; count: number }>();
   for (const d of active) {
-    const acc = bySource.get(d.source) ?? { totalCents: 0, count: 0 };
-    acc.totalCents += d.donationAmountCents;
-    acc.count += 1;
-    bySource.set(d.source, acc);
+    const sourceAcc = bySource.get(d.source) ?? { totalCents: 0, count: 0 };
+    sourceAcc.totalCents += d.donationAmountCents;
+    sourceAcc.count += 1;
+    bySource.set(d.source, sourceAcc);
+
+    const fundLabel = d.fundName || "No fund";
+    const fundAcc = byFund.get(fundLabel) ?? { totalCents: 0, count: 0 };
+    fundAcc.totalCents += d.donationAmountCents;
+    fundAcc.count += 1;
+    byFund.set(fundLabel, fundAcc);
   }
   const totalExternalCents = active.reduce((sum, d) => sum + d.donationAmountCents, 0);
 
+  // The WGC-processed comparison total is a fixed organization-wide figure
+  // for the period — it never reflects the external-only filters above
+  // (payment method, fund, receipt status, source), which don't apply to
+  // Finix transfers.
   const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
   const transfers = await prisma.finixTransfer.findMany({
     where: {
@@ -579,5 +607,9 @@ export async function getExternalDonationsInsights(churchId: string, dateFilter:
     .map(([source, v]) => ({ source, totalCents: v.totalCents, count: v.count }))
     .sort((a, b) => b.totalCents - a.totalCents);
 
-  return { summary, bySourceTable, totalWgcCents, totalExternalCents, hasData: active.length > 0 };
+  const byFundTable = [...byFund.entries()]
+    .map(([fund, v]) => ({ fund, totalCents: v.totalCents, count: v.count }))
+    .sort((a, b) => b.totalCents - a.totalCents);
+
+  return { summary, bySourceTable, byFundTable, totalWgcCents, totalExternalCents, hasData: active.length > 0 };
 }
