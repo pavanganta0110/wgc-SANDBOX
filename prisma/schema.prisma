@@ -1990,6 +1990,30 @@ model BulkStatementJob {
   @@index([churchId, status])
 }
 
+/// Same chunked-job pattern as BulkStatementJob, for sending the
+/// ExternalDonation rows a CSV import queued (receiptStatus: "QUEUED")
+/// without blocking the import commit request or a single web request.
+model BulkReceiptJob {
+  id       String @id @default(cuid())
+  churchId String
+
+  targetIds  Json // ExternalDonation ids
+  totalCount Int
+
+  status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+
+  processedCount Int @default(0)
+  succeededCount Int @default(0)
+  failedCount    Int @default(0)
+  skippedCount   Int @default(0)
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([churchId, status])
+}
+
 model AnnualDonationStatementLine {
   id                 String  @id @default(cuid())
   annualStatementId  String
