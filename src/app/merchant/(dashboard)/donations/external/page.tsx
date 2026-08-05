@@ -110,6 +110,11 @@ export default async function ExternalDonationsPage({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {canImport && (
+            <Link href="/merchant/donations/external/import/history" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              Import History
+            </Link>
+          )}
+          {canImport && (
             <Link href="/merchant/donations/external/import" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
               Import Donations
             </Link>
