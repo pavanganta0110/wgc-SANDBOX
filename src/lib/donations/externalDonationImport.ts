@@ -293,7 +293,12 @@ export function validateMappedRow(row: MappedImportRow): ImportRowValidation {
   }
 
   const donorName = [row.donorFirstName, row.donorLastName].filter(Boolean).join(" ").trim() || null;
-  if (!donorName && !row.donorEmail && !row.donorPhone) {
+  const anonymousParsed = parseYesNo(row.anonymous);
+  const isAnonymous = anonymousParsed.value ?? false;
+  // A row explicitly marked Anonymous never needs donor identity — matches
+  // the manual-entry form's "Anonymous" donor mode, which also accepts no
+  // name/email/phone at all.
+  if (!isAnonymous && !donorName && !row.donorEmail && !row.donorPhone) {
     errors.push("Provide a donor name, email, or phone");
   }
   if (row.donorEmail && !isValidEmail(row.donorEmail)) {
@@ -330,9 +335,7 @@ export function validateMappedRow(row: MappedImportRow): ImportRowValidation {
     errors.push("Goods or services value is greater than the donation amount");
   }
 
-  const anonymousParsed = parseYesNo(row.anonymous);
   if (!anonymousParsed.valid) errors.push('Invalid value for "Anonymous" — use yes or no');
-  const isAnonymous = anonymousParsed.value ?? false;
   if (isAnonymous && (row.donorEmail || donorName)) {
     warnings.push("Row marked Anonymous — donor name/email will not be linked");
   }
