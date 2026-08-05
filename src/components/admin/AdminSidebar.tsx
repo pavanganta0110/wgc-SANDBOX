@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building } from "lucide-react";
+import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
   { name: "Merchants", href: "/admin/merchants", icon: Building },
+  { name: "Billing & Subscriptions", href: "/admin/billing", icon: CreditCard },
   { name: "Support Tickets", href: "/admin/support/tickets", icon: LifeBuoy },
   { name: "First Look Leads", href: "/admin/first-look-leads", icon: Inbox },
   { name: "Inquiries", href: "/admin/inquiries", icon: Inbox },

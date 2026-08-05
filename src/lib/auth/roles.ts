@@ -101,7 +101,19 @@ export type PermissionKey =
   | "canRefundInvoicePayments"
   | "canManageClients"
   | "canManageInvoiceSettings"
-  | "canExportInvoices";
+  | "canExportInvoices"
+  // WGC platform-subscription billing (Settings -> Billing & Subscription) —
+  // deliberately separate from canManageBilling above (that key predates
+  // this feature and is unused anywhere in application code as of this
+  // change; kept as-is rather than repurposed, to avoid ambiguity with
+  // whatever it was originally scoped for).
+  | "canViewSubscription"
+  | "canManageSubscription"
+  | "canViewBillingHistory"
+  | "canUpdateBillingMethod"
+  | "canCancelSubscription"
+  | "canDownloadBillingReceipts"
+  | "canViewInvoiceBilling";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -146,6 +158,13 @@ const ALL_FALSE: PermissionMatrix = {
   canManageClients: false,
   canManageInvoiceSettings: false,
   canExportInvoices: false,
+  canViewSubscription: false,
+  canManageSubscription: false,
+  canViewBillingHistory: false,
+  canUpdateBillingMethod: false,
+  canCancelSubscription: false,
+  canDownloadBillingReceipts: false,
+  canViewInvoiceBilling: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -192,6 +211,14 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageClients: true,
     canManageInvoiceSettings: true,
     canExportInvoices: true,
+    // Owner: full billing visibility and management, per the approved spec.
+    canViewSubscription: true,
+    canManageSubscription: true,
+    canViewBillingHistory: true,
+    canUpdateBillingMethod: true,
+    canCancelSubscription: true,
+    canDownloadBillingReceipts: true,
+    canViewInvoiceBilling: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -225,6 +252,12 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageClients: true,
     canManageInvoiceSettings: true,
     canExportInvoices: true,
+    // Organization Admin: view billing by default; manage only when
+    // explicitly permitted (override), per the approved spec.
+    canViewSubscription: true,
+    canViewBillingHistory: true,
+    canViewInvoiceBilling: true,
+    canDownloadBillingReceipts: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and
@@ -331,4 +364,18 @@ export const INVOICE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canManageClients",
   "canManageInvoiceSettings",
   "canExportInvoices",
+];
+
+/** Permission keys for the WGC platform-subscription Billing & Subscription
+ * feature — reused wherever code needs to enumerate just this feature's
+ * permissions (e.g. the merchant settings team-permissions editor). Mirrors
+ * INVOICE_PERMISSION_KEYS above. */
+export const BILLING_PERMISSION_KEYS: readonly PermissionKey[] = [
+  "canViewSubscription",
+  "canManageSubscription",
+  "canViewBillingHistory",
+  "canUpdateBillingMethod",
+  "canCancelSubscription",
+  "canDownloadBillingReceipts",
+  "canViewInvoiceBilling",
 ];

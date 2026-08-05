@@ -51,6 +51,13 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canManageClients",
   "canManageInvoiceSettings",
   "canExportInvoices",
+  "canViewSubscription",
+  "canManageSubscription",
+  "canViewBillingHistory",
+  "canUpdateBillingMethod",
+  "canCancelSubscription",
+  "canDownloadBillingReceipts",
+  "canViewInvoiceBilling",
 ];
 
 /**
@@ -127,6 +134,13 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canManageClients: false,
       canManageInvoiceSettings: false,
       canExportInvoices: false,
+      canViewSubscription: false,
+      canManageSubscription: false,
+      canViewBillingHistory: false,
+      canUpdateBillingMethod: false,
+      canCancelSubscription: false,
+      canDownloadBillingReceipts: false,
+      canViewInvoiceBilling: false,
     };
   }
 

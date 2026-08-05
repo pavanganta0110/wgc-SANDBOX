@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/merchant/Sidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
 import ComplianceBanner from "@/components/merchant/ComplianceBanner";
+import BillingGateBanner from "@/components/merchant/BillingGateBanner";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { reconcileComplianceFormsForChurch, resolveComplianceStatus } from "@/lib/finix/sync/complianceForms";
@@ -46,6 +47,13 @@ export default async function MerchantDashboardLayout({
   if (!church) {
     redirect("/merchant/login");
   }
+
+  // WGC platform-billing gate: approved by Finix but billing/subscription
+  // setup not yet complete. A full per-route hard-block (e.g. via
+  // middleware) is not yet implemented — this renders a persistent,
+  // non-dismissable banner and redirects the dashboard home page, which
+  // covers the primary post-login entry point. See BillingGateBanner.
+  const billingGateActive = church.billingSetupStatus === "APPROVED_BILLING_REQUIRED";
 
   const { after } = require("next/server");
   after(async () => {
@@ -93,6 +101,7 @@ export default async function MerchantDashboardLayout({
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
       <ComplianceBanner status={complianceStatus} />
+      {billingGateActive && <BillingGateBanner />}
       <div className="flex-grow flex">
         <Sidebar role={auth.role ?? undefined} />
         <div className="flex-grow flex flex-col min-w-0">

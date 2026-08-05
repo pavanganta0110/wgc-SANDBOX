@@ -389,6 +389,11 @@ export class FinixClient {
     buyer_details: { identity_id: string; instrument_id: string };
     subscription_details?: { collection_method: "BILL_AUTOMATICALLY" };
     tags?: Record<string, string>;
+    // Trial-period support for WGC's own platform-subscription billing
+    // (see src/lib/billing/wgcSubscriptionService.ts) — exact shape not
+    // yet confirmed against Finix's docs for this project's configured
+    // API version; see that module's doc comment.
+    trial_details?: { trial_period_days: number };
   }) {
     return this.fetchApi("/subscriptions", {
       method: "POST",

@@ -1316,6 +1316,24 @@ export async function POST(req: Request) {
       },
     });
 
+    // WGC platform-subscription billing events — resolved by
+    // finixSubscriptionId, never by trusting anything client-submitted.
+    // Matches nothing (returns false) for the overwhelming majority of
+    // events (every donation/invoice transfer on a client organization's
+    // own merchant), so this never interferes with the logic below.
+    try {
+      const { handleWgcSubscriptionWebhookEvent } = await import("@/lib/billing/wgcSubscriptionWebhook");
+      const handled = await handleWgcSubscriptionWebhookEvent(eventType, data);
+      if (handled) {
+        return NextResponse.json({ message: "WGC billing event processed" }, { status: 200 });
+      }
+    } catch (wgcBillingError) {
+      console.error("WGC subscription webhook handling failed:", wgcBillingError);
+      // Fall through to the existing logic below rather than failing the
+      // whole webhook — this event may still be a legitimate church-merchant
+      // event that the existing sync layer needs to process.
+    }
+
     // Additive Finix data sync layer — stores transfers/disputes/settlements
     // into their own tables for future reporting/admin dashboard use. This
     // is independent of and does not affect the onboarding status logic
@@ -1447,7 +1465,7 @@ export async function POST(req: Request) {
           // the separate "secure dashboard access" email referenced above.
           // Wrapped so a failure here never blocks the approval flow itself.
           try {
-            await provisionChurchAccount({
+            const provisioned = await provisionChurchAccount({
               id: app.id,
               organizationName: app.organizationName,
               legalBusinessName: app.legalBusinessName,
@@ -1457,6 +1475,61 @@ export async function POST(req: Request) {
               finixIdentityId: app.finixIdentityId,
               finixApplicationId: app.finixApplicationId,
             });
+
+            // WGC platform-billing gate: approved, but dashboard access
+            // stays restricted to subscription/billing setup until the
+            // owner completes activation — see requireMerchantSession's
+            // billing-gate check and /activate-subscription/[token].
+            // Wrapped independently so a failure here never blocks the
+            // approval/provisioning that already succeeded above.
+            try {
+              await prisma.church.update({
+                where: { id: provisioned.church.id },
+                data: { billingSetupStatus: "APPROVED_BILLING_REQUIRED" },
+              });
+
+              const { attachPromotionEntitlementIfLeadExists } = await import("@/lib/billing/promotionEntitlement");
+              const entitlement = await attachPromotionEntitlementIfLeadExists(app.id, provisioned.church.id);
+
+              const { createBillingActivationToken } = await import("@/lib/billing/billingActivation");
+              const rawActivationToken = await createBillingActivationToken(provisioned.church.id);
+
+              const { sendSubscriptionActivationEmail } = await import("@/lib/billing/billingEmails");
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+              await sendSubscriptionActivationEmail({
+                organizationId: provisioned.church.id,
+                organizationName: app.organizationName,
+                recipientEmail: app.contactEmail,
+                activationUrl: `${appUrl}/activate-subscription/${rawActivationToken}`,
+              });
+
+              const { logBillingAuditEvent } = await import("@/lib/billing/billingAudit");
+              await logBillingAuditEvent({
+                organizationId: provisioned.church.id,
+                action: "organization.finix_approved",
+                entityType: "Church",
+                entityId: provisioned.church.id,
+                newValue: { billingSetupStatus: "APPROVED_BILLING_REQUIRED" },
+                metadata: { onboardingApplicationId: app.id },
+              });
+              if (entitlement) {
+                await logBillingAuditEvent({
+                  organizationId: provisioned.church.id,
+                  action: "promotion.attached",
+                  entityType: "PromotionEntitlement",
+                  entityId: entitlement.entitlementId,
+                  metadata: { promotionId: entitlement.promotionId },
+                });
+              }
+              await logBillingAuditEvent({
+                organizationId: provisioned.church.id,
+                action: "billing.activation_link_created",
+                entityType: "Church",
+                entityId: provisioned.church.id,
+              });
+            } catch (billingGateError) {
+              console.error("Failed to set up billing-activation gate after approval:", billingGateError);
+            }
           } catch (provisionError) {
             console.error("Failed to provision church dashboard account:", provisionError);
           }
