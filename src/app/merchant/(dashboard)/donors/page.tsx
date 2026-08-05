@@ -24,13 +24,23 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { loadDonorsList, type DonorsListSort } from "@/lib/donors/donorsList";
 import { computeAddressStatus } from "@/lib/donors/donorAddress";
 import { loadDonorSummary } from "@/lib/donors/donorSummary";
-import { loadDonationTrend, loadTopDonors, type TopDonorMetric } from "@/lib/donors/donorAnalytics";
-import { loadDonorAnalyticsExtended, loadDonorGrowth } from "@/lib/donors/donorAnalyticsExtended";
+import {
+  loadDonationTrend,
+  loadTopDonors,
+  type TopDonorMetric,
+} from "@/lib/donors/donorAnalytics";
+import {
+  loadDonorAnalyticsExtended,
+  loadDonorGrowth,
+} from "@/lib/donors/donorAnalyticsExtended";
 import { loadDonorPaymentMethodMix } from "@/lib/donors/donorBreakdowns";
 import { prisma } from "@/lib/prisma";
 import DonorAnalyticsExtras from "@/components/merchant/DonorAnalyticsExtras";
 import { parseVisibleDonorColumns } from "@/lib/donorColumns";
-import { DONOR_DISPLAY_STATUS_LABELS, type DonorDisplayStatus } from "@/lib/donors/donorStatus";
+import {
+  DONOR_DISPLAY_STATUS_LABELS,
+  type DonorDisplayStatus,
+} from "@/lib/donors/donorStatus";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { DONOR_SOURCE_BADGE_LABELS } from "@/lib/donors/donorSources";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
@@ -47,7 +57,15 @@ function StackedDateTime({ date }: { date: Date | null | undefined }) {
   );
 }
 
-function SummaryCard({ label, value, sublabel }: { label: string; value: string; sublabel?: string }) {
+function SummaryCard({
+  label,
+  value,
+  sublabel,
+}: {
+  label: string;
+  value: string;
+  sublabel?: string;
+}) {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
       <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -98,16 +116,26 @@ export default async function DonorsPage({
   const churchId = auth.churchId;
   const permissions = getDonorPermissions(auth.rawRole);
   const sp = await searchParams;
+  const pendingMatchCount = permissions.canReviewMatches
+    ? await prisma.possibleDonorMatch.count({ where: { churchId, status: "PENDING" } })
+    : 0;
 
   // Team-access: donor list and every summary/trend/growth analytics card
   // are scoped to donors with attributed activity for the selected user
   // (resolveScopedDonorIds, same helper used by the donor-export and
   // donor-detail routes).
   const viewScope = await resolveViewScope(auth);
-  const scopedDonorIds = (await resolveScopedDonorIds(auth, viewScope)) ?? undefined;
+  const scopedDonorIds =
+    (await resolveScopedDonorIds(auth, viewScope)) ?? undefined;
 
-  const { from: startDate, to: endDate } = resolveDateRange(sp.range, sp.from, sp.to);
-  const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
+  const { from: startDate, to: endDate } = resolveDateRange(
+    sp.range,
+    sp.from,
+    sp.to,
+  );
+  const dateFilter = startDate
+    ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) }
+    : undefined;
   // resolveDateRange always falls back to a default preset (currently
   // "Last 6 Months") even when the admin never picked a range — correct
   // for period-scoped metrics (Active/New/Recurring, trend, Top Donors),
@@ -121,12 +149,23 @@ export default async function DonorsPage({
   const rosterDateFilter = explicitRangeRequested ? dateFilter : undefined;
   const visibleCols = parseVisibleDonorColumns(sp.cols);
 
-  const minTotal = sp.minTotal ? Math.round(parseFloat(sp.minTotal) * 100) : undefined;
-  const maxTotal = sp.maxTotal ? Math.round(parseFloat(sp.maxTotal) * 100) : undefined;
+  const minTotal = sp.minTotal
+    ? Math.round(parseFloat(sp.minTotal) * 100)
+    : undefined;
+  const maxTotal = sp.maxTotal
+    ? Math.round(parseFloat(sp.maxTotal) * 100)
+    : undefined;
 
-  const [sortKey, sortDir] = (sp.sort || "createdAt:desc").split(":") as [DonorsListSort["key"], "asc" | "desc"];
+  const [sortKey, sortDir] = (sp.sort || "createdAt:desc").split(":") as [
+    DonorsListSort["key"],
+    "asc" | "desc",
+  ];
   const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);
-  const topMetric: TopDonorMetric = (["gross", "net", "count", "recurring"].includes(sp.topMetric || "") ? sp.topMetric : "net") as TopDonorMetric;
+  const topMetric: TopDonorMetric = (
+    ["gross", "net", "count", "recurring"].includes(sp.topMetric || "")
+      ? sp.topMetric
+      : "net"
+  ) as TopDonorMetric;
 
   // Sequenced, not Promise.all-ed — each of these loaders already fans out
   // into several of its own batched queries, and running all four top-level
@@ -135,18 +174,45 @@ export default async function DonorsPage({
   // a real 500 against the live pooler. Trading a bit of latency for not
   // blowing the connection budget.
   const summary = await loadDonorSummary(churchId, dateFilter, scopedDonorIds);
-  const trend = await loadDonationTrend(churchId, dateFilter, "weekly", scopedDonorIds);
-  const topDonors = await loadTopDonors(churchId, dateFilter, topMetric, 10, scopedDonorIds);
+  const trend = await loadDonationTrend(
+    churchId,
+    dateFilter,
+    "weekly",
+    scopedDonorIds,
+  );
+  const topDonors = await loadTopDonors(
+    churchId,
+    dateFilter,
+    topMetric,
+    10,
+    scopedDonorIds,
+  );
 
   let previousPeriodFilter: { gte: Date; lte?: Date } | undefined;
   if (dateFilter?.lte) {
     const spanMs = dateFilter.lte.getTime() - dateFilter.gte.getTime();
-    previousPeriodFilter = { gte: new Date(dateFilter.gte.getTime() - spanMs), lte: new Date(dateFilter.gte.getTime() - 1) };
+    previousPeriodFilter = {
+      gte: new Date(dateFilter.gte.getTime() - spanMs),
+      lte: new Date(dateFilter.gte.getTime() - 1),
+    };
   }
-  const extended = await loadDonorAnalyticsExtended(churchId, dateFilter, previousPeriodFilter, scopedDonorIds);
-  const growth = await loadDonorGrowth(churchId, dateFilter, "weekly", scopedDonorIds);
+  const extended = await loadDonorAnalyticsExtended(
+    churchId,
+    dateFilter,
+    previousPeriodFilter,
+    scopedDonorIds,
+  );
+  const growth = await loadDonorGrowth(
+    churchId,
+    dateFilter,
+    "weekly",
+    scopedDonorIds,
+  );
   const orgInstruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: scopedDonorIds ? { in: scopedDonorIds } : { not: null } },
+    where: {
+      churchId,
+      donorId: scopedDonorIds ? { in: scopedDonorIds } : { not: null },
+    },
     select: { finixPaymentInstrumentId: true },
   });
   const paymentMethodMix = await loadDonorPaymentMethodMix(
@@ -159,9 +225,15 @@ export default async function DonorsPage({
     {
       search: sp.q,
       createdDateFilter: rosterDateFilter,
-      donorStatus: sp.status && sp.status in DONOR_DISPLAY_STATUS_LABELS ? (sp.status as DonorDisplayStatus) : undefined,
+      donorStatus:
+        sp.status && sp.status in DONOR_DISPLAY_STATUS_LABELS
+          ? (sp.status as DonorDisplayStatus)
+          : undefined,
       recurringOnly: sp.recurring === "1",
-      paymentMethod: sp.paymentMethod === "card" || sp.paymentMethod === "bank" ? sp.paymentMethod : undefined,
+      paymentMethod:
+        sp.paymentMethod === "card" || sp.paymentMethod === "bank"
+          ? sp.paymentMethod
+          : undefined,
       minTotalDonatedCents: Number.isNaN(minTotal) ? undefined : minTotal,
       maxTotalDonatedCents: Number.isNaN(maxTotal) ? undefined : maxTotal,
       hasFailedPayment: sp.hasFailedPayment === "1",
@@ -169,10 +241,18 @@ export default async function DonorsPage({
       hasBankReturn: sp.hasBankReturn === "1",
       hasDispute: sp.hasDispute === "1",
       hasActiveSubscription: sp.hasActiveSubscription === "1",
-      hasExternalDonation: sp.source === "external" || sp.source === "both" ? true : undefined,
-      hasProcessedDonation: sp.source === "processed" || sp.source === "both" ? true : undefined,
-      addressStatus: sp.addressStatus === "MISSING" || sp.addressStatus === "UNVERIFIED" || sp.addressStatus === "CONFIRMED" ? sp.addressStatus : undefined,
-      archivedStatus: (sp.archived as "active" | "archived" | "all") || "active",
+      hasExternalDonation:
+        sp.source === "external" || sp.source === "both" ? true : undefined,
+      hasProcessedDonation:
+        sp.source === "processed" || sp.source === "both" ? true : undefined,
+      addressStatus:
+        sp.addressStatus === "MISSING" ||
+        sp.addressStatus === "UNVERIFIED" ||
+        sp.addressStatus === "CONFIRMED"
+          ? sp.addressStatus
+          : undefined,
+      archivedStatus:
+        (sp.archived as "active" | "archived" | "all") || "active",
       donorIdIn: scopedDonorIds,
     },
     { key: sortKey, dir: sortDir },
@@ -184,7 +264,8 @@ export default async function DonorsPage({
 
   const sortLink = (key: string) => {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(sp)) if (v && k !== "sort" && k !== "page") params.set(k, v);
+    for (const [k, v] of Object.entries(sp))
+      if (v && k !== "sort" && k !== "page") params.set(k, v);
     const nextDir = sortKey === key && sortDir === "desc" ? "asc" : "desc";
     params.set("sort", `${key}:${nextDir}`);
     return `?${params.toString()}`;
@@ -195,9 +276,20 @@ export default async function DonorsPage({
       <div className="flex items-center gap-2 mb-6">
         <h2 className="text-lg font-bold text-slate-900">Donors</h2>
         <PinButton />
-        <Link href="/merchant/donors/annual-statements" className="text-sm font-semibold text-blue-600 hover:underline">
+        <Link
+          href="/merchant/donors/annual-statements"
+          className="text-sm font-semibold text-blue-600 hover:underline"
+        >
           Annual Donation Statements
         </Link>
+        {permissions.canReviewMatches && pendingMatchCount > 0 && (
+          <Link
+            href="/merchant/donors/matches"
+            className="text-sm font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1 hover:bg-amber-100"
+          >
+            {pendingMatchCount} possible {pendingMatchCount === 1 ? "match" : "matches"} to review
+          </Link>
+        )}
         {permissions.canEdit && (
           <div className="ml-auto flex items-center gap-2">
             <ImportDonorsButton />
@@ -209,13 +301,48 @@ export default async function DonorsPage({
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <SummaryCard label="Total Donors" value={String(summary.totalDonors)} />
-        <SummaryCard label="Active Donors" value={String(summary.activeDonors)} sublabel="Selected period" />
-        <SummaryCard label="New Donors" value={String(summary.newDonors)} sublabel="Selected period" />
-        <SummaryCard label="Recurring Donors" value={String(summary.recurringDonors)} />
-        <SummaryCard label="Total Donated" value={formatCents(summary.totalDonatedCents)} sublabel="Selected period" />
-        <SummaryCard label="Average Donation" value={formatCents(summary.averageDonationCents)} sublabel="Selected period" />
-        <SummaryCard label="Donors With Failed Payments" value={String(summary.donorsWithFailedPayments)} />
-        <SummaryCard label="Donors Requiring Attention" value={String(summary.donorsRequiringAttention)} />
+        <SummaryCard
+          label="Active Donors"
+          value={String(summary.activeDonors)}
+          sublabel="Selected period"
+        />
+        <SummaryCard
+          label="New Donors"
+          value={String(summary.newDonors)}
+          sublabel="Selected period"
+        />
+        <SummaryCard
+          label="Recurring Donors"
+          value={String(summary.recurringDonors)}
+        />
+        <SummaryCard
+          label="Total Donated"
+          value={formatCents(summary.totalDonatedCents)}
+          sublabel="Selected period · WGC + external"
+        />
+        <SummaryCard
+          label="WGC Processed"
+          value={formatCents(summary.wgcProcessedCents)}
+          sublabel="Card/ACH/wallet/invoice"
+        />
+        <SummaryCard
+          label="External Donated"
+          value={formatCents(summary.externalDonatedCents)}
+          sublabel="Cash/check/imported/etc."
+        />
+        <SummaryCard
+          label="Average Donation"
+          value={formatCents(summary.averageDonationCents)}
+          sublabel="Selected period"
+        />
+        <SummaryCard
+          label="Donors With Failed Payments"
+          value={String(summary.donorsWithFailedPayments)}
+        />
+        <SummaryCard
+          label="Donors Requiring Attention"
+          value={String(summary.donorsRequiringAttention)}
+        />
       </div>
 
       {/* Analytics */}
@@ -232,7 +359,10 @@ export default async function DonorsPage({
         </div>
       </div>
 
-      <DonorAnalyticsExtras extended={extended} paymentMethodMix={paymentMethodMix} />
+      <DonorAnalyticsExtras
+        extended={extended}
+        paymentMethodMix={paymentMethodMix}
+      />
 
       <div className="flex justify-end mb-6">
         <a
@@ -252,9 +382,12 @@ export default async function DonorsPage({
               <div className="mx-auto w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center mb-3">
                 <Users className="w-6 h-6 text-slate-300" />
               </div>
-              <h3 className="text-sm font-bold text-slate-900 mb-1">No donors yet</h3>
+              <h3 className="text-sm font-bold text-slate-900 mb-1">
+                No donors yet
+              </h3>
               <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                Donors will appear here after they make a donation or are added by an authorized organization user.
+                Donors will appear here after they make a donation or are added
+                by an authorized organization user.
               </p>
             </div>
           ) : (
@@ -263,55 +396,99 @@ export default async function DonorsPage({
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                   {visibleCols.has("donor") && (
                     <th className="px-6 py-3">
-                      <Link href={sortLink("name")} className="flex items-center gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("name")}
+                        className="flex items-center gap-1 hover:text-slate-800"
+                      >
                         Donor <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
-                  {visibleCols.has("contact") && <th className="px-6 py-3">Contact</th>}
-                  {visibleCols.has("status") && <th className="px-6 py-3">Status</th>}
-                  {visibleCols.has("addressStatus") && <th className="px-6 py-3">Mailing Address</th>}
+                  {visibleCols.has("contact") && (
+                    <th className="px-6 py-3">Contact</th>
+                  )}
+                  {visibleCols.has("status") && (
+                    <th className="px-6 py-3">Status</th>
+                  )}
+                  {visibleCols.has("addressStatus") && (
+                    <th className="px-6 py-3">Mailing Address</th>
+                  )}
                   {visibleCols.has("totalDonated") && (
                     <th className="px-6 py-3 text-right">
-                      <Link href={sortLink("totalDonatedCents")} className="flex items-center justify-end gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("totalDonatedCents")}
+                        className="flex items-center justify-end gap-1 hover:text-slate-800"
+                      >
                         Total Donated <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
-                  {visibleCols.has("wgcProcessed") && <th className="px-6 py-3 text-right">WGC Processed</th>}
-                  {visibleCols.has("externalDonated") && <th className="px-6 py-3 text-right">External Donated</th>}
-                  {visibleCols.has("sources") && <th className="px-6 py-3">Sources</th>}
+                  {visibleCols.has("wgcProcessed") && (
+                    <th className="px-6 py-3 text-right">WGC Processed</th>
+                  )}
+                  {visibleCols.has("externalDonated") && (
+                    <th className="px-6 py-3 text-right">External Donated</th>
+                  )}
+                  {visibleCols.has("sources") && (
+                    <th className="px-6 py-3">Sources</th>
+                  )}
                   {visibleCols.has("donationCount") && (
                     <th className="px-6 py-3 text-right">
-                      <Link href={sortLink("donationCount")} className="flex items-center justify-end gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("donationCount")}
+                        className="flex items-center justify-end gap-1 hover:text-slate-800"
+                      >
                         Donation Count <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
-                  {visibleCols.has("averageDonation") && <th className="px-6 py-3 text-right">Average Donation</th>}
+                  {visibleCols.has("averageDonation") && (
+                    <th className="px-6 py-3 text-right">Average Donation</th>
+                  )}
                   {visibleCols.has("firstDonation") && (
                     <th className="px-6 py-3">
-                      <Link href={sortLink("firstDonationAt")} className="flex items-center gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("firstDonationAt")}
+                        className="flex items-center gap-1 hover:text-slate-800"
+                      >
                         First Donation <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
                   {visibleCols.has("lastDonation") && (
                     <th className="px-6 py-3">
-                      <Link href={sortLink("lastDonationAt")} className="flex items-center gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("lastDonationAt")}
+                        className="flex items-center gap-1 hover:text-slate-800"
+                      >
                         Last Donation <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
-                  {visibleCols.has("recurringStatus") && <th className="px-6 py-3">Recurring Status</th>}
-                  {visibleCols.has("paymentMethods") && <th className="px-6 py-3">Payment Methods</th>}
-                  {visibleCols.has("failedPayments") && <th className="px-6 py-3 text-right">Failed Payments</th>}
-                  {visibleCols.has("refunds") && <th className="px-6 py-3 text-right">Refunds</th>}
-                  {visibleCols.has("bankReturns") && <th className="px-6 py-3 text-right">Bank Returns</th>}
-                  {visibleCols.has("disputes") && <th className="px-6 py-3 text-right">Disputes</th>}
+                  {visibleCols.has("recurringStatus") && (
+                    <th className="px-6 py-3">Recurring Status</th>
+                  )}
+                  {visibleCols.has("paymentMethods") && (
+                    <th className="px-6 py-3">Payment Methods</th>
+                  )}
+                  {visibleCols.has("failedPayments") && (
+                    <th className="px-6 py-3 text-right">Failed Payments</th>
+                  )}
+                  {visibleCols.has("refunds") && (
+                    <th className="px-6 py-3 text-right">Refunds</th>
+                  )}
+                  {visibleCols.has("bankReturns") && (
+                    <th className="px-6 py-3 text-right">Bank Returns</th>
+                  )}
+                  {visibleCols.has("disputes") && (
+                    <th className="px-6 py-3 text-right">Disputes</th>
+                  )}
                   {visibleCols.has("created") && (
                     <th className="px-6 py-3">
-                      <Link href={sortLink("createdAt")} className="flex items-center gap-1 hover:text-slate-800">
+                      <Link
+                        href={sortLink("createdAt")}
+                        className="flex items-center gap-1 hover:text-slate-800"
+                      >
                         Created <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
@@ -320,151 +497,239 @@ export default async function DonorsPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ donor, aggregates, status, primaryInstrument, activeSubscriptionCount, sources }) => {
-                  const isSelected = sp.id === donor.id;
-                  const isArchived = Boolean(donor.archivedAt);
-                  return (
-                    <ClickableTableRow
-                      key={donor.id}
-                      id={donor.id}
-                      className={`border-t border-slate-50 hover:bg-slate-50 ${isSelected ? "bg-slate-50" : ""}`}
-                    >
-                      {visibleCols.has("donor") && (
-                        <td className="px-6 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center shrink-0">
-                              {(donor.anonymousPreference ? "A" : formatPersonName(donor.name)[0]) || "?"}
+                {rows.map(
+                  ({
+                    donor,
+                    aggregates,
+                    status,
+                    primaryInstrument,
+                    activeSubscriptionCount,
+                    sources,
+                  }) => {
+                    const isSelected = sp.id === donor.id;
+                    const isArchived = Boolean(donor.archivedAt);
+                    return (
+                      <ClickableTableRow
+                        key={donor.id}
+                        id={donor.id}
+                        className={`border-t border-slate-50 hover:bg-slate-50 ${isSelected ? "bg-slate-50" : ""}`}
+                      >
+                        {visibleCols.has("donor") && (
+                          <td className="px-6 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center shrink-0">
+                                {(donor.anonymousPreference
+                                  ? "A"
+                                  : formatPersonName(donor.name)[0]) || "?"}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-800">
+                                  {donor.anonymousPreference
+                                    ? "Anonymous Donor"
+                                    : formatPersonName(donor.name)}
+                                </p>
+                                {donor.companyName && (
+                                  <p className="text-xs text-slate-400">
+                                    {donor.companyName}
+                                  </p>
+                                )}
+                                {isArchived && (
+                                  <span className="text-xs text-slate-400">
+                                    Archived
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-semibold text-slate-800">
-                                {donor.anonymousPreference ? "Anonymous Donor" : formatPersonName(donor.name)}
-                              </p>
-                              {donor.companyName && <p className="text-xs text-slate-400">{donor.companyName}</p>}
-                              {isArchived && <span className="text-xs text-slate-400">Archived</span>}
-                            </div>
-                          </div>
-                        </td>
-                      )}
-                      {visibleCols.has("contact") && (
-                        <td className="px-6 py-3 text-slate-600">
-                          <p>{donor.email || "—"}</p>
-                          <p className="text-xs text-slate-400">{donor.phone || "—"}</p>
-                          {!donor.email && !donor.phone && (
-                            <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
-                              <AlertTriangle className="w-3 h-3" /> Missing contact
+                          </td>
+                        )}
+                        {visibleCols.has("contact") && (
+                          <td className="px-6 py-3 text-slate-600">
+                            <p>{donor.email || "—"}</p>
+                            <p className="text-xs text-slate-400">
+                              {donor.phone || "—"}
                             </p>
-                          )}
-                        </td>
-                      )}
-                      {visibleCols.has("status") && (
+                            {!donor.email && !donor.phone && (
+                              <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5">
+                                <AlertTriangle className="w-3 h-3" /> Missing
+                                contact
+                              </p>
+                            )}
+                          </td>
+                        )}
+                        {visibleCols.has("status") && (
+                          <td className="px-6 py-3">
+                            <StateBadge state={status} />
+                          </td>
+                        )}
+                        {visibleCols.has("addressStatus") && (
+                          <td className="px-6 py-3">
+                            {(() => {
+                              const addrStatus = computeAddressStatus(donor);
+                              const label =
+                                addrStatus === "MISSING"
+                                  ? "Missing address"
+                                  : addrStatus === "CONFIRMED"
+                                    ? "Confirmed"
+                                    : "Unverified";
+                              const cls =
+                                addrStatus === "MISSING"
+                                  ? "bg-slate-100 text-slate-500"
+                                  : addrStatus === "CONFIRMED"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-amber-100 text-amber-700";
+                              return (
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}
+                                >
+                                  {label}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {visibleCols.has("totalDonated") && (
+                          <td className="px-6 py-3 text-right font-semibold text-slate-900">
+                            {formatCents(aggregates.totalDonatedCents)}
+                          </td>
+                        )}
+                        {visibleCols.has("wgcProcessed") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {formatCents(
+                              aggregates.totalDonatedCents -
+                                aggregates.externalDonatedCents,
+                            )}
+                          </td>
+                        )}
+                        {visibleCols.has("externalDonated") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {formatCents(aggregates.externalDonatedCents)}
+                          </td>
+                        )}
+                        {visibleCols.has("sources") && (
+                          <td className="px-6 py-3">
+                            <div className="flex flex-wrap gap-1">
+                              {sources.length === 0 && (
+                                <span className="text-slate-400 text-xs">
+                                  —
+                                </span>
+                              )}
+                              {sources.map((s) => (
+                                <span
+                                  key={s}
+                                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 whitespace-nowrap"
+                                >
+                                  {DONOR_SOURCE_BADGE_LABELS[s] ?? s}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        )}
+                        {visibleCols.has("donationCount") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {aggregates.donationCount}
+                          </td>
+                        )}
+                        {visibleCols.has("averageDonation") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {formatCents(aggregates.averageDonationCents)}
+                          </td>
+                        )}
+                        {visibleCols.has("firstDonation") && (
+                          <td className="px-6 py-3">
+                            <StackedDateTime
+                              date={aggregates.firstDonationAt}
+                            />
+                          </td>
+                        )}
+                        {visibleCols.has("lastDonation") && (
+                          <td className="px-6 py-3">
+                            <StackedDateTime date={aggregates.lastDonationAt} />
+                          </td>
+                        )}
+                        {visibleCols.has("recurringStatus") && (
+                          <td className="px-6 py-3 text-slate-600">
+                            {activeSubscriptionCount > 0
+                              ? `Active (${activeSubscriptionCount})`
+                              : "None"}
+                          </td>
+                        )}
+                        {visibleCols.has("paymentMethods") && (
+                          <td className="px-6 py-3 text-slate-600">
+                            {primaryInstrument
+                              ? `${primaryInstrument.cardBrand || (primaryInstrument.bankLast4 ? "Bank" : "—")} •••• ${
+                                  primaryInstrument.cardLast4 ||
+                                  primaryInstrument.bankLast4 ||
+                                  ""
+                                }`
+                              : "—"}
+                          </td>
+                        )}
+                        {visibleCols.has("failedPayments") && (
+                          <td
+                            className={`px-6 py-3 text-right ${aggregates.failedPaymentCount > 0 ? "text-red-600 font-semibold" : "text-slate-600"}`}
+                          >
+                            {aggregates.failedPaymentCount}
+                          </td>
+                        )}
+                        {visibleCols.has("refunds") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {aggregates.refundCount > 0
+                              ? `${aggregates.refundCount} · ${formatCents(aggregates.refundedAmountCents)}`
+                              : "—"}
+                          </td>
+                        )}
+                        {visibleCols.has("bankReturns") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {aggregates.bankReturnCount > 0
+                              ? `${aggregates.bankReturnCount} · ${formatCents(aggregates.returnedAmountCents)}`
+                              : "—"}
+                          </td>
+                        )}
+                        {visibleCols.has("disputes") && (
+                          <td className="px-6 py-3 text-right text-slate-600">
+                            {aggregates.disputeCount > 0
+                              ? `${aggregates.disputeCount} · ${formatCents(aggregates.disputedAmountCents)}`
+                              : "—"}
+                          </td>
+                        )}
+                        {visibleCols.has("created") && (
+                          <td className="px-6 py-3">
+                            <StackedDateTime date={donor.createdAt} />
+                          </td>
+                        )}
                         <td className="px-6 py-3">
-                          <StateBadge state={status} />
+                          <DonorRowActions
+                            donorId={donor.id}
+                            isArchived={isArchived}
+                            canArchive={permissions.canArchive}
+                            canRestore={permissions.canRestore}
+                            canExport={permissions.canExport}
+                            canEdit={permissions.canEdit}
+                          />
                         </td>
-                      )}
-                      {visibleCols.has("addressStatus") && (
-                        <td className="px-6 py-3">
-                          {(() => {
-                            const addrStatus = computeAddressStatus(donor);
-                            const label = addrStatus === "MISSING" ? "Missing address" : addrStatus === "CONFIRMED" ? "Confirmed" : "Unverified";
-                            const cls =
-                              addrStatus === "MISSING"
-                                ? "bg-slate-100 text-slate-500"
-                                : addrStatus === "CONFIRMED"
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-amber-100 text-amber-700";
-                            return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${cls}`}>{label}</span>;
-                          })()}
-                        </td>
-                      )}
-                      {visibleCols.has("totalDonated") && (
-                        <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(aggregates.totalDonatedCents)}</td>
-                      )}
-                      {visibleCols.has("wgcProcessed") && (
-                        <td className="px-6 py-3 text-right text-slate-600">{formatCents(aggregates.totalDonatedCents - aggregates.externalDonatedCents)}</td>
-                      )}
-                      {visibleCols.has("externalDonated") && (
-                        <td className="px-6 py-3 text-right text-slate-600">{formatCents(aggregates.externalDonatedCents)}</td>
-                      )}
-                      {visibleCols.has("sources") && (
-                        <td className="px-6 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {sources.length === 0 && <span className="text-slate-400 text-xs">—</span>}
-                            {sources.map((s) => (
-                              <span key={s} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 whitespace-nowrap">
-                                {DONOR_SOURCE_BADGE_LABELS[s] ?? s}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                      )}
-                      {visibleCols.has("donationCount") && (
-                        <td className="px-6 py-3 text-right text-slate-600">{aggregates.donationCount}</td>
-                      )}
-                      {visibleCols.has("averageDonation") && (
-                        <td className="px-6 py-3 text-right text-slate-600">{formatCents(aggregates.averageDonationCents)}</td>
-                      )}
-                      {visibleCols.has("firstDonation") && (
-                        <td className="px-6 py-3"><StackedDateTime date={aggregates.firstDonationAt} /></td>
-                      )}
-                      {visibleCols.has("lastDonation") && (
-                        <td className="px-6 py-3"><StackedDateTime date={aggregates.lastDonationAt} /></td>
-                      )}
-                      {visibleCols.has("recurringStatus") && (
-                        <td className="px-6 py-3 text-slate-600">
-                          {activeSubscriptionCount > 0 ? `Active (${activeSubscriptionCount})` : "None"}
-                        </td>
-                      )}
-                      {visibleCols.has("paymentMethods") && (
-                        <td className="px-6 py-3 text-slate-600">
-                          {primaryInstrument
-                            ? `${primaryInstrument.cardBrand || (primaryInstrument.bankLast4 ? "Bank" : "—")} •••• ${
-                                primaryInstrument.cardLast4 || primaryInstrument.bankLast4 || ""
-                              }`
-                            : "—"}
-                        </td>
-                      )}
-                      {visibleCols.has("failedPayments") && (
-                        <td className={`px-6 py-3 text-right ${aggregates.failedPaymentCount > 0 ? "text-red-600 font-semibold" : "text-slate-600"}`}>
-                          {aggregates.failedPaymentCount}
-                        </td>
-                      )}
-                      {visibleCols.has("refunds") && (
-                        <td className="px-6 py-3 text-right text-slate-600">
-                          {aggregates.refundCount > 0 ? `${aggregates.refundCount} · ${formatCents(aggregates.refundedAmountCents)}` : "—"}
-                        </td>
-                      )}
-                      {visibleCols.has("bankReturns") && (
-                        <td className="px-6 py-3 text-right text-slate-600">
-                          {aggregates.bankReturnCount > 0 ? `${aggregates.bankReturnCount} · ${formatCents(aggregates.returnedAmountCents)}` : "—"}
-                        </td>
-                      )}
-                      {visibleCols.has("disputes") && (
-                        <td className="px-6 py-3 text-right text-slate-600">
-                          {aggregates.disputeCount > 0 ? `${aggregates.disputeCount} · ${formatCents(aggregates.disputedAmountCents)}` : "—"}
-                        </td>
-                      )}
-                      {visibleCols.has("created") && (
-                        <td className="px-6 py-3"><StackedDateTime date={donor.createdAt} /></td>
-                      )}
-                      <td className="px-6 py-3">
-                        <DonorRowActions
-                          donorId={donor.id}
-                          isArchived={isArchived}
-                          canArchive={permissions.canArchive}
-                          canRestore={permissions.canRestore}
-                          canExport={permissions.canExport}
-                          canEdit={permissions.canEdit}
-                        />
-                      </td>
-                    </ClickableTableRow>
-                  );
-                })}
+                      </ClickableTableRow>
+                    );
+                  },
+                )}
               </tbody>
             </table>
           )}
-          {rows.length > 0 && <Pagination page={page} pageCount={pageCount} total={totalCount} pageSize={PAGE_SIZE} />}
+          {rows.length > 0 && (
+            <Pagination
+              page={page}
+              pageCount={pageCount}
+              total={totalCount}
+              pageSize={PAGE_SIZE}
+            />
+          )}
         </div>
-        {sp.id && <DonorDetailPanel donorId={sp.id} churchId={churchId} canAddNote={permissions.canAddNote} />}
+        {sp.id && (
+          <DonorDetailPanel
+            donorId={sp.id}
+            churchId={churchId}
+            canAddNote={permissions.canAddNote}
+          />
+        )}
       </div>
     </div>
   );

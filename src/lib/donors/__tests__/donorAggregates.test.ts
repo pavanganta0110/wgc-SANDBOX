@@ -191,6 +191,26 @@ describe("loadDonorAggregatesBatch — external donation contributions", () => {
     expect(agg.totalDonatedCents).toBe(15000); // just the two Finix transfers
   });
 
+  it("a cash donation with depositStatus === null (the normal case — depositStatus is only ever set on checks) still counts in full", async () => {
+    // Regression test: Postgres evaluates `depositStatus <> 'RETURNED'` as
+    // NULL (excluded) when depositStatus IS NULL, which would silently drop
+    // every non-check external donation if that comparison were ever pushed
+    // into the Prisma WHERE clause instead of filtered in JS.
+    const prismaMock = makePrismaMock({
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([{ donorId: "D1", donationAmountCents: 5000, donationDate: new Date("2026-01-10"), depositStatus: null }]),
+      },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { loadDonorAggregatesBatch } = await import("@/lib/donors/donorAggregates");
+
+    const result = await loadDonorAggregatesBatch(["D1"], "church-A");
+    const agg = result.get("D1")!;
+
+    expect(agg.externalDonatedCents).toBe(5000);
+    expect(agg.totalDonatedCents).toBe(20000); // two Finix transfers + the cash gift
+  });
+
   it("scopes external donations to the attributed fundraiser via createdByUserId", async () => {
     const externalFindMany = vi.fn().mockResolvedValue([]);
     const prismaMock = makePrismaMock({ externalDonation: { findMany: externalFindMany } });

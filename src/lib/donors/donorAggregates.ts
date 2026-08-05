@@ -51,6 +51,64 @@ export interface DateRangeFilter {
 }
 
 /**
+ * Canonical eligibility rule for ExternalDonation rows, shared by every
+ * caller (per-donor aggregates, org summary, Top Donors, Donation Trend) so
+ * "what counts as a real external donation" is defined exactly once. Voided
+ * rows never count. depositStatus is deliberately NOT filtered here at the
+ * SQL level — depositStatus is only ever set on CHECK rows (see schema
+ * comment on ExternalDonation.depositStatus); every other payment method
+ * (cash, Zelle, Cash App, bank transfer, imported, etc.) has depositStatus
+ * = null, and Postgres's `<> 'RETURNED'` evaluates to NULL (excluded, not
+ * included) for a null column — filtering depositStatus in the WHERE
+ * clause would silently drop every non-check external donation from every
+ * total on the app. depositStatus === "RETURNED" exclusion is applied in
+ * JS by each caller instead, where null correctly means "not returned."
+ */
+export function externalDonationEligibilityWhere(
+  churchId: string,
+  opts: {
+    donorIds?: string[];
+    dateFilter?: DateRangeFilter;
+    attributedUserId?: string;
+  } = {},
+) {
+  return {
+    churchId,
+    status: { not: "VOIDED" as const },
+    ...(opts.donorIds ? { donorId: { in: opts.donorIds } } : {}),
+    ...(opts.attributedUserId
+      ? { createdByUserId: opts.attributedUserId }
+      : {}),
+    ...(opts.dateFilter ? { donationDate: opts.dateFilter } : {}),
+  };
+}
+
+/** JS-side depositStatus filter — see externalDonationEligibilityWhere's
+ * doc comment for why this can never be pushed into the SQL WHERE clause. */
+export function isExternalDonationDeposited(row: { depositStatus?: string | null }): boolean {
+  return row.depositStatus !== "RETURNED";
+}
+
+/**
+ * Canonical eligibility rule for FinixTransfer rows: SUCCEEDED only. A
+ * later ACH return does not flip this state (see module doc comment above)
+ * — returns are tracked separately and only ever netted out of
+ * netDonatedCents, never excluded from the gross successful count.
+ */
+export function finixTransferEligibilityWhere(
+  churchId: string,
+  instrumentIds: string[],
+  dateFilter?: DateRangeFilter,
+) {
+  return {
+    churchId,
+    finixPaymentInstrumentId: { in: instrumentIds },
+    state: "SUCCEEDED" as const,
+    ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+  };
+}
+
+/**
  * The single centralized aggregate calculation for donor financial history —
  * every surface (list, drawer, profile, export, analytics) must call this
  * rather than re-deriving totals independently, so the numbers can never
@@ -116,8 +174,18 @@ async function loadInvoiceContributionsByDonor(
   if (attributedUserId || donorIds.length === 0) return byDonor;
 
   const invoices = await prisma.invoice.findMany({
-    where: { churchId, linkedDonorId: { in: donorIds }, classification: { in: ["CHARITABLE_DONATION", "PARTIAL_DONATION"] } },
-    select: { id: true, linkedDonorId: true, classification: true, totalCents: true, charitablePortionCents: true },
+    where: {
+      churchId,
+      linkedDonorId: { in: donorIds },
+      classification: { in: ["CHARITABLE_DONATION", "PARTIAL_DONATION"] },
+    },
+    select: {
+      id: true,
+      linkedDonorId: true,
+      classification: true,
+      totalCents: true,
+      charitablePortionCents: true,
+    },
   });
   if (invoices.length === 0) return byDonor;
   const invoiceById = new Map(invoices.map((i) => [i.id, i]));
@@ -129,18 +197,34 @@ async function loadInvoiceContributionsByDonor(
       status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED"] },
       ...(dateFilter ? { createdAt: dateFilter } : {}),
     },
-    select: { invoiceId: true, grossAmountCents: true, refundedCents: true, feeContributionCents: true, feeContributionRefundedCents: true, customerCoveredFee: true, createdAt: true },
+    select: {
+      invoiceId: true,
+      grossAmountCents: true,
+      refundedCents: true,
+      feeContributionCents: true,
+      feeContributionRefundedCents: true,
+      customerCoveredFee: true,
+      createdAt: true,
+    },
   });
 
   for (const p of payments) {
     const invoice = invoiceById.get(p.invoiceId);
     if (!invoice?.linkedDonorId) continue;
     const netPrincipalCents = Math.max(0, p.grossAmountCents - p.refundedCents);
-    const netFeeCents = p.customerCoveredFee ? Math.max(0, p.feeContributionCents - p.feeContributionRefundedCents) : 0;
+    const netFeeCents = p.customerCoveredFee
+      ? Math.max(0, p.feeContributionCents - p.feeContributionRefundedCents)
+      : 0;
     const finalCents = netPrincipalCents + netFeeCents;
     if (finalCents <= 0) continue;
 
-    const acc = byDonor.get(invoice.linkedDonorId) ?? { totalCents: 0, count: 0, largestCents: 0, refundedCents: 0, dates: [] };
+    const acc = byDonor.get(invoice.linkedDonorId) ?? {
+      totalCents: 0,
+      count: 0,
+      largestCents: 0,
+      refundedCents: 0,
+      dates: [],
+    };
     acc.totalCents += finalCents;
     acc.count += 1;
     acc.largestCents = Math.max(acc.largestCents, finalCents);
@@ -152,12 +236,18 @@ async function loadInvoiceContributionsByDonor(
   return byDonor;
 }
 
-function mergeInvoiceContribution(aggregates: DonorAggregates, contribution: InvoiceContribution | undefined): DonorAggregates {
+function mergeInvoiceContribution(
+  aggregates: DonorAggregates,
+  contribution: InvoiceContribution | undefined,
+): DonorAggregates {
   if (!contribution) return aggregates;
-  const totalDonatedCents = aggregates.totalDonatedCents + contribution.totalCents;
+  const totalDonatedCents =
+    aggregates.totalDonatedCents + contribution.totalCents;
   const donationCount = aggregates.donationCount + contribution.count;
   const allDates = [
-    ...(aggregates.firstDonationAt ? [aggregates.firstDonationAt.getTime()] : []),
+    ...(aggregates.firstDonationAt
+      ? [aggregates.firstDonationAt.getTime()]
+      : []),
     ...(aggregates.lastDonationAt ? [aggregates.lastDonationAt.getTime()] : []),
     ...contribution.dates,
   ];
@@ -165,12 +255,20 @@ function mergeInvoiceContribution(aggregates: DonorAggregates, contribution: Inv
     ...aggregates,
     totalDonatedCents,
     donationCount,
-    averageDonationCents: donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
-    largestDonationCents: Math.max(aggregates.largestDonationCents, contribution.largestCents),
+    averageDonationCents:
+      donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
+    largestDonationCents: Math.max(
+      aggregates.largestDonationCents,
+      contribution.largestCents,
+    ),
     firstDonationAt: allDates.length ? new Date(Math.min(...allDates)) : null,
     lastDonationAt: allDates.length ? new Date(Math.max(...allDates)) : null,
-    refundedAmountCents: aggregates.refundedAmountCents + contribution.refundedCents,
-    netDonatedCents: aggregates.netDonatedCents + contribution.totalCents - contribution.refundedCents,
+    refundedAmountCents:
+      aggregates.refundedAmountCents + contribution.refundedCents,
+    netDonatedCents:
+      aggregates.netDonatedCents +
+      contribution.totalCents -
+      contribution.refundedCents,
   };
 }
 
@@ -202,19 +300,28 @@ async function loadExternalDonationContributionsByDonor(
   if (donorIds.length === 0) return byDonor;
 
   const rows = await prisma.externalDonation.findMany({
-    where: {
-      churchId,
-      donorId: { in: donorIds },
-      status: { not: "VOIDED" },
-      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
-      ...(dateFilter ? { donationDate: dateFilter } : {}),
+    where: externalDonationEligibilityWhere(churchId, {
+      donorIds,
+      dateFilter,
+      attributedUserId,
+    }),
+    select: {
+      donorId: true,
+      donationAmountCents: true,
+      donationDate: true,
+      depositStatus: true,
     },
-    select: { donorId: true, donationAmountCents: true, donationDate: true, depositStatus: true },
   });
 
   for (const r of rows) {
     if (!r.donorId || r.depositStatus === "RETURNED") continue;
-    const acc = byDonor.get(r.donorId) ?? { totalCents: 0, count: 0, largestCents: 0, refundedCents: 0, dates: [] };
+    const acc = byDonor.get(r.donorId) ?? {
+      totalCents: 0,
+      count: 0,
+      largestCents: 0,
+      refundedCents: 0,
+      dates: [],
+    };
     acc.totalCents += r.donationAmountCents;
     acc.count += 1;
     acc.largestCents = Math.max(acc.largestCents, r.donationAmountCents);
@@ -225,13 +332,18 @@ async function loadExternalDonationContributionsByDonor(
   return byDonor;
 }
 
-function mergeExternalDonationContribution(aggregates: DonorAggregates, contribution: InvoiceContribution | undefined): DonorAggregates {
+function mergeExternalDonationContribution(
+  aggregates: DonorAggregates,
+  contribution: InvoiceContribution | undefined,
+): DonorAggregates {
   if (!contribution) return aggregates;
   const merged = mergeInvoiceContribution(aggregates, contribution);
   return {
     ...merged,
-    externalDonatedCents: aggregates.externalDonatedCents + contribution.totalCents,
-    externalDonationCount: aggregates.externalDonationCount + contribution.count,
+    externalDonatedCents:
+      aggregates.externalDonatedCents + contribution.totalCents,
+    externalDonationCount:
+      aggregates.externalDonationCount + contribution.count,
   };
 }
 
@@ -246,14 +358,18 @@ export async function loadDonorAggregatesBatch(
   // Payment.attributedUserId (FinixTransfer itself carries no attribution).
   attributedUserId?: string,
 ): Promise<Map<string, DonorAggregates>> {
-  const result = new Map<string, DonorAggregates>(donorIds.map((id) => [id, { ...EMPTY_DONOR_AGGREGATES }]));
+  const result = new Map<string, DonorAggregates>(
+    donorIds.map((id) => [id, { ...EMPTY_DONOR_AGGREGATES }]),
+  );
   if (donorIds.length === 0) return result;
 
   const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
     where: { churchId, donorId: { in: donorIds } },
     select: { finixPaymentInstrumentId: true, donorId: true },
   });
-  const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));
+  const instrumentToDonor = new Map(
+    instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]),
+  );
   const instrumentIds = [...instrumentToDonor.keys()];
 
   // Resolved once, up front, so the in-memory transfer filter below is a
@@ -267,20 +383,43 @@ export async function loadDonorAggregatesBatch(
           })
         )
           .map((p) => p.finixTransferId)
-          .filter((id): id is string => Boolean(id))
+          .filter((id): id is string => Boolean(id)),
       )
     : null;
 
   if (instrumentIds.length === 0) {
-    const [activeSubs, invoiceContributions, externalContributions] = await Promise.all([
-      loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
-      loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
-      loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
-    ]);
+    const [activeSubs, invoiceContributions, externalContributions] =
+      await Promise.all([
+        loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
+        loadInvoiceContributionsByDonor(
+          donorIds,
+          churchId,
+          dateFilter,
+          attributedUserId,
+        ),
+        loadExternalDonationContributionsByDonor(
+          donorIds,
+          churchId,
+          dateFilter,
+          attributedUserId,
+        ),
+      ]);
     for (const donorId of donorIds) {
-      const base = { ...EMPTY_DONOR_AGGREGATES, activeSubscriptionCount: activeSubs.get(donorId) ?? 0 };
-      const withInvoice = mergeInvoiceContribution(base, invoiceContributions.get(donorId));
-      result.set(donorId, mergeExternalDonationContribution(withInvoice, externalContributions.get(donorId)));
+      const base = {
+        ...EMPTY_DONOR_AGGREGATES,
+        activeSubscriptionCount: activeSubs.get(donorId) ?? 0,
+      };
+      const withInvoice = mergeInvoiceContribution(
+        base,
+        invoiceContributions.get(donorId),
+      );
+      result.set(
+        donorId,
+        mergeExternalDonationContribution(
+          withInvoice,
+          externalContributions.get(donorId),
+        ),
+      );
     }
     return result;
   }
@@ -304,14 +443,18 @@ export async function loadDonorAggregatesBatch(
   // than threaded into the query above, so this stays a single, low-risk
   // addition on top of the existing (already complex) aggregation logic
   // rather than a rewrite of it.
-  const transfers = allowedTransferIds ? allTransfers.filter((t) => allowedTransferIds.has(t.finixTransferId)) : allTransfers;
+  const transfers = allowedTransferIds
+    ? allTransfers.filter((t) => allowedTransferIds.has(t.finixTransferId))
+    : allTransfers;
 
   const successfulByDonor = new Map<string, typeof transfers>();
   const failedCountByDonor = new Map<string, number>();
   const transferIdToDonor = new Map<string, string>();
 
   for (const t of transfers) {
-    const donorId = t.finixPaymentInstrumentId ? instrumentToDonor.get(t.finixPaymentInstrumentId) : undefined;
+    const donorId = t.finixPaymentInstrumentId
+      ? instrumentToDonor.get(t.finixPaymentInstrumentId)
+      : undefined;
     if (!donorId) continue;
     transferIdToDonor.set(t.finixTransferId, donorId);
 
@@ -321,17 +464,34 @@ export async function loadDonorAggregatesBatch(
       list.push(t);
       successfulByDonor.set(donorId, list);
     } else if (state === "FAILED") {
-      failedCountByDonor.set(donorId, (failedCountByDonor.get(donorId) ?? 0) + 1);
+      failedCountByDonor.set(
+        donorId,
+        (failedCountByDonor.get(donorId) ?? 0) + 1,
+      );
     }
   }
 
   const transferIds = [...transferIdToDonor.keys()];
-  const paymentIds = transfers.map((t) => t.paymentId).filter((id): id is string => Boolean(id));
+  const paymentIds = transfers
+    .map((t) => t.paymentId)
+    .filter((id): id is string => Boolean(id));
 
-  const [refunds, bankReturns, disputes, activeSubs, givingLinkPayments, invoiceContributions, externalContributions] = await Promise.all([
+  const [
+    refunds,
+    bankReturns,
+    disputes,
+    activeSubs,
+    givingLinkPayments,
+    invoiceContributions,
+    externalContributions,
+  ] = await Promise.all([
     transferIds.length
       ? prisma.finixRefundOrReversal.findMany({
-          where: { churchId, finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" },
+          where: {
+            churchId,
+            finixOriginalTransferId: { in: transferIds },
+            state: "SUCCEEDED",
+          },
           select: { finixOriginalTransferId: true, amountCents: true },
         })
       : Promise.resolve([]),
@@ -352,19 +512,34 @@ export async function loadDonorAggregatesBatch(
       ? prisma.payment.findMany({
           where: {
             churchId,
-            OR: [{ id: { in: paymentIds } }, { finixTransferId: { in: transferIds } }],
+            OR: [
+              { id: { in: paymentIds } },
+              { finixTransferId: { in: transferIds } },
+            ],
             givingLinkId: { not: null },
           },
           select: { finixTransferId: true, givingLinkId: true },
         })
       : Promise.resolve([]),
-    loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
-    loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+    loadInvoiceContributionsByDonor(
+      donorIds,
+      churchId,
+      dateFilter,
+      attributedUserId,
+    ),
+    loadExternalDonationContributionsByDonor(
+      donorIds,
+      churchId,
+      dateFilter,
+      attributedUserId,
+    ),
   ]);
 
   const refundedByDonor = new Map<string, { amount: number; count: number }>();
   for (const r of refunds) {
-    const donorId = r.finixOriginalTransferId ? transferIdToDonor.get(r.finixOriginalTransferId) : undefined;
+    const donorId = r.finixOriginalTransferId
+      ? transferIdToDonor.get(r.finixOriginalTransferId)
+      : undefined;
     if (!donorId) continue;
     const acc = refundedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     acc.amount += r.amountCents ?? 0;
@@ -374,7 +549,9 @@ export async function loadDonorAggregatesBatch(
 
   const returnedByDonor = new Map<string, { amount: number; count: number }>();
   for (const r of bankReturns) {
-    const donorId = r.originalTransferId ? transferIdToDonor.get(r.originalTransferId) : undefined;
+    const donorId = r.originalTransferId
+      ? transferIdToDonor.get(r.originalTransferId)
+      : undefined;
     if (!donorId) continue;
     const acc = returnedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     acc.amount += r.amountCents ?? 0;
@@ -384,7 +561,9 @@ export async function loadDonorAggregatesBatch(
 
   const disputedByDonor = new Map<string, { amount: number; count: number }>();
   for (const d of disputes) {
-    const donorId = d.finixTransferId ? transferIdToDonor.get(d.finixTransferId) : undefined;
+    const donorId = d.finixTransferId
+      ? transferIdToDonor.get(d.finixTransferId)
+      : undefined;
     if (!donorId) continue;
     const acc = disputedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     acc.amount += d.amountCents ?? 0;
@@ -394,7 +573,9 @@ export async function loadDonorAggregatesBatch(
 
   const givingLinkCountByDonor = new Map<string, Set<string>>();
   for (const p of givingLinkPayments) {
-    const donorId = p.finixTransferId ? transferIdToDonor.get(p.finixTransferId) : undefined;
+    const donorId = p.finixTransferId
+      ? transferIdToDonor.get(p.finixTransferId)
+      : undefined;
     if (!donorId || !p.givingLinkId) continue;
     const set = givingLinkCountByDonor.get(donorId) ?? new Set();
     set.add(p.givingLinkId);
@@ -403,10 +584,18 @@ export async function loadDonorAggregatesBatch(
 
   for (const donorId of donorIds) {
     const successful = successfulByDonor.get(donorId) ?? [];
-    const totalDonatedCents = successful.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+    const totalDonatedCents = successful.reduce(
+      (sum, t) => sum + (t.amountCents ?? 0),
+      0,
+    );
     const donationCount = successful.length;
-    const largestDonationCents = successful.reduce((max, t) => Math.max(max, t.amountCents ?? 0), 0);
-    const dates = successful.map((t) => t.createdAtFinix?.getTime()).filter((d): d is number => d != null);
+    const largestDonationCents = successful.reduce(
+      (max, t) => Math.max(max, t.amountCents ?? 0),
+      0,
+    );
+    const dates = successful
+      .map((t) => t.createdAtFinix?.getTime())
+      .filter((d): d is number => d != null);
     const refunded = refundedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     const returned = returnedByDonor.get(donorId) ?? { amount: 0, count: 0 };
     const disputed = disputedByDonor.get(donorId) ?? { amount: 0, count: 0 };
@@ -414,7 +603,8 @@ export async function loadDonorAggregatesBatch(
     const base: DonorAggregates = {
       totalDonatedCents,
       donationCount,
-      averageDonationCents: donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
+      averageDonationCents:
+        donationCount > 0 ? Math.round(totalDonatedCents / donationCount) : 0,
       largestDonationCents,
       firstDonationAt: dates.length ? new Date(Math.min(...dates)) : null,
       lastDonationAt: dates.length ? new Date(Math.max(...dates)) : null,
@@ -431,8 +621,17 @@ export async function loadDonorAggregatesBatch(
       externalDonatedCents: 0,
       externalDonationCount: 0,
     };
-    const withInvoice = mergeInvoiceContribution(base, invoiceContributions.get(donorId));
-    result.set(donorId, mergeExternalDonationContribution(withInvoice, externalContributions.get(donorId)));
+    const withInvoice = mergeInvoiceContribution(
+      base,
+      invoiceContributions.get(donorId),
+    );
+    result.set(
+      donorId,
+      mergeExternalDonationContribution(
+        withInvoice,
+        externalContributions.get(donorId),
+      ),
+    );
   }
 
   return result;
@@ -444,7 +643,12 @@ export async function loadDonorAggregates(
   dateFilter?: DateRangeFilter,
   attributedUserId?: string,
 ): Promise<DonorAggregates> {
-  const map = await loadDonorAggregatesBatch([donorId], churchId, dateFilter, attributedUserId);
+  const map = await loadDonorAggregatesBatch(
+    [donorId],
+    churchId,
+    dateFilter,
+    attributedUserId,
+  );
   return map.get(donorId) ?? { ...EMPTY_DONOR_AGGREGATES };
 }
 
@@ -464,19 +668,28 @@ async function loadActiveSubscriptionCounts(
     where: { churchId, donorId: { in: donorIds } },
     select: { finixPaymentInstrumentId: true, donorId: true },
   });
-  const instrumentToDonor = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]));
+  const instrumentToDonor = new Map(
+    instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]),
+  );
   const instrumentIds = [...instrumentToDonor.keys()];
   if (instrumentIds.length === 0) return new Map();
 
   const subs = await prisma.finixSubscription.findMany({
     // FinixSubscription carries attributedUserId directly — no bridging needed.
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "ACTIVE", ...(attributedUserId ? { attributedUserId } : {}) },
+    where: {
+      churchId,
+      finixPaymentInstrumentId: { in: instrumentIds },
+      state: "ACTIVE",
+      ...(attributedUserId ? { attributedUserId } : {}),
+    },
     select: { finixPaymentInstrumentId: true },
   });
 
   const counts = new Map<string, number>();
   for (const s of subs) {
-    const donorId = s.finixPaymentInstrumentId ? instrumentToDonor.get(s.finixPaymentInstrumentId) : undefined;
+    const donorId = s.finixPaymentInstrumentId
+      ? instrumentToDonor.get(s.finixPaymentInstrumentId)
+      : undefined;
     if (!donorId) continue;
     counts.set(donorId, (counts.get(donorId) ?? 0) + 1);
   }
