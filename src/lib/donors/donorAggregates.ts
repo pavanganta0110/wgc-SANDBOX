@@ -17,6 +17,11 @@ export interface DonorAggregates {
   bankReturnCount: number;
   disputeCount: number;
   givingLinkCount: number;
+  /** Portion of totalDonatedCents/donationCount that came from ExternalDonation
+   * rows (cash/check/Zelle/imported/etc.) rather than Finix/invoice processing —
+   * "WGC-processed" = totalDonatedCents - externalDonatedCents. */
+  externalDonatedCents: number;
+  externalDonationCount: number;
 }
 
 export const EMPTY_DONOR_AGGREGATES: DonorAggregates = {
@@ -36,6 +41,8 @@ export const EMPTY_DONOR_AGGREGATES: DonorAggregates = {
   bankReturnCount: 0,
   disputeCount: 0,
   givingLinkCount: 0,
+  externalDonatedCents: 0,
+  externalDonationCount: 0,
 };
 
 export interface DateRangeFilter {
@@ -167,6 +174,67 @@ function mergeInvoiceContribution(aggregates: DonorAggregates, contribution: Inv
   };
 }
 
+/**
+ * Folds each donor's active ExternalDonation rows (cash/check/Zelle/Cash App/
+ * bank transfer/imported/etc.) into the same totals this function already
+ * produces from Finix transfers and charitable invoice payments, so a
+ * donor who has only ever given offline still shows a real "Total Donated"
+ * and isn't invisible to every financial filter on the donor list.
+ *
+ * "Active" mirrors every other reader of this table: status !== "VOIDED"
+ * and depositStatus !== "RETURNED" (a bounced check never counts as
+ * received). There is no separate refund concept for external donations —
+ * a returned/voided row is simply excluded, not netted against a refund
+ * amount, since the organization received nothing to refund.
+ *
+ * Scoped (attributedUserId) views ARE supported here, unlike invoice
+ * contributions — ExternalDonation.createdByUserId is a direct column, so
+ * a fundraiser-scoped view can correctly filter to only the external
+ * donations they personally recorded.
+ */
+async function loadExternalDonationContributionsByDonor(
+  donorIds: string[],
+  churchId: string,
+  dateFilter?: DateRangeFilter,
+  attributedUserId?: string,
+): Promise<Map<string, InvoiceContribution>> {
+  const byDonor = new Map<string, InvoiceContribution>();
+  if (donorIds.length === 0) return byDonor;
+
+  const rows = await prisma.externalDonation.findMany({
+    where: {
+      churchId,
+      donorId: { in: donorIds },
+      status: { not: "VOIDED" },
+      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
+      ...(dateFilter ? { donationDate: dateFilter } : {}),
+    },
+    select: { donorId: true, donationAmountCents: true, donationDate: true, depositStatus: true },
+  });
+
+  for (const r of rows) {
+    if (!r.donorId || r.depositStatus === "RETURNED") continue;
+    const acc = byDonor.get(r.donorId) ?? { totalCents: 0, count: 0, largestCents: 0, refundedCents: 0, dates: [] };
+    acc.totalCents += r.donationAmountCents;
+    acc.count += 1;
+    acc.largestCents = Math.max(acc.largestCents, r.donationAmountCents);
+    acc.dates.push(r.donationDate.getTime());
+    byDonor.set(r.donorId, acc);
+  }
+
+  return byDonor;
+}
+
+function mergeExternalDonationContribution(aggregates: DonorAggregates, contribution: InvoiceContribution | undefined): DonorAggregates {
+  if (!contribution) return aggregates;
+  const merged = mergeInvoiceContribution(aggregates, contribution);
+  return {
+    ...merged,
+    externalDonatedCents: aggregates.externalDonatedCents + contribution.totalCents,
+    externalDonationCount: aggregates.externalDonationCount + contribution.count,
+  };
+}
+
 export async function loadDonorAggregatesBatch(
   donorIds: string[],
   churchId: string,
@@ -204,13 +272,15 @@ export async function loadDonorAggregatesBatch(
     : null;
 
   if (instrumentIds.length === 0) {
-    const [activeSubs, invoiceContributions] = await Promise.all([
+    const [activeSubs, invoiceContributions, externalContributions] = await Promise.all([
       loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
       loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+      loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
     ]);
     for (const donorId of donorIds) {
       const base = { ...EMPTY_DONOR_AGGREGATES, activeSubscriptionCount: activeSubs.get(donorId) ?? 0 };
-      result.set(donorId, mergeInvoiceContribution(base, invoiceContributions.get(donorId)));
+      const withInvoice = mergeInvoiceContribution(base, invoiceContributions.get(donorId));
+      result.set(donorId, mergeExternalDonationContribution(withInvoice, externalContributions.get(donorId)));
     }
     return result;
   }
@@ -258,7 +328,7 @@ export async function loadDonorAggregatesBatch(
   const transferIds = [...transferIdToDonor.keys()];
   const paymentIds = transfers.map((t) => t.paymentId).filter((id): id is string => Boolean(id));
 
-  const [refunds, bankReturns, disputes, activeSubs, givingLinkPayments, invoiceContributions] = await Promise.all([
+  const [refunds, bankReturns, disputes, activeSubs, givingLinkPayments, invoiceContributions, externalContributions] = await Promise.all([
     transferIds.length
       ? prisma.finixRefundOrReversal.findMany({
           where: { churchId, finixOriginalTransferId: { in: transferIds }, state: "SUCCEEDED" },
@@ -289,6 +359,7 @@ export async function loadDonorAggregatesBatch(
         })
       : Promise.resolve([]),
     loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+    loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
   ]);
 
   const refundedByDonor = new Map<string, { amount: number; count: number }>();
@@ -357,8 +428,11 @@ export async function loadDonorAggregatesBatch(
       bankReturnCount: returned.count,
       disputeCount: disputed.count,
       givingLinkCount: givingLinkCountByDonor.get(donorId)?.size ?? 0,
+      externalDonatedCents: 0,
+      externalDonationCount: 0,
     };
-    result.set(donorId, mergeInvoiceContribution(base, invoiceContributions.get(donorId)));
+    const withInvoice = mergeInvoiceContribution(base, invoiceContributions.get(donorId));
+    result.set(donorId, mergeExternalDonationContribution(withInvoice, externalContributions.get(donorId)));
   }
 
   return result;

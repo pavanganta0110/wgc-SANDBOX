@@ -26,6 +26,7 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
   const hasBankReturn = searchParams.get("hasBankReturn") === "1";
   const hasDispute = searchParams.get("hasDispute") === "1";
   const hasActiveSubscription = searchParams.get("hasActiveSubscription") === "1";
+  const source = searchParams.get("source") || "";
   const archived = searchParams.get("archived") || "active";
   const addressStatus = searchParams.get("addressStatus") || "";
   const visibleCols = parseVisibleDonorColumns(searchParams.get("cols") || undefined);
@@ -33,6 +34,15 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isColsOpen, setIsColsOpen] = useState(false);
+
+  const setParam = (key: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(key, value);
+    else params.delete(key);
+    params.delete("id");
+    params.delete("page");
+    router.push(`?${params.toString()}`);
+  };
 
   // Debounced search — filtering itself always happens server-side on submit.
   useEffect(() => {
@@ -51,16 +61,8 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
     (hasBankReturn ? 1 : 0) +
     (hasDispute ? 1 : 0) +
     (hasActiveSubscription ? 1 : 0) +
+    (source ? 1 : 0) +
     (archived !== "active" ? 1 : 0);
-
-  const setParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value) params.set(key, value);
-    else params.delete(key);
-    params.delete("id");
-    params.delete("page");
-    router.push(`?${params.toString()}`);
-  };
 
   const toggleParam = (key: string, current: boolean) => setParam(key, current ? "" : "1");
 
@@ -147,6 +149,19 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
                   <option value="">Any</option>
                   <option value="card">Card</option>
                   <option value="bank">Bank</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Donation Source</label>
+                <select
+                  value={source}
+                  onChange={(e) => setParam("source", e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none"
+                >
+                  <option value="">All donors</option>
+                  <option value="external">External donors (cash, check, imported, etc.)</option>
+                  <option value="processed">WGC-processed donors</option>
+                  <option value="both">Both external and WGC-processed</option>
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2">

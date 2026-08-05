@@ -16,6 +16,7 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     finixSubscription: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     subscriptionConsent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     subscriptionSetupLink: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    externalDonation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     annualDonationStatement: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -78,6 +79,21 @@ describe("mergeDonors — safety rules", () => {
     const archiveCall = prismaMock.__updateCalls.find((c: any) => c.where.id === "dup" && c.data.archivedAt);
     expect(archiveCall).toBeDefined();
     expect(archiveCall.data.mergedIntoDonorId).toBe("primary");
+  });
+
+  it("reassigns ExternalDonation.donorId to the primary — merging donors must not orphan cash/check history from the surviving profile", async () => {
+    const prismaMock = makePrismaMock({});
+    prismaMock.__tx.externalDonation = { updateMany: vi.fn().mockResolvedValue({ count: 4 }) };
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { mergeDonors } = await import("@/lib/donors/donorMerge");
+
+    const result = await mergeDonors("primary", "dup", "church-A", "user1", "a@test.com");
+
+    expect(result.reassigned.externalDonations).toBe(4);
+    expect(prismaMock.__tx.externalDonation.updateMany).toHaveBeenCalledWith({
+      where: { donorId: "dup", churchId: "church-A" },
+      data: { donorId: "primary" },
+    });
   });
 
   it("backfills the primary's missing contact fields from the duplicate without overwriting populated ones", async () => {

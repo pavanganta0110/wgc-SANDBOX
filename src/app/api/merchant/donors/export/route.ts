@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma";
 import { loadDonorAggregates } from "@/lib/donors/donorAggregates";
 import { loadDonorRiskSignals } from "@/lib/donors/donorRiskSignals";
 import { resolveDonorDisplayStatus } from "@/lib/donors/donorStatus";
+import { loadDonorSourceBadges, DONOR_SOURCE_BADGE_LABELS } from "@/lib/donors/donorSources";
 
 const COLUMNS: CsvColumn<DonorListRow>[] = [
   { header: "Donor ID", value: (r) => r.donor.id },
@@ -24,6 +25,8 @@ const COLUMNS: CsvColumn<DonorListRow>[] = [
   { header: "Phone", value: (r) => r.donor.phone || "" },
   { header: "Status", value: (r) => DONOR_DISPLAY_STATUS_LABELS[r.status] },
   { header: "Total Donated", value: (r) => formatCents(r.aggregates.totalDonatedCents) },
+  { header: "WGC Processed Donated", value: (r) => formatCents(r.aggregates.totalDonatedCents - r.aggregates.externalDonatedCents) },
+  { header: "External Donated", value: (r) => formatCents(r.aggregates.externalDonatedCents) },
   { header: "Net Donated", value: (r) => formatCents(r.aggregates.netDonatedCents) },
   { header: "Donation Count", value: (r) => String(r.aggregates.donationCount) },
   { header: "Average Donation", value: (r) => formatCents(r.aggregates.averageDonationCents) },
@@ -36,6 +39,7 @@ const COLUMNS: CsvColumn<DonorListRow>[] = [
   { header: "Refunded Amount", value: (r) => formatCents(r.aggregates.refundedAmountCents) },
   { header: "Returned Amount", value: (r) => formatCents(r.aggregates.returnedAmountCents) },
   { header: "Disputed Amount", value: (r) => formatCents(r.aggregates.disputedAmountCents) },
+  { header: "Sources", value: (r) => r.sources.map((s) => DONOR_SOURCE_BADGE_LABELS[s] ?? s).join("; ") },
   { header: "Created", value: (r) => r.donor.createdAt.toISOString() },
   { header: "Updated", value: (r) => r.donor.updatedAt.toISOString() },
 ];
@@ -83,6 +87,7 @@ export async function GET(req: Request) {
       loadDonorAggregates(donor.id, auth.churchId),
       loadDonorRiskSignals([donor.id], auth.churchId).then((m) => m.get(donor.id)!),
     ]);
+    const sourcesMap = await loadDonorSourceBadges([donor.id], auth.churchId, new Map([[donor.id, aggregates]]));
     rows = [
       {
         donor,
@@ -91,6 +96,7 @@ export async function GET(req: Request) {
         primaryInstrument: null,
         activeSubscriptionCount: aggregates.activeSubscriptionCount,
         givingLinkIds: [],
+        sources: sourcesMap.get(donor.id) ?? [],
       },
     ];
   } else {
