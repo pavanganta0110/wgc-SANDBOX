@@ -268,13 +268,15 @@ export async function POST(req: Request) {
         },
       });
 
+      const rowDonorResolutionValue = rowDonorResolution(donorMatchStatus, donorId, donorWasCreated);
+
       await prisma.externalDonationAuditLog.create({
-        data: { externalDonationId: created.id, action: "IMPORTED", toValue: donorMatchStatus, performedByUserId: auth.userId },
+        data: { externalDonationId: created.id, action: "IMPORTED", toValue: rowDonorResolutionValue, performedByUserId: auth.userId },
       });
 
       await prisma.externalDonationImportRow.update({
         where: { importBatchId_rowNumber: { importBatchId: batch.id, rowNumber } },
-        data: { status: "IMPORTED", externalDonationId: created.id, donorResolution: rowDonorResolution(donorMatchStatus, donorId, donorWasCreated) },
+        data: { status: "IMPORTED", externalDonationId: created.id, donorResolution: rowDonorResolutionValue },
       }).catch(() =>
         // Row record may not exist yet if this is the first write for this row — create it.
         prisma.externalDonationImportRow.create({
@@ -285,7 +287,7 @@ export async function POST(req: Request) {
             fingerprint,
             status: "IMPORTED",
             externalDonationId: created.id,
-            donorResolution: rowDonorResolution(donorMatchStatus, donorId, donorWasCreated),
+            donorResolution: rowDonorResolutionValue,
           },
         })
       );
