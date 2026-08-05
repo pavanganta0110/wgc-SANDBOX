@@ -25,6 +25,16 @@ import {
  * as the donor CSV import commit route. Every resolvable row goes through
  * the same resolveOrCreateDonor() every other donation entry path uses.
  */
+
+function rowDonorResolution(
+  donorMatchStatus: "MATCHED" | "ANONYMOUS" | "UNMATCHED",
+  donorId: string | null,
+  donorWasCreated: boolean
+): "ANONYMOUS" | "CREATED_NEW" | "MATCHED_EXISTING" | "UNMATCHED" {
+  if (donorMatchStatus === "ANONYMOUS") return "ANONYMOUS";
+  if (!donorId) return "UNMATCHED";
+  return donorWasCreated ? "CREATED_NEW" : "MATCHED_EXISTING";
+}
 export async function POST(req: Request) {
   let auth;
   try {
@@ -167,6 +177,7 @@ export async function POST(req: Request) {
       let donorId: string | null = null;
       let donorMatchStatus: "MATCHED" | "ANONYMOUS" | "UNMATCHED" = "UNMATCHED";
       let isAnonymous = false;
+      let donorWasCreated = false;
       if (validation.isAnonymous) {
         isAnonymous = true;
         donorMatchStatus = "ANONYMOUS";
@@ -179,6 +190,7 @@ export async function POST(req: Request) {
         });
         donorId = resolved.id;
         donorMatchStatus = "MATCHED";
+        donorWasCreated = resolved.created;
         if (resolved.created) newDonorsCreated++;
         else donorsMatched++;
 
@@ -262,7 +274,7 @@ export async function POST(req: Request) {
 
       await prisma.externalDonationImportRow.update({
         where: { importBatchId_rowNumber: { importBatchId: batch.id, rowNumber } },
-        data: { status: "IMPORTED", externalDonationId: created.id, donorResolution: donorMatchStatus === "ANONYMOUS" ? "ANONYMOUS" : donorId ? "MATCHED_EXISTING" : "UNMATCHED" },
+        data: { status: "IMPORTED", externalDonationId: created.id, donorResolution: rowDonorResolution(donorMatchStatus, donorId, donorWasCreated) },
       }).catch(() =>
         // Row record may not exist yet if this is the first write for this row — create it.
         prisma.externalDonationImportRow.create({
@@ -273,7 +285,7 @@ export async function POST(req: Request) {
             fingerprint,
             status: "IMPORTED",
             externalDonationId: created.id,
-            donorResolution: donorMatchStatus === "ANONYMOUS" ? "ANONYMOUS" : donorId ? "MATCHED_EXISTING" : "UNMATCHED",
+            donorResolution: rowDonorResolution(donorMatchStatus, donorId, donorWasCreated),
           },
         })
       );
