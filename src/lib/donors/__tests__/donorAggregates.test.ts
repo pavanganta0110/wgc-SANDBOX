@@ -19,6 +19,7 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     payment: { findMany: vi.fn().mockResolvedValue([]) },
     invoice: { findMany: vi.fn().mockResolvedValue([]) },
     invoicePayment: { findMany: vi.fn().mockResolvedValue([]) },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
     ...overrides,
   };
 }
@@ -130,5 +131,73 @@ describe("loadDonorAggregatesBatch — invoice payment contributions", () => {
 
     await loadDonorAggregatesBatch(["D1"], "church-A", undefined, "fundraiser-user-1");
     expect(invoiceFindMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("loadDonorAggregatesBatch — external donation contributions", () => {
+  beforeEach(() => vi.resetModules());
+
+  it("folds active ExternalDonation rows into Total Donated alongside Finix donations, tracked separately as externalDonatedCents", async () => {
+    const prismaMock = makePrismaMock({
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([
+          { donorId: "D1", donationAmountCents: 4000, donationDate: new Date("2026-01-10"), depositStatus: null },
+        ]),
+      },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { loadDonorAggregatesBatch } = await import("@/lib/donors/donorAggregates");
+
+    const result = await loadDonorAggregatesBatch(["D1"], "church-A");
+    const agg = result.get("D1")!;
+
+    expect(agg.donationCount).toBe(3); // 2 Finix + 1 external
+    expect(agg.totalDonatedCents).toBe(19000); // 10000 + 5000 (Finix) + 4000 (external)
+    expect(agg.externalDonatedCents).toBe(4000);
+    expect(agg.externalDonationCount).toBe(1);
+  });
+
+  it("gives a cash/check-only donor (no Finix instrument at all) a real Total Donated instead of $0", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([{ donorId: "D1", donationAmountCents: 7500, donationDate: new Date("2026-02-01"), depositStatus: null }]),
+      },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { loadDonorAggregatesBatch } = await import("@/lib/donors/donorAggregates");
+
+    const result = await loadDonorAggregatesBatch(["D1"], "church-A");
+    const agg = result.get("D1")!;
+
+    expect(agg.totalDonatedCents).toBe(7500);
+    expect(agg.externalDonatedCents).toBe(7500);
+    expect(agg.donationCount).toBe(1);
+  });
+
+  it("excludes a returned check (depositStatus RETURNED) from totals", async () => {
+    const prismaMock = makePrismaMock({
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([{ donorId: "D1", donationAmountCents: 4000, donationDate: new Date("2026-01-10"), depositStatus: "RETURNED" }]),
+      },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { loadDonorAggregatesBatch } = await import("@/lib/donors/donorAggregates");
+
+    const result = await loadDonorAggregatesBatch(["D1"], "church-A");
+    const agg = result.get("D1")!;
+
+    expect(agg.externalDonatedCents).toBe(0);
+    expect(agg.totalDonatedCents).toBe(15000); // just the two Finix transfers
+  });
+
+  it("scopes external donations to the attributed fundraiser via createdByUserId", async () => {
+    const externalFindMany = vi.fn().mockResolvedValue([]);
+    const prismaMock = makePrismaMock({ externalDonation: { findMany: externalFindMany } });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { loadDonorAggregatesBatch } = await import("@/lib/donors/donorAggregates");
+
+    await loadDonorAggregatesBatch(["D1"], "church-A", undefined, "fundraiser-user-1");
+    expect(externalFindMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ createdByUserId: "fundraiser-user-1" }) }));
   });
 });

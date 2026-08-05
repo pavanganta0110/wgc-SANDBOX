@@ -169,6 +169,7 @@ export interface MergeResult {
     subscriptionConsents: number;
     subscriptionSetupLinks: number;
     statements: number;
+    externalDonations: number;
   };
   /** AnnualDonationStatement rows left on the archived donor because the
    * primary already has one for the same (taxYear, version) — never
@@ -204,6 +205,13 @@ export async function mergeDonors(primaryDonorId: string, duplicateDonorId: stri
     const subscriptions = await tx.finixSubscription.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
     const subscriptionConsents = await tx.subscriptionConsent.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
     const subscriptionSetupLinks = await tx.subscriptionSetupLink.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
+    // ExternalDonation (cash/check/Zelle/imported/etc.) carries its own
+    // donorId FK, same as Payment — without this, merging two donors would
+    // silently orphan the duplicate's offline-giving history from the
+    // surviving profile even though every other donor-linked model above
+    // is reassigned. donorMatchStatus stays MATCHED; only the ownership
+    // pointer moves.
+    const externalDonations = await tx.externalDonation.updateMany({ where: { donorId: duplicateDonorId, churchId }, data: { donorId: primaryDonorId } });
 
     // AnnualDonationStatement is unique on (donorId, taxYear, version) — a
     // plain updateMany would throw if the primary already has one for the
@@ -270,6 +278,7 @@ export async function mergeDonors(primaryDonorId: string, duplicateDonorId: stri
         subscriptionConsents: subscriptionConsents.count,
         subscriptionSetupLinks: subscriptionSetupLinks.count,
         statements: statementsMoved,
+        externalDonations: externalDonations.count,
       },
       statementConflicts,
     };

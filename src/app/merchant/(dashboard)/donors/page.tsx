@@ -32,6 +32,7 @@ import DonorAnalyticsExtras from "@/components/merchant/DonorAnalyticsExtras";
 import { parseVisibleDonorColumns } from "@/lib/donorColumns";
 import { DONOR_DISPLAY_STATUS_LABELS, type DonorDisplayStatus } from "@/lib/donors/donorStatus";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { DONOR_SOURCE_BADGE_LABELS } from "@/lib/donors/donorSources";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
 
 const PAGE_SIZE = 25;
@@ -71,6 +72,10 @@ export default async function DonorsPage({
     hasBankReturn?: string;
     hasDispute?: string;
     hasActiveSubscription?: string;
+    /** "external" = has at least one external donation (does NOT exclude
+     * donors who also paid through WGC). "processed" = has at least one
+     * WGC/Finix or charitable-invoice donation. "both" = has both. */
+    source?: string;
     addressStatus?: string;
     archived?: string;
     range?: string;
@@ -164,6 +169,8 @@ export default async function DonorsPage({
       hasBankReturn: sp.hasBankReturn === "1",
       hasDispute: sp.hasDispute === "1",
       hasActiveSubscription: sp.hasActiveSubscription === "1",
+      hasExternalDonation: sp.source === "external" || sp.source === "both" ? true : undefined,
+      hasProcessedDonation: sp.source === "processed" || sp.source === "both" ? true : undefined,
       addressStatus: sp.addressStatus === "MISSING" || sp.addressStatus === "UNVERIFIED" || sp.addressStatus === "CONFIRMED" ? sp.addressStatus : undefined,
       archivedStatus: (sp.archived as "active" | "archived" | "all") || "active",
       donorIdIn: scopedDonorIds,
@@ -271,6 +278,9 @@ export default async function DonorsPage({
                       </Link>
                     </th>
                   )}
+                  {visibleCols.has("wgcProcessed") && <th className="px-6 py-3 text-right">WGC Processed</th>}
+                  {visibleCols.has("externalDonated") && <th className="px-6 py-3 text-right">External Donated</th>}
+                  {visibleCols.has("sources") && <th className="px-6 py-3">Sources</th>}
                   {visibleCols.has("donationCount") && (
                     <th className="px-6 py-3 text-right">
                       <Link href={sortLink("donationCount")} className="flex items-center justify-end gap-1 hover:text-slate-800">
@@ -310,7 +320,7 @@ export default async function DonorsPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ donor, aggregates, status, primaryInstrument, activeSubscriptionCount }) => {
+                {rows.map(({ donor, aggregates, status, primaryInstrument, activeSubscriptionCount, sources }) => {
                   const isSelected = sp.id === donor.id;
                   const isArchived = Boolean(donor.archivedAt);
                   return (
@@ -368,6 +378,24 @@ export default async function DonorsPage({
                       )}
                       {visibleCols.has("totalDonated") && (
                         <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(aggregates.totalDonatedCents)}</td>
+                      )}
+                      {visibleCols.has("wgcProcessed") && (
+                        <td className="px-6 py-3 text-right text-slate-600">{formatCents(aggregates.totalDonatedCents - aggregates.externalDonatedCents)}</td>
+                      )}
+                      {visibleCols.has("externalDonated") && (
+                        <td className="px-6 py-3 text-right text-slate-600">{formatCents(aggregates.externalDonatedCents)}</td>
+                      )}
+                      {visibleCols.has("sources") && (
+                        <td className="px-6 py-3">
+                          <div className="flex flex-wrap gap-1">
+                            {sources.length === 0 && <span className="text-slate-400 text-xs">—</span>}
+                            {sources.map((s) => (
+                              <span key={s} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 whitespace-nowrap">
+                                {DONOR_SOURCE_BADGE_LABELS[s] ?? s}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
                       )}
                       {visibleCols.has("donationCount") && (
                         <td className="px-6 py-3 text-right text-slate-600">{aggregates.donationCount}</td>

@@ -28,7 +28,9 @@ import {
   loadDonorBankReturnsTab,
   loadDonorDisputesTab,
   loadDonorActivityTab,
+  loadDonorExternalDonationsTab,
 } from "@/lib/donors/donorTabs";
+import { EXTERNAL_PAYMENT_METHOD_LABELS, receiptStatusLabel, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import DonorNotesList from "@/components/merchant/DonorNotesList";
 import DonorRowActions from "@/components/merchant/DonorRowActions";
 import EditDonorButton from "@/components/merchant/EditDonorButton";
@@ -40,7 +42,8 @@ import Pagination from "@/components/merchant/Pagination";
 
 const TABS = [
   { key: "overview", label: "Overview" },
-  { key: "donations", label: "Donations" },
+  { key: "donations", label: "WGC Donations" },
+  { key: "external", label: "External Donations" },
   { key: "recurring", label: "Recurring Donations" },
   { key: "payment-methods", label: "Payment Methods" },
   { key: "giving-links", label: "Giving Links" },
@@ -115,15 +118,25 @@ export default async function DonorProfilePage({
           </h1>
           <StateBadge state={status} />
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
           <div>
             <p className="text-xs text-slate-500">Total Donated</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.totalDonatedCents)}</p>
           </div>
           <div>
+            <p className="text-xs text-slate-500">WGC Processed</p>
+            <p className="font-bold text-slate-900">{formatCents(aggregates.totalDonatedCents - aggregates.externalDonatedCents)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-slate-500">External Donations</p>
+            <p className="font-bold text-slate-900">{formatCents(aggregates.externalDonatedCents)}</p>
+          </div>
+          <div>
             <p className="text-xs text-slate-500">Net Donated</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.netDonatedCents)}</p>
           </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
           <div>
             <p className="text-xs text-slate-500">Donation Count</p>
             <p className="font-bold text-slate-900">{aggregates.donationCount}</p>
@@ -227,6 +240,7 @@ export default async function DonorProfilePage({
       {tab === "donations" && (
         <DonationsTab instrumentIds={instrumentIds} churchId={churchId} page={Math.max(1, parseInt(sp.page || "1", 10) || 1)} scopedUserId={scopedUserId} />
       )}
+      {tab === "external" && <ExternalDonationsTab donorId={donor.id} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "recurring" && <RecurringTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "payment-methods" && <PaymentMethodsTab instruments={instruments} instrumentIds={instrumentIds} churchId={churchId} />}
       {tab === "giving-links" && <GivingLinksTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
@@ -284,8 +298,11 @@ async function OverviewTab({
         <Card title="Giving Summary">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
             <Row label="Total Donated" value={formatCents(aggregates.totalDonatedCents)} />
+            <Row label="WGC Processed" value={formatCents(aggregates.totalDonatedCents - aggregates.externalDonatedCents)} />
+            <Row label="External Donations" value={formatCents(aggregates.externalDonatedCents)} />
             <Row label="Net Donated" value={formatCents(aggregates.netDonatedCents)} />
             <Row label="Donation Count" value={String(aggregates.donationCount)} />
+            <Row label="External Donation Count" value={String(aggregates.externalDonationCount)} />
             <Row label="Average Donation" value={formatCents(aggregates.averageDonationCents)} />
             <Row label="Largest Donation" value={formatCents(aggregates.largestDonationCents)} />
             <Row label="First Donation" value={aggregates.firstDonationAt ? formatDateCDT(aggregates.firstDonationAt) : "—"} />
@@ -456,6 +473,63 @@ async function DonationsTab({ instrumentIds, churchId, page, scopedUserId }: { i
         </table>
       )}
       {rows.length > 0 && <Pagination page={page} pageCount={pageCount} total={totalCount} pageSize={DONATIONS_PAGE_SIZE} />}
+    </div>
+  );
+}
+
+async function ExternalDonationsTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
+  const rows = await loadDonorExternalDonationsTab(donorId, churchId, scopedUserId);
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="px-6 py-3 border-b border-slate-100 bg-amber-50/50">
+        <p className="text-xs text-amber-800">
+          Cash, check, and other donations recorded by the organization outside WGC Payments — never processed by Finix, not included in WGC
+          settlement/deposit/fee totals, but counted toward this donor&apos;s lifetime giving and annual statement.
+        </p>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-6 py-16 text-center">
+          <h3 className="text-sm font-bold text-slate-900 mb-1">No external donations</h3>
+          <p className="text-sm text-slate-500">Cash, check, and other offline gifts recorded for this donor will appear here.</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[900px]">
+            <thead>
+              <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
+                <th className="px-6 py-3">Date</th>
+                <th className="px-6 py-3 text-right">Amount</th>
+                <th className="px-6 py-3">Method</th>
+                <th className="px-6 py-3">Fund</th>
+                <th className="px-6 py-3">Reference</th>
+                <th className="px-6 py-3">Receipt</th>
+                <th className="px-6 py-3">Deductible</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((d) => (
+                <tr key={d.id} className="border-t border-slate-50 hover:bg-slate-50">
+                  <td className="px-6 py-3 whitespace-nowrap">
+                    <Link href={`/merchant/donations/external/${d.id}`} className="text-blue-600 hover:underline">
+                      {formatDateCDT(d.donationDate)}
+                    </Link>
+                  </td>
+                  <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(d.donationAmountCents)}</td>
+                  <td className="px-6 py-3 text-slate-600">
+                    {d.paymentMethod === "OTHER" ? d.otherPaymentMethodName : EXTERNAL_PAYMENT_METHOD_LABELS[d.paymentMethod as ExternalPaymentMethod]}
+                  </td>
+                  <td className="px-6 py-3 text-slate-600">{d.fundName || "—"}</td>
+                  <td className="px-6 py-3 text-slate-600">{d.externalTransactionId || d.checkNumber || d.confirmationNumber || "—"}</td>
+                  <td className="px-6 py-3">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{receiptStatusLabel(d.receiptStatus)}</span>
+                  </td>
+                  <td className="px-6 py-3 text-slate-600">{d.isTaxDeductible ? "Yes" : "No"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -121,6 +121,26 @@ export async function loadDonorDonationsTab(
   return { rows: paged, totalCount };
 }
 
+/**
+ * The donor's External Donation history (cash/check/Zelle/Cash App/bank
+ * transfer/imported/etc.) — same table other readers of ExternalDonation
+ * already use, scoped directly by donorId (no instrument bridge needed,
+ * unlike the Finix-sourced tabs above). Voided rows are excluded, matching
+ * every other reader of this table. Scoped by createdByUserId when a
+ * fundraiser/viewer without canViewAllTransactions is viewing.
+ */
+export async function loadDonorExternalDonationsTab(donorId: string, churchId: string, attributedUserId?: string) {
+  return prisma.externalDonation.findMany({
+    where: {
+      churchId,
+      donorId,
+      status: { not: "VOIDED" },
+      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
+    },
+    orderBy: { donationDate: "desc" },
+  });
+}
+
 export async function loadDonorRecurringTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
   if (instrumentIds.length === 0) return [];
   return prisma.finixSubscription.findMany({

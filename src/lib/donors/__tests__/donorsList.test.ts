@@ -12,6 +12,7 @@ function makePrismaMock(donors: any[] = []) {
     payment: { findMany: vi.fn().mockResolvedValue([]) },
     invoice: { findMany: vi.fn().mockResolvedValue([]) },
     invoicePayment: { findMany: vi.fn().mockResolvedValue([]) },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
   };
 }
 
