@@ -9,6 +9,7 @@ vi.mock("@/lib/prisma", () => ({
     payment: { findMany: vi.fn() },
     finixSubscription: { findMany: vi.fn() },
     finixPaymentInstrumentSnapshot: { findMany: vi.fn() },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

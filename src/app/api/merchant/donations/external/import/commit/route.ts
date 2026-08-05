@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
-import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
+import { resolveOrCreateDonorWithMatchReview } from "@/lib/donors/resolveOrCreateDonorWithMatchReview";
 import { canManageFunds } from "@/lib/giving/fundPermissions";
 import { classifySource } from "@/lib/donations/externalDonationTypes";
 import {
@@ -182,11 +182,19 @@ export async function POST(req: Request) {
         isAnonymous = true;
         donorMatchStatus = "ANONYMOUS";
       } else if (validation.donorName || mapped.donorEmail || mapped.donorPhone) {
-        const resolved = await resolveOrCreateDonor({
+        const resolved = await resolveOrCreateDonorWithMatchReview({
           churchId: auth.churchId,
           name: validation.donorName,
           email: mapped.donorEmail,
           phone: mapped.donorPhone,
+          sourceType: "EXTERNAL_DONATION_IMPORT",
+          sourceId: batch.id,
+          donationAmountCents: validation.amountCents ?? undefined,
+          donationDate: validation.donationDate ?? undefined,
+          actorUserId: auth.userId,
+          actorEmail: auth.email,
+          actorRole: auth.role,
+          req,
         });
         donorId = resolved.id;
         donorMatchStatus = "MATCHED";

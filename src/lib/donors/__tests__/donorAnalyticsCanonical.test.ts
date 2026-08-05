@@ -21,18 +21,46 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     },
     finixTransfer: {
       findMany: vi.fn().mockResolvedValue([
-        { finixTransferId: "TR1", finixPaymentInstrumentId: "IN1", amountCents: 5000, state: "SUCCEEDED", createdAtFinix: new Date("2026-01-01") },
-        { finixTransferId: "TR2", finixPaymentInstrumentId: "IN2", amountCents: 7500, state: "SUCCEEDED", createdAtFinix: new Date("2026-02-01") },
-        { finixTransferId: "TR3", finixPaymentInstrumentId: "IN3", amountCents: 1000, state: "SUCCEEDED", createdAtFinix: new Date("2026-01-15") },
+        {
+          finixTransferId: "TR1",
+          finixPaymentInstrumentId: "IN1",
+          amountCents: 5000,
+          state: "SUCCEEDED",
+          createdAtFinix: new Date("2026-01-01"),
+        },
+        {
+          finixTransferId: "TR2",
+          finixPaymentInstrumentId: "IN2",
+          amountCents: 7500,
+          state: "SUCCEEDED",
+          createdAtFinix: new Date("2026-02-01"),
+        },
+        {
+          finixTransferId: "TR3",
+          finixPaymentInstrumentId: "IN3",
+          amountCents: 1000,
+          state: "SUCCEEDED",
+          createdAtFinix: new Date("2026-01-15"),
+        },
       ]),
-      aggregate: vi.fn().mockResolvedValue({ _sum: { amountCents: 13500 }, _count: 3 }),
+      aggregate: vi
+        .fn()
+        .mockResolvedValue({ _sum: { amountCents: 13500 }, _count: 3 }),
     },
     finixRefundOrReversal: { findMany: vi.fn().mockResolvedValue([]) },
     bankReturn: { findMany: vi.fn().mockResolvedValue([]) },
     finixSubscription: {
       findMany: vi.fn().mockResolvedValue([
-        { finixPaymentInstrumentId: "IN1", amountCents: 2000, billingInterval: "MONTHLY" },
-        { finixPaymentInstrumentId: "IN2", amountCents: 3000, billingInterval: "MONTHLY" },
+        {
+          finixPaymentInstrumentId: "IN1",
+          amountCents: 2000,
+          billingInterval: "MONTHLY",
+        },
+        {
+          finixPaymentInstrumentId: "IN2",
+          amountCents: 3000,
+          billingInterval: "MONTHLY",
+        },
       ]),
     },
     donor: {
@@ -42,6 +70,14 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
       ]),
       count: vi.fn().mockResolvedValue(2),
     },
+    externalDonation: {
+      findMany: vi.fn().mockResolvedValue([]),
+      aggregate: vi
+        .fn()
+        .mockResolvedValue({ _sum: { donationAmountCents: 0 }, _count: 0 }),
+    },
+    invoice: { findMany: vi.fn().mockResolvedValue([]) },
+    invoicePayment: { findMany: vi.fn().mockResolvedValue([]) },
     ...overrides,
   };
 }
@@ -75,16 +111,160 @@ describe("loadTopDonors — one canonical donor combines every linked instrument
     const { loadTopDonors } = await loadModule(prismaMock);
 
     prismaMock.finixSubscription.findMany.mockResolvedValue([
-      { finixPaymentInstrumentId: "IN1", amountCents: 2000, billingInterval: "MONTHLY" },
-      { finixPaymentInstrumentId: "IN2", amountCents: 3000, billingInterval: "MONTHLY" },
+      {
+        finixPaymentInstrumentId: "IN1",
+        amountCents: 2000,
+        billingInterval: "MONTHLY",
+      },
+      {
+        finixPaymentInstrumentId: "IN2",
+        amountCents: 3000,
+        billingInterval: "MONTHLY",
+      },
     ]);
-    prismaMock.donor.findMany.mockResolvedValue([{ id: "D1", name: "Pavan Reddy", anonymousPreference: false }]);
+    prismaMock.donor.findMany.mockResolvedValue([
+      { id: "D1", name: "Pavan Reddy", anonymousPreference: false },
+    ]);
 
-    const { rows } = await loadTopDonors("church-a", undefined, "recurring", 10);
+    const { rows } = await loadTopDonors(
+      "church-a",
+      undefined,
+      "recurring",
+      10,
+    );
 
     expect(rows).toHaveLength(1);
     expect(rows[0].donorId).toBe("D1");
     expect(rows[0].metricValueCents).toBe(5000); // 2000 + 3000 monthly, one donor
+  });
+});
+
+describe("loadTopDonors — combines WGC-processed and external donations for the same canonical donor", () => {
+  it("a donor who gave via card AND cash appears once with the combined total (John Smith: $100 Google Pay + $50 cash = $150, not two rows)", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ finixPaymentInstrumentId: "IN1", donorId: "D1" }]),
+      },
+      finixTransfer: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            finixTransferId: "TR1",
+            finixPaymentInstrumentId: "IN1",
+            amountCents: 10000,
+            state: "SUCCEEDED",
+            createdAtFinix: new Date("2026-01-01"),
+          },
+        ]),
+      },
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([
+          { donorId: "D1", donationAmountCents: 5000, donationDate: new Date("2026-01-15") },
+        ]),
+      },
+      finixSubscription: { findMany: vi.fn().mockResolvedValue([]) },
+      donor: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: "D1", name: "John Smith", anonymousPreference: false }]),
+        count: vi.fn().mockResolvedValue(1),
+      },
+    });
+    const { loadTopDonors } = await loadModule(prismaMock);
+
+    const { rows, totalForMetricCents } = await loadTopDonors("church-a", undefined, "gross", 10);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].donorId).toBe("D1");
+    expect(rows[0].metricValueCents).toBe(15000); // $100 Google Pay + $50 cash
+    expect(rows[0].donationCount).toBe(2);
+    expect(totalForMetricCents).toBe(15000);
+  });
+
+  it("a donor with only external donations (no Finix instrument at all) still appears in Top Donors", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      finixTransfer: { findMany: vi.fn().mockResolvedValue([]) },
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([
+          { donorId: "D9", donationAmountCents: 7500, donationDate: new Date("2026-01-10") },
+        ]),
+      },
+      finixSubscription: { findMany: vi.fn().mockResolvedValue([]) },
+      donor: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ id: "D9", name: "Cash Only Donor", anonymousPreference: false }]),
+        count: vi.fn().mockResolvedValue(1),
+      },
+    });
+    const { loadTopDonors } = await loadModule(prismaMock);
+
+    const { rows } = await loadTopDonors("church-a", undefined, "gross", 10);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].donorId).toBe("D9");
+    expect(rows[0].metricValueCents).toBe(7500);
+  });
+});
+
+describe("loadDonationTrend — combines WGC-processed and external donations by actual donation date", () => {
+  it("buckets an external donation by donationDate, not by createdAt/import date, and sums both sources", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([{ finixPaymentInstrumentId: "IN1", donorId: "D1" }]),
+      },
+      finixTransfer: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            finixTransferId: "TR1",
+            finixPaymentInstrumentId: "IN1",
+            amountCents: 10000,
+            createdAtFinix: new Date("2026-01-05T12:00:00Z"),
+          },
+        ]),
+      },
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([
+          // donationDate is the real gift date; imagine this was imported
+          // months later — it must still land in the January bucket.
+          { donorId: "D2", donationAmountCents: 5000, donationDate: new Date("2026-01-06T12:00:00Z") },
+        ]),
+      },
+    });
+    const { loadDonationTrend } = await loadModule(prismaMock);
+
+    const dateFilter = { gte: new Date("2026-01-01"), lte: new Date("2026-01-31") };
+    const buckets = await loadDonationTrend("church-a", dateFilter, "daily", undefined, "all");
+
+    const totalGross = buckets.reduce((s, b) => s + b.grossDonatedCents, 0);
+    const totalWgc = buckets.reduce((s, b) => s + b.wgcDonatedCents, 0);
+    const totalExternal = buckets.reduce((s, b) => s + b.externalDonatedCents, 0);
+
+    expect(totalGross).toBe(15000);
+    expect(totalWgc).toBe(10000);
+    expect(totalExternal).toBe(5000);
+  });
+
+  it("sourceFilter='external' excludes WGC-processed transfers entirely", async () => {
+    const prismaMock = makePrismaMock({
+      externalDonation: {
+        findMany: vi.fn().mockResolvedValue([
+          { donorId: "D2", donationAmountCents: 5000, donationDate: new Date("2026-01-06T12:00:00Z") },
+        ]),
+      },
+    });
+    const { loadDonationTrend } = await loadModule(prismaMock);
+
+    const dateFilter = { gte: new Date("2026-01-01"), lte: new Date("2026-01-31") };
+    const buckets = await loadDonationTrend("church-a", dateFilter, "daily", undefined, "external");
+
+    expect(prismaMock.finixTransfer.findMany).not.toHaveBeenCalled();
+    const totalGross = buckets.reduce((s, b) => s + b.grossDonatedCents, 0);
+    expect(totalGross).toBe(5000);
   });
 });
 
@@ -96,16 +276,43 @@ describe("loadDonorSummary — Total Donors counts canonical donor profiles", ()
     vi.doMock("@/lib/donors/donorAggregates", () => ({
       loadDonorAggregatesBatch: vi.fn().mockResolvedValue(
         new Map([
-          ["D1", { totalDonatedCents: 12500, donationCount: 2, firstDonationAt: new Date("2026-01-01"), lastDonationAt: new Date("2026-02-01"), activeSubscriptionCount: 2, failedPaymentCount: 0 }],
-          ["D2", { totalDonatedCents: 1000, donationCount: 1, firstDonationAt: new Date("2026-01-15"), lastDonationAt: new Date("2026-01-15"), activeSubscriptionCount: 0, failedPaymentCount: 0 }],
-        ])
+          [
+            "D1",
+            {
+              totalDonatedCents: 12500,
+              donationCount: 2,
+              firstDonationAt: new Date("2026-01-01"),
+              lastDonationAt: new Date("2026-02-01"),
+              activeSubscriptionCount: 2,
+              failedPaymentCount: 0,
+            },
+          ],
+          [
+            "D2",
+            {
+              totalDonatedCents: 1000,
+              donationCount: 1,
+              firstDonationAt: new Date("2026-01-15"),
+              lastDonationAt: new Date("2026-01-15"),
+              activeSubscriptionCount: 0,
+              failedPaymentCount: 0,
+            },
+          ],
+        ]),
       ),
+      externalDonationEligibilityWhere: (churchId: string, opts: any = {}) => ({
+        churchId,
+        ...opts,
+      }),
+      isExternalDonationDeposited: (row: any) => row.depositStatus !== "RETURNED",
     }));
     vi.doMock("@/lib/donors/donorRiskSignals", () => ({
-      loadDonorRiskSignals: vi.fn().mockResolvedValue(new Map([
-        ["D1", { hasActiveSubscription: true }],
-        ["D2", { hasActiveSubscription: false }],
-      ])),
+      loadDonorRiskSignals: vi.fn().mockResolvedValue(
+        new Map([
+          ["D1", { hasActiveSubscription: true }],
+          ["D2", { hasActiveSubscription: false }],
+        ]),
+      ),
     }));
     vi.doMock("@/lib/donors/donorStatus", () => ({
       resolveDonorDisplayStatus: () => "ACTIVE",
@@ -123,7 +330,12 @@ describe("loadDonorSummary — Total Donors counts canonical donor profiles", ()
     // Total Donors must reflect that, not the payment/subscription count.
     expect(summary.totalDonors).toBe(2);
     expect(prismaMock.donor.count).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ churchId: "church-a", archivedAt: null }) })
+      expect.objectContaining({
+        where: expect.objectContaining({
+          churchId: "church-a",
+          archivedAt: null,
+        }),
+      }),
     );
   });
 
@@ -132,19 +344,42 @@ describe("loadDonorSummary — Total Donors counts canonical donor profiles", ()
     const prismaMock = makePrismaMock();
     vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
     vi.doMock("@/lib/donors/donorAggregates", () => ({
-      loadDonorAggregatesBatch: vi.fn().mockResolvedValue(
-        new Map([["D1", { totalDonatedCents: 0, donationCount: 0, firstDonationAt: null, lastDonationAt: null, activeSubscriptionCount: 2, failedPaymentCount: 0 }]])
-      ),
+      loadDonorAggregatesBatch: vi
+        .fn()
+        .mockResolvedValue(
+          new Map([
+            [
+              "D1",
+              {
+                totalDonatedCents: 0,
+                donationCount: 0,
+                firstDonationAt: null,
+                lastDonationAt: null,
+                activeSubscriptionCount: 2,
+                failedPaymentCount: 0,
+              },
+            ],
+          ]),
+        ),
+      externalDonationEligibilityWhere: (churchId: string, opts: any = {}) => ({
+        churchId,
+        ...opts,
+      }),
+      isExternalDonationDeposited: (row: any) => row.depositStatus !== "RETURNED",
     }));
     vi.doMock("@/lib/donors/donorRiskSignals", () => ({
-      loadDonorRiskSignals: vi.fn().mockResolvedValue(new Map([["D1", { hasActiveSubscription: true }]])),
+      loadDonorRiskSignals: vi
+        .fn()
+        .mockResolvedValue(new Map([["D1", { hasActiveSubscription: true }]])),
     }));
     vi.doMock("@/lib/donors/donorStatus", () => ({
       resolveDonorDisplayStatus: () => "ACTIVE",
       resolveDonorNeedsAttentionReasons: () => [],
     }));
     prismaMock.donor.count.mockResolvedValue(1);
-    prismaMock.donor.findMany.mockResolvedValue([{ id: "D1", createdAt: new Date("2026-01-01") }]);
+    prismaMock.donor.findMany.mockResolvedValue([
+      { id: "D1", createdAt: new Date("2026-01-01") },
+    ]);
 
     const { loadDonorSummary } = await import("@/lib/donors/donorSummary");
     const summary = await loadDonorSummary("church-a");

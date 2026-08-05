@@ -7,6 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     payment: { findMany: vi.fn() },
     finixSubscription: { findMany: vi.fn() },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -87,6 +88,17 @@ describe("CP4A behavioral tests 6/7: resolveScopedDonorIds derives donor visibil
     expect(ids).not.toContain("donor-other-fundraisers-donor");
   });
 
+  it("a donor visible only via an external donation this fundraiser recorded (no Payment/Subscription at all) IS included — a fundraiser who logs a cash gift must be able to see that donor again", async () => {
+    const { prisma } = await import("@/lib/prisma");
+    vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.finixSubscription.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.externalDonation.findMany).mockResolvedValue([{ donorId: "cash-only-donor" }] as never);
+    const { resolveScopedDonorIds } = await import("@/lib/auth/scopes");
+    const auth = makeAuth();
+    const ids = await resolveScopedDonorIds(auth, { kind: "organization" });
+    expect(ids).toEqual(["cash-only-donor"]);
+  });
+
   it("organization scope returns null (no donor-ID restriction) for an OWNER", async () => {
     const { resolveScopedDonorIds } = await import("@/lib/auth/scopes");
     const auth = makeAuth({ role: "owner", rawRole: "owner", userId: "owner-1" });
@@ -98,6 +110,7 @@ describe("CP4A behavioral tests 6/7: resolveScopedDonorIds derives donor visibil
     const { prisma } = await import("@/lib/prisma");
     vi.mocked(prisma.payment.findMany).mockResolvedValue([] as never);
     vi.mocked(prisma.finixSubscription.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.externalDonation.findMany).mockResolvedValue([] as never);
     const { resolveScopedDonorIds } = await import("@/lib/auth/scopes");
     const auth = makeAuth();
     const ids = await resolveScopedDonorIds(auth, { kind: "organization" });

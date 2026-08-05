@@ -177,6 +177,17 @@ export interface MergeResult {
   statementConflicts: number;
 }
 
+export type MergeableField = "name" | "email" | "phone" | "addressLine1" | "addressLine2" | "city" | "state" | "postalCode";
+
+/**
+ * Explicit per-field winner picks from the merge-review UI — "primary"
+ * (default, no-op) or "duplicate" (take the duplicate's value even if the
+ * primary already has one populated). This is the ONLY path that ever
+ * overwrites a populated primary field; the automatic fill-in below never
+ * does, by design.
+ */
+export type MergeFieldSelections = Partial<Record<MergeableField, "primary" | "duplicate">>;
+
 /**
  * Reassigns every local relationship from the duplicate donor to the
  * primary donor, transactionally, then archives the duplicate (never hard-
@@ -184,7 +195,14 @@ export interface MergeResult {
  * primary). Both donors must belong to the same organization, and a donor
  * can never be merged into itself.
  */
-export async function mergeDonors(primaryDonorId: string, duplicateDonorId: string, churchId: string, actorUserId: string | null, actorEmail: string | null): Promise<MergeResult> {
+export async function mergeDonors(
+  primaryDonorId: string,
+  duplicateDonorId: string,
+  churchId: string,
+  actorUserId: string | null,
+  actorEmail: string | null,
+  fieldSelections?: MergeFieldSelections,
+): Promise<MergeResult> {
   if (primaryDonorId === duplicateDonorId) {
     throw new Error("Cannot merge a donor into itself");
   }
@@ -262,6 +280,21 @@ export async function mergeDonors(primaryDonorId: string, duplicateDonorId: stri
       await tx.donor.update({ where: { id: duplicateDonorId }, data: { finixIdentityId: null } });
       fillIn.finixIdentityId = duplicate.finixIdentityId;
     }
+    // Explicit reviewer field selections always win over both the
+    // just-computed fill-in above and whatever the primary already had —
+    // this is the deliberate exception to "never overwrite a populated
+    // primary field" that the merge-review UI's per-field picker relies on.
+    if (fieldSelections) {
+      for (const [field, winner] of Object.entries(fieldSelections) as [MergeableField, "primary" | "duplicate"][]) {
+        if (winner !== "duplicate") continue;
+        const value = duplicate[field as keyof typeof duplicate];
+        if (value == null) continue;
+        fillIn[field] = value;
+        if (field === "email") fillIn.normalizedEmail = duplicate.normalizedEmail;
+        if (field === "phone") fillIn.normalizedPhone = duplicate.normalizedPhone;
+      }
+    }
+
     if (Object.keys(fillIn).length > 0) {
       await tx.donor.update({ where: { id: primaryDonorId }, data: fillIn });
     }

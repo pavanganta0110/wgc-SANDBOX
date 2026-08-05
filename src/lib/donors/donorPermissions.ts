@@ -13,6 +13,10 @@ export interface DonorPermissions {
   canGenerateStatements: boolean;
   canSendStatements: boolean;
   canTriggerSync: boolean;
+  /** Review the possible-duplicate-donor queue (confirm/reject a fuzzy
+   * match, or merge from it) — same gate as canMerge since confirming a
+   * match is itself a merge decision. */
+  canReviewMatches: boolean;
 }
 
 /** Team-access Checkpoint 4: composed from the centralized role-permission
@@ -36,6 +40,7 @@ export function getDonorPermissions(role: SessionRole | null | undefined): Donor
       canGenerateStatements: true,
       canSendStatements: false, // wgc_admin can troubleshoot but must not send on an organization's behalf without an authorized action
       canTriggerSync: true,
+      canReviewMatches: true,
     };
   }
 
@@ -52,6 +57,7 @@ export function getDonorPermissions(role: SessionRole | null | undefined): Donor
       canGenerateStatements: false,
       canSendStatements: false,
       canTriggerSync: false,
+      canReviewMatches: false,
     };
   }
 
@@ -67,5 +73,6 @@ export function getDonorPermissions(role: SessionRole | null | undefined): Donor
     canGenerateStatements: base.canManageOrgSettings,
     canSendStatements: base.canManageOrgSettings,
     canTriggerSync: false, // wgc_admin-only, handled above
+    canReviewMatches: base.canManageOrgSettings,
   };
 }

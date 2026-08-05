@@ -768,6 +768,61 @@ model Donor {
   @@index([archivedAt])
 }
 
+/// A confidence-scored candidate match between a newly-entered/imported
+/// donor and an existing Donor row, raised when the automatic exact-match
+/// resolver (resolveOrCreateDonor: email/phone/finixIdentityId) finds no
+/// exact match but a fuzzy comparison (name+address, name+partial phone,
+/// name+similar email) crosses the MEDIUM-confidence bar. Never created
+/// for a HIGH-confidence exact match (that auto-attaches immediately,
+/// same as always) or for a bare name-only LOW match (that creates a new
+/// donor with no review needed, per the "never merge on name alone" rule).
+/// A record here does not itself change any donation's donorId — the new
+/// donor row is created normally so the gift is never blocked or lost;
+/// this table only tracks that a human should confirm whether the two
+/// donor rows are actually the same person.
+model PossibleDonorMatch {
+  id       String @id @default(cuid())
+  churchId String
+
+  // The pre-existing donor this new record might be the same person as.
+  existingDonorId  String
+  // The newly created donor row raised against existingDonorId — created
+  // immediately (never blocked pending review), reassigned into
+  // existingDonorId via the normal mergeDonors() flow only if a reviewer
+  // confirms the match.
+  candidateDonorId String
+
+  // EXTERNAL_DONATION_ENTRY | EXTERNAL_DONATION_IMPORT — the only two
+  // paths that currently run fuzzy scoring (see donorMatchConfidence.ts
+  // doc comment for why the public Finix checkout path never does).
+  sourceType String
+  // ExternalDonation.id (entry) or ExternalDonationImportBatch.id (import)
+  sourceId   String?
+
+  confidence        String // MEDIUM (HIGH auto-attaches, LOW never rows here)
+  confidenceScore   Int // 0-100, informational — confidence is the decision boundary
+  matchedFields     String[]
+  conflictingFields String[]
+  matchReason       String
+
+  donationAmountCents Int?
+  donationDate        DateTime?
+
+  // PENDING | CONFIRMED | REJECTED | SKIPPED
+  status           String    @default("PENDING")
+  reviewedByUserId String?
+  reviewedByEmail  String?
+  reviewedAt       DateTime?
+  resolutionNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, status])
+  @@index([existingDonorId])
+  @@index([candidateDonorId])
+}
+
 // Multiple free-text internal notes per donor, each with its own author/
 // timestamp — distinct from the single-overwritable-field pattern used by
 // FinixDispute.internalNote. Never sent to the donor or the processor.
