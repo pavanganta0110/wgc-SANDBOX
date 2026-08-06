@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { resolveSafeMerchantRedirect } from "@/lib/safeReturnPath";
 
 export default function MerchantLoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,8 +32,17 @@ export default function MerchantLoginForm() {
         throw new Error(data.error || "Login failed.");
       }
 
+      // Previously hardcoded to /merchant/dashboard regardless of how this
+      // page was reached — a restricted org following an activation link
+      // that redirected here to log in first (e.g.
+      // /merchant/login?next=/activate-subscription/<token>) landed back
+      // on the gated dashboard instead of continuing to the page they
+      // actually came for. resolveSafeMerchantRedirect validates `next`
+      // is same-origin (/merchant/* or /activate-subscription/* only)
+      // before ever using it — no open redirect.
+      const next = resolveSafeMerchantRedirect(searchParams.get("next"));
       // replace (not push) so the back button doesn't return to /merchant/login
-      router.replace("/merchant/dashboard");
+      router.replace(next);
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "An error occurred");
