@@ -21,13 +21,17 @@ import { logBillingAuditEvent } from "@/lib/billing/billingAudit";
  * Finix before retrying" — see reconcileIncompleteSubscription below for
  * the timeout-recovery path).
  *
- * NOTE ON trial_details: the exact Finix subscription trial-period request/
- * response shape used below (trial_details.trial_period_days,
- * response fields trial_start/trial_end/first_charge_at) is this
- * implementation's best-effort structure per Finix's subscriptions guide,
- * and per the project's own spec (section 31) MUST be confirmed against
- * WGC's actual Finix contact before any production trial subscription is
- * created — flagged again in the completion report.
+ * TRIAL FIELDS — confirmed against a real Finix sandbox POST /subscriptions
+ * call (2026-08-06), not guessed: trial_details lives inside
+ * subscription_details as { interval_type: "MONTH", interval_count: N },
+ * never as a top-level field (Finix silently no-ops an unrecognized
+ * top-level trial_details rather than erroring — confirmed by a first
+ * attempt that returned 201 with state="ACTIVE" and
+ * subscription_details.trial_details=null). The response has NO
+ * trial_start/trial_end fields at all; trial state instead lives in
+ * subscription_phase ("TRIAL" | "DISCOUNT" | "EVERGREEN"), and
+ * first_charge_at IS the effective trial-end / first-real-charge date.
+ * next_billing_date is a {year, month, day} object, not an ISO string.
  */
 
 const DEFAULT_PLAN_CODE = "WGC_STANDARD";
@@ -143,9 +147,13 @@ export async function activateWgcSubscription(input: ActivateSubscriptionInput):
       linked_to: merchantStatus.merchantId,
       linked_type: "MERCHANT",
       buyer_details: { identity_id: input.billingIdentityId, instrument_id: input.billingPaymentInstrumentId },
-      subscription_details: { collection_method: "BILL_AUTOMATICALLY" },
+      subscription_details: {
+        collection_method: "BILL_AUTOMATICALLY",
+        ...(isPromotional && entitlement
+          ? { trial_details: { interval_type: "MONTH" as const, interval_count: entitlement.durationMonths } }
+          : {}),
+      },
       tags,
-      ...(isPromotional && entitlement ? { trial_details: { trial_period_days: entitlement.durationMonths * 30 } } : {}),
     });
   } catch (err) {
     await logBillingAuditEvent({
@@ -162,14 +170,28 @@ export async function activateWgcSubscription(input: ActivateSubscriptionInput):
     );
   }
 
-  // Defensive parsing — see module doc comment re: confirming exact field
-  // names with Finix before production use.
-  const trialStartsAt = finixSubscription?.trial_start ? new Date(finixSubscription.trial_start) : isPromotional ? new Date() : null;
-  const trialEndsAt = finixSubscription?.trial_end ? new Date(finixSubscription.trial_end) : null;
-  const firstChargeAt = finixSubscription?.first_charge_at ? new Date(finixSubscription.first_charge_at) : trialEndsAt;
-  const nextChargeAt = finixSubscription?.next_charge_date ? new Date(finixSubscription.next_charge_date) : firstChargeAt;
-  const finixState: string = finixSubscription?.state || (isPromotional ? "TRIALING" : "ACTIVE");
-  const newStatus = finixState === "TRIALING" ? "TRIALING" : "ACTIVE";
+  // Field names confirmed against a real Finix response — see module doc
+  // comment. subscription_phase (not state) indicates TRIAL; there are no
+  // trial_start/trial_end fields, so trialStartsAt derives from
+  // start_subscription_at and trialEndsAt/firstChargeAt both derive from
+  // first_charge_at (the one date Finix actually returns for "when does
+  // the trial end and the first real charge happen").
+  const subscriptionPhase: string | undefined = finixSubscription?.subscription_phase;
+  const isTrialPhase = subscriptionPhase === "TRIAL";
+  const trialStartsAt = finixSubscription?.start_subscription_at
+    ? new Date(finixSubscription.start_subscription_at)
+    : isPromotional
+      ? new Date()
+      : null;
+  const firstChargeAt = finixSubscription?.first_charge_at ? new Date(finixSubscription.first_charge_at) : null;
+  const trialEndsAt = isTrialPhase ? firstChargeAt : null;
+  const nextBillingDate = finixSubscription?.next_billing_date;
+  const nextChargeAt =
+    nextBillingDate && typeof nextBillingDate === "object"
+      ? new Date(Date.UTC(nextBillingDate.year, nextBillingDate.month - 1, nextBillingDate.day))
+      : firstChargeAt;
+  const finixState: string = finixSubscription?.state || "ACTIVE";
+  const newStatus = isTrialPhase ? "TRIALING" : finixState === "CANCELED" ? "CANCELED" : "ACTIVE";
 
   const updated = await prisma.$transaction(async (tx) => {
     const updatedRow = await tx.wgcSubscription.update({

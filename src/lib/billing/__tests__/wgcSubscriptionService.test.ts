@@ -55,13 +55,16 @@ describe("activateWgcSubscription — trial configuration for a promotional orga
         update: vi.fn().mockResolvedValue({}),
       },
     });
+    // Field names match a real confirmed Finix sandbox response (see
+    // wgcSubscriptionService.ts doc comment) — no trial_start/trial_end,
+    // trial state via subscription_phase, next_billing_date as an object.
     const createSubscription = vi.fn().mockResolvedValue({
       id: "fx_sub_123",
-      state: "TRIALING",
-      trial_start: "2027-01-01T00:00:00Z",
-      trial_end: "2027-07-01T00:00:00Z",
+      state: "ACTIVE",
+      subscription_phase: "TRIAL",
+      start_subscription_at: "2027-01-01T00:00:00Z",
       first_charge_at: "2027-07-01T00:00:00Z",
-      next_charge_date: "2027-07-01T00:00:00Z",
+      next_billing_date: { year: 2027, month: 7, day: 1 },
     });
     const mod = await loadModule(prismaMock, undefined, createSubscription);
 
@@ -78,18 +81,27 @@ describe("activateWgcSubscription — trial configuration for a promotional orga
         billing_interval: "MONTHLY",
         linked_to: "MU_wgc_billing_123",
         linked_type: "MERCHANT",
-        trial_details: expect.objectContaining({ trial_period_days: 180 }),
+        subscription_details: expect.objectContaining({
+          collection_method: "BILL_AUTOMATICALLY",
+          trial_details: { interval_type: "MONTH", interval_count: 6 },
+        }),
       }),
     );
     expect(result.isPromotional).toBe(true);
     expect(result.subscription.amountCents).toBe(1000);
     expect(result.subscription.firstChargeAt?.toISOString()).toBe("2027-07-01T00:00:00.000Z");
+    expect(result.subscription.trialEndsAt?.toISOString()).toBe("2027-07-01T00:00:00.000Z");
     expect(result.subscription.status).toBe("TRIALING");
   });
 
   it("a normal (non-promotional) organization gets no trial_details at all — the $10 charge is immediate/first-cycle", async () => {
     const prismaMock = makePrismaMock();
-    const createSubscription = vi.fn().mockResolvedValue({ id: "fx_sub_456", state: "ACTIVE", next_charge_date: "2027-02-01T00:00:00Z" });
+    const createSubscription = vi.fn().mockResolvedValue({
+      id: "fx_sub_456",
+      state: "ACTIVE",
+      subscription_phase: "EVERGREEN",
+      next_billing_date: { year: 2027, month: 2, day: 1 },
+    });
     const mod = await loadModule(prismaMock, undefined, createSubscription);
 
     const result = await mod.activateWgcSubscription({
@@ -99,8 +111,9 @@ describe("activateWgcSubscription — trial configuration for a promotional orga
     });
 
     const callArgs = createSubscription.mock.calls[0][0];
-    expect(callArgs.trial_details).toBeUndefined();
+    expect(callArgs.subscription_details.trial_details).toBeUndefined();
     expect(result.isPromotional).toBe(false);
+    expect(result.subscription.status).toBe("ACTIVE");
   });
 
   it("no platform charge is created during trial — Finix is asked to create a SUBSCRIPTION, never a one-off transfer/charge", async () => {

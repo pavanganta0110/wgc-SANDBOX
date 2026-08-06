@@ -104,9 +104,21 @@ export async function reconcileWgcSubscriptions(): Promise<ReconciliationResult>
     if (!sub.finixSubscriptionId) continue;
     try {
       const remote = await finixClient.getSubscription(sub.finixSubscriptionId);
+      // Field names confirmed against a real Finix response (see
+      // wgcSubscriptionService.ts doc comment): trial state lives in
+      // subscription_phase, not state; there is no trial_end field —
+      // first_charge_at is the effective trial-end date while
+      // subscription_phase is "TRIAL"; next_billing_date is a
+      // {year, month, day} object, not an ISO string.
       const remoteState: string | undefined = remote?.state;
-      const remoteTrialEnd = remote?.trial_end ? new Date(remote.trial_end) : null;
-      const remoteNextCharge = remote?.next_charge_date ? new Date(remote.next_charge_date) : null;
+      const remoteSubscriptionPhase: string | undefined = remote?.subscription_phase;
+      const remoteIsTrialPhase = remoteSubscriptionPhase === "TRIAL";
+      const remoteTrialEnd = remoteIsTrialPhase && remote?.first_charge_at ? new Date(remote.first_charge_at) : null;
+      const remoteNextBillingDate = remote?.next_billing_date;
+      const remoteNextCharge =
+        remoteNextBillingDate && typeof remoteNextBillingDate === "object"
+          ? new Date(Date.UTC(remoteNextBillingDate.year, remoteNextBillingDate.month - 1, remoteNextBillingDate.day))
+          : null;
 
       const driftedTrialEnd = Boolean(
         remoteTrialEnd && sub.trialEndsAt && Math.abs(remoteTrialEnd.getTime() - sub.trialEndsAt.getTime()) > 24 * 60 * 60 * 1000,
@@ -116,11 +128,11 @@ export async function reconcileWgcSubscriptions(): Promise<ReconciliationResult>
           type: "TRIAL_DATE_MISMATCH",
           organizationId: sub.organizationId,
           subscriptionId: sub.id,
-          detail: `Locally-stored trialEndsAt (${sub.trialEndsAt?.toISOString()}) disagrees with Finix's trial_end (${remoteTrialEnd?.toISOString()}) by more than 24h.`,
+          detail: `Locally-stored trialEndsAt (${sub.trialEndsAt?.toISOString()}) disagrees with Finix's first_charge_at (${remoteTrialEnd?.toISOString()}) by more than 24h.`,
         });
       }
 
-      const mappedStatus = remoteState === "TRIALING" ? "TRIALING" : remoteState === "CANCELED" ? "CANCELED" : sub.status === "PAST_DUE" ? "PAST_DUE" : "ACTIVE";
+      const mappedStatus = remoteIsTrialPhase ? "TRIALING" : remoteState === "CANCELED" ? "CANCELED" : sub.status === "PAST_DUE" ? "PAST_DUE" : "ACTIVE";
       const needsUpdate =
         mappedStatus !== sub.status ||
         (remoteTrialEnd && sub.trialEndsAt?.getTime() !== remoteTrialEnd.getTime()) ||

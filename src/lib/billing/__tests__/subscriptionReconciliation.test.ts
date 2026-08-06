@@ -28,7 +28,7 @@ describe("reconcileWgcSubscriptions — never creates a new charge or subscripti
   it("only reads Finix and updates local fields — never calls a creation method", async () => {
     const sub = { id: "sub-1", organizationId: "church-A", finixSubscriptionId: "fx_1", finixBillingMerchantId: "MU_wgc_billing_123", status: "TRIALING", trialEndsAt: new Date("2027-07-01"), nextChargeAt: new Date("2027-07-01"), pastDueAt: null, createdAt: new Date() };
     const prismaMock = makePrismaMock([sub]);
-    const getSubscription = vi.fn().mockResolvedValue({ state: "TRIALING", trial_end: "2027-07-01T00:00:00Z", next_charge_date: "2027-07-01T00:00:00Z" });
+    const getSubscription = vi.fn().mockResolvedValue({ state: "ACTIVE", subscription_phase: "TRIAL", first_charge_at: "2027-07-01T00:00:00Z", next_billing_date: { year: 2027, month: 7, day: 1 } });
     const mod = await loadModule(prismaMock, getSubscription);
 
     const result = await mod.reconcileWgcSubscriptions();
@@ -43,7 +43,7 @@ describe("reconcileWgcSubscriptions — never creates a new charge or subscripti
   it("updates locally-stored dates when they drift from Finix's returned values", async () => {
     const sub = { id: "sub-1", organizationId: "church-A", finixSubscriptionId: "fx_1", finixBillingMerchantId: "MU_wgc_billing_123", status: "TRIALING", trialEndsAt: new Date("2027-06-01"), nextChargeAt: new Date("2027-06-01"), pastDueAt: null, createdAt: new Date() };
     const prismaMock = makePrismaMock([sub]);
-    const getSubscription = vi.fn().mockResolvedValue({ state: "TRIALING", trial_end: "2027-07-01T00:00:00Z", next_charge_date: "2027-07-01T00:00:00Z" });
+    const getSubscription = vi.fn().mockResolvedValue({ state: "ACTIVE", subscription_phase: "TRIAL", first_charge_at: "2027-07-01T00:00:00Z", next_billing_date: { year: 2027, month: 7, day: 1 } });
     const mod = await loadModule(prismaMock, getSubscription);
 
     const result = await mod.reconcileWgcSubscriptions();
