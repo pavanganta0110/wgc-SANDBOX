@@ -94,8 +94,11 @@ export default function ActivationForm({
   const estimatedFirstCharge = estimatedFirstChargeDate(isPromotional ? durationMonths : 0);
 
   return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4">
-      <div className="max-w-lg mx-auto bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
+    <div className="min-h-screen bg-slate-50 py-12 px-4 flex flex-col items-center justify-center">
+      <div className="mb-6 flex justify-center">
+        <img src="/wgc-logo.png" alt="WGC Payments Logo" className="h-12 object-contain" />
+      </div>
+      <div className="max-w-lg w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
         <h1 className="text-xl font-bold text-slate-900 mb-1">Activate your WGC Platform subscription</h1>
         <p className="text-sm text-slate-500 mb-6">{organizationName}</p>
 
