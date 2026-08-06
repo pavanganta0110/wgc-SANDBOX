@@ -41,8 +41,8 @@ export interface OrgAccessResult {
 
 export async function resolveOrgAccessState(churchId: string): Promise<OrgAccessResult> {
   const [church, subscription] = await Promise.all([
-    prisma.church.findUnique({ where: { id: churchId }, select: { billingSetupStatus: true, status: true } }),
-    prisma.wgcSubscription.findUnique({ where: { organizationId: churchId } }),
+    prisma.church?.findUnique({ where: { id: churchId }, select: { billingSetupStatus: true, status: true } }),
+    prisma.wgcSubscription?.findUnique({ where: { organizationId: churchId } }),
   ]);
 
   if (!church) {
