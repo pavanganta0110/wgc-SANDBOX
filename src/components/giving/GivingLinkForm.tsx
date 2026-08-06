@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
-import { CheckCircle, Clock, AlertCircle, Repeat } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, Repeat, Loader2 } from "lucide-react";
 import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
@@ -234,6 +234,11 @@ export default function GivingLinkForm({
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
+  // Distinct from walletProcessing, which is set the moment the wallet button
+  // is tapped — i.e. while the native Apple/Google sheet is still open. This
+  // one covers only the post-authorization /donate round trip, so the
+  // "Completing your gift…" overlay never renders underneath a payment sheet.
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
   const googlePayButtonRef = useRef<HTMLDivElement>(null);
   const applePayButtonRef = useRef<HTMLElement>(null);
   const [attemptId, setAttemptId] = useState("");
@@ -300,6 +305,7 @@ export default function GivingLinkForm({
     method: "apple_pay" | "google_pay",
     walletResult: ApplePayResult | GooglePayResult
   ): Promise<{ success: boolean }> => {
+    setWalletSubmitting(true);
     try {
       walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
       // getFraudSessionId has no internal timeout — on a slow mobile
@@ -360,10 +366,17 @@ export default function GivingLinkForm({
       }
 
       setWalletProcessing(null);
+      // /donate returns `success: true` for any transfer it managed to create,
+      // including one Finix immediately declined — `state` is the only field
+      // that says whether money actually moved. This previously treated every
+      // non-PENDING state as success, so a FAILED wallet transfer (e.g. a
+      // closed card account) showed the donor a completed-donation screen for
+      // a gift the church never received. Only SUCCEEDED is success; PENDING
+      // keeps its ACH-style processing screen; everything else is a failure.
       const state = (data.state || "").toUpperCase();
       if (state === "PENDING") {
         setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-      } else {
+      } else if (state === "SUCCEEDED") {
         setResult({
           step: "success",
           totalCents: data.totalCents,
@@ -371,6 +384,13 @@ export default function GivingLinkForm({
           donationAmountCents: data.donationAmountCents,
           transferId: data.transferId,
         });
+      } else {
+        walletLog(`${method}: transfer did not succeed`, { state, transferId: data.transferId });
+        setResult({
+          step: "failed",
+          error: "Your payment was declined and you have not been charged. Please try a different card or payment method.",
+        });
+        return { success: false };
       }
       return { success: true };
     } catch (err) {
@@ -382,6 +402,10 @@ export default function GivingLinkForm({
       setWalletProcessing(null);
       setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
       return { success: false };
+    } finally {
+      // Every exit path clears it — a stuck overlay would trap the donor
+      // behind a full-screen, non-dismissible spinner.
+      setWalletSubmitting(false);
     }
   };
 
@@ -792,17 +816,29 @@ export default function GivingLinkForm({
             return;
           }
 
+          // Same rule as the wallet path: /donate returns success: true for
+          // any transfer it managed to create, including one Finix declined
+          // outright, so `state` is the only field that says whether money
+          // actually moved. Treating every non-PENDING state as success showed
+          // the donor a completed-donation screen for a declined card.
+          // PENDING is the normal ACH/bank case and keeps its processing
+          // screen; only SUCCEEDED is a completed gift.
           const state = (data.state || "").toUpperCase();
           setSubmitting(false);
           if (state === "PENDING") {
             setResult({ step: "pending", totalCents: data.totalCents, transferId: data.transferId });
-          } else {
+          } else if (state === "SUCCEEDED") {
             setResult({
               step: "success",
               totalCents: data.totalCents,
               feeCoveredCents: data.feeCoveredCents,
               donationAmountCents: data.donationAmountCents,
               transferId: data.transferId,
+            });
+          } else {
+            setResult({
+              step: "failed",
+              error: "Your payment was declined and you have not been charged. Please check your details or try a different payment method.",
             });
           }
         } catch {
@@ -888,6 +924,27 @@ export default function GivingLinkForm({
 
   return (
     <div className="space-y-6">
+      {/* Once the wallet sheet closes, the donation still needs a fraud
+          session plus the /donate round trip — several seconds on mobile. The
+          only feedback used to be a dimmed wallet button and a text-xs
+          "Processing donation…" line, so donors reported the page "going back
+          to the giving form" and then jumping to the success screen. This
+          overlay makes that wait unmistakable. It deliberately sits on top of
+          the form rather than replacing it (as a step: "processing" render
+          branch would) — the card path keeps Finix's tokenization iframe
+          mounted in this same tree, and unmounting it mid-submit would break
+          card payments. */}
+      {walletSubmitting && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/60 px-6 text-center"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="w-8 h-8 animate-spin text-white" />
+          <p className="text-base font-semibold text-white">Completing your gift…</p>
+          <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
+        </div>
+      )}
       {recurringEnabled && (
         <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
           <button

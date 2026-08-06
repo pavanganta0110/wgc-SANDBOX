@@ -1,6 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 import FirstLookForm from "@/components/marketing/FirstLookForm";
+import GatewayIcon from "@/components/ui/GatewayIcon";
+
+const CALENDLY_URL = "https://calendly.com/collinsansom/1-on-1-wgc-first-look";
 
 export const metadata = {
   title: "First Look | WGC Payments",
@@ -19,15 +22,19 @@ function DecorativeBar() {
 
 function Header() {
   return (
-    <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
-      <div className="flex flex-col">
-        <Image src="/images/first-look-logo.png" alt="Waypoint Gateway Collective" width={48} height={48} className="w-12 h-12 object-contain" />
-      </div>
-      <a 
+    <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-3 flex justify-between items-center">
+      <a href="/" className="flex items-center gap-3">
+        <GatewayIcon className="h-9 w-auto shrink-0" />
+        <div className="flex flex-col">
+          <span className="font-serif text-lg font-bold text-[#14213D] leading-none">WGC</span>
+          <span className="text-[9px] uppercase font-mono tracking-widest text-[#41506F] mt-1">Waypoint Gateway Collective</span>
+        </div>
+      </a>
+      <a
         href="#join"
         className="text-xs font-bold uppercase tracking-wider text-[#14213D] border border-[#14213D] rounded-full px-5 py-2 hover:bg-[#14213D] hover:text-[#FFFDF8] transition-colors"
       >
-        Join First Look
+        Schedule a Call
       </a>
     </header>
   );
@@ -38,7 +45,7 @@ function Footer() {
     <footer className="w-full bg-[#14213D] text-[#FFFDF8] py-16 px-6 text-center border-t-4 border-[#C9992E]">
       <div className="max-w-4xl mx-auto flex flex-col items-center">
         <span className="font-serif text-2xl font-bold mb-2">Waypoint Gateway Collective</span>
-        <a href="https://wgcpayments.com" className="text-[#C9992E] hover:underline mb-8 font-mono text-sm">wgcpayments.com</a>
+        <a href="https://www.wgcpayments.com" className="text-[#C9992E] hover:underline mb-8 font-mono text-sm">wgcpayments.com</a>
         
         <p className="font-serif italic text-[#E8E0CF] text-lg">“Thus far the Lord has helped us.” — 1 Samuel 7:12</p>
       </div>
@@ -54,22 +61,24 @@ export default function FirstLookPage() {
 
       <main>
         {/* HERO SECTION */}
-        <section className="px-6 pt-20 pb-16 md:pt-32 md:pb-24 max-w-[1120px] mx-auto text-center">
-          <span className="inline-block text-[11px] uppercase font-mono font-bold text-[#8C5A33] mb-6 tracking-widest border-b-2 border-[#C9992E] pb-1">
+        <section className="px-6 pt-10 pb-16 md:pt-14 md:pb-20 max-w-[1120px] mx-auto text-center">
+          <span className="inline-block text-[11px] uppercase font-mono font-bold text-[#8C5A33] mb-4 tracking-widest border-b-2 border-[#C9992E] pb-1">
             First Look — Live Working Session
           </span>
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-medium leading-[1.1] mb-8 text-[#14213D] max-w-4xl mx-auto">
-            Your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-medium leading-[1.1] mb-6 text-[#14213D] max-w-4xl mx-auto">
+            We're betting your giving platform was built for retail and <span className="text-[#8C5A33] border-b-4 border-[#C9992E]">retrofitted</span> for church.
           </h1>
-          <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-10 leading-relaxed">
-            Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code — and we want church leaders in the room while we do it.
+          <p className="text-lg md:text-xl text-[#41506F] max-w-2xl mx-auto mb-8 leading-relaxed">
+            Ours wasn't. We're building payments and giving infrastructure for churches and ministries from the first line of code. Click below to be one of the first to join us.
           </p>
           <div className="flex flex-col items-center gap-4">
-            <a 
-              href="#join"
-              className="inline-block bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-10 rounded-[3px] text-lg transition-colors shadow-sm"
+            <a
+              href={CALENDLY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-center bg-[#14213D] hover:bg-[#203154] text-white font-bold py-4 px-6 sm:px-10 rounded-[3px] text-base sm:text-lg transition-colors shadow-sm"
             >
-              Save my seat
+              Schedule a Time to Hear More
             </a>
             <span className="text-sm font-mono text-[#41506F]">Free. About 20 minutes. Bring your wish list.</span>
           </div>
@@ -81,7 +90,7 @@ export default function FirstLookPage() {
             <div className="w-full aspect-[16/9] bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
               {/* Dashboard Preview Image */}
               <Image 
-                src="/images/first-look-dashboard.png" 
+                src="/images/first-look-dashboard-v2.png"
                 alt="Admin View — Transaction Insights"
                 fill
                 className="object-cover object-top"
@@ -108,7 +117,7 @@ export default function FirstLookPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-0.5 bg-[rgba(20,33,61,0.08)] border border-[rgba(20,33,61,0.08)]">
               {[
                 { title: "Givers cover the fee", body: "One checkbox at checkout and the full gift lands in the fund. Most givers say yes when you simply ask." },
-                { title: "Recurring that holds", body: "Set to the 1st and 15th by default, because that's when people get paid. Card updates handled quietly in the background." },
+                { title: "Recurring that holds", body: "We're building recurring to default to the 1st and 15th, with card updates handled quietly in the background — because that's how people actually get paid." },
                 { title: "Designated funds", body: "Building fund, missions, benevolence. Split at the point of the gift so it doesn't get sorted by hand later." },
                 { title: "Giving links anywhere", body: "Bulletin, text, kiosk, QR on the screen. Same page, same reporting, no separate system to babysit." },
                 { title: "Reporting a treasurer can read", body: "Deposits, settlements, and disputes in plain language, tied back to the gift that caused them." },
@@ -152,10 +161,10 @@ export default function FirstLookPage() {
               <div className="aspect-[9/19] bg-[#14213D] rounded-[40px] p-3 shadow-2xl relative border-4 border-[#203154]">
                 <div className="w-full h-full bg-[#F5F1E8] rounded-[30px] overflow-hidden relative">
                    <Image 
-                     src="/images/first-look-phone.png"
+                     src="/images/first-look-phone-v2.png"
                      alt="Giving App Preview"
                      fill
-                     className="object-cover"
+                     className="object-cover object-top"
                      sizes="320px"
                    />
                 </div>
@@ -187,12 +196,20 @@ export default function FirstLookPage() {
             
             <div className="md:col-span-8 md:pl-12 md:border-l border-[rgba(255,255,255,0.1)]">
               <p className="text-lg leading-relaxed text-[#E8E0CF] mb-8 font-light">
-                I've spent my career in nonprofit development — managing major donor portfolios, sitting in budget meetings, and watching good organizations quietly hand over money that was given for ministry. I'm finishing a Master of Theological Studies at Midwestern Baptist Theological Seminary. I know this world from the inside, and I'd rather build this with church leaders than guess at what you need.
+                I've spent my career in nonprofit development, managing major donor portfolios, sitting in budget meetings, and watching good organizations quietly hand over money that was given for ministry. I'm finishing a Master of Theological Studies at Midwestern Baptist Theological Seminary. I know this world from the inside, and I'd rather build this with church leaders than guess at what you need.
               </p>
               <div className="flex flex-col">
                 <span className="font-serif text-2xl text-white mb-1">Collin Sansom</span>
                 <span className="font-mono text-xs uppercase tracking-widest text-[#E3B94F]">Founder, Waypoint Gateway Collective</span>
               </div>
+              <a
+                href={CALENDLY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 mt-8 bg-[#C9992E] hover:bg-[#E3B94F] text-[#14213D] font-bold py-3 px-8 rounded-[3px] text-sm transition-colors shadow-sm"
+              >
+                Book a 1-on-1 with Collin
+              </a>
             </div>
           </div>
         </section>
@@ -255,7 +272,7 @@ export default function FirstLookPage() {
             
             <div className="mt-12 text-center">
               <p className="text-sm font-mono text-[#41506F]">
-                See our <Link href="/legal/privacy-policy" className="text-[#8C5A33] hover:underline">Privacy Policy</Link> and <Link href="/legal/terms-of-service" className="text-[#8C5A33] hover:underline">Terms</Link>.
+                See our <Link href="/legal/privacy" className="text-[#8C5A33] hover:underline">Privacy Policy</Link> and <Link href="/legal/terms" className="text-[#8C5A33] hover:underline">Terms</Link>.
               </p>
             </div>
           </div>

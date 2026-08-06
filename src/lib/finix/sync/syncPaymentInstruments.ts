@@ -25,12 +25,12 @@ function deriveInstrumentState(instrument: { enabled?: boolean; disabled_code?: 
  */
 export async function syncPaymentInstrument(
   finixPaymentInstrumentId: string,
-  opts?: { churchId?: string; donorId?: string }
+  opts?: { churchId?: string; donorId?: string; skipDonorMatch?: boolean }
 ) {
   const instrument = await finixClient.getPaymentInstrument(finixPaymentInstrumentId);
 
   let donorId = opts?.donorId ?? null;
-  if (!donorId && opts?.churchId && instrument.identity) {
+  if (!donorId && !opts?.skipDonorMatch && opts?.churchId && instrument.identity) {
     donorId = await upsertDonorFromIdentity(instrument.identity, opts.churchId);
   }
 

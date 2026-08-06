@@ -1,14 +1,55 @@
 "use client";
 
 import Script from "next/script";
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
+import { getMetaPixelId, pageView } from "@/lib/analytics/metaPixel";
+
+// Re-exported for existing call sites (src/components/giving/GivingLinkForm.tsx)
+// that import trackMetaEvent from this module path. New code should import
+// trackEvent / trackCustomEvent directly from "@/lib/analytics/metaPixel".
+export { trackMetaEvent } from "@/lib/analytics/metaPixel";
+
+/**
+ * Public marketing surface only. Never track authenticated merchant/admin
+ * dashboard activity, or content rendered inside third-party embeds, to Meta.
+ */
+const EXCLUDED_PATH_PREFIXES = ["/merchant", "/admin", "/embed"];
+
+function isExcludedPath(pathname: string): boolean {
+  return EXCLUDED_PATH_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
+/**
+ * Fires a PageView on every client-side route change. Skips the very first
+ * render — the bootstrap script below already fires the initial PageView —
+ * so page loads never produce two PageView events for the same view.
+ */
+function MetaPixelPageviewTracker() {
+  const pathname = usePathname();
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    pageView();
+  }, [pathname]);
+
+  return null;
+}
 
 export default function MetaPixel() {
-  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  
-  if (!pixelId) {
+  const pixelId = getMetaPixelId();
+  const pathname = usePathname();
+
+  if (!pixelId || isExcludedPath(pathname)) {
     return null;
   }
-  
+
   return (
     <>
       <Script
@@ -35,14 +76,10 @@ export default function MetaPixel() {
           width="1"
           style={{ display: "none" }}
           src={`https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`}
+          alt=""
         />
       </noscript>
+      <MetaPixelPageviewTracker />
     </>
   );
-}
-
-export function trackMetaEvent(eventName: string, options?: any, eventId?: string) {
-  if (typeof window !== "undefined" && (window as any).fbq) {
-    (window as any).fbq("trackCustom", eventName, options, { eventID: eventId });
-  }
 }

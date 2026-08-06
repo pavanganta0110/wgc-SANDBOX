@@ -195,7 +195,7 @@ export default function GivingLinkPreviewPanel({
               {showPoweredByWgc !== false && (
                 <div className="text-center mt-6">
                   <a
-                    href="https://wgcpayments.com"
+                    href="https://www.wgcpayments.com"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-slate-400 hover:text-slate-600 transition-colors"

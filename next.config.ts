@@ -30,13 +30,17 @@ const securityHeaders = [
       // www.google.com/www.gstatic.com: react-google-recaptcha on the /start
       // onboarding application (src/app/start/page.tsx) — recaptcha/api.js
       // is served from google.com, its rendered widget assets from gstatic.com.
-      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://www.google.com https://www.gstatic.com",
+      // connect.facebook.net: loads the Meta Pixel's fbevents.js on public
+      // marketing pages (see src/components/common/MetaPixel.tsx).
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://www.google.com https://www.gstatic.com https://connect.facebook.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
       // pay.google.com: Google Pay's client makes XHR calls to its own
       // origin during isReadyToPay/loadPaymentData.
-      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
+      // connect.facebook.net / www.facebook.com: the Meta Pixel's own beacon
+      // calls (fbq track/trackCustom) and its noscript <img> fallback.
+      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com https://connect.facebook.net https://www.facebook.com",
       // Google Pay's payment sheet renders inside an iframe from pay.google.com.
       // js.finix.com: the Finix card-tokenization form itself is mounted as
       // an iframe (application/index.html) — adding an explicit frame-src
@@ -55,6 +59,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      { source: "/for-software-partners", destination: "/software-partners", permanent: true },
+      { source: "/churches", destination: "/for/churches", permanent: true },
+      { source: "/register", destination: "/start", permanent: true },
+    ];
+  },
   experimental: {
     // The merchant dashboard shows live financial data (payments,
     // balances, donation totals) — Next's default client router cache

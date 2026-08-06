@@ -22,6 +22,15 @@ const styles = StyleSheet.create({
   totalsBlock: { marginTop: 10, alignSelf: "flex-end", width: 220 },
   totalsRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 3 },
   grandTotalRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 4, paddingTop: 4, borderTop: 1, borderTopColor: "#0f172a" },
+  paymentsSection: { marginTop: 18 },
+  paymentsHeaderRow: { flexDirection: "row", paddingVertical: 6, borderBottom: 1, borderBottomColor: "#e2e8f0" },
+  paymentsRow: { flexDirection: "row", paddingVertical: 6, borderBottom: 1, borderBottomColor: "#f1f5f9" },
+  colDate: { flex: 1.4 },
+  colMethod: { flex: 1.4 },
+  colInvoiceAmt: { flex: 1, textAlign: "right" },
+  colFee: { flex: 1, textAlign: "right" },
+  colTotalPaid: { flex: 1, textAlign: "right" },
+  refundBadge: { fontSize: 8, color: "#dc2626" },
   qrBlock: { marginTop: 20, alignItems: "center" },
   qrImage: { width: 90, height: 90 },
   footer: { position: "absolute", bottom: 24, left: 36, right: 36, fontSize: 8, color: "#94a3b8" },
@@ -40,6 +49,24 @@ export interface InvoicePdfLineItem {
   quantity: number;
   unitPriceCents: number;
   totalCents: number;
+}
+
+/**
+ * One row per completed InvoicePayment — PENDING/FAILED/CANCELED payments
+ * are never included (see generateInvoicePdf.ts's query filter), and every
+ * figure here is the value actually stored at charge time, never
+ * recalculated during PDF generation. grossAmountCents/feeContributionCents/
+ * totalChargedCents/refundedCents match the InvoicePayment row exactly.
+ */
+export interface InvoicePdfPayment {
+  date: Date;
+  method: string;
+  grossAmountCents: number;
+  feeContributionCents: number;
+  customerCoveredFee: boolean;
+  totalChargedCents: number;
+  refundedCents: number;
+  status: string;
 }
 
 export interface InvoicePdfProps {
@@ -64,6 +91,9 @@ export interface InvoicePdfProps {
   totalCents: number;
   amountPaidCents: number;
   balanceCents: number;
+  /** Empty when the invoice has no completed payments yet — the section is
+   * omitted entirely rather than shown blank. */
+  payments: InvoicePdfPayment[];
   clientMemo: string | null;
   paymentInstructions: string | null;
   termsAndConditions: string | null;
@@ -138,6 +168,38 @@ export function InvoicePdf(props: InvoicePdfProps) {
           {props.amountPaidCents > 0 && <View style={styles.totalsRow}><Text style={styles.label}>Paid</Text><Text>-{formatCents(props.amountPaidCents)}</Text></View>}
           <View style={styles.grandTotalRow}><Text style={{ fontWeight: 700 }}>Balance Due</Text><Text style={{ fontWeight: 700 }}>{formatCents(props.balanceCents)}</Text></View>
         </View>
+
+        {props.payments.length > 0 && (
+          <View style={styles.paymentsSection}>
+            <Text style={styles.sectionTitle}>Payments</Text>
+            <View style={styles.paymentsHeaderRow}>
+              <Text style={[styles.colDate, styles.label]}>Date</Text>
+              <Text style={[styles.colMethod, styles.label]}>Method</Text>
+              <Text style={[styles.colInvoiceAmt, styles.label]}>Invoice Amount</Text>
+              <Text style={[styles.colFee, styles.label]}>Processing Fee</Text>
+              <Text style={[styles.colTotalPaid, styles.label]}>Total Paid</Text>
+            </View>
+            {props.payments.map((p, i) => {
+              const netInvoiceAmountCents = Math.max(0, p.grossAmountCents - p.refundedCents);
+              const netTotalPaidCents = Math.max(0, p.totalChargedCents - p.refundedCents);
+              const isFullyRefunded = p.status === "REFUNDED";
+              const isPartiallyRefunded = !isFullyRefunded && p.refundedCents > 0;
+              return (
+                <View key={i} style={styles.paymentsRow}>
+                  <Text style={styles.colDate}>{formatDate(p.date)}</Text>
+                  <Text style={styles.colMethod}>
+                    {p.method.replace(/_/g, " ")}
+                    {isFullyRefunded && <Text style={styles.refundBadge}>  Refunded</Text>}
+                    {isPartiallyRefunded && <Text style={styles.refundBadge}>  Partially Refunded</Text>}
+                  </Text>
+                  <Text style={styles.colInvoiceAmt}>{formatCents(netInvoiceAmountCents)}</Text>
+                  <Text style={styles.colFee}>{p.customerCoveredFee ? formatCents(p.feeContributionCents) : formatCents(0)}</Text>
+                  <Text style={styles.colTotalPaid}>{formatCents(netTotalPaidCents)}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         {props.clientMemo && <Text style={{ marginTop: 16 }}>{props.clientMemo}</Text>}
         {props.paymentInstructions && <Text style={{ marginTop: 8, color: "#64748b" }}>{props.paymentInstructions}</Text>}

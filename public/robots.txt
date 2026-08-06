@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.wgcpayments.com/sitemap.xml
+Disallow: /merchant/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /onboarding/
+
+Sitemap: https://wgcpayments.com/sitemap.xml

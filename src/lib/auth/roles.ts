@@ -92,6 +92,12 @@ export type PermissionKey =
   | "canExportDonorAddress"
   | "canConfirmDonorAddress"
   | "canViewAddressAuditHistory"
+  // Aplos (and future third-party accounting) integration management:
+  // connect/disconnect, configure accounts, map funds, enable/disable
+  // automatic sync, retry failed syncs. Read-only integration status is
+  // governed separately (any authenticated org member can view it; see
+  // the Aplos status route) — this key gates every state-changing action.
+  | "canManageIntegrations"
   | "canViewInvoices"
   | "canCreateInvoices"
   | "canEditInvoices"
@@ -148,6 +154,7 @@ const ALL_FALSE: PermissionMatrix = {
   canExportDonorAddress: false,
   canConfirmDonorAddress: false,
   canViewAddressAuditHistory: false,
+  canManageIntegrations: false,
   canViewInvoices: false,
   canCreateInvoices: false,
   canEditInvoices: false,
@@ -201,6 +208,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportDonorAddress: true,
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
     canViewInvoices: true,
     canCreateInvoices: true,
     canEditInvoices: true,
@@ -245,6 +253,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportDonorAddress: true,
     canConfirmDonorAddress: true,
     canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
     canViewInvoices: true,
     canCreateInvoices: true,
     canEditInvoices: true,

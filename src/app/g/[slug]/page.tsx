@@ -79,9 +79,9 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
 
         {(() => {
           const wgcUrl = (() => {
-            const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+            const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
             if (url.includes("vercel.app") || url.includes("localhost") || url.includes("sandbox")) {
-              return "https://wgcpayments.com";
+              return "https://www.wgcpayments.com";
             }
             return url;
           })();

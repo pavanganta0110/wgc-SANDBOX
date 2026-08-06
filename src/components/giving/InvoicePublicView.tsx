@@ -9,6 +9,7 @@ import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import { formatCents } from "@/lib/format";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
+import { getTestWalletAdapter } from "@/lib/finix/wallets/testWalletAdapter";
 // Pure, framework-agnostic function — its own doc comment says it's "safe
 // for frontend previews." Used here only to show the payer a live estimate
 // before the card is tokenized (the exact card-brand rate isn't known
@@ -53,7 +54,7 @@ interface InvoiceData {
   minimumPartialPaymentCents: number | null;
   feeCoveredBy: string;
   allowFeeCoverage: boolean;
-  paymentHistory: { date: string; method: string; grossAmountCents: number; feeContributionCents: number; totalChargedCents: number; refundedCents: number; status: string }[];
+  paymentHistory: { date: string; method: string; grossAmountCents: number; feeContributionCents: number; totalChargedCents: number; customerCoveredFee: boolean; refundedCents: number; status: string }[];
   branding: {
     logoUrl: string | null;
     organizationDisplayName: string;
@@ -158,7 +159,17 @@ export default function InvoicePublicView({ token }: { token: string }) {
     const canStillPay = data.status !== "VOID" && data.status !== "DRAFT" && data.status !== "SCHEDULED" && data.status !== "UNCOLLECTIBLE" && data.balanceCents > 0;
     if (!canStillPay) return;
     let cancelled = false;
+
+    // Finix.PaymentForm appends into the target element rather than
+    // replacing its contents — without clearing it first, every re-mount
+    // (switching Card/Bank, or a data refetch) stacks another form
+    // instance into the same container instead of replacing the old one.
+    // Mirrors GivingLinkForm.tsx's identical fix for the donation form.
+    const container = document.getElementById("invoice-finix-form");
+    if (container) container.innerHTML = "";
+    formInstanceRef.current = null;
     setFormReady(false);
+
     mountFinixPaymentForm("invoice-finix-form", data.finixApplicationId, { paymentMethods: [payMethod], showAddress: false }, data.finixEnvironment)
       .then((instance) => {
         if (cancelled) return;
@@ -177,6 +188,11 @@ export default function InvoicePublicView({ token }: { token: string }) {
   useEffect(() => {
     setAppleAvailable(false);
     if (!data?.allowApplePay || !data.finixMerchantId) return;
+    const testAdapter = getTestWalletAdapter();
+    if (testAdapter) {
+      if (testAdapter.isApplePayAvailable()) setAppleAvailable(true);
+      return;
+    }
     if (!isApplePayAvailable()) return;
     setAppleAvailable(true);
     loadApplePayButtonScript().catch(() => {});
@@ -185,6 +201,11 @@ export default function InvoicePublicView({ token }: { token: string }) {
   useEffect(() => {
     setGoogleAvailable(false);
     if (!data?.allowGooglePay || !data.googlePayGatewayMerchantId) return;
+    const testAdapter = getTestWalletAdapter();
+    if (testAdapter) {
+      if (testAdapter.isGooglePayAvailable()) setGoogleAvailable(true);
+      return;
+    }
     let cancelled = false;
     isGooglePayAvailable({
       environment: data.googlePayEnvironment,
@@ -217,6 +238,24 @@ export default function InvoicePublicView({ token }: { token: string }) {
 
   useEffect(() => {
     if (!googleAvailable || !data?.googlePayGatewayMerchantId) return;
+    const testAdapter = getTestWalletAdapter();
+    if (testAdapter) {
+      // Real Google Pay's button is rendered by Google's own GPay JS,
+      // which this test build never loads (see the availability effect
+      // above) — substitute a plain, selectable button wired to the same
+      // click ref the real button uses.
+      const el = googlePayButtonRef.current;
+      if (!el) return;
+      el.innerHTML = "";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-testid", "google-pay-test-button");
+      btn.textContent = "Google Pay (Test)";
+      btn.className = "w-full h-11 rounded-lg bg-black text-white text-sm font-semibold";
+      btn.addEventListener("click", () => handleGooglePayClickRef.current());
+      el.appendChild(btn);
+      return;
+    }
     let cancelled = false;
     const config = {
       environment: data.googlePayEnvironment,
@@ -525,7 +564,9 @@ export default function InvoicePublicView({ token }: { token: string }) {
     }
     if (!data.finixMerchantId || walletProcessing) return;
     setWalletProcessing("apple_pay");
-    beginApplePaySession({
+    const testAdapter = getTestWalletAdapter();
+    const begin = testAdapter?.beginApplePaySession ?? beginApplePaySession;
+    begin({
       amountCents: estimatedTotalCents,
       totalLabel: data.churchName,
       onValidateMerchant: async (validationURL) => {
@@ -554,7 +595,9 @@ export default function InvoicePublicView({ token }: { token: string }) {
     if (!data.googlePayGatewayMerchantId || walletProcessing) return;
     setWalletProcessing("google_pay");
     try {
-      const result = await requestGooglePayment(
+      const testAdapter = getTestWalletAdapter();
+      const request = testAdapter?.requestGooglePayment ?? requestGooglePayment;
+      const result = await request(
         {
           environment: data.googlePayEnvironment,
           gatewayMerchantId: data.googlePayGatewayMerchantId,
@@ -590,7 +633,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
               <span className="px-3 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: `${accent}1a`, color: accent }}>
                 {STATUS_LABELS[data.status] || data.status}
               </span>
-              <a href={`/api/invoice/${token}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-slate-600 underline">
+              <a href={`/api/invoice/${token}/pdf`} target="_blank" rel="noreferrer" className="text-xs text-slate-400 hover:text-slate-600 underline print:hidden">
                 Download PDF
               </a>
             </div>
@@ -664,7 +707,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
             <h3 className="text-base font-bold text-slate-900 mb-4">Make a Payment</h3>
 
             {data.allowPartialPayments && (
-              <div className="mb-4">
+              <div className="mb-4 print:hidden">
                 <label className="text-xs text-slate-500 mb-1 block">Amount to pay</label>
                 <input
                   type="number"
@@ -677,11 +720,11 @@ export default function InvoicePublicView({ token }: { token: string }) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-3 mb-4 print:hidden">
               <input placeholder="Full Name" value={payerName} onChange={(e) => setPayerName(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />
               <input placeholder="Email" value={payerEmail} onChange={(e) => setPayerEmail(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />
             </div>
-            <input placeholder="Phone (Optional)" value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none mb-4" />
+            <input placeholder="Phone (Optional)" value={payerPhone} onChange={(e) => setPayerPhone(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none mb-4 print:hidden" />
 
             <div className="bg-slate-50 rounded-xl p-4 mb-4 text-sm">
               <div className="flex justify-between text-slate-600 mb-1">
@@ -689,7 +732,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
                 <span>{formatCents(requestedAmountCents)}</span>
               </div>
               {data.allowFeeCoverage && (
-                <label className="flex items-center justify-between gap-3 py-2 cursor-pointer">
+                <label className="flex items-center justify-between gap-3 py-2 cursor-pointer print:hidden">
                   <span className="flex items-center gap-2 text-slate-700">
                     <input type="checkbox" checked={coverFee} onChange={(e) => setCoverFee(e.target.checked)} className="rounded" />
                     Add {formatCents(estimatedFeeContributionCents)} to help cover the processing fee
@@ -707,14 +750,29 @@ export default function InvoicePublicView({ token }: { token: string }) {
             </div>
 
             {(appleAvailable || googleAvailable) && (
-              <div className="flex gap-3 mb-4">
-                {appleAvailable && <div ref={applePayButtonRef} className="flex-1 h-11 [&_apple-pay-button]:w-full [&_apple-pay-button]:h-11" dangerouslySetInnerHTML={{ __html: `<apple-pay-button buttonstyle="black" type="pay" locale="en-US"></apple-pay-button>` }} />}
-                {googleAvailable && <div ref={googlePayButtonRef} className="flex-1 h-11" />}
+              <div className="relative flex gap-3 mb-4 print:hidden">
+                {/* Apple Pay's/Google Pay's own sheet closes as soon as the
+                 * payer authorizes — everything after that (creating the
+                 * buyer identity, payment instrument, and transfer) is a
+                 * real, multi-second server round trip with no wallet UI
+                 * of its own to show progress. Without this overlay the
+                 * payer just sees the same invoice page sit there with no
+                 * feedback until the success/failure screen appears, which
+                 * reads as "did my payment go through?" — this covers that
+                 * gap the same way the Card/Bank submit button's own
+                 * "Processing…" label already does. */}
+                {walletProcessing && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-lg bg-white/90 text-sm font-medium text-slate-600">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Processing your payment…
+                  </div>
+                )}
+                {appleAvailable && <div ref={applePayButtonRef} data-testid="apple-pay-button" className="flex-1 h-11 [&_apple-pay-button]:w-full [&_apple-pay-button]:h-11" dangerouslySetInnerHTML={{ __html: `<apple-pay-button buttonstyle="black" type="pay" locale="en-US"></apple-pay-button>` }} />}
+                {googleAvailable && <div ref={googlePayButtonRef} data-testid="google-pay-button" className="flex-1 h-11" />}
               </div>
             )}
 
             {(data.allowCard || data.allowAch) && (
-              <>
+              <div className="print:hidden">
                 {data.allowCard && data.allowAch && (
                   <div className="flex gap-2 mb-3">
                     <button onClick={() => setPayMethod("card")} className={`flex-1 py-2 rounded-lg text-sm font-medium ${payMethod === "card" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}>
@@ -734,10 +792,10 @@ export default function InvoicePublicView({ token }: { token: string }) {
                 >
                   {submitting ? "Processing…" : `Pay ${formatCents(estimatedTotalCents)}`}
                 </button>
-              </>
+              </div>
             )}
 
-            <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-400">
+            <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-400 print:hidden">
               <ShieldCheck className="w-3.5 h-3.5" /> Payments are securely processed. Your card and bank details are never stored by {data.branding.organizationDisplayName}.
             </p>
           </div>
@@ -750,16 +808,44 @@ export default function InvoicePublicView({ token }: { token: string }) {
         )}
 
         {data.paymentHistory.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 print:border-0 print:shadow-none print:p-0">
             <h3 className="text-sm font-bold text-slate-900 mb-3">Payment History</h3>
-            <div className="space-y-2">
-              {data.paymentHistory.map((p, i) => (
-                <div key={i} className="flex justify-between text-sm text-slate-500">
-                  <span>{new Date(p.date).toLocaleDateString("en-US")} — {p.method}</span>
-                  <span>{formatCents(p.grossAmountCents - p.refundedCents)}</span>
-                </div>
-              ))}
-            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-400 uppercase tracking-wide">
+                  <th className="pb-2 font-medium">Date</th>
+                  <th className="pb-2 font-medium">Method</th>
+                  <th className="pb-2 font-medium text-right">Invoice Amount</th>
+                  <th className="pb-2 font-medium text-right">Processing Fee</th>
+                  <th className="pb-2 font-medium text-right">Total Paid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.paymentHistory.map((p, i) => {
+                  // Net of any refund — never shown unadjusted. refundedCents
+                  // is currently always applied against the invoice-amount
+                  // principal (see InvoicePayment schema comment), so it's
+                  // subtracted from both the invoice-amount column and the
+                  // total-paid column, never from the fee contribution.
+                  const netInvoiceAmountCents = Math.max(0, p.grossAmountCents - p.refundedCents);
+                  const netTotalPaidCents = Math.max(0, p.totalChargedCents - p.refundedCents);
+                  const isFullyRefunded = p.status === "REFUNDED";
+                  return (
+                    <tr key={i} className="border-t border-slate-100 text-slate-700">
+                      <td className="py-2">{new Date(p.date).toLocaleDateString("en-US")}</td>
+                      <td className="py-2">
+                        {p.method.replace(/_/g, " ")}
+                        {isFullyRefunded && <span className="ml-2 text-xs font-semibold text-red-500">Refunded</span>}
+                        {!isFullyRefunded && p.refundedCents > 0 && <span className="ml-2 text-xs font-semibold text-amber-600">Partially Refunded</span>}
+                      </td>
+                      <td className="py-2 text-right">{formatCents(netInvoiceAmountCents)}</td>
+                      <td className="py-2 text-right">{p.customerCoveredFee ? formatCents(p.feeContributionCents) : formatCents(0)}</td>
+                      <td className="py-2 text-right font-semibold">{formatCents(netTotalPaidCents)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 

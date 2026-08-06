@@ -118,6 +118,20 @@ export async function sendInvoicePaymentReceiptEmail(invoiceId: string, paymentI
     const branding = applyInvoiceOverrides(await resolveInvoiceBranding(invoice.churchId), invoice);
     const orgName = branding.organizationDisplayName;
 
+    // Attaches the current invoice PDF (payments section included) as the
+    // receipt record — no fresh raw token is available at this point (see
+    // sendInvoiceEmail's comment on why tokens are never persisted for
+    // reuse), so this renders without the pay-online QR code, same as a
+    // merchant re-downloading a PDF after the original send.
+    let pdfAttachment: { filename: string; content: Buffer }[] | undefined;
+    try {
+      const { generateInvoicePdf } = await import("./generateInvoicePdf");
+      const pdf = await generateInvoicePdf(invoiceId);
+      pdfAttachment = [{ filename: `invoice-${invoice.invoiceNumber}-receipt.pdf`, content: pdf }];
+    } catch (err) {
+      console.error("Failed to generate invoice PDF for receipt email attachment:", err);
+    }
+
     await sendWgcEmail({
       to: client.email,
       subject: `Payment received — Invoice ${invoice.invoiceNumber}`,
@@ -135,6 +149,7 @@ export async function sendInvoicePaymentReceiptEmail(invoiceId: string, paymentI
         <p>Remaining balance: <strong>${formatCents(invoice.balanceCents)}</strong>.</p>
         ${branding.thankYouMessage ? `<p>${branding.thankYouMessage}</p>` : ""}
       `,
+      attachments: pdfAttachment,
     });
   } catch (err) {
     console.error("Failed to send invoice payment receipt email:", err);

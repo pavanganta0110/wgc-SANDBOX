@@ -1,16 +1,18 @@
 import { formatCents } from "@/lib/format";
+import type {
+  TransferAggregate,
+  DisputeAggregate,
+  RefundAggregate,
+  AuthorizationAggregate,
+  DepositAggregate,
+} from "./dashboardAggregates";
 
-interface MetricInputs {
-  transfers: { state: string | null; amountCents: number | null }[];
-  disputes: { state: string | null; amountCents: number | null }[];
-  refunds: { state: string | null; amountCents: number | null }[];
-  authorizations: {
-    state: string | null;
-    amountCents: number | null;
-    amountRequestedCents: number | null;
-    isVoid: boolean | null;
-  }[];
-  deposits: { amountCents: number | null }[];
+interface SummaryInputs {
+  transfers: TransferAggregate;
+  disputes: DisputeAggregate;
+  refunds: RefundAggregate;
+  authorizations: AuthorizationAggregate;
+  deposits: DepositAggregate;
 }
 
 export const DEFAULT_METRICS = [
@@ -41,69 +43,46 @@ export const METRIC_LABELS: Record<string, string> = {
   totalDeposits: "Total Deposits",
 };
 
-export function computeSummaryMetrics(inputs: MetricInputs): Record<string, string> {
-  const succeededTransfers = inputs.transfers.filter(
-    (t) => (t.state || "").toUpperCase() === "SUCCEEDED"
-  );
-  const totalVolumeCents = succeededTransfers.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+/**
+ * Pure formatting/derivation over already-aggregated numbers — see
+ * src/lib/reports/dashboardAggregates.ts for where those sums/counts
+ * actually come from (database-side aggregate queries, not row-by-row
+ * reduction in JS).
+ */
+export function computeSummaryMetrics(inputs: SummaryInputs): Record<string, string> {
   const avgTransactionCents =
-    succeededTransfers.length > 0 ? totalVolumeCents / succeededTransfers.length : 0;
-
-  const totalDisputeVolumeCents = inputs.disputes.reduce((sum, d) => sum + (d.amountCents ?? 0), 0);
-  const activeDisputeCount = inputs.disputes.filter(
-    (d) => (d.state || "").toLowerCase() === "pending"
-  ).length;
-  const disputeRate =
-    inputs.transfers.length > 0 ? (inputs.disputes.length / inputs.transfers.length) * 100 : 0;
-
-  const successfulRefunds = inputs.refunds.filter(
-    (r) => (r.state || "").toUpperCase() === "SUCCEEDED"
-  );
-  const failedRefunds = inputs.refunds.filter((r) => (r.state || "").toUpperCase() === "FAILED");
-  const totalRefundVolumeCents = inputs.refunds.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
-  const successfulRefundVolumeCents = successfulRefunds.reduce(
-    (sum, r) => sum + (r.amountCents ?? 0),
-    0
-  );
-  const failedRefundVolumeCents = failedRefunds.reduce((sum, r) => sum + (r.amountCents ?? 0), 0);
-
-  const approvedAuths = inputs.authorizations.filter(
-    (a) => (a.state || "").toUpperCase() === "SUCCEEDED"
-  );
-  const voidedAuths = inputs.authorizations.filter((a) => Boolean(a.isVoid));
-  const authorizationRate =
-    inputs.authorizations.length > 0
-      ? (approvedAuths.length / inputs.authorizations.length) * 100
+    inputs.transfers.succeededCount > 0
+      ? inputs.transfers.succeededVolumeCents / inputs.transfers.succeededCount
       : 0;
-  const authorizationRequestVolumeCents = inputs.authorizations.reduce(
-    (sum, a) => sum + (a.amountRequestedCents ?? 0),
-    0
-  );
-  const voidedAuthorizationVolumeCents = voidedAuths.reduce(
-    (sum, a) => sum + (a.amountCents ?? 0),
-    0
-  );
 
-  const totalDepositsCents = inputs.deposits.reduce((sum, d) => sum + (d.amountCents ?? 0), 0);
+  const disputeRate =
+    inputs.transfers.totalCount > 0
+      ? (inputs.disputes.totalCount / inputs.transfers.totalCount) * 100
+      : 0;
+
+  const authorizationRate =
+    inputs.authorizations.totalCount > 0
+      ? (inputs.authorizations.succeededCount / inputs.authorizations.totalCount) * 100
+      : 0;
 
   return {
-    totalTransactionVolume: formatCents(totalVolumeCents),
+    totalTransactionVolume: formatCents(inputs.transfers.succeededVolumeCents),
     avgTransactionAmount: formatCents(avgTransactionCents),
-    totalDisputeVolume: formatCents(totalDisputeVolumeCents),
-    totalRefundVolume: formatCents(totalRefundVolumeCents),
-    totalTransactionCount: String(inputs.transfers.length),
-    totalDisputeCount: String(inputs.disputes.length),
-    activeDisputeCount: String(activeDisputeCount),
+    totalDisputeVolume: formatCents(inputs.disputes.totalVolumeCents),
+    totalRefundVolume: formatCents(inputs.refunds.totalVolumeCents),
+    totalTransactionCount: String(inputs.transfers.totalCount),
+    totalDisputeCount: String(inputs.disputes.totalCount),
+    activeDisputeCount: String(inputs.disputes.activeCount),
     disputeRate: `${disputeRate.toFixed(1)}%`,
-    successfulRefundCount: String(successfulRefunds.length),
-    successfulRefundVolume: formatCents(successfulRefundVolumeCents),
-    failedRefundCount: String(failedRefunds.length),
-    failedRefundVolume: formatCents(failedRefundVolumeCents),
+    successfulRefundCount: String(inputs.refunds.succeededCount),
+    successfulRefundVolume: formatCents(inputs.refunds.succeededVolumeCents),
+    failedRefundCount: String(inputs.refunds.failedCount),
+    failedRefundVolume: formatCents(inputs.refunds.failedVolumeCents),
     authorizationRate: `${authorizationRate.toFixed(1)}%`,
-    authorizationRequestCount: String(inputs.authorizations.length),
-    authorizationRequestVolume: formatCents(authorizationRequestVolumeCents),
-    voidedAuthorizationCount: String(voidedAuths.length),
-    voidedAuthorizationVolume: formatCents(voidedAuthorizationVolumeCents),
-    totalDeposits: formatCents(totalDepositsCents),
+    authorizationRequestCount: String(inputs.authorizations.totalCount),
+    authorizationRequestVolume: formatCents(inputs.authorizations.requestedVolumeCents),
+    voidedAuthorizationCount: String(inputs.authorizations.voidedCount),
+    voidedAuthorizationVolume: formatCents(inputs.authorizations.voidedVolumeCents),
+    totalDeposits: formatCents(inputs.deposits.totalVolumeCents),
   };
 }

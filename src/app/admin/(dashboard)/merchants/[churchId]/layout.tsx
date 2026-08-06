@@ -37,6 +37,7 @@ export default async function MerchantDetailLayout(props: {
     { name: "Donors", href: `/admin/merchants/${churchId}/donors` },
     { name: "Recurring", href: `/admin/merchants/${churchId}/recurring` },
     { name: "Giving Pages", href: `/admin/merchants/${churchId}/giving-pages` },
+    { name: "Aplos", href: `/admin/merchants/${churchId}/aplos` },
     { name: "Tickets", href: `/admin/merchants/${churchId}/tickets` },
     { name: "Activity", href: `/admin/merchants/${churchId}/activity` },
     { name: "Emails", href: `/admin/merchants/${churchId}/emails` },

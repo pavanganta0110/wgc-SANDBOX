@@ -12,7 +12,7 @@ export default function ResourceCTA() {
           Give churches, nonprofit organizations, and other 501(c) organizations a seamless payment experience under your own brand.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link href="/register" 
+          <Link href="/start" 
             className="w-full sm:w-auto bg-wgc-gold-500 text-wgc-navy-900 px-10 py-4 rounded-2xl text-[11px] font-bold uppercase tracking-[0.2em] shadow-xl shadow-wgc-gold-500/20 hover:bg-black hover:text-wgc-navy-900 hover:scale-105 active:scale-95 transition-all">
             Get Started
           </Link>
