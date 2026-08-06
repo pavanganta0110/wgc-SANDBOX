@@ -39,12 +39,13 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => ({}));
-  const { token, financeInstrumentToken, paymentMethodType, authorizationAccepted } = body;
+  const { token, financeInstrumentToken, paymentMethodType, authorizationAccepted, walletToken, walletBillingContact } = body;
+  const isWallet = paymentMethodType === "apple_pay" || paymentMethodType === "google_pay";
 
   if (!token || typeof token !== "string") {
     return NextResponse.json({ error: "Missing activation token." }, { status: 400 });
   }
-  if (!financeInstrumentToken || typeof financeInstrumentToken !== "string") {
+  if (isWallet ? !walletToken : !financeInstrumentToken || typeof financeInstrumentToken !== "string") {
     return NextResponse.json({ error: "Missing billing method token." }, { status: 400 });
   }
   if (authorizationAccepted !== true) {
@@ -73,11 +74,34 @@ export async function POST(req: Request) {
     const identity = await finixClient.createBuyerIdentity({
       entity: { email: auth.email },
     });
-    const instrument = await finixClient.createPaymentInstrument({
-      identity: identity.id,
-      token: financeInstrumentToken,
-      type: "TOKEN",
-    });
+    // Apple/Google Pay tokens use a completely different Finix instrument
+    // shape than the card/bank iframe's TOKEN type — third_party_token
+    // instead of token, and merchant_identity MUST be
+    // FINIX_APPLICATION_OWNER_ID (the wallet token is scoped to whatever
+    // identity it was tokenized against client-side, an application-wide
+    // value, never WGC's own billing merchant identity). Mirrors the exact
+    // shape already proven out in src/app/api/g/[slug]/donate/route.ts.
+    const instrument = isWallet
+      ? await finixClient.createPaymentInstrument({
+          identity: identity.id,
+          merchant_identity: process.env.FINIX_APPLICATION_OWNER_ID,
+          type: paymentMethodType === "google_pay" ? "GOOGLE_PAY" : "APPLE_PAY",
+          third_party_token: walletToken,
+          name: walletBillingContact?.name,
+          address: {
+            line1: walletBillingContact?.address?.line1,
+            line2: walletBillingContact?.address?.line2,
+            city: walletBillingContact?.address?.city,
+            region: walletBillingContact?.address?.region,
+            postal_code: walletBillingContact?.address?.postal_code,
+            country: walletBillingContact?.address?.country,
+          },
+        })
+      : await finixClient.createPaymentInstrument({
+          identity: identity.id,
+          token: financeInstrumentToken,
+          type: "TOKEN",
+        });
 
     const maskedDetails =
       instrument?.brand && instrument?.last_four
