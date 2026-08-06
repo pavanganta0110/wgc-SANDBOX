@@ -30,6 +30,14 @@ const normalizeWebsiteUrl = (value: string) => {
   return `https://${trimmed}`;
 };
 
+// Matches the server-side convention in verify-captcha/route.ts and
+// onboarding/route.ts, which both already no-op when RECAPTCHA_SECRET_KEY
+// is unset (e.g. this deployment's reCAPTCHA site key isn't registered for
+// this domain in Google's reCAPTCHA admin console) — without this, the
+// widget renders an unusable "Invalid domain for site key" error and the
+// client-side requirement below blocks the form from ever being submitted.
+const RECAPTCHA_ENABLED = Boolean(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY);
+
 export default function StartOnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
@@ -198,6 +206,10 @@ export default function StartOnboardingPage() {
     e.preventDefault();
     
     if (step === 1) {
+      if (!RECAPTCHA_ENABLED) {
+        nextStep();
+        return;
+      }
       if (!recaptchaToken) {
         toast.error("Please verify that you are not a robot.");
         return;
@@ -211,7 +223,7 @@ export default function StartOnboardingPage() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Captcha validation failed");
-        
+
         setIsSubmitting(false);
         nextStep();
       } catch (err: any) {
@@ -477,13 +489,15 @@ export default function StartOnboardingPage() {
                   </div>
                 </div>
 
-                <div className="mt-8 flex justify-end">
-                  <ReCAPTCHA
-                    ref={recaptchaRef}
-                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
-                    onChange={(val) => setRecaptchaToken(val)}
-                  />
-                </div>
+                {RECAPTCHA_ENABLED && (
+                  <div className="mt-8 flex justify-end">
+                    <ReCAPTCHA
+                      ref={recaptchaRef}
+                      sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
+                      onChange={(val) => setRecaptchaToken(val)}
+                    />
+                  </div>
+                )}
               </div>
             )}
 

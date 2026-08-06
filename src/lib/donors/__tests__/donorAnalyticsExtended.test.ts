@@ -12,6 +12,7 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     payment: { findMany: vi.fn().mockResolvedValue([]) },
     invoice: { findMany: vi.fn().mockResolvedValue([]) },
     invoicePayment: { findMany: vi.fn().mockResolvedValue([]) },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
     ...overrides,
   };
 }

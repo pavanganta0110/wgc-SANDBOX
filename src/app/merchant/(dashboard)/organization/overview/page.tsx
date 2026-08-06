@@ -1,9 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { getOrganizationPermissions } from "@/lib/organization/organizationPermissions";
 import { loadOrganizationProfile } from "@/lib/organization/organizationProfileLoader";
 import RequestChangeButton from "@/components/merchant/RequestChangeButton";
+import SubscriptionSummaryCard from "@/components/billing/SubscriptionSummaryCard";
 
 function Row({ label, value, area, canRequest }: { label: string; value: string; area?: string; canRequest?: boolean }) {
   return (
@@ -33,6 +36,16 @@ export default async function OrganizationOverviewPage() {
   if (!profile) return null;
   const { church, onboarding } = profile;
 
+  // allowRestrictedAccess=true: account overview is minimal account info,
+  // reachable regardless of billing-access state — see accessGate.ts.
+  let billingAuth;
+  try {
+    billingAuth = await requireMerchantSession(true);
+  } catch (err) {
+    if (isAuthError(err)) billingAuth = null;
+    else throw err;
+  }
+
   const legalName = church.name || onboarding?.legalBusinessName || onboarding?.organizationName || "—";
   const orgType = church.organizationType || onboarding?.organizationType || "—";
   const legalAddress = [church.addressLine1 || onboarding?.businessAddressLine1, church.city || onboarding?.businessCity, church.state || onboarding?.businessState, church.postalCode || onboarding?.businessPostalCode]
@@ -42,6 +55,7 @@ export default async function OrganizationOverviewPage() {
 
   return (
     <div className="space-y-6">
+      {billingAuth && <SubscriptionSummaryCard auth={billingAuth} />}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-bold text-slate-900">Legal Identity</h3>

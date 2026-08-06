@@ -62,6 +62,29 @@ export async function applyInvoicePaymentTransferState(finixTransferId: string, 
       },
     });
 
+    // Invoice-feature usage ledger — trusted server-side only (this
+    // function is the single choke point both the Finix webhook and the
+    // payer-return reconciliation path go through; never driven by a raw
+    // browser signal). Idempotent per finixTransferId + resulting status,
+    // so a duplicate webhook, a page refresh, or a reconciliation retry
+    // can never double-count.
+    if (derivedStatus === "PAID" || derivedStatus === "PARTIALLY_PAID") {
+      try {
+        const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+        await recordInvoiceUsageEvent({
+          organizationId: invoice.churchId,
+          invoiceId: invoice.id,
+          invoicePaymentId: priorInvoicePayment.id,
+          eventType: derivedStatus === "PAID" ? "INVOICE_PAID" : "INVOICE_PARTIALLY_PAID",
+          invoiceAmountCents: invoice.totalCents,
+          amountPaidCents: balance.amountPaidCents,
+          idempotencyKey: `${finixTransferId}:${derivedStatus}`,
+        });
+      } catch (err) {
+        console.error("Invoice usage ledger recording failed (non-fatal):", err);
+      }
+    }
+
     if (newStatus === "SUCCEEDED" && priorInvoicePayment.method === "ACH") {
       try {
         const { sendInvoicePaymentReceiptEmail } = await import("./invoiceEmails");

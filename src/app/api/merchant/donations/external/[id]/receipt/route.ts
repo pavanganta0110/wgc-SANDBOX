@@ -31,8 +31,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         "Content-Disposition": `attachment; filename="${fileName}"`,
       },
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Could not generate receipt" }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not generate receipt";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }
 

@@ -153,6 +153,18 @@ export async function POST(req: Request) {
       req,
     });
 
+    // Invoice-feature usage ledger — recorded for future pricing/reporting
+    // regardless of whether invoice billing is active; never itself
+    // creates a charge (see invoiceUsageLedger.ts doc comment).
+    const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+    await recordInvoiceUsageEvent({
+      organizationId: auth.churchId,
+      invoiceId: invoice.id,
+      eventType: "INVOICE_CREATED",
+      invoiceAmountCents: invoice.totalCents,
+      idempotencyKey: `${invoice.id}:INVOICE_CREATED`,
+    }).catch((err) => console.error("Invoice usage ledger recording failed (non-fatal):", err));
+
     return NextResponse.json({ success: true, invoice });
   } catch (err) {
     if (isUniqueConstraintError(err)) {

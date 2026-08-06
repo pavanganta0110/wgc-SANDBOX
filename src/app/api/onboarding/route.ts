@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { sendWgcEmail, sendWgcAdminOnboardingNotification } from "@/lib/email";
+import { consumePromotionLeadForSignup } from "@/lib/billing/promotionAttribution";
 
 function extractFinixErrorMessage(err: any): string {
   let finixErrorStr = err.message || "Unknown error";
@@ -179,6 +180,18 @@ export async function POST(req: Request) {
         },
       });
       console.log("ONBOARDING_STEP", "APPLICATION_CREATED", application.id);
+
+      // Server-trusted promotion attribution — only ever consumes a lead
+      // created by the /six-months-free landing page's own server route
+      // (see promotionAttribution.ts doc comment). A normal /start signup
+      // simply has no cookie here, and this silently does nothing — no
+      // query parameter, form field, or client value is ever consulted.
+      try {
+        await consumePromotionLeadForSignup(application.id);
+      } catch (promoErr) {
+        // Never fail a real signup over promotion-attribution bookkeeping.
+        console.error("ONBOARDING_PROMO_ATTRIBUTION_FAILED", promoErr);
+      }
     } catch (err: any) {
       console.error("ONBOARDING_FAILED", { step: "DATABASE_APPLICATION_CREATE_FAILED", errorMessage: err.message, code: err.code });
       return NextResponse.json({

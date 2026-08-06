@@ -380,6 +380,14 @@ export class FinixClient {
   // "application/json". Overridden per-call rather than changing the
   // global default, since other endpoints depend on the HAL response shape
   // (_embedded, _links).
+  // Confirmed against docs.finix.com/api/subscriptions/createsubscription
+  // AND a real sandbox POST /subscriptions call (see wgcSubscriptionService.ts
+  // doc comment): trial_details lives INSIDE subscription_details, not as a
+  // top-level sibling — Finix silently ignores an unrecognized top-level
+  // field rather than erroring, so a misplaced trial_details produces a
+  // 201 with no trial applied at all (confirmed: subscription came back
+  // state="ACTIVE", subscription_details.trial_details=null). The field
+  // shape is interval_type + interval_count, not trial_period_days.
   async createSubscription(payload: {
     amount: number;
     currency: string;
@@ -387,7 +395,11 @@ export class FinixClient {
     linked_to: string;
     linked_type: "MERCHANT";
     buyer_details: { identity_id: string; instrument_id: string };
-    subscription_details?: { collection_method: "BILL_AUTOMATICALLY" };
+    subscription_details?: {
+      collection_method: "BILL_AUTOMATICALLY";
+      trial_details?: { interval_type: "DAY" | "WEEK" | "MONTH" | "YEAR"; interval_count: number };
+      discount_phase_details?: { amount: number; billing_interval_count: number };
+    };
     tags?: Record<string, string>;
   }) {
     return this.fetchApi("/subscriptions", {

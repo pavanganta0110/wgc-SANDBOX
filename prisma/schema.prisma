@@ -293,14 +293,27 @@ model AuditLog {
 }
 
 model Church {
-  id                            String  @id @default(cuid())
+  id                            String    @id @default(cuid())
   name                          String
-  slug                          String  @unique
+  slug                          String    @unique
   primaryContactEmail           String
   onboardingApplicationId       String?
   finixMerchantId               String?
   finixIdentityId               String?
   finixApplicationId            String?
+  // WGC platform-billing gate, checked on every dashboard request (denormalized
+  // here for a fast session-level check rather than joining WgcSubscription on
+  // every request). Null = grandfathered/no gate (organizations that existed
+  // before this feature). APPROVED_BILLING_REQUIRED = Finix-approved but
+  // billing/subscription setup not yet complete — dashboard access is
+  // restricted to subscription setup, billing setup, support, account info,
+  // and logout only (see requireMerchantSession's billing-gate check).
+  // BILLING_ACTIVE = full dashboard access restored.
+  billingSetupStatus            String?
+  // Set once the org's WGC platform subscription goes PAST_DUE past its
+  // configured grace period — a second, independent restriction from
+  // billingSetupStatus (a fully-set-up org can still lapse into this state).
+  billingAccessRestrictedAt     DateTime?
   // Team-access Checkpoint 1: exactly one User (role "owner") accountable
   // per Church. Nullable during migration — existing churches are backfilled
   // via an explicit, reviewed report (see ownerBackfillPreview), never
@@ -332,9 +345,9 @@ model Church {
   statementSubjectTemplate      String?
   statementThankYouMessage      String?
   statementDisclaimer           String?
-  statementShowDonorCoveredFees Boolean @default(false)
-  statementShowTaxId            Boolean @default(false)
-  statementShowWebsite          Boolean @default(false)
+  statementShowDonorCoveredFees Boolean   @default(false)
+  statementShowTaxId            Boolean   @default(false)
+  statementShowWebsite          Boolean   @default(false)
   // Optional authorized-signature block on year-end statements — a name/
   // title pair renders as a signature line even without an image; the image
   // (if provided) renders above them. All optional per organization.
@@ -770,6 +783,61 @@ model Donor {
   @@index([archivedAt])
 }
 
+/// A confidence-scored candidate match between a newly-entered/imported
+/// donor and an existing Donor row, raised when the automatic exact-match
+/// resolver (resolveOrCreateDonor: email/phone/finixIdentityId) finds no
+/// exact match but a fuzzy comparison (name+address, name+partial phone,
+/// name+similar email) crosses the MEDIUM-confidence bar. Never created
+/// for a HIGH-confidence exact match (that auto-attaches immediately,
+/// same as always) or for a bare name-only LOW match (that creates a new
+/// donor with no review needed, per the "never merge on name alone" rule).
+/// A record here does not itself change any donation's donorId — the new
+/// donor row is created normally so the gift is never blocked or lost;
+/// this table only tracks that a human should confirm whether the two
+/// donor rows are actually the same person.
+model PossibleDonorMatch {
+  id       String @id @default(cuid())
+  churchId String
+
+  // The pre-existing donor this new record might be the same person as.
+  existingDonorId  String
+  // The newly created donor row raised against existingDonorId — created
+  // immediately (never blocked pending review), reassigned into
+  // existingDonorId via the normal mergeDonors() flow only if a reviewer
+  // confirms the match.
+  candidateDonorId String
+
+  // EXTERNAL_DONATION_ENTRY | EXTERNAL_DONATION_IMPORT — the only two
+  // paths that currently run fuzzy scoring (see donorMatchConfidence.ts
+  // doc comment for why the public Finix checkout path never does).
+  sourceType String
+  // ExternalDonation.id (entry) or ExternalDonationImportBatch.id (import)
+  sourceId   String?
+
+  confidence        String // MEDIUM (HIGH auto-attaches, LOW never rows here)
+  confidenceScore   Int // 0-100, informational — confidence is the decision boundary
+  matchedFields     String[]
+  conflictingFields String[]
+  matchReason       String
+
+  donationAmountCents Int?
+  donationDate        DateTime?
+
+  // PENDING | CONFIRMED | REJECTED | SKIPPED
+  status           String    @default("PENDING")
+  reviewedByUserId String?
+  reviewedByEmail  String?
+  reviewedAt       DateTime?
+  resolutionNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, status])
+  @@index([existingDonorId])
+  @@index([candidateDonorId])
+}
+
 // Multiple free-text internal notes per donor, each with its own author/
 // timestamp — distinct from the single-overwritable-field pattern used by
 // FinixDispute.internalNote. Never sent to the donor or the processor.
@@ -980,60 +1048,439 @@ model PaymentAttempt {
   updatedAt         DateTime @updatedAt
 }
 
-model SubscriptionPlan {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  amountCents     Int
-  currency        String   @default("USD")
-  billingInterval String
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+// =========================================================================
+// WGC Platform Billing (WGC charging its own client organizations for the
+// platform subscription / invoice feature) — completely separate from any
+// client organization's own Finix merchant, which only ever processes that
+// organization's donations/invoices. Every charge here is routed through
+// FINIX_WGC_BILLING_MERCHANT_ID via src/lib/billing/paymentRouting.ts,
+// never a Church's own finixMerchantId. See docs/wgc-billing.md.
+//
+// Replaces the previously-scaffolded SubscriptionPlan/ChurchSubscription/
+// SubscriptionCharge models, which were confirmed completely unwired (zero
+// call sites beyond a throwing stub, zero rows) and removed rather than
+// repurposed in place, since their shape didn't carry the fields this
+// feature actually needs (trial dates, billing-merchant reference,
+// idempotency keys, pricing-version linkage).
+// =========================================================================
+
+/// Versioned pricing for the WGC platform subscription itself (currently
+/// $10/month). Never silently changes an existing organization's price —
+/// a new version is added and WgcSubscription.priceVersionId keeps pointing
+/// at whichever version it was created under.
+model WgcPricingVersion {
+  id                  String    @id @default(cuid())
+  planCode            String
+  planName            String
+  monthlyAmountCents  Int
+  currency            String    @default("USD")
+  billingInterval     String    @default("MONTHLY")
+  internalDescription String?
+  customerDescription String?
+  isDefaultForNewOrgs Boolean   @default(false)
+  effectiveFrom       DateTime  @default(now())
+  effectiveUntil      DateTime?
+  // DRAFT | ACTIVE | RETIRED
+  status              String    @default("DRAFT")
+  createdByUserId     String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([planCode, status])
 }
 
-model ChurchSubscription {
-  id                       String    @id @default(cuid())
-  onboardingApplicationId  String?
-  churchId                 String?
-  subscriptionPlanId       String
-  finixSubscriptionId      String?
-  finixBuyerIdentityId     String?
-  finixPaymentInstrumentId String?
-  amountCents              Int
-  currency                 String    @default("USD")
-  billingInterval          String
-  state                    String
-  subscriptionPhase        String?
-  firstChargeAt            DateTime?
-  nextBillingDate          DateTime?
-  startedAt                DateTime?
-  canceledAt               DateTime?
-  expiresAt                DateTime?
-  failedAt                 DateTime?
-  failureCode              String?
-  failureMessage           String?
-  paymentMethodType        String?
-  cardBrand                String?
-  cardLast4                String?
-  bankLast4                String?
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
-  lastSyncedAt             DateTime?
+/// A client organization's billing identity + payment instrument under
+/// WGC's own Finix billing merchant — entirely separate from the
+/// organization's own Finix identity/merchant (Church.finixIdentityId/
+/// finixMerchantId) used for donations/invoices. One per organization.
+model WgcBillingAccount {
+  id                         String    @id @default(cuid())
+  organizationId             String    @unique
+  billingIdentityId          String?
+  billingPaymentInstrumentId String?
+  // CARD | BANK_ACCOUNT
+  billingMethodType          String?
+  cardBrand                  String?
+  cardLast4                  String?
+  cardExpMonth               Int?
+  cardExpYear                Int?
+  bankLast4                  String?
+  maskedBillingDetails       String?
+  billingContactEmail        String?
+  authorizationAcceptedAt    DateTime?
+  authorizationTermsVersion  String?
+  authorizationIpAddress     String?
+  authorizationUserAgent     String?
+  authorizingUserId          String?
+  // PENDING | ACTIVE | REPLACED | INVALID
+  status                     String    @default("PENDING")
+  lastUpdatedByUserId        String?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([organizationId])
 }
 
-model SubscriptionCharge {
-  id                   String    @id @default(cuid())
-  churchSubscriptionId String
-  finixTransferId      String?
-  amountCents          Int
-  status               String
-  paidAt               DateTime?
-  failedAt             DateTime?
-  failureCode          String?
-  failureMessage       String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+/// The organization's WGC platform subscription — a Finix Subscription
+/// billed through WGC's OWN Finix billing merchant, never the
+/// organization's own merchant. Application logic (not a DB constraint)
+/// enforces at most one active/trialing subscription per organization —
+/// see resolveOrCreateWgcSubscription's transaction lock.
+model WgcSubscription {
+  id                         String    @id @default(cuid())
+  // One row per organization for the lifetime of the account — reactivating
+  // after cancellation updates this same row (new finixSubscriptionId etc.)
+  // rather than creating a second row, which is also what makes the
+  // upsert-by-organizationId pattern in wgcSubscriptionService.ts an atomic
+  // duplicate-activation guard (see "duplicate activation does not create
+  // duplicate subscriptions").
+  organizationId             String    @unique
+  planCode                   String
+  priceVersionId             String
+  finixSubscriptionId        String?   @unique
+  finixBillingMerchantId     String
+  billingIdentityId          String?
+  billingPaymentInstrumentId String?
+  amountCents                Int
+  currency                   String    @default("USD")
+  billingInterval            String    @default("MONTHLY")
+  // INCOMPLETE | TRIALING | ACTIVE | PAST_DUE | CANCELED
+  status                     String    @default("INCOMPLETE")
+  trialStartsAt              DateTime?
+  trialEndsAt                DateTime?
+  firstChargeAt              DateTime?
+  nextChargeAt               DateTime?
+  lastChargeAt               DateTime?
+  pastDueAt                  DateTime?
+  gracePeriodEndsAt          DateTime?
+  cancelRequestedAt          DateTime?
+  canceledAt                 DateTime?
+  canceledByUserId           String?
+  cancellationReason         String?
+  lastSyncedAt               DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+/// A defined promotional offer template (e.g. "Six Months Free"). Editing
+/// this template must never retroactively change an already-granted
+/// PromotionEntitlement — entitlements snapshot their own terms at grant
+/// time (see PromotionEntitlement.durationMonths etc.).
+model Promotion {
+  id                               String    @id @default(cuid())
+  code                             String    @unique
+  name                             String
+  customerDescription              String?
+  durationMonths                   Int
+  normalMonthlyAmountCents         Int
+  active                           Boolean   @default(true)
+  validFrom                        DateTime  @default(now())
+  validUntil                       DateTime?
+  // Which automatic source, if any, may grant this without admin action —
+  // e.g. "LANDING_PAGE_SIX_MONTHS_FREE". Null = admin-grant only.
+  automaticEligibilitySource       String?
+  maxOrganizations                 Int?
+  allowManualGrantToExistingOrg    Boolean   @default(false)
+  promotionWaivesPlatformFee       Boolean   @default(true)
+  promotionWaivesInvoiceMonthlyFee Boolean   @default(false)
+  promotionWaivesInvoiceUsageFee   Boolean   @default(false)
+  createdByUserId                  String?
+  createdAt                        DateTime  @default(now())
+  updatedAt                        DateTime  @updatedAt
+
+  @@index([code])
+}
+
+/// The organization-level grant of a Promotion — belongs to the
+/// organization, never a user. Adding, removing, or changing sub-users must
+/// never create, reset, extend, or remove this.
+model PromotionEntitlement {
+  id                        String    @id @default(cuid())
+  organizationId            String
+  promotionId               String
+  // LANDING_PAGE_AUTOMATIC | ADMIN_APPROVED_CURRENT_CLIENT |
+  // ADMIN_PROMOTION_EXTENSION | CUSTOM_CONTRACT
+  source                    String
+  // LEAD_CAPTURED | SIGNUP_STARTED | ACCOUNT_CREATED |
+  // FINIX_ONBOARDING_STARTED | AWAITING_FINIX_APPROVAL |
+  // MORE_INFORMATION_REQUIRED | AWAITING_BILLING_SETUP | ACTIVE |
+  // ENDING_SOON | COMPLETED | CANCELED | EXPIRED_UNUSED | INELIGIBLE
+  status                    String    @default("LEAD_CAPTURED")
+  // Snapshotted from Promotion at grant time so a later template edit never
+  // silently changes an already-granted entitlement.
+  durationMonths            Int
+  normalMonthlyAmountCents  Int
+  waivesPlatformFee         Boolean   @default(true)
+  waivesInvoiceMonthlyFee   Boolean   @default(false)
+  waivesInvoiceUsageFee     Boolean   @default(false)
+  grantedAt                 DateTime  @default(now())
+  startsAt                  DateTime?
+  endsAt                    DateTime?
+  firstPaidBillingDate      DateTime?
+  grantedByUserId           String?
+  approvalReason            String?
+  customerFacingExplanation String?
+  canceledAt                DateTime?
+  canceledByUserId          String?
+  completedAt               DateTime?
+  originalLeadId            String?
+  finixSubscriptionId       String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+/// A promotional signup lead, captured server-side the moment a visitor
+/// clicks "Start Six Months Free" on the trusted /six-months-free landing
+/// page — never derived from a client-submitted query parameter, cookie
+/// value, or hidden form field. Tracks the lead through signup -> Finix
+/// approval -> billing setup.
+model PromotionLead {
+  id                      String    @id @default(cuid())
+  organizationName        String?
+  contactName             String?
+  contactEmail            String?
+  contactPhone            String?
+  campaignSource          String?
+  promotionId             String
+  // Hash of the signed one-time signup token issued to this lead — the raw
+  // token itself is never stored.
+  tokenHash               String    @unique
+  tokenExpiresAt          DateTime
+  consumedAt              DateTime?
+  signupStartedAt         DateTime?
+  // Set as soon as signup creates the OnboardingApplication row — the
+  // practical link that carries the promotion through Finix approval,
+  // since Church itself doesn't exist until provisionChurchAccount runs
+  // post-approval (organizationId below is set at that later point).
+  onboardingApplicationId String?
+  organizationId          String?
+  finixApplicationId      String?
+  lastActivityAt          DateTime  @default(now())
+  // LEAD_CAPTURED | SIGNUP_STARTED | ACCOUNT_CREATED | EXPIRED | CONSUMED
+  status                  String    @default("LEAD_CAPTURED")
+  ipAddress               String?
+  userAgent               String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([promotionId])
+  @@index([organizationId])
+  @@index([tokenExpiresAt])
+}
+
+/// Every WGC-billing-merchant charge (platform subscription, invoice add-on/
+/// usage, plan upgrade, promotional credit, refund) — never a client
+/// organization's own donation/invoice charge, which stays in Payment/
+/// FinixTransfer/InvoicePayment, processed through the organization's own
+/// merchant.
+model BillingCharge {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  // WGC_PLATFORM_SUBSCRIPTION | WGC_INVOICE_ADD_ON | WGC_INVOICE_USAGE |
+  // WGC_PLAN_UPGRADE | PROMOTIONAL_CREDIT | BILLING_ADJUSTMENT | REFUND
+  chargeType          String
+  // e.g. "2027-02" for a monthly billing period; null for one-off charges.
+  billingPeriod       String?
+  amountCents         Int
+  currency            String    @default("USD")
+  finixTransferId     String?
+  finixSubscriptionId String?
+  pricingVersionId    String?
+  idempotencyKey      String    @unique
+  // PENDING | SUCCEEDED | FAILED | REFUNDED | RECONCILING
+  status              String    @default("PENDING")
+  failureCode         String?
+  failureMessage      String?
+  internalNote        String?
+  attemptedAt         DateTime  @default(now())
+  succeededAt         DateTime?
+  failedAt            DateTime?
+  refundedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([organizationId])
+  @@index([chargeType])
+  @@index([billingPeriod])
+  @@index([status])
+}
+
+/// WGC-wide configuration for how the invoice feature is billed to
+/// organizations. Starts DISABLED/DRAFT. Versioned the same way
+/// WgcPricingVersion is — activating a new configuration never
+/// retroactively bills InvoiceUsageEvent rows recorded before its
+/// effectiveFrom date.
+model InvoiceBillingConfiguration {
+  id                               String    @id @default(cuid())
+  // INCLUDED_IN_PLATFORM | MONTHLY_ADD_ON | PER_INVOICE_SENT |
+  // PER_INVOICE_PAID | FLAT_MONTHLY_PLUS_USAGE | DISABLED
+  mode                             String    @default("DISABLED")
+  monthlyAmountCents               Int?
+  usageAmountCents                 Int?
+  // INVOICE_SENT | INVOICE_PAID
+  trigger                          String?
+  partialPaymentCountsAsBillable   Boolean   @default(false)
+  multiplePaymentsCountOnce        Boolean   @default(true)
+  minimumMonthlyChargeCents        Int?
+  maximumMonthlyChargeCents        Int?
+  freeUsageAllowance               Int?
+  customerFacingDescription        String?
+  showUsageAsEstimateBeforeBilling Boolean   @default(true)
+  promotionWaivesInvoiceFees       Boolean   @default(false)
+  effectiveFrom                    DateTime  @default(now())
+  effectiveUntil                   DateTime?
+  // DRAFT | ACTIVE | RETIRED
+  status                           String    @default("DRAFT")
+  createdByUserId                  String?
+  activatedByUserId                String?
+  activatedAt                      DateTime?
+  createdAt                        DateTime  @default(now())
+  updatedAt                        DateTime  @updatedAt
+
+  @@index([status])
+}
+
+/// Idempotent usage ledger for the invoice feature — recorded regardless of
+/// whether invoice billing is currently active, so WGC can support future
+/// pricing without losing historical usage data. Never used to bill
+/// retroactively for activity that predates a pricing configuration's
+/// effectiveFrom date.
+model InvoiceUsageEvent {
+  id                 String   @id @default(cuid())
+  organizationId     String
+  invoiceId          String
+  invoicePaymentId   String?
+  // INVOICE_CREATED | INVOICE_SENT | INVOICE_PAID | INVOICE_PARTIALLY_PAID |
+  // INVOICE_VOIDED | INVOICE_REFUNDED | INVOICE_PAYMENT_REVERSED
+  eventType          String
+  occurredAt         DateTime @default(now())
+  invoiceAmountCents Int?
+  amountPaidCents    Int?
+  currency           String   @default("USD")
+  idempotencyKey     String   @unique
+  billingPeriod      String?
+  billable           Boolean  @default(false)
+  nonBillableReason  String?
+  pricingVersionId   String?
+  billingChargeId    String?
+  createdAt          DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([invoiceId])
+  @@index([billingPeriod])
+  @@index([eventType])
+}
+
+/// Dedicated audit trail for WGC platform-billing/promotion actions. Kept
+/// separate from DashboardAuditLog since many of these actions are WGC-admin
+/// actions not tied to a single organization user, and financial-override
+/// actions need explicit previous/new-value + reason tracking.
+model WgcBillingAuditLog {
+  id                   String   @id @default(cuid())
+  organizationId       String?
+  actorUserId          String?
+  actorEmail           String?
+  actorRole            String?
+  // e.g. "promotion.lead_created", "subscription.created", "charge.refunded"
+  action               String
+  entityType           String?
+  entityId             String?
+  previousValue        Json?
+  newValue             Json?
+  internalReason       String?
+  customerFacingReason String?
+  idempotencyKey       String?
+  ipAddress            String?
+  userAgent            String?
+  metadata             Json?
+  createdAt            DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action])
+}
+
+/// Single-purpose, single-organization, hashed, expiring, revocable token
+/// gating access to /activate-subscription/[token]. The raw token is emailed
+/// once and never persisted — only its hash.
+model BillingActivationToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId])
+}
+
+/// Period-scoped dedup for recurring/periodic billing emails (trial-ending
+/// reminders, first-charge reminder, receipts, failed-payment notices,
+/// cancellation confirmation) — distinct from EmailLog, which only dedups
+/// "has this onboarding application ever received this email type" and has
+/// no period concept.
+model BillingEmailLog {
+  id                    String    @id @default(cuid())
+  organizationId        String
+  recipientEmail        String
+  // e.g. "TRIAL_ENDING_14_DAYS", "FIRST_CHARGE_RECEIPT"
+  emailType             String
+  // Composite dedup key, e.g. "{organizationId}:{emailType}:{periodOrChargeId}"
+  idempotencyKey        String    @unique
+  relatedSubscriptionId String?
+  relatedChargeId       String?
+  status                String    @default("PENDING")
+  providerMessageId     String?
+  failureReason         String?
+  resendCount           Int       @default(0)
+  sentAt                DateTime?
+  createdAt             DateTime  @default(now())
+
+  @@index([organizationId, emailType])
+}
+
+/// Versioned legal text for subscription terms / cancellation policy /
+/// billing authorization / promotion terms / invoice billing terms. An
+/// accepted WgcBillingAccount.authorizationTermsVersion always points at one
+/// of these permanently, even after a newer version is published — existing
+/// accepted authorizations are never rewritten.
+model BillingTermsVersion {
+  id                String   @id @default(cuid())
+  // SUBSCRIPTION_TERMS | CANCELLATION_POLICY | BILLING_AUTHORIZATION |
+  // PROMOTION_TERMS | INVOICE_BILLING_TERMS
+  termsType         String
+  version           String
+  bodyMarkdown      String
+  publishedAt       DateTime @default(now())
+  publishedByUserId String?
+
+  @@unique([termsType, version])
+  @@index([termsType])
+}
+
+/// Singleton WGC-wide billing configuration (always exactly one row, id
+/// "singleton") — grace period length, past-due reminder cadence, and which
+/// dashboard features are restricted while an org's access gate is closed.
+/// Editing this changes behavior going forward only; it is never applied
+/// retroactively to already-computed gracePeriodEndsAt values on existing
+/// WgcSubscription rows.
+model WgcBillingSettings {
+  id                       String   @id @default("singleton")
+  gracePeriodDays          Int      @default(14)
+  pastDueReminderDays      Int[]    @default([1, 3, 7, 12])
+  trialEndingReminderDays  Int[]    @default([14, 3, 1])
+  restrictedFeatureKeys    String[] @default([])
+  supportContactEmail      String?
+  updatedByUserId          String?
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
 }
 
 // =========================================================================

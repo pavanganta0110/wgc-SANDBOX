@@ -196,7 +196,13 @@ export async function resolveScopedDonorIds(
   const scopedUserId = resolveScopedUserId(auth, viewScope);
   if (scopedUserId === null) return null;
 
-  const [paymentDonors, subscriptionDonors] = await Promise.all([
+  // ExternalDonation.createdByUserId is included alongside Payment/
+  // FinixSubscription attribution — without this, a fundraiser who records
+  // a cash/check donation for a donor with no other WGC-processed activity
+  // could create the donation but never see that donor again on their own
+  // scoped donor list/dashboard, since the donor would have zero attributed
+  // Payment/FinixSubscription rows to match on.
+  const [paymentDonors, subscriptionDonors, externalDonationDonors] = await Promise.all([
     prisma.payment.findMany({
       where: { churchId: auth.churchId, attributedUserId: scopedUserId, donorId: { not: null } },
       select: { donorId: true },
@@ -207,10 +213,16 @@ export async function resolveScopedDonorIds(
       select: { donorId: true },
       distinct: ["donorId"],
     }),
+    prisma.externalDonation.findMany({
+      where: { churchId: auth.churchId, createdByUserId: scopedUserId, donorId: { not: null } },
+      select: { donorId: true },
+      distinct: ["donorId"],
+    }),
   ]);
 
   const ids = new Set<string>();
   for (const p of paymentDonors) if (p.donorId) ids.add(p.donorId);
   for (const s of subscriptionDonors) if (s.donorId) ids.add(s.donorId);
+  for (const e of externalDonationDonors) if (e.donorId) ids.add(e.donorId);
   return Array.from(ids);
 }

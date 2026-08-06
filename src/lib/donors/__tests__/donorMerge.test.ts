@@ -16,6 +16,7 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     finixSubscription: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     subscriptionConsent: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     subscriptionSetupLink: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    externalDonation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     annualDonationStatement: {
       findMany: vi.fn().mockResolvedValue([]),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -80,6 +81,21 @@ describe("mergeDonors — safety rules", () => {
     expect(archiveCall.data.mergedIntoDonorId).toBe("primary");
   });
 
+  it("reassigns ExternalDonation.donorId to the primary — merging donors must not orphan cash/check history from the surviving profile", async () => {
+    const prismaMock = makePrismaMock({});
+    prismaMock.__tx.externalDonation = { updateMany: vi.fn().mockResolvedValue({ count: 4 }) };
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { mergeDonors } = await import("@/lib/donors/donorMerge");
+
+    const result = await mergeDonors("primary", "dup", "church-A", "user1", "a@test.com");
+
+    expect(result.reassigned.externalDonations).toBe(4);
+    expect(prismaMock.__tx.externalDonation.updateMany).toHaveBeenCalledWith({
+      where: { donorId: "dup", churchId: "church-A" },
+      data: { donorId: "primary" },
+    });
+  });
+
   it("backfills the primary's missing contact fields from the duplicate without overwriting populated ones", async () => {
     const prismaMock = makePrismaMock();
     vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -132,6 +148,47 @@ describe("mergeDonors — safety rules", () => {
       where: { id: "stmt-clean" },
       data: { donorId: "primary" },
     });
+  });
+
+  it("an explicit fieldSelections pick overwrites a populated primary field — the one deliberate exception to 'never overwrite a populated primary value'", async () => {
+    const prismaMock = makePrismaMock();
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { mergeDonors } = await import("@/lib/donors/donorMerge");
+
+    // primary already has an email/phone from the earlier auto-fill test's
+    // fixture shape — force a real conflict by re-mocking donor.findFirst
+    // with a primary that already has a *different* email than the dup.
+    prismaMock.donor.findFirst = vi.fn((args: any) => {
+      if (args.where.id === "primary") return Promise.resolve({ id: "primary", churchId: "church-A", email: "old@example.com", phone: null, finixIdentityId: null, normalizedEmail: "old@example.com", normalizedPhone: null });
+      if (args.where.id === "dup") return Promise.resolve({ id: "dup", churchId: "church-A", email: "dup@example.com", phone: "8165551234", finixIdentityId: null, normalizedEmail: "dup@example.com", normalizedPhone: "+18165551234" });
+      return Promise.resolve(null);
+    });
+
+    await mergeDonors("primary", "dup", "church-A", "user1", "a@test.com", { email: "duplicate" });
+
+    const primaryUpdate = prismaMock.__updateCalls.find((c: any) => c.where.id === "primary");
+    // Without an explicit selection, email would never move (primary
+    // already had one) — the fieldSelections pick is what forces it.
+    expect(primaryUpdate.data.email).toBe("dup@example.com");
+    expect(primaryUpdate.data.normalizedEmail).toBe("dup@example.com");
+  });
+
+  it("fieldSelections defaults (no explicit pick) never overwrite a populated primary field, same as before", async () => {
+    const prismaMock = makePrismaMock();
+    prismaMock.donor.findFirst = vi.fn((args: any) => {
+      if (args.where.id === "primary") return Promise.resolve({ id: "primary", churchId: "church-A", email: "old@example.com", phone: null, finixIdentityId: null, normalizedEmail: "old@example.com", normalizedPhone: null });
+      if (args.where.id === "dup") return Promise.resolve({ id: "dup", churchId: "church-A", email: "dup@example.com", phone: "8165551234", finixIdentityId: null, normalizedEmail: "dup@example.com", normalizedPhone: "+18165551234" });
+      return Promise.resolve(null);
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { mergeDonors } = await import("@/lib/donors/donorMerge");
+
+    await mergeDonors("primary", "dup", "church-A", "user1", "a@test.com", { phone: "primary" });
+
+    const primaryUpdate = prismaMock.__updateCalls.find((c: any) => c.where.id === "primary");
+    // phone: "primary" explicitly picked, and email had no selection at
+    // all — both cases must leave the populated primary email untouched.
+    expect(primaryUpdate?.data.email).toBeUndefined();
   });
 });
 

@@ -122,5 +122,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     req,
   });
 
+  // Idempotency key is invoiceId-only (not resend-specific) — a resend
+  // must never count as a second "sent" usage event, per "do not count
+  // the same invoice twice because of... multiple invoice sends."
+  const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+  await recordInvoiceUsageEvent({
+    organizationId: auth.churchId,
+    invoiceId,
+    eventType: "INVOICE_SENT",
+    idempotencyKey: `${invoiceId}:INVOICE_SENT`,
+  }).catch((err) => console.error("Invoice usage ledger recording failed (non-fatal):", err));
+
   return NextResponse.json({ success: true, status: derivedStatus });
 }

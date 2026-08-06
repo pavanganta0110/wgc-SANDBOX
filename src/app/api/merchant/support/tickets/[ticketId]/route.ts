@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ ticketI
   const { ticketId } = await params;
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: support must remain reachable while billing-restricted
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
@@ -38,7 +38,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ticket
   const { ticketId } = await params;
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: support must remain reachable while billing-restricted
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;

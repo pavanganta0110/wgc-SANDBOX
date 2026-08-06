@@ -58,6 +58,7 @@ function baseChurch(overrides: Record<string, unknown> = {}) {
     finixMerchantId: "MU123",
     embedDomainRestrictionEnabled: false,
     embedAllowedDomainsJson: [],
+    status: "ACTIVE",
     ...overrides,
   };
 }

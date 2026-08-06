@@ -4,6 +4,7 @@ import { loadDonorAggregatesBatch, type DonorAggregates, type DateRangeFilter } 
 import { loadDonorRiskSignals } from "@/lib/donors/donorRiskSignals";
 import { resolveDonorDisplayStatus, type DonorDisplayStatus } from "@/lib/donors/donorStatus";
 import { normalizeEmail, normalizePhone } from "@/lib/donors/donorContact";
+import { loadDonorSourceBadges, type DonorSourceBadge } from "@/lib/donors/donorSources";
 
 /**
  * Aggregate-dependent filters/sorts (total donated, donation count, status,
@@ -45,6 +46,13 @@ export interface DonorsListFilters {
   hasActiveSubscription?: boolean;
   addressStatus?: "MISSING" | "UNVERIFIED" | "CONFIRMED";
   archivedStatus?: "active" | "archived" | "all";
+  /** At least one active ExternalDonation (cash/check/Zelle/imported/etc.) —
+   * does NOT exclude donors who also have WGC-processed donations, per the
+   * explicit "External Donors filter should not exclude donors who also
+   * paid through WGC" requirement. */
+  hasExternalDonation?: boolean;
+  /** At least one WGC/Finix-processed or charitable-invoice donation. */
+  hasProcessedDonation?: boolean;
   /** Team-access Checkpoint 4A: undefined = organization scope (all
    * church donors). A non-null array restricts to exactly these donor IDs —
    * set from resolveScopedDonorIds(auth, viewScope) in scopes.ts, which
@@ -69,6 +77,7 @@ export interface DonorListRow {
   primaryInstrument: Prisma.FinixPaymentInstrumentSnapshotGetPayload<{}> | null;
   activeSubscriptionCount: number;
   givingLinkIds: string[];
+  sources: DonorSourceBadge[];
 }
 
 export async function loadDonorsList(
@@ -123,6 +132,7 @@ export async function loadDonorsList(
         })
       : Promise.resolve([]),
   ]);
+  const sourcesMap = await loadDonorSourceBadges(donorIds, churchId, aggregatesMap);
 
   const instrumentsByDonor = new Map<string, typeof instruments>();
   for (const i of instruments) {
@@ -175,6 +185,7 @@ export async function loadDonorsList(
       primaryInstrument: instrumentsByDonor.get(donor.id)?.[0] ?? null,
       activeSubscriptionCount: aggregates.activeSubscriptionCount,
       givingLinkIds: [...(givingLinksByDonor.get(donor.id) ?? [])],
+      sources: sourcesMap.get(donor.id) ?? [],
     };
   });
 
@@ -193,6 +204,8 @@ export async function loadDonorsList(
     if (filters.hasBankReturn && r.aggregates.bankReturnCount === 0) return false;
     if (filters.hasDispute && r.aggregates.disputeCount === 0) return false;
     if (filters.hasActiveSubscription && r.activeSubscriptionCount === 0) return false;
+    if (filters.hasExternalDonation && r.aggregates.externalDonationCount === 0) return false;
+    if (filters.hasProcessedDonation && r.aggregates.donationCount - r.aggregates.externalDonationCount <= 0) return false;
     if (filters.firstDonationDateFilter) {
       const d = r.aggregates.firstDonationAt;
       if (!d) return false;

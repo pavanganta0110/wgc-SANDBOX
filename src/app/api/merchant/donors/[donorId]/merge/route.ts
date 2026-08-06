@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
-import { mergeDonors } from "@/lib/donors/donorMerge";
+import { mergeDonors, type MergeFieldSelections } from "@/lib/donors/donorMerge";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 
@@ -26,9 +26,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ donorId
   if (!duplicateDonorId) {
     return NextResponse.json({ error: "duplicateDonorId is required" }, { status: 400 });
   }
+  const fieldSelections: MergeFieldSelections | undefined =
+    body.fieldSelections && typeof body.fieldSelections === "object" ? body.fieldSelections : undefined;
+
+  await logDashboardAction({
+    churchId: auth.churchId,
+    actorUserId: auth.userId,
+    actorEmail: auth.email,
+    actorRole: auth.rawRole,
+    action: "donor.merge_started",
+    entityType: "donor",
+    entityId: donorId,
+    metadata: { duplicateDonorId, method: "manual" },
+    req,
+  });
 
   try {
-    const result = await mergeDonors(donorId, duplicateDonorId, auth.churchId, auth.userId, auth.email);
+    const result = await mergeDonors(donorId, duplicateDonorId, auth.churchId, auth.userId, auth.email, fieldSelections);
 
     await logDashboardAction({
       churchId: auth.churchId,
@@ -38,12 +52,35 @@ export async function POST(req: Request, { params }: { params: Promise<{ donorId
       action: "donor.merged",
       entityType: "donor",
       entityId: donorId,
+      metadata: { archivedDonorId: duplicateDonorId, reassigned: result.reassigned, method: "manual" },
+      req,
+    });
+    await logDashboardAction({
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      action: "donor.merge_completed",
+      entityType: "donor",
+      entityId: donorId,
       metadata: { archivedDonorId: duplicateDonorId, reassigned: result.reassigned },
       req,
     });
 
     return NextResponse.json(result);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to merge donors" }, { status: 400 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "unknown error";
+    await logDashboardAction({
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      action: "donor.merge_failed",
+      entityType: "donor",
+      entityId: donorId,
+      metadata: { duplicateDonorId, error: message },
+      req,
+    });
+    return NextResponse.json({ error: message || "Failed to merge donors" }, { status: 400 });
   }
 }

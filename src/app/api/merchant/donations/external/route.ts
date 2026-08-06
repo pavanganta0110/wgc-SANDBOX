@@ -5,7 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
-import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
+import { resolveOrCreateDonorWithMatchReview } from "@/lib/donors/resolveOrCreateDonorWithMatchReview";
 import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
 import { classifySource, isExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import { findPossibleDuplicateExternalDonation } from "@/lib/donations/checkExternalDonationDuplicate";
@@ -140,6 +140,7 @@ export async function POST(req: Request) {
   let donorId: string | null = null;
   let isAnonymous = false;
   let donorMatchStatus: "MATCHED" | "ANONYMOUS" | "UNMATCHED" = "UNMATCHED";
+  let possibleMatchId: string | undefined;
 
   if (donorMode === "anonymous") {
     isAnonymous = true;
@@ -153,14 +154,22 @@ export async function POST(req: Request) {
     if (!donorName?.trim() && !donorEmail && !normalizedPhone) {
       return NextResponse.json({ error: "Provide at least a donor name, email, or phone to create a donor" }, { status: 400 });
     }
-    const resolved = await resolveOrCreateDonor({
+    const resolved = await resolveOrCreateDonorWithMatchReview({
       churchId: auth.churchId,
       name: donorName,
       email: donorEmail,
       phone: donorPhone,
+      sourceType: "EXTERNAL_DONATION_ENTRY",
+      donationAmountCents,
+      donationDate: parsedDonationDate,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.role,
+      req,
     });
     donorId = resolved.id;
     donorMatchStatus = "MATCHED";
+    possibleMatchId = resolved.possibleMatchId;
 
     if (donorAddress && typeof donorAddress === "object") {
       const cleaned = cleanAddressInput(donorAddress);
@@ -256,6 +265,10 @@ export async function POST(req: Request) {
       performedByUserId: auth.userId,
     },
   });
+
+  if (possibleMatchId) {
+    await prisma.possibleDonorMatch.update({ where: { id: possibleMatchId }, data: { sourceId: created.id } });
+  }
 
   await logDashboardAction({
     churchId: auth.churchId,

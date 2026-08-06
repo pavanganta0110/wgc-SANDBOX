@@ -15,7 +15,7 @@ const PAGE_SIZE = 20;
 export async function GET(req: Request) {
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: support must remain reachable while billing-restricted
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   let auth;
   try {
-    auth = await requireMerchantSession();
+    auth = await requireMerchantSession(true); // allowlisted: support must remain reachable while billing-restricted
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
