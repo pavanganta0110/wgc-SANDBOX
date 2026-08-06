@@ -459,7 +459,34 @@ export async function POST(req: Request) {
       return NextResponse.redirect(loginUrl.toString());
     }
 
-    return await handleAppleAuth(code, idToken, stateToken, appleUserJson, req);
+    // Since SameSite=Lax prevents cookies from being sent on cross-site POST requests,
+    // we return a client-side GET redirect so the browser sends the state cookie.
+    const redirectUrl = new URL("/api/auth/callback/apple", req.url);
+    redirectUrl.searchParams.set("code", code);
+    redirectUrl.searchParams.set("id_token", idToken);
+    redirectUrl.searchParams.set("state", stateToken);
+    if (appleUserJson) {
+      redirectUrl.searchParams.set("user", appleUserJson);
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Redirecting...</title>
+          <script>
+            window.location.replace(${JSON.stringify(redirectUrl.toString())});
+          </script>
+        </head>
+        <body>
+          <p>Redirecting to authenticate your session...</p>
+        </body>
+      </html>
+    `;
+
+    return new NextResponse(html, {
+      headers: { "Content-Type": "text/html" },
+    });
   } catch (err: any) {
     console.error("Apple POST callback failed:", err);
     const loginUrl = new URL("/merchant/login", req.url);
@@ -474,6 +501,7 @@ export async function GET(req: Request) {
     const code = searchParams.get("code");
     const idToken = searchParams.get("id_token");
     const stateToken = searchParams.get("state");
+    const appleUserJson = searchParams.get("user");
     const errorParam = searchParams.get("error");
 
     if (errorParam === "user_cancelled_authorize") {
@@ -488,7 +516,7 @@ export async function GET(req: Request) {
       return NextResponse.redirect(loginUrl.toString());
     }
 
-    return await handleAppleAuth(code, idToken, stateToken, null, req);
+    return await handleAppleAuth(code, idToken, stateToken, appleUserJson, req);
   } catch (err: any) {
     console.error("Apple GET callback failed:", err);
     const loginUrl = new URL("/merchant/login", req.url);
