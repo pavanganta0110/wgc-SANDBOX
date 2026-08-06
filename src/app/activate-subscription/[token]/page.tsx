@@ -10,7 +10,13 @@ export default async function ActivateSubscriptionPage({ params }: { params: Pro
 
   let auth;
   try {
-    auth = await requireMerchantSession();
+    // allowlisted: this is the one page that MUST remain reachable while
+    // the org is in the APPROVED_BILLING_REQUIRED restricted state — it's
+    // the only way out of that state. Without this, every visit here threw
+    // BillingAccessRestrictedError uncaught (no error boundary at this
+    // route depth), so the activation flow was completely broken —
+    // confirmed via a real sandbox test account stuck on this exact page.
+    auth = await requireMerchantSession(true);
   } catch (err) {
     if (isAuthError(err)) redirect(`/merchant/login?next=/activate-subscription/${token}`);
     throw err;
