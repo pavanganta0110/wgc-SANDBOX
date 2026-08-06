@@ -36,7 +36,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ linkId:
   const { token, tokenHash } = generateSetupLinkToken();
   const expiresAt = new Date(Date.now() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const setupUrl = `${appUrl}/setup/${token}`;
 
   const emailResult = await sendWgcEmail({

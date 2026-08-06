@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -22,12 +23,14 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-google-recaptcha": "^3.1.0",
-    "react-hook-form": "^7.82.0",
+    "react-hook-form": "^7.83.0",
     "react-hot-toast": "^2.6.0",
     "resend": "^6.17.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/applepayjs": "^14.0.9",
     "@types/node": "^20",

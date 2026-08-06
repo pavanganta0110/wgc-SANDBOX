@@ -1,3 +1,24 @@
+/**
+ * Neutralizes spreadsheet-formula injection: a CSV cell starting with
+ * =, +, -, or @ is interpreted as a formula by Excel/Google Sheets/etc.
+ * when the file is opened, which can execute attacker-controlled content
+ * (e.g. a donor name of `=HYPERLINK(...)` from an imported CSV row).
+ * Prefixing with a leading apostrophe forces spreadsheet apps to treat the
+ * cell as plain text while leaving the value visually unchanged for anyone
+ * reading the raw CSV or re-importing it as data (the apostrophe is a
+ * formatting hint, not a literal character, once opened as a spreadsheet).
+ *
+ * Purely additive — existing callers of buildCsvExport are unaffected
+ * unless they opt in by calling this from their own column `value`
+ * functions, same as the external-donations export does.
+ */
+export function sanitizeCsvFormulaValue(value: string): string {
+  if (/^[=+\-@]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 function csvEscape(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
     return `"${value.replace(/"/g, '""')}"`;

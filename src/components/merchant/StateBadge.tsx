@@ -47,6 +47,13 @@ const STATE_STYLES: Record<string, string> = {
   // Subscription Setup Links
   OPENED: "bg-blue-50 text-blue-700",
   REVOKED: "bg-slate-100 text-slate-500",
+  // Invoices (Invoice.status)
+  DRAFT: "bg-slate-100 text-slate-600",
+  SCHEDULED: "bg-blue-50 text-blue-700",
+  VIEWED: "bg-blue-50 text-blue-700",
+  PARTIALLY_PAID: "bg-amber-50 text-amber-700",
+  UNCOLLECTIBLE: "bg-red-100 text-red-800",
+  VOID: "bg-slate-100 text-slate-500",
   COMPLETING: "bg-amber-50 text-amber-700",
   // Payment methods / verification / organization capability status
   ENABLED: "bg-green-50 text-green-700",
@@ -88,6 +95,20 @@ const STATE_STYLES: Record<string, string> = {
   PENDING_VERIFICATION: "bg-amber-50 text-amber-700",
   APPROVED: "bg-green-50 text-green-700",
   HISTORICAL: "bg-slate-100 text-slate-400",
+  // Aplos integration connection status (AplosConnection.status)
+  NOT_CONNECTED: "bg-slate-100 text-slate-500",
+  TESTING: "bg-amber-50 text-amber-700",
+  CONNECTED: "bg-green-50 text-green-700",
+  INVALID_CREDENTIALS: "bg-red-50 text-red-700",
+  REAUTHENTICATION_REQUIRED: "bg-amber-50 text-amber-700",
+  ERROR: "bg-red-50 text-red-700",
+  DISCONNECTED: "bg-slate-100 text-slate-500",
+  // Aplos sync record status (AplosSyncRecord.status)
+  SYNCED: "bg-green-50 text-green-700",
+  RETRY_SCHEDULED: "bg-amber-50 text-amber-700",
+  BLOCKED: "bg-red-50 text-red-700",
+  BLOCKED_AWAITING_FEES: "bg-amber-50 text-amber-700",
+  CANCELLED: "bg-slate-100 text-slate-500",
 };
 
 export default function StateBadge({ state, label }: { state: string | null | undefined; label?: string }) {

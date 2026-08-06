@@ -99,6 +99,10 @@ export async function generateYearEndStatement(
     data: calc.lines.map((l) => ({
       annualStatementId: statement.id,
       paymentId: l.paymentId,
+      externalDonationId: l.externalDonationId ?? null,
+      invoicePaymentId: l.invoicePaymentId ?? null,
+      invoiceNumberSnapshot: l.invoiceNumber ?? null,
+      paymentMethodLabel: l.paymentMethodLabel,
       donationDate: l.donationDate,
       reference: l.reference,
       fundOrCampaignName: l.fundName,
@@ -127,6 +131,12 @@ export async function renderStatementPdf(statementId: string, churchId: string):
   const church = await prisma.church.findUnique({ where: { id: churchId } });
 
   const orgAddress = statement.organizationAddressSnapshot as any;
+  const donorAddressSnapshot = statement.donorAddressSnapshot as { line1?: string; line2?: string; city?: string; state?: string; postalCode?: string; country?: string } | null;
+  const donorAddress = donorAddressSnapshot?.line1
+    ? [donorAddressSnapshot.line1, donorAddressSnapshot.line2, [donorAddressSnapshot.city, donorAddressSnapshot.state, donorAddressSnapshot.postalCode].filter(Boolean).join(", ")]
+        .filter(Boolean)
+        .join(", ")
+    : null;
   const settings = resolveStatementPdfSettings(church);
 
   // A statement covers many contributions — when any of them individually
@@ -156,6 +166,7 @@ export async function renderStatementPdf(statementId: string, churchId: string):
       organizationTaxId: settings.organizationTaxId,
       donorName: statement.donorNameSnapshot || "Donor",
       donorEmail: statement.donorEmailSnapshot,
+      donorAddress,
       taxYear: statement.taxYear,
       donationCount: statement.donationCount,
       grossDonatedCents: statement.grossDonatedCents,
@@ -167,14 +178,19 @@ export async function renderStatementPdf(statementId: string, churchId: string):
       totalRecordedContributionAmountCents,
       lines: lines.map((l) => ({
         donationDate: l.donationDate!,
-        reference: l.reference || "",
+        // Invoice-sourced lines append the invoice number onto the same
+        // reference column used for the transaction ID everywhere else —
+        // "preserve the invoice number and transaction ID for
+        // reconciliation" without a separate PDF column for what's a rare
+        // line type on most statements.
+        reference: l.invoiceNumberSnapshot ? `${l.reference || ""} (Invoice ${l.invoiceNumberSnapshot})`.trim() : l.reference || "",
         fundName: l.fundOrCampaignName,
         grossAmountCents: l.grossAmountCents,
         donorCoveredFeeCents: l.donorCoveredFeeCents,
         refundedAmountCents: l.refundedAmountCents,
         returnedAmountCents: l.returnedAmountCents,
         finalRecordedAmountCents: l.eligibleAmountCents,
-        paymentMethodLabel: "",
+        paymentMethodLabel: l.paymentMethodLabel || "",
         goodsServicesProvided: l.goodsServicesProvided,
         goodsServicesDescription: l.goodsServicesDescription,
         goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,

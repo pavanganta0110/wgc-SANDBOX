@@ -27,6 +27,7 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
   const hasDispute = searchParams.get("hasDispute") === "1";
   const hasActiveSubscription = searchParams.get("hasActiveSubscription") === "1";
   const archived = searchParams.get("archived") || "active";
+  const addressStatus = searchParams.get("addressStatus") || "";
   const visibleCols = parseVisibleDonorColumns(searchParams.get("cols") || undefined);
 
   const [isStatusOpen, setIsStatusOpen] = useState(false);
@@ -178,6 +179,19 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
                   <option value="active">Active Only</option>
                   <option value="archived">Archived Only</option>
                   <option value="all">All</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Mailing Address</label>
+                <select
+                  value={addressStatus}
+                  onChange={(e) => setParam("addressStatus", e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none"
+                >
+                  <option value="">Any</option>
+                  <option value="MISSING">Missing address</option>
+                  <option value="UNVERIFIED">Unverified</option>
+                  <option value="CONFIRMED">Confirmed</option>
                 </select>
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-700">

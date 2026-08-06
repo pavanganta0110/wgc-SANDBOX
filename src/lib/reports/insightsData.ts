@@ -522,3 +522,94 @@ export async function getDepositsInsights(churchId: string, dateFilter: { gte: D
 
   return { summary, trendData, hasData: deposits.length > 0 };
 }
+
+/**
+ * Reporting for "Record External Donation" entries — deliberately never
+ * joins Finix transfer/settlement/fee tables, so this can never contribute
+ * to Finix processing volume or WGC processing-fee totals. The WGC total
+ * is a separate, minimal query (same eligibility rule as getPaymentsInsights'
+ * successful-transfer total) included only so the two can be shown side by
+ * side without conflating them.
+ */
+export interface ExternalDonationsInsightsFilters {
+  paymentMethod?: string;
+  receiptStatus?: string;
+  fundId?: string;
+  /** "manual" | "imported" | undefined (both) */
+  source?: string;
+}
+
+export async function getExternalDonationsInsights(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  attributedUserId?: string,
+  filters: ExternalDonationsInsightsFilters = {}
+) {
+  const rows = await prisma.externalDonation.findMany({
+    where: {
+      churchId,
+      status: { not: "VOIDED" },
+      ...(dateFilter ? { donationDate: dateFilter } : {}),
+      // scopedUserId (passed as attributedUserId, same param name the other
+      // getXInsights functions in this file use) restricts a FUNDRAISER/
+      // VIEWER without canViewAllTransactions to donations they personally
+      // recorded — same rule as every other tab on this page.
+      ...(attributedUserId ? { createdByUserId: attributedUserId } : {}),
+      ...(filters.paymentMethod ? { paymentMethod: filters.paymentMethod } : {}),
+      ...(filters.receiptStatus ? { receiptStatus: filters.receiptStatus === "NOT_SENT" ? null : filters.receiptStatus } : {}),
+      ...(filters.fundId ? { fundId: filters.fundId } : {}),
+      ...(filters.source === "manual" ? { importBatchId: null } : filters.source === "imported" ? { importBatchId: { not: null } } : {}),
+    },
+  });
+  const active = rows.filter((d) => d.depositStatus !== "RETURNED");
+
+  const bySource = new Map<string, { totalCents: number; count: number }>();
+  const byFund = new Map<string, { totalCents: number; count: number }>();
+  for (const d of active) {
+    const sourceAcc = bySource.get(d.source) ?? { totalCents: 0, count: 0 };
+    sourceAcc.totalCents += d.donationAmountCents;
+    sourceAcc.count += 1;
+    bySource.set(d.source, sourceAcc);
+
+    const fundLabel = d.fundName || "No fund";
+    const fundAcc = byFund.get(fundLabel) ?? { totalCents: 0, count: 0 };
+    fundAcc.totalCents += d.donationAmountCents;
+    fundAcc.count += 1;
+    byFund.set(fundLabel, fundAcc);
+  }
+  const totalExternalCents = active.reduce((sum, d) => sum + d.donationAmountCents, 0);
+
+  // The WGC-processed comparison total is a fixed organization-wide figure
+  // for the period — it never reflects the external-only filters above
+  // (payment method, fund, receipt status, source), which don't apply to
+  // Finix transfers.
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
+  const transfers = await prisma.finixTransfer.findMany({
+    where: {
+      churchId,
+      ...EXCLUDE_NON_DONATION_TRANSFERS,
+      state: "SUCCEEDED",
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
+    select: { amountCents: true },
+  });
+  const totalWgcCents = transfers.reduce((sum, t) => sum + (t.amountCents ?? 0), 0);
+
+  const summary = [
+    { label: "WGC-Processed Donations", value: formatCents(totalWgcCents) },
+    { label: "External Donations", value: formatCents(totalExternalCents) },
+    { label: "Combined Total Donations", value: formatCents(totalWgcCents + totalExternalCents) },
+    { label: "External Donation Count", value: String(active.length) },
+  ];
+
+  const bySourceTable = [...bySource.entries()]
+    .map(([source, v]) => ({ source, totalCents: v.totalCents, count: v.count }))
+    .sort((a, b) => b.totalCents - a.totalCents);
+
+  const byFundTable = [...byFund.entries()]
+    .map(([fund, v]) => ({ fund, totalCents: v.totalCents, count: v.count }))
+    .sort((a, b) => b.totalCents - a.totalCents);
+
+  return { summary, bySourceTable, byFundTable, totalWgcCents, totalExternalCents, hasData: active.length > 0 };
+}

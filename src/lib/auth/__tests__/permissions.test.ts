@@ -94,3 +94,41 @@ describe("requirePermission", () => {
     expect(() => requirePermission(auth, "canIssueRefunds")).not.toThrow();
   });
 });
+
+describe("canManageIntegrations (Aplos)", () => {
+  it("is granted to owner", () => {
+    expect(hasPermission(makeAuth({ role: "owner" }), "canManageIntegrations")).toBe(true);
+  });
+
+  it("is granted to admin", () => {
+    expect(hasPermission(makeAuth({ role: "admin" }), "canManageIntegrations")).toBe(true);
+  });
+
+  it("is denied to fundraiser by default", () => {
+    expect(hasPermission(makeAuth({ role: "fundraiser" }), "canManageIntegrations")).toBe(false);
+  });
+
+  it("is denied to viewer by default", () => {
+    expect(hasPermission(makeAuth({ role: "viewer" }), "canManageIntegrations")).toBe(false);
+  });
+
+  it("is overridable to true for a fundraiser via permissionsJson (owner-granted exception)", () => {
+    const auth = makeAuth({ role: "fundraiser", permissionsJson: { canManageIntegrations: true } });
+    expect(hasPermission(auth, "canManageIntegrations")).toBe(true);
+  });
+
+  it("is overridable to false for an admin (explicit deny wins over role default)", () => {
+    const auth = makeAuth({ role: "admin", permissionsJson: { canManageIntegrations: false } });
+    expect(hasPermission(auth, "canManageIntegrations")).toBe(false);
+  });
+
+  it("wgc_admin never receives canManageIntegrations — it is an org-side action key, not a WGC-admin one", () => {
+    const auth = makeAuth({ role: null, isWgcAdmin: true, rawRole: "wgc_admin", permissionsJson: { canManageIntegrations: true } });
+    expect(hasPermission(auth, "canManageIntegrations")).toBe(false);
+  });
+
+  it("an unrecognized role denies canManageIntegrations along with everything else", () => {
+    const auth = makeAuth({ role: null, rawRole: "superadmin" as MerchantAuthContext["rawRole"] });
+    expect(hasPermission(auth, "canManageIntegrations")).toBe(false);
+  });
+});

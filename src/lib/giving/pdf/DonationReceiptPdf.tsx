@@ -14,6 +14,7 @@ const styles = StyleSheet.create({
   acknowledgment: { marginTop: 8, lineHeight: 1.4 },
   disclaimer: { fontSize: 8, color: "#64748b", marginTop: 16, lineHeight: 1.4 },
   footer: { position: "absolute", bottom: 24, left: 36, right: 36, fontSize: 8, color: "#94a3b8" },
+  externalNote: { marginTop: 8, marginBottom: 8, padding: 8, backgroundColor: "#fffbeb", borderWidth: 1, borderColor: "#fde68a", borderRadius: 3, fontSize: 9, color: "#92400e" },
 });
 
 function formatCents(cents: number) {
@@ -49,6 +50,11 @@ export interface DonationReceiptPdfProps {
   acknowledgmentText: string;
   disclaimer: string;
   footer: string | null;
+  /** Set only for a donation recorded outside WGC Payments (cash, check,
+   * Zelle, etc.) — renders a clear disclosure banner so this receipt is
+   * never mistaken for a WGC/Finix-processed transaction. Null/undefined
+   * for a normal processed-donation receipt. */
+  externalDonationNote?: string | null;
 }
 
 export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
@@ -70,6 +76,8 @@ export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
         </View>
 
         <Text style={styles.title}>Donation Receipt</Text>
+
+        {props.externalDonationNote && <Text style={styles.externalNote}>{props.externalDonationNote}</Text>}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Donor</Text>

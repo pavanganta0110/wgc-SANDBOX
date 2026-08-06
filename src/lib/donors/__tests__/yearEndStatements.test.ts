@@ -34,6 +34,9 @@ function makePrismaMock(overrides: Record<string, any> = {}) {
     payment: { findMany: vi.fn().mockResolvedValue([]) },
     fund: { findMany: vi.fn().mockResolvedValue([]) },
     donor: { findMany: vi.fn().mockResolvedValue([]) },
+    externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
+    invoice: { findMany: vi.fn().mockResolvedValue([]) },
+    invoicePayment: { findMany: vi.fn().mockResolvedValue([]) },
     ...overrides,
   };
 }
@@ -166,5 +169,190 @@ describe("computeYearEndStatement — eligibility and calendar boundaries", () =
     const result = await computeYearEndStatement("D1", "church-A", 2026);
     expect(result.donationCount).toBe(0);
     expect(result.recordedTotalCents).toBe(0);
+  });
+});
+
+describe("computeYearEndStatement — invoice payments", () => {
+  beforeEach(() => vi.resetModules());
+
+  function invoiceMock(overrides: Record<string, unknown> = {}) {
+    return { id: "inv1", invoiceNumber: "INV-000001", classification: "CHARITABLE_DONATION", totalCents: 10000, charitablePortionCents: null, ...overrides };
+  }
+  function invoicePaymentMock(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "ip1",
+      invoiceId: "inv1",
+      grossAmountCents: 10000,
+      refundedCents: 0,
+      feeContributionCents: 0,
+      feeContributionRefundedCents: 0,
+      customerCoveredFee: false,
+      status: "SUCCEEDED",
+      method: "CARD",
+      finixTransferId: "TR1",
+      offlineReferenceNumber: null,
+      createdAt: new Date("2026-06-01T12:00:00Z"),
+      ...overrides,
+    };
+  }
+
+  it("includes a linked CHARITABLE_DONATION invoice payment in the statement", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock()]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.donationCount).toBe(1);
+    expect(result.grossDonatedCents).toBe(10000);
+    expect(result.lines[0].invoiceNumber).toBe("INV-000001");
+    expect(result.lines[0].invoicePaymentId).toBe("ip1");
+  });
+
+  it("displays the processing-fee contribution separately from the invoice amount when the customer covered it", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock({ customerCoveredFee: true, feeContributionCents: 300 })]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    const line = result.lines[0];
+    expect(line.grossAmountCents).toBe(10000); // invoice amount, never combined with the fee
+    expect(line.donorCoveredFeeCents).toBe(300); // fee shown as its own figure
+    expect(line.finalRecordedAmountCents).toBe(10300); // total paid = both together
+  });
+
+  it("shows a $0 fee contribution when the customer declined fee coverage", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      // feeContributionCents is non-zero on the row but customerCoveredFee
+      // is false — must never leak into the statement regardless.
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock({ customerCoveredFee: false, feeContributionCents: 300 })]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.lines[0].donorCoveredFeeCents).toBe(0);
+    expect(result.grossDonatedCents).toBe(10000);
+  });
+
+  it("excludes a fully refunded invoice payment entirely", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock({ refundedCents: 10000 })]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.donationCount).toBe(0);
+  });
+
+  it("shows a partial refund as a reduced amount rather than excluding the line", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock({ refundedCents: 4000 })]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.donationCount).toBe(1);
+    expect(result.lines[0].grossAmountCents).toBe(6000);
+  });
+
+  it("adjusts only the fee portion when the fee-only refund figure is set, leaving the invoice principal untouched", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: {
+        findMany: vi
+          .fn()
+          .mockResolvedValue([invoicePaymentMock({ customerCoveredFee: true, feeContributionCents: 300, feeContributionRefundedCents: 300 })]),
+      },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.lines[0].grossAmountCents).toBe(10000); // principal untouched
+    expect(result.lines[0].donorCoveredFeeCents).toBe(0); // only the fee reduced
+  });
+
+  it("excludes FAILED and PENDING invoice payments — only SUCCEEDED/PARTIALLY_REFUNDED are queried", async () => {
+    const findMany = vi.fn((args: { where?: { status?: { in?: string[] } } }) => {
+      expect(args.where?.status?.in).toEqual(["SUCCEEDED", "PARTIALLY_REFUNDED"]);
+      return Promise.resolve([]);
+    });
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock()]) },
+      invoicePayment: { findMany },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    await computeYearEndStatement("D1", "church-A", 2026);
+    expect(findMany).toHaveBeenCalled();
+  });
+
+  it("never queries GOODS_OR_SERVICES invoices — a commercial transaction is never a donation", async () => {
+    const invoiceFindMany = vi.fn((args: { where?: { classification?: { in?: string[] } } }) => {
+      expect(args.where?.classification?.in).toEqual(["CHARITABLE_DONATION", "PARTIAL_DONATION"]);
+      return Promise.resolve([]);
+    });
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: invoiceFindMany },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    expect(result.donationCount).toBe(0);
+  });
+
+  it("pro-rates a PARTIAL_DONATION invoice to only its charitable portion, while the full fee contribution still counts", async () => {
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: vi.fn().mockResolvedValue([invoiceMock({ classification: "PARTIAL_DONATION", totalCents: 10000, charitablePortionCents: 4000 })]) },
+      invoicePayment: { findMany: vi.fn().mockResolvedValue([invoicePaymentMock({ customerCoveredFee: true, feeContributionCents: 300 })]) },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    const result = await computeYearEndStatement("D1", "church-A", 2026);
+    const line = result.lines[0];
+    // 4000/10000 of the 10000 gross is charitable-eligible (4000), plus the
+    // full 300 fee contribution, which is never subject to the same
+    // goods/services proration.
+    expect(line.recordedContributionAmountCents).toBe(4300);
+  });
+
+  it("scopes the invoice lookup to the requesting church, never a different organization's invoices", async () => {
+    const invoiceFindMany = vi.fn((args: { where?: { churchId?: string; linkedDonorId?: string } }) => {
+      expect(args.where?.churchId).toBe("church-A");
+      expect(args.where?.linkedDonorId).toBe("D1");
+      return Promise.resolve([]);
+    });
+    const prismaMock = makePrismaMock({
+      finixPaymentInstrumentSnapshot: { findMany: vi.fn().mockResolvedValue([]) },
+      invoice: { findMany: invoiceFindMany },
+    });
+    vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+    const { computeYearEndStatement } = await import("@/lib/donors/yearEndStatements");
+
+    await computeYearEndStatement("D1", "church-A", 2026);
+    expect(invoiceFindMany).toHaveBeenCalled();
   });
 });

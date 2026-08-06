@@ -4,6 +4,7 @@ import DateRangePicker from "@/components/merchant/DateRangePicker";
 import TrendFilter from "@/components/merchant/TrendFilter";
 import StackedBarChart from "@/components/merchant/StackedBarChart";
 import DimensionFilter from "@/components/merchant/DimensionFilter";
+import ExternalDonationsInsightsFilterBar from "@/components/merchant/ExternalDonationsInsightsFilterBar";
 import CardPaymentDataTable from "@/components/merchant/CardPaymentDataTable";
 import CardAuthorizationDataTable from "@/components/merchant/CardAuthorizationDataTable";
 import CardDisputeDataTable from "@/components/merchant/CardDisputeDataTable";
@@ -16,9 +17,13 @@ import {
   getDisputesInsights,
   getBankReturnsInsights,
   getDepositsInsights,
+  getExternalDonationsInsights,
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
+import { SOURCE_LABELS } from "@/lib/donations/externalDonationTypes";
+import { formatCents } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedUserId } from "@/lib/auth/scopes";
@@ -68,6 +73,10 @@ export default async function InsightsPage({
     to?: string;
     trend?: string;
     dim?: string;
+    extMethod?: string;
+    extReceiptStatus?: string;
+    extFund?: string;
+    extSource?: string;
   }>;
 }) {
   let auth;
@@ -87,6 +96,10 @@ export default async function InsightsPage({
     to: toParam,
     trend: trendParam,
     dim: dimParam,
+    extMethod,
+    extReceiptStatus,
+    extFund,
+    extSource,
   } = await searchParams;
   const tab = tabParam || "payments";
   const trend = trendParam && ["daily", "weekly", "monthly"].includes(trendParam) ? trendParam : "weekly";
@@ -135,7 +148,75 @@ export default async function InsightsPage({
       {tab === "deposits" && (
         <DepositsTab churchId={churchId} dateFilter={dateFilter} trend={trend} scopedUserId={scopedUserId} />
       )}
+      {tab === "external" && (
+        <ExternalDonationsTab
+          churchId={churchId}
+          dateFilter={dateFilter}
+          scopedUserId={scopedUserId}
+          filters={{ paymentMethod: extMethod, receiptStatus: extReceiptStatus, fundId: extFund, source: extSource }}
+        />
+      )}
     </div>
+  );
+}
+
+async function ExternalDonationsTab({
+  churchId,
+  dateFilter,
+  scopedUserId,
+  filters,
+}: {
+  churchId: string;
+  dateFilter: { gte: Date; lte?: Date } | undefined;
+  scopedUserId?: string;
+  filters: { paymentMethod?: string; receiptStatus?: string; fundId?: string; source?: string };
+}) {
+  const [{ summary, bySourceTable, byFundTable, hasData }, funds] = await Promise.all([
+    getExternalDonationsInsights(churchId, dateFilter, scopedUserId, filters),
+    prisma.fund.findMany({ where: { churchId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+  ]);
+
+  return (
+    <>
+      <ExternalDonationsInsightsFilterBar funds={funds} />
+      <SummaryCards items={summary} />
+      <p className="text-xs text-slate-400 -mt-2">
+        External donations are never sent to WGC&apos;s payment processor — they never count toward WGC-processed volume, settlement totals, or processing fees.
+        The WGC-Processed total above reflects the date range only and is not affected by the filters below.
+      </p>
+      <div className="grid md:grid-cols-2 gap-4">
+        <ChartCard title="External Donations by Source">
+          {hasData ? (
+            <div className="divide-y divide-slate-100">
+              {bySourceTable.map((row) => (
+                <div key={row.source} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-slate-700">{SOURCE_LABELS[row.source as keyof typeof SOURCE_LABELS] ?? row.source}</span>
+                  <span className="text-slate-500">{row.count} donation{row.count === 1 ? "" : "s"}</span>
+                  <span className="font-semibold text-slate-900">{formatCents(row.totalCents)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+        <ChartCard title="External Donations by Fund">
+          {hasData ? (
+            <div className="divide-y divide-slate-100">
+              {byFundTable.map((row) => (
+                <div key={row.fund} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-slate-700">{row.fund}</span>
+                  <span className="text-slate-500">{row.count} donation{row.count === 1 ? "" : "s"}</span>
+                  <span className="font-semibold text-slate-900">{formatCents(row.totalCents)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyChart />
+          )}
+        </ChartCard>
+      </div>
+    </>
   );
 }
 
@@ -508,7 +589,7 @@ async function DepositsTab({
     <>
       {scopedUserId && (
         <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-          Deposits bundle transactions from the entire organization and can't be broken down by team member — showing organization-wide totals.
+          Deposits bundle transactions from the entire organization and can&apos;t be broken down by team member — showing organization-wide totals.
         </div>
       )}
       <SummaryCards items={summary} />

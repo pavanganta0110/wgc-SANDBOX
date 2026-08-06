@@ -10,6 +10,7 @@ import { loadDonorsList, type DonorsListFilters, type DonorListRow } from "@/lib
 import { DONOR_DISPLAY_STATUS_LABELS } from "@/lib/donors/donorStatus";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { hasPermission } from "@/lib/auth/permissions";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { prisma } from "@/lib/prisma";
 import { loadDonorAggregates } from "@/lib/donors/donorAggregates";
@@ -37,6 +38,16 @@ const COLUMNS: CsvColumn<DonorListRow>[] = [
   { header: "Disputed Amount", value: (r) => formatCents(r.aggregates.disputedAmountCents) },
   { header: "Created", value: (r) => r.donor.createdAt.toISOString() },
   { header: "Updated", value: (r) => r.donor.updatedAt.toISOString() },
+];
+
+const ADDRESS_COLUMNS: CsvColumn<DonorListRow>[] = [
+  { header: "Address Line 1", value: (r) => r.donor.addressLine1 || "" },
+  { header: "Address Line 2", value: (r) => r.donor.addressLine2 || "" },
+  { header: "City", value: (r) => r.donor.city || "" },
+  { header: "State", value: (r) => r.donor.state || "" },
+  { header: "Postal Code", value: (r) => r.donor.postalCode || "" },
+  { header: "Country", value: (r) => r.donor.country || "" },
+  { header: "Address Verified", value: (r) => r.donor.addressVerified },
 ];
 
 export async function GET(req: Request) {
@@ -110,17 +121,24 @@ export async function GET(req: Request) {
     rows = result.rows;
   }
 
+  // Address columns are only included in the export when the caller
+  // specifically holds canExportDonorAddress — canExport alone (the
+  // generic donor-export permission) is not sufficient, matching the
+  // "authorized merchant users" requirement for address exports.
+  const includeAddress = hasPermission(auth, "canExportDonorAddress");
+  const columns = includeAddress ? [...COLUMNS, ...ADDRESS_COLUMNS] : COLUMNS;
+
   await logDashboardAction({
     churchId: auth.churchId,
     actorUserId: auth.userId,
     actorEmail: auth.email,
     actorRole: auth.rawRole,
-    action: "donor.exported",
+    action: includeAddress ? "donor.address_exported" : "donor.exported",
     entityType: "donor",
-    metadata: { rowCount: rows.length, singleDonorId: singleDonorId || undefined },
+    metadata: { rowCount: rows.length, singleDonorId: singleDonorId || undefined, includedAddress: includeAddress },
     req,
   });
 
-  const csv = buildCsvExport(rows, COLUMNS);
+  const csv = buildCsvExport(rows, columns);
   return csvResponse(csv, "donors.csv");
 }

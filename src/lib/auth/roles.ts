@@ -73,7 +73,41 @@ export type PermissionKey =
   | "canViewAsUser"
   | "canManageOrgSettings"
   | "canManageRolesAndPermissions"
-  | "canTransferOwnership";
+  | "canTransferOwnership"
+  | "canCreateExternalDonation"
+  | "canEditExternalDonation"
+  | "canVoidExternalDonation"
+  | "canSendExternalDonationReceipt"
+  | "canViewExternalDonationProof"
+  | "canMatchExternalDonationToDonor"
+  // Bulk CSV import of external donations and viewing that import's
+  // history/row-level results — deliberately separate from
+  // canCreateExternalDonation (a single manual entry) since importing
+  // hundreds of financial records at once is a higher-trust bulk
+  // operation, not a routine per-gift edit.
+  | "canImportExternalDonations"
+  | "canExportExternalDonations"
+  | "canViewDonorAddress"
+  | "canEditDonorAddress"
+  | "canExportDonorAddress"
+  | "canConfirmDonorAddress"
+  | "canViewAddressAuditHistory"
+  // Aplos (and future third-party accounting) integration management:
+  // connect/disconnect, configure accounts, map funds, enable/disable
+  // automatic sync, retry failed syncs. Read-only integration status is
+  // governed separately (any authenticated org member can view it; see
+  // the Aplos status route) — this key gates every state-changing action.
+  | "canManageIntegrations"
+  | "canViewInvoices"
+  | "canCreateInvoices"
+  | "canEditInvoices"
+  | "canSendInvoices"
+  | "canVoidInvoices"
+  | "canRecordOfflineInvoicePayments"
+  | "canRefundInvoicePayments"
+  | "canManageClients"
+  | "canManageInvoiceSettings"
+  | "canExportInvoices";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -95,6 +129,30 @@ const ALL_FALSE: PermissionMatrix = {
   canManageOrgSettings: false,
   canManageRolesAndPermissions: false,
   canTransferOwnership: false,
+  canCreateExternalDonation: false,
+  canEditExternalDonation: false,
+  canVoidExternalDonation: false,
+  canSendExternalDonationReceipt: false,
+  canViewExternalDonationProof: false,
+  canMatchExternalDonationToDonor: false,
+  canImportExternalDonations: false,
+  canExportExternalDonations: false,
+  canViewDonorAddress: false,
+  canEditDonorAddress: false,
+  canExportDonorAddress: false,
+  canConfirmDonorAddress: false,
+  canViewAddressAuditHistory: false,
+  canManageIntegrations: false,
+  canViewInvoices: false,
+  canCreateInvoices: false,
+  canEditInvoices: false,
+  canSendInvoices: false,
+  canVoidInvoices: false,
+  canRecordOfflineInvoicePayments: false,
+  canRefundInvoicePayments: false,
+  canManageClients: false,
+  canManageInvoiceSettings: false,
+  canExportInvoices: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -118,6 +176,30 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageOrgSettings: true,
     canManageRolesAndPermissions: true,
     canTransferOwnership: true,
+    canCreateExternalDonation: true,
+    canEditExternalDonation: true,
+    canVoidExternalDonation: true,
+    canSendExternalDonationReceipt: true,
+    canViewExternalDonationProof: true,
+    canMatchExternalDonationToDonor: true,
+    canImportExternalDonations: true,
+    canExportExternalDonations: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canVoidInvoices: true,
+    canRecordOfflineInvoicePayments: true,
+    canRefundInvoicePayments: true,
+    canManageClients: true,
+    canManageInvoiceSettings: true,
+    canExportInvoices: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -134,8 +216,37 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageRecurring: true,
     canViewSettlements: true,
     canManageOrgSettings: true,
+    canCreateExternalDonation: true,
+    canEditExternalDonation: true,
+    canSendExternalDonationReceipt: true,
+    canMatchExternalDonationToDonor: true,
+    canExportExternalDonations: true,
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    canExportDonorAddress: true,
+    canConfirmDonorAddress: true,
+    canViewAddressAuditHistory: true,
+    canManageIntegrations: true,
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canManageClients: true,
+    canManageInvoiceSettings: true,
+    canExportInvoices: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
-    // canViewAsUser: false by default, override-able.
+    // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
+    // false by default, override-able — voiding a donation record and
+    // viewing a proof-of-payment attachment are treated like a refund
+    // (canIssueRefunds), not a routine edit.
+    // canImportExternalDonations: false by default, override-able — bulk
+    // CSV import can create/modify hundreds of financial records and donor
+    // profiles in one action, treated like canManageBankAccount, not like
+    // the single-record canCreateExternalDonation admin already has.
+    // canVoidInvoices, canRecordOfflineInvoicePayments,
+    // canRefundInvoicePayments: false by default, override-able, for the
+    // same reason — voiding an invoice, recording a manual payment, and
+    // refunding are treated like canIssueRefunds, not routine invoice edits.
     // canManageRolesAndPermissions, canTransferOwnership: never granted to
     // ADMIN, not override-able (see permissions.ts OVERRIDABLE_PERMISSION_KEYS).
   },
@@ -145,6 +256,31 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditOwnGivingLinks: true,
     canViewOwnTransactions: true,
     canViewDonors: true, // scope-limited to donors tied to their attributed payments; see buildGivingLinkScope/buildPaymentScope
+    canCreateExternalDonation: true, // fundraisers are the ones recording cash/checks received in person
+    canMatchExternalDonationToDonor: true,
+    // Address view/edit follow the same donor-scoping rule as canViewDonors
+    // (limited to donors tied to their attributed payments) — a fundraiser
+    // regularly collects a mailing address while recording a gift in
+    // person, but export/confirm/audit-history are left owner/admin-only
+    // by default, override-able.
+    canViewDonorAddress: true,
+    canEditDonorAddress: true,
+    // Invoices they created only — canViewInvoices/canEditInvoices/
+    // canSendInvoices are enforced scoped-to-own by an inline
+    // `auth.role === "fundraiser" && invoice.createdByUserId !== auth.userId`
+    // check in every invoice route that reads/mutates a specific existing
+    // invoice (list/export routes scope via a `createdByUserId` filter
+    // instead), not by the permission flag alone.
+    // canManageClients is granted so a fundraiser can select/create a
+    // client while building an invoice, the same way they get
+    // canCreateExternalDonation to do their donation-recording job.
+    canViewInvoices: true,
+    canCreateInvoices: true,
+    canEditInvoices: true,
+    canSendInvoices: true,
+    canManageClients: true,
+    // No refunds, no voiding, no offline-payment recording, no invoice
+    // settings, no export by default — override-able per the approved spec.
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,
@@ -157,6 +293,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewOwnTransactions: true,
     // Explicitly no mutations of any kind (no create/edit links, no refunds,
     // no bank/billing/team management) per the approved spec.
+    // Invoice access (including read-only canViewInvoices) is NOT a default
+    // grant for VIEWER — "read-only invoice access where granted" per the
+    // approved spec means it can only come from an explicit permissionsJson
+    // override, same as canViewAllTransactions/canViewDonors above.
   },
 };
 
@@ -170,3 +310,34 @@ export const WGC_ADMIN_PERMISSIONS: PermissionMatrix = {
   canViewDonors: true,
   canViewSettlements: true,
 };
+
+/** Permission keys that only matter for the "Record External Donation"
+ * feature — reused wherever code needs to enumerate just this feature's
+ * permissions (e.g. the merchant settings team-permissions editor). */
+export const EXTERNAL_DONATION_PERMISSION_KEYS: readonly PermissionKey[] = [
+  "canCreateExternalDonation",
+  "canEditExternalDonation",
+  "canVoidExternalDonation",
+  "canSendExternalDonationReceipt",
+  "canViewExternalDonationProof",
+  "canMatchExternalDonationToDonor",
+  "canImportExternalDonations",
+  "canExportExternalDonations",
+];
+
+/** Permission keys for the Invoicing & Client Payments feature — reused
+ * wherever code needs to enumerate just this feature's permissions (e.g.
+ * the merchant settings team-permissions editor). Mirrors
+ * EXTERNAL_DONATION_PERMISSION_KEYS above. */
+export const INVOICE_PERMISSION_KEYS: readonly PermissionKey[] = [
+  "canViewInvoices",
+  "canCreateInvoices",
+  "canEditInvoices",
+  "canSendInvoices",
+  "canVoidInvoices",
+  "canRecordOfflineInvoicePayments",
+  "canRefundInvoicePayments",
+  "canManageClients",
+  "canManageInvoiceSettings",
+  "canExportInvoices",
+];

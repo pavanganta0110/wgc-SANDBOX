@@ -50,6 +50,7 @@ export interface StatementPdfProps {
   organizationTaxId: string | null;
   donorName: string;
   donorEmail: string | null;
+  donorAddress: string | null;
   taxYear: number;
   donationCount: number;
   grossDonatedCents: number;
@@ -104,6 +105,7 @@ export function YearEndStatementPdf(props: StatementPdfProps) {
           <Text style={styles.sectionTitle}>Donor</Text>
           <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{props.donorName}</Text></View>
           {props.donorEmail && <View style={styles.row}><Text style={styles.label}>Email</Text><Text style={styles.value}>{props.donorEmail}</Text></View>}
+          {props.donorAddress && <View style={styles.row}><Text style={styles.label}>Mailing Address</Text><Text style={styles.value}>{props.donorAddress}</Text></View>}
         </View>
 
         <View style={styles.section}>

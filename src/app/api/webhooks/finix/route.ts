@@ -16,19 +16,41 @@ import { syncAllChurchesPricing, syncChurchPricingForMerchantProfile } from "@/l
 import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
+import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
-const WEBHOOK_SECRET = process.env.FINIX_WEBHOOK_SECRET || process.env.FINIX_WEBHOOK_SIGNING_KEY;
-const BEARER_TOKEN = process.env.FINIX_WEBHOOK_BEARER_TOKEN;
+// Credentials pasted into a dashboard env editor routinely pick up a trailing
+// newline or a wrapping pair of quotes (this repo's own .env.local stores these
+// same keys as a literal `""`). Those survive into process.env and make the
+// strict comparisons below fail against a credential that is otherwise correct,
+// which surfaces as a blanket 401 on every delivery with no other symptom.
+// Normalizing here only strips accidental wrapper characters — it never relaxes
+// the comparison itself.
+function normalizeSecret(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  let v = value.trim();
+  // Content inside explicit quotes is preserved byte-for-byte — a credential
+  // that legitimately ends in a space is why someone quoted it in the first
+  // place, so the outer trim above must not reach inside.
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    v = v.slice(1, -1);
+  }
+  return v === "" ? undefined : v;
+}
+
+const WEBHOOK_SECRET =
+  normalizeSecret(process.env.FINIX_WEBHOOK_SECRET) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_SIGNING_KEY);
+const BEARER_TOKEN = normalizeSecret(process.env.FINIX_WEBHOOK_BEARER_TOKEN);
 const BASIC_AUTH_USERNAME =
-  process.env.FINIX_WEBHOOK_BASIC_USERNAME ||
-  process.env.FINIX_WEBHOOK_USERNAME ||
-  process.env.FINIX_WEBHOOK_BASIC_AUTH_USERNAME;
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_USERNAME) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_USERNAME) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_AUTH_USERNAME);
 const BASIC_AUTH_PASSWORD =
-  process.env.FINIX_WEBHOOK_BASIC_PASSWORD ||
-  process.env.FINIX_WEBHOOK_PASSWORD ||
-  process.env.FINIX_WEBHOOK_BASIC_AUTH_PASSWORD;
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_PASSWORD) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_PASSWORD) ||
+  normalizeSecret(process.env.FINIX_WEBHOOK_BASIC_AUTH_PASSWORD);
 
-async function sendWebhookEmail(
+export async function sendWebhookEmail(
   applicationId: string,
   type: string,
   to: string,
@@ -38,12 +60,41 @@ async function sendWebhookEmail(
   badgeColor: string,
   bodyHtml: string
 ) {
-  const existingLog = await prisma.emailLog.findFirst({
-    where: { onboardingApplicationId: applicationId, type: type },
+  // Finix redelivers webhooks (retries, or two events landing close
+  // together), and the old check-then-send-then-log sequence had a real
+  // race window: the "does a log already exist" check and the eventual
+  // emailLog.create() were separated by an entire external Resend API
+  // call, so two near-simultaneous deliveries could both pass the check
+  // before either had written its row — sending the same email twice.
+  // pg_try_advisory_xact_lock makes the check-and-claim atomic without
+  // needing a schema migration (no unique index exists on EmailLog, and
+  // one can't be added here — DASHBOARD_ACCESS intentionally allows more
+  // than one row per applicationId when a prior send never completed).
+  // A losing concurrent caller sees locked=false and returns immediately
+  // rather than blocking, since the winner already owns this send.
+  const lockKey = `${applicationId}:${type}`;
+  const claimed = await prisma.$transaction(async (tx) => {
+    const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS locked`;
+    if (!locked) return null;
+
+    const existingLog = await tx.emailLog.findFirst({
+      where: { onboardingApplicationId: applicationId, type: type },
+    });
+    if (existingLog) return null;
+
+    return tx.emailLog.create({
+      data: {
+        onboardingApplicationId: applicationId,
+        type: type,
+        to: to,
+        subject: subject,
+        status: "PENDING",
+      },
+    });
   });
 
-  if (existingLog) {
-    console.log(`Email of type ${type} already sent for application ${applicationId}`);
+  if (!claimed) {
+    console.log(`Email of type ${type} already sent (or in flight) for application ${applicationId}`);
     return;
   }
 
@@ -52,12 +103,9 @@ async function sendWebhookEmail(
     const error = response.success ? null : response.error;
     const data = response.data;
 
-    await prisma.emailLog.create({
+    await prisma.emailLog.update({
+      where: { id: claimed.id },
       data: {
-        onboardingApplicationId: applicationId,
-        type: type,
-        to: to,
-        subject: subject,
         status: error ? "ERROR" : "SENT",
         providerMessageId: (data as any)?.data?.id || (data as any)?.id || null,
         error: error ? JSON.stringify(error) : null,
@@ -66,6 +114,9 @@ async function sendWebhookEmail(
     });
   } catch (err) {
     console.error("Failed to send email:", err);
+    await prisma.emailLog
+      .update({ where: { id: claimed.id }, data: { status: "ERROR", error: String(err) } })
+      .catch(() => {});
   }
 }
 
@@ -105,6 +156,66 @@ async function resolveChurchIdForMerchant(finixMerchantId: string | null | undef
   if (!finixMerchantId) return null;
   const church = await prisma.church.findFirst({ where: { finixMerchantId } });
   return church?.id ?? null;
+}
+
+/**
+ * Applies a refund/reversal (merchant-initiated) or ACH return
+ * (bank-initiated) against the InvoicePayment tied to `originalTransferId`,
+ * if any — a no-op for transfers that aren't invoice payments. Shared by
+ * both the REVERSAL and RETURN branches below since both represent "money
+ * came back," just with a different `disputeStatus`-adjacent cause; the
+ * dispute field itself is untouched here (see the DISPUTE branch instead).
+ * Never rewrites grossAmountCents/netAmountCents — only refundedCents and
+ * status, per the schema's "a dispute/refund must never silently rewrite
+ * grossAmountCents" rule.
+ */
+async function reconcileInvoicePaymentReversal(originalTransferId: string, amountCents: number) {
+  const invoicePayment = await prisma.invoicePayment.findFirst({ where: { finixTransferId: originalTransferId } });
+  if (!invoicePayment) return;
+
+  const newRefundedCents = Math.min(invoicePayment.grossAmountCents, invoicePayment.refundedCents + (amountCents || 0));
+  const newStatus = newRefundedCents >= invoicePayment.grossAmountCents ? "REFUNDED" : "PARTIALLY_REFUNDED";
+
+  await prisma.invoicePayment.update({
+    where: { id: invoicePayment.id },
+    data: { refundedCents: newRefundedCents, status: newStatus },
+  });
+
+  const invoice = await prisma.invoice.findUnique({ where: { id: invoicePayment.invoiceId } });
+  if (!invoice) return;
+
+  const { calculateInvoiceBalance } = await import("@/lib/invoices/invoiceMoney");
+  const { computeDerivedInvoiceStatus } = await import("@/lib/invoices/invoiceStatus");
+  const payments = await prisma.invoicePayment.findMany({
+    where: { invoiceId: invoice.id, status: { in: ["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED"] } },
+  });
+  const balance = calculateInvoiceBalance({ totalCents: invoice.totalCents, payments });
+  const derivedStatus = computeDerivedInvoiceStatus({
+    currentStatus: invoice.status as InvoiceStatus,
+    balanceCents: balance.balanceCents,
+    totalCents: invoice.totalCents,
+    hasBeenViewed: Boolean(invoice.firstViewedAt),
+    dueDate: invoice.dueDate,
+  });
+
+  await prisma.invoice.update({
+    where: { id: invoice.id },
+    data: {
+      amountPaidCents: balance.amountPaidCents,
+      refundedCents: balance.refundedCents,
+      balanceCents: balance.balanceCents,
+      status: derivedStatus,
+    },
+  });
+
+  await prisma.invoiceActivity.create({
+    data: {
+      invoiceId: invoice.id,
+      churchId: invoice.churchId,
+      activityType: "invoice.payment_refunded",
+      metadata: { finixTransferId: originalTransferId, amountCents, newRefundedCents, newStatus },
+    },
+  });
 }
 
 async function findOnboardingApplicationForFinixEvent(data: any) {
@@ -155,7 +266,7 @@ export async function syncFinixDataFromWebhookEvent(
   if (entity === "TRANSFER" && data?.id) {
     const tags = data.tags ?? {};
     const source =
-      tags.source === "wgc_giving_page" || tags.source === "wgc_giving_link" || tags.source === "wgc_admin_payment"
+      tags.source === "wgc_giving_page" || tags.source === "wgc_giving_link" || tags.source === "wgc_admin_payment" || tags.source === "wgc_invoice_payment"
         ? tags.source
         : "finix_dashboard";
 
@@ -245,6 +356,20 @@ export async function syncFinixDataFromWebhookEvent(
       }
     }
 
+    // Invoice payments (source === "wgc_invoice_payment") settle on their
+    // own async schedule — an ACH InvoicePayment created PENDING by the
+    // /api/invoice/[token]/pay route only becomes a real reduction of the
+    // invoice balance once this webhook reports SUCCEEDED. Shared with the
+    // public payment-status endpoint (invoicePaymentReconciliation.ts) so
+    // there's exactly one place this state transition is applied — a
+    // webhook and a payer's return-page verification racing each other
+    // both call the same idempotent function, so neither can double-apply
+    // a payment or send a duplicate receipt.
+    if (churchId && data.id && applyState && source === "wgc_invoice_payment") {
+      const { applyInvoicePaymentTransferState } = await import("@/lib/invoices/invoicePaymentReconciliation");
+      await applyInvoicePaymentTransferState(data.id, data.state);
+    }
+
     // Non-blocking: pull the buyer's payment instrument (+ linked donor
     // identity) and any processor fees now associated with this transfer.
     // Wrapped individually so a Finix API hiccup on one never drops the
@@ -287,7 +412,7 @@ export async function syncFinixDataFromWebhookEvent(
         title: "Recurring Payment Failed",
         badgeText: "Action May Be Required",
         badgeColor: "#DC2626",
-        bodyHtml: `<p>A scheduled recurring donation payment failed to process${data.failure_message ? `: ${data.failure_message}` : "."}</p><p><a href="https://wgcpayments.com/merchant/subscriptions">View subscriptions</a></p>`,
+        bodyHtml: `<p>A scheduled recurring donation payment failed to process${data.failure_message ? `: ${data.failure_message}` : "."}</p><p><a href="https://www.wgcpayments.com/merchant/subscriptions">View subscriptions</a></p>`,
       });
     }
 
@@ -450,6 +575,11 @@ export async function syncFinixDataFromWebhookEvent(
             data: { refundedCents: { increment: data.amount ?? 0 } },
           });
         }
+        try {
+          await reconcileInvoicePaymentReversal(data.parent_transfer, data.amount ?? 0);
+        } catch (err) {
+          console.error("Failed to reconcile invoice payment refund:", err);
+        }
       }
     }
 
@@ -541,6 +671,11 @@ export async function syncFinixDataFromWebhookEvent(
               data: { returnedCents: { increment: data.amount ?? 0 } },
             });
           }
+          try {
+            await reconcileInvoicePaymentReversal(originalTransferId, data.amount ?? 0);
+          } catch (err) {
+            console.error("Failed to reconcile invoice payment ACH return:", err);
+          }
         }
       }
     }
@@ -595,8 +730,22 @@ export async function syncFinixDataFromWebhookEvent(
         title: "New Dispute Opened",
         badgeText: "Action May Be Required",
         badgeColor: "#DC2626",
-        bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://wgcpayments.com/merchant/disputes">View disputes</a></p>`,
+        bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://www.wgcpayments.com/merchant/disputes">View disputes</a></p>`,
       });
+    }
+
+    // Display-only sync onto InvoicePayment.disputeStatus — per the schema
+    // comment, a dispute must never silently rewrite grossAmountCents/
+    // netAmountCents/refundedCents; only this one field is touched here.
+    if (data.transfer) {
+      try {
+        await prisma.invoicePayment.updateMany({
+          where: { finixTransferId: data.transfer },
+          data: { disputeStatus: mapFinixDisputeStateToWgcStatus(data.state) },
+        });
+      } catch (err) {
+        console.error("Failed to sync dispute status onto invoice payment:", err);
+      }
     }
     return;
   }
@@ -672,7 +821,7 @@ export async function syncFinixDataFromWebhookEvent(
         title: "Settlement Funded",
         badgeText: "Funds Deposited",
         badgeColor: "#059669",
-        bodyHtml: `<p>A settlement batch has been funded to your bank account.</p><p><a href="https://wgcpayments.com/merchant/settlements">View settlements</a></p>`,
+        bodyHtml: `<p>A settlement batch has been funded to your bank account.</p><p><a href="https://www.wgcpayments.com/merchant/settlements">View settlements</a></p>`,
       });
     }
     return;
@@ -1341,7 +1490,7 @@ export async function POST(req: Request) {
             newStatus: "APPROVED",
             whatHappened: "Finix approved the merchant onboarding application.",
             actionNeeded: "None.",
-            adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
           });
 
           // Provision the Church row + church_admin User account and send
@@ -1392,7 +1541,7 @@ export async function POST(req: Request) {
               }
             }
 
-            const secureLink = `https://wgcpayments.com/onboarding/update/${rawToken}`;
+            const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
 
             await sendWebhookEmail(
               app.id,
@@ -1415,7 +1564,7 @@ export async function POST(req: Request) {
               newStatus: "MORE_INFORMATION_REQUIRED",
               whatHappened: "Finix requested additional information or documents for the merchant.",
               actionNeeded: "Merchant has been sent a secure upload link.",
-              adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+              adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
             });
           }
         } else if (onboardingState === "REJECTED" || status === "REJECTED" || status === "FAILED") {
@@ -1445,7 +1594,7 @@ export async function POST(req: Request) {
             newStatus: "REJECTED",
             whatHappened: "Finix rejected the merchant onboarding application.",
             actionNeeded: "Review rejection reason in Finix. Contact merchant if needed.",
-            adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
           });
         }
       } else if (eventType === "verification.created") {
@@ -1494,7 +1643,7 @@ export async function POST(req: Request) {
         newStatus: "WEBHOOK_FAILED",
         whatHappened: `Failed to process webhook event: ${eventType} (${eventId})`,
         actionNeeded: `Check logs. Error: ${processError.message}`,
-        adminDashboardLink: "https://wgcpayments.com/admin/merchant-applications"
+        adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
       });
 
       throw processError;

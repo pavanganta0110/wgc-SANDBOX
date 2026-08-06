@@ -2,6 +2,7 @@ export const DONOR_COLUMNS = [
   { key: "donor", label: "Donor" },
   { key: "contact", label: "Contact" },
   { key: "status", label: "Status" },
+  { key: "addressStatus", label: "Mailing Address" },
   { key: "totalDonated", label: "Total Donated" },
   { key: "donationCount", label: "Donation Count" },
   { key: "averageDonation", label: "Average Donation" },

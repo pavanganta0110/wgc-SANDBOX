@@ -71,6 +71,8 @@ export async function POST(req: Request) {
         postalCode: row.input.postalCode,
         country: row.input.country,
         companyName: row.input.companyName,
+        addressSource: row.input.addressSource || (row.input.addressLine1 ? "CSV_IMPORT" : null),
+        addressConfirmedDate: row.input.addressConfirmedDate,
       });
       if (result.created) created += 1;
       else if (result.updated) updated += 1;
@@ -81,6 +83,7 @@ export async function POST(req: Request) {
   }
 
   const rejected = rows.length - toResolve.length;
+  const rowsWithAddress = toResolve.filter((r) => r.input.addressLine1).length;
 
   await logDashboardAction({
     churchId: auth.churchId,
@@ -89,9 +92,21 @@ export async function POST(req: Request) {
     actorRole: auth.rawRole,
     action: "donor.csv_import",
     entityType: "donor",
-    metadata: { totalRows: rows.length, created, updated, reused, rejected, failed: failed.length },
+    metadata: { totalRows: rows.length, created, updated, reused, rejected, failed: failed.length, rowsWithAddress },
     req,
   });
+  if (rowsWithAddress > 0) {
+    await logDashboardAction({
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      action: "donor.address_imported",
+      entityType: "donor",
+      metadata: { rowsWithAddress, source: "CSV_IMPORT" },
+      req,
+    });
+  }
 
   // "skipped" kept alongside "rejected" for backward compatibility with
   // the existing import-result UI, which reads that field name.

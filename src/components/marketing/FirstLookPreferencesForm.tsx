@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { trackMetaEvent } from "@/components/common/MetaPixel";
+import { trackCustomEvent } from "@/lib/analytics/metaPixel";
 
 export default function FirstLookPreferencesForm() {
   const searchParams = useSearchParams();
@@ -33,7 +33,8 @@ export default function FirstLookPreferencesForm() {
       }
 
       if (preference === "OPTED_IN") {
-        trackMetaEvent("BuildUpdatesOptIn", { content_name: "First Look Build Updates" });
+        // Not a Meta standard event name, so this stays a custom event.
+        trackCustomEvent("BuildUpdatesOptIn", { content_name: "First Look Build Updates" });
       }
 
       setStatus("SUCCESS");
