@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
@@ -19,7 +19,7 @@ interface AuthOptionsProps {
   emailSignupVisible?: boolean;
 }
 
-export default function AuthOptions({
+function AuthOptionsInner({
   mode,
   redirectTo,
   promotion,
@@ -319,5 +319,17 @@ export default function AuthOptions({
         </form>
       )}
     </div>
+  );
+}
+
+export default function AuthOptions(props: AuthOptionsProps) {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    }>
+      <AuthOptionsInner {...props} />
+    </Suspense>
   );
 }
