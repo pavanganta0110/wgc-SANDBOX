@@ -45,3 +45,8 @@ next-env.d.ts
 # scratch scripts and local debug files — never commit these
 /scratch/
 /server.log
+
+# Playwright artifacts — regenerated per run, never source
+/test-results/
+/playwright-report/
+/playwright/.cache/
