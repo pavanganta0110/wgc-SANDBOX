@@ -118,8 +118,13 @@ async function resolveChurchIdForMerchant(finixMerchantId: string | null | undef
  * Never rewrites grossAmountCents/netAmountCents — only refundedCents and
  * status, per the schema's "a dispute/refund must never silently rewrite
  * grossAmountCents" rule.
+ *
+ * `cause` distinguishes the two callers for invoice usage-ledger purposes: a
+ * merchant-initiated REFUND maps to the same INVOICE_REFUNDED/
+ * INVOICE_PARTIALLY_PAID convention the offline refund route uses, while a
+ * bank-initiated ACH_RETURN always records INVOICE_PAYMENT_REVERSED.
  */
-async function reconcileInvoicePaymentReversal(originalTransferId: string, amountCents: number) {
+async function reconcileInvoicePaymentReversal(originalTransferId: string, amountCents: number, cause: "REFUND" | "ACH_RETURN") {
   const invoicePayment = await prisma.invoicePayment.findFirst({ where: { finixTransferId: originalTransferId } });
   if (!invoicePayment) return;
 
@@ -166,6 +171,31 @@ async function reconcileInvoicePaymentReversal(originalTransferId: string, amoun
       metadata: { finixTransferId: originalTransferId, amountCents, newRefundedCents, newStatus },
     },
   });
+
+  try {
+    const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+    if (cause === "REFUND") {
+      await recordInvoiceUsageEvent({
+        organizationId: invoice.churchId,
+        invoiceId: invoice.id,
+        invoicePaymentId: invoicePayment.id,
+        eventType: newStatus === "REFUNDED" ? "INVOICE_REFUNDED" : "INVOICE_PARTIALLY_PAID",
+        amountPaidCents: amountCents,
+        idempotencyKey: `${originalTransferId}:REFUND:${newRefundedCents}`,
+      });
+    } else {
+      await recordInvoiceUsageEvent({
+        organizationId: invoice.churchId,
+        invoiceId: invoice.id,
+        invoicePaymentId: invoicePayment.id,
+        eventType: "INVOICE_PAYMENT_REVERSED",
+        amountPaidCents: amountCents,
+        idempotencyKey: `${originalTransferId}:ACH_RETURN:${newRefundedCents}`,
+      });
+    }
+  } catch (err) {
+    console.error("Invoice usage ledger recording failed (non-fatal):", err);
+  }
 }
 
 async function findOnboardingApplicationForFinixEvent(data: any) {
@@ -526,7 +556,7 @@ export async function syncFinixDataFromWebhookEvent(
           });
         }
         try {
-          await reconcileInvoicePaymentReversal(data.parent_transfer, data.amount ?? 0);
+          await reconcileInvoicePaymentReversal(data.parent_transfer, data.amount ?? 0, "REFUND");
         } catch (err) {
           console.error("Failed to reconcile invoice payment refund:", err);
         }
@@ -622,7 +652,7 @@ export async function syncFinixDataFromWebhookEvent(
             });
           }
           try {
-            await reconcileInvoicePaymentReversal(originalTransferId, data.amount ?? 0);
+            await reconcileInvoicePaymentReversal(originalTransferId, data.amount ?? 0, "ACH_RETURN");
           } catch (err) {
             console.error("Failed to reconcile invoice payment ACH return:", err);
           }
@@ -688,13 +718,40 @@ export async function syncFinixDataFromWebhookEvent(
     // comment, a dispute must never silently rewrite grossAmountCents/
     // netAmountCents/refundedCents; only this one field is touched here.
     if (data.transfer) {
+      const wgcDisputeStatus = mapFinixDisputeStateToWgcStatus(data.state);
       try {
         await prisma.invoicePayment.updateMany({
           where: { finixTransferId: data.transfer },
-          data: { disputeStatus: mapFinixDisputeStateToWgcStatus(data.state) },
+          data: { disputeStatus: wgcDisputeStatus },
         });
       } catch (err) {
         console.error("Failed to sync dispute status onto invoice payment:", err);
+      }
+
+      // Only "lost" is a terminal state where funds actually left —
+      // "pending"/"won"/"expired"/"unknown" never reverse money, so a usage
+      // event must never fire for those (see mapFinixDisputeStateToWgcStatus).
+      if (wgcDisputeStatus === "lost") {
+        try {
+          const disputedInvoicePayments = await prisma.invoicePayment.findMany({
+            where: { finixTransferId: data.transfer },
+          });
+          const { recordInvoiceUsageEvent } = await import("@/lib/billing/invoiceUsageLedger");
+          for (const disputedInvoicePayment of disputedInvoicePayments) {
+            const disputedInvoice = await prisma.invoice.findUnique({ where: { id: disputedInvoicePayment.invoiceId } });
+            if (!disputedInvoice) continue;
+            await recordInvoiceUsageEvent({
+              organizationId: disputedInvoice.churchId,
+              invoiceId: disputedInvoice.id,
+              invoicePaymentId: disputedInvoicePayment.id,
+              eventType: "INVOICE_PAYMENT_REVERSED",
+              amountPaidCents: data.amount ?? undefined,
+              idempotencyKey: `${data.id}:DISPUTE_LOST:${disputedInvoicePayment.id}`,
+            });
+          }
+        } catch (err) {
+          console.error("Invoice usage ledger recording failed for dispute loss (non-fatal):", err);
+        }
       }
     }
     return;

@@ -15,8 +15,11 @@
  * client-side error boundaries only receive a serialized Error (message +
  * digest), and guessing at message-matching across server/client
  * boundaries is fragile. Any uncaught dashboard error — billing-restricted
- * or a genuine bug — gets this same safe, non-leaking screen with a link
- * to the one page that's always reachable (Billing & Subscription).
+ * or a genuine bug — gets this same safe, non-leaking screen, but now links
+ * to /merchant/billing-status: a SERVER component that independently calls
+ * requireMerchantSession(true) and reads the real orgAccessState, so the
+ * user lands on an accurate, state-specific explanation without this
+ * boundary ever needing to know or guess what actually happened.
  */
 export default function DashboardErrorBoundary({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
@@ -27,8 +30,8 @@ export default function DashboardErrorBoundary({ reset }: { error: Error & { dig
           This may be because your organization&rsquo;s WGC Platform subscription needs attention, or a temporary error occurred.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <a href="/merchant/subscription" className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">
-            Manage Billing &amp; Subscription
+          <a href="/merchant/billing-status" className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800">
+            View Account Status
           </a>
           <button onClick={() => reset()} className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50">
             Try Again

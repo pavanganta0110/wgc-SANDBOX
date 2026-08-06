@@ -27,7 +27,10 @@ const securityHeaders = [
       // cdn.sift.com: Finix's own fraud-detection SDK (Finix.Auth, wraps
       // Sift Science), loaded by finix.js itself to produce fraud_session_id
       // — required for every donation, wallet or card, not wallet-specific.
-      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com",
+      // www.google.com/www.gstatic.com: react-google-recaptcha on the /start
+      // onboarding application (src/app/start/page.tsx) — recaptcha/api.js
+      // is served from google.com, its rendered widget assets from gstatic.com.
+      "script-src 'self' 'unsafe-inline' https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://www.google.com https://www.gstatic.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
@@ -42,7 +45,9 @@ const securityHeaders = [
       // script-src" behavior; an explicit frame-src fully replaces the
       // default-src fallback for iframes, so every framed origin needs its
       // own entry here).
-      "frame-src 'self' https://pay.google.com https://js.finix.com",
+      // www.google.com: the reCAPTCHA challenge widget itself renders in an
+      // iframe from here (same reasoning as js.finix.com above).
+      "frame-src 'self' https://pay.google.com https://js.finix.com https://www.google.com",
       // Prevent this page from being embedded anywhere
       "frame-ancestors 'none'",
     ].join("; "),
