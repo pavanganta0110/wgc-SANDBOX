@@ -102,7 +102,12 @@ export async function provisionChurchAccount(app: {
         },
       });
 
-  const setPasswordLink = `https://www.wgcpayments.com/merchant/set-password/${rawToken}`;
+  // Previously hardcoded to https://www.wgcpayments.com regardless of
+  // environment — every sandbox-provisioned account got an email pointing
+  // at production, where the token doesn't exist (sandbox and production
+  // use separate databases). Mirrors the NEXT_PUBLIC_APP_URL fallback
+  // pattern already used in billingEmails.ts.
+  const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/merchant/set-password/${rawToken}`;
 
   const result = await sendWgcEmail({
     to: app.contactEmail,

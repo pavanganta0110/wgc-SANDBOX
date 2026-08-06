@@ -30,12 +30,20 @@ export default function ActivationForm({
   isPromotional,
   durationMonths,
   regularMonthlyAmountCents,
+  // When rendered inside the merchant dashboard (e.g. /merchant/subscription's
+  // in-app activation path), the dashboard layout already provides its own
+  // page chrome (sidebar, header, logo) — the standalone full-page wrapper
+  // and duplicate logo used for the emailed /activate-subscription/[token]
+  // page would look broken nested inside that. embedded=true renders just
+  // the card content instead.
+  embedded = false,
 }: {
   token: string;
   organizationName: string;
   isPromotional: boolean;
   durationMonths: number | null;
   regularMonthlyAmountCents: number;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -278,12 +286,8 @@ export default function ActivationForm({
   const estimatedFirstCharge = estimatedFirstChargeDate(isPromotional ? durationMonths : 0);
   const showWallets = appleAvailable || googleAvailable;
 
-  return (
-    <div className="min-h-screen bg-slate-50 py-12 px-4 flex flex-col items-center justify-center">
-      <div className="mb-6 flex justify-center">
-        <img src="/wgc-logo.png" alt="WGC Payments Logo" className="h-12 object-contain" />
-      </div>
-      <div className="max-w-lg w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-8">
+  const card = (
+    <div className={embedded ? "max-w-lg bg-white rounded-2xl border border-slate-100 shadow-sm p-8" : "max-w-lg w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-8"}>
         <h1 className="text-xl font-bold text-slate-900 mb-1">Activate your WGC Platform subscription</h1>
         <p className="text-sm text-slate-500 mb-6">{organizationName}</p>
 
@@ -383,7 +387,17 @@ export default function ActivationForm({
         <div className="mt-6">
           <SubscriptionLegalFooterLinks returnTo={pathname || "/test-billing-form"} />
         </div>
+    </div>
+  );
+
+  if (embedded) return card;
+
+  return (
+    <div className="min-h-screen bg-slate-50 py-12 px-4 flex flex-col items-center justify-center">
+      <div className="mb-6 flex justify-center">
+        <img src="/wgc-logo.png" alt="WGC Payments Logo" className="h-12 object-contain" />
       </div>
+      {card}
     </div>
   );
 }
