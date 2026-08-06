@@ -140,6 +140,13 @@ export async function POST(req: Request) {
       ? "TAX_EXEMPT_ORGANIZATION" 
       : "CORPORATION";
 
+    const cookieStore = await cookies();
+    const promoCookie = cookieStore.get("wgc_promo_signup")?.value;
+    const promotion = promoCookie === "SIX_MONTHS_FREE" ? "SIX_MONTHS_FREE" : null;
+    if (promotion) {
+      cookieStore.delete("wgc_promo_signup");
+    }
+
     let application;
     try {
       application = await prisma.onboardingApplication.create({
@@ -151,6 +158,7 @@ export async function POST(req: Request) {
           contactPhone,
           website,
           status: "DRAFT",
+          promotion,
 
           legalBusinessName, doingBusinessAs, businessType: businessTypeEnum,
           businessTaxIdProvided: !!businessTaxId, businessAddressLine1, businessAddressLine2, businessCity, businessState, businessPostalCode, businessCountry,

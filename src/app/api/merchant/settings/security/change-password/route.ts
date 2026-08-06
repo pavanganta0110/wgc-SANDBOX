@@ -18,6 +18,12 @@ export async function POST(req: Request) {
     throw err;
   }
 
+  // Reauthentication Gate
+  const now = Math.floor(Date.now() / 1000);
+  if (!auth.authTime || now - auth.authTime > 600) {
+    return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+  }
+
   const body = await req.json();
   const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
   const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";

@@ -16,6 +16,7 @@ export interface MerchantAuthContext {
   isWgcAdmin: boolean;
   permissionsJson: unknown;
   authVersion: number;
+  authTime: number | null;
 }
 
 /**
@@ -101,5 +102,6 @@ export const requireMerchantSession = cache(async (): Promise<MerchantAuthContex
     isWgcAdmin: false,
     permissionsJson: user.permissionsJson,
     authVersion: user.authVersion,
+    authTime: payload.authTime ?? null,
   };
 });

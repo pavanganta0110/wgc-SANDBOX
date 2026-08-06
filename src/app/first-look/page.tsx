@@ -21,7 +21,9 @@ function Header() {
   return (
     <header className="w-full bg-[#FFFDF8] border-b border-[rgba(20,33,61,0.13)] px-6 py-4 flex justify-between items-center">
       <div className="flex flex-col">
-        <Image src="/images/first-look-logo.png" alt="Waypoint Gateway Collective" width={48} height={48} className="w-12 h-12 object-contain" />
+        <div className="border border-gray-200 p-1 flex items-center justify-center bg-white shadow-sm w-14 h-14">
+          <Image src="/favicon.png" alt="Waypoint Gateway Collective" width={40} height={40} className="w-10 h-10 object-contain" />
+        </div>
       </div>
       <a 
         href="#join"

@@ -30,6 +30,12 @@ export async function provisionChurchAccount(app: {
     where: { onboardingApplicationId: app.id },
   });
 
+  const applicationDb = await prisma.onboardingApplication.findUnique({
+    where: { id: app.id },
+    select: { promotion: true },
+  });
+  const promotion = applicationDb?.promotion || null;
+
   if (!church) {
     let slug = slugBase;
     let suffix = 1;
@@ -47,6 +53,7 @@ export async function provisionChurchAccount(app: {
         finixIdentityId: app.finixIdentityId,
         finixApplicationId: app.finixApplicationId,
         status: "ACTIVE",
+        promotion: promotion,
       },
     });
   } else {
@@ -57,6 +64,7 @@ export async function provisionChurchAccount(app: {
         finixIdentityId: app.finixIdentityId,
         finixApplicationId: app.finixApplicationId,
         status: "ACTIVE",
+        promotion: promotion,
       },
     });
   }

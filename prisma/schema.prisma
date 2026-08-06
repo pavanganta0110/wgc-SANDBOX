@@ -109,6 +109,7 @@ model OnboardingApplication {
   terminationReason                 String?
   suspendedAt                       DateTime?
   suspensionReason                  String?
+  promotion                         String?
   associatedOwners                  AssociatedOwner[]
   documents                         MerchantDocument[]
   internalDocuments                 OnboardingInternalDocument[]
@@ -415,6 +416,7 @@ model Church {
   primaryColor   String? // hex, e.g. "#0f172a"
   secondaryColor String?
   accentColor    String?
+  promotion      String?
 
   // Website Embed (Settings -> Website Embed). Domain restriction is
   // opt-in and off by default so embeds work on any site with zero setup;
@@ -1753,6 +1755,7 @@ model User {
   passwordChangedAt         DateTime?
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
+  authAccounts              AuthAccount[]
 }
 
 model FinixAuthorization {
@@ -2083,3 +2086,18 @@ model FirstLookLeadActivity {
 
   @@index([leadId])
 }
+
+model AuthAccount {
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String    // "google" | "apple"
+  providerAccountId String
+  providerEmail     String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+
+  @@unique([provider, providerAccountId])
+}
+

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { setSessionCookie, type SessionPayload } from "@/lib/auth/session";
+import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
   try {
@@ -38,6 +39,61 @@ export async function POST(req: Request) {
     });
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+
+    // Handle account linking if a pending link cookie is present
+    const cookieStore = await cookies();
+    const pendingLinkCookie = cookieStore.get("wgc_pending_link")?.value;
+    if (pendingLinkCookie) {
+      try {
+        const pendingLink = JSON.parse(pendingLinkCookie);
+        if (pendingLink.email === user.email) {
+          // Link provider account
+          await prisma.authAccount.upsert({
+            where: { provider_providerAccountId: { provider: pendingLink.provider, providerAccountId: pendingLink.providerAccountId } },
+            create: {
+              userId: user.id,
+              provider: pendingLink.provider,
+              providerAccountId: pendingLink.providerAccountId,
+              providerEmail: pendingLink.providerEmail,
+              lastLoginAt: new Date(),
+            },
+            update: {
+              userId: user.id,
+              providerEmail: pendingLink.providerEmail,
+              lastLoginAt: new Date(),
+            },
+          });
+
+          // Log Audit event
+          if (user.churchId) {
+            await prisma.dashboardAuditLog.create({
+              data: {
+                churchId: user.churchId,
+                actorUserId: user.id,
+                actorEmail: user.email,
+                actorRole: user.role,
+                action: `auth.${pendingLink.provider}_account_linked`,
+                metadata: { provider: pendingLink.provider, providerEmail: pendingLink.providerEmail },
+                createdAt: new Date(),
+              },
+            });
+          } else {
+            await prisma.auditLog.create({
+              data: {
+                action: `auth.${pendingLink.provider}_account_linked`,
+                actorEmail: user.email,
+                metadata: { provider: pendingLink.provider, providerEmail: pendingLink.providerEmail },
+                createdAt: new Date(),
+              },
+            });
+          }
+
+          cookieStore.delete("wgc_pending_link");
+        }
+      } catch (err) {
+        console.error("Account linking failed during login:", err);
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {

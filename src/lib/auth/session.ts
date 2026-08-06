@@ -30,6 +30,7 @@ export interface SessionPayload {
   // authVersion instead (see above).
   passwordChangedAt?: number | null;
   exp: number; // unix seconds
+  authTime?: number; // unix seconds of sign-in
 }
 
 function getSecret(): string {
@@ -55,6 +56,7 @@ function base64url(input: Buffer | string): string {
 export function createSessionToken(payload: Omit<SessionPayload, "exp">): string {
   const fullPayload: SessionPayload = {
     ...payload,
+    authTime: payload.authTime ?? Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
   };
   const payloadB64 = base64url(JSON.stringify(fullPayload));

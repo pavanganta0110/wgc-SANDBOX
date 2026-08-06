@@ -41,6 +41,14 @@ export async function PATCH(req: Request) {
   const current = await prisma.church.findUnique({ where: { id: churchId } });
   if (!current) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 
+  // Reauthentication Gate for changing organization owner email
+  if ("primaryContactEmail" in body && body.primaryContactEmail !== current.primaryContactEmail) {
+    const now = Math.floor(Date.now() / 1000);
+    if (!session.authTime || now - session.authTime > 600) {
+      return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+    }
+  }
+
   const errors: Record<string, string> = {};
   const data: Record<string, unknown> = {};
 

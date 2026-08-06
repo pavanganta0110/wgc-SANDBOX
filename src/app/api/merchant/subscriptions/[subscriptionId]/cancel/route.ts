@@ -20,6 +20,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
   if (!permissions.canCancel) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Reauthentication Gate
+  const now = Math.floor(Date.now() / 1000);
+  if (!auth.authTime || now - auth.authTime > 600) {
+    return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+  }
   const churchId = auth.churchId;
   const { subscriptionId } = await params;
 
