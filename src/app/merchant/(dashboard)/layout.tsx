@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/merchant/Sidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
@@ -112,14 +113,18 @@ export default async function MerchantDashboardLayout({
           <div className="flex items-center justify-between px-6 md:px-10 py-6 border-b border-slate-100 bg-white">
             <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
               <div>
-                <h1 className="text-lg font-bold text-slate-900">{church.name}</h1>
+                <h1 className="text-lg font-bold text-slate-900">
+                  {((await cookies()).has("wgc_demo_mode")) ? "Grace Community Church" : church.name}
+                </h1>
                 <p className="text-[11px] text-slate-500">Powered by WGC Payments</p>
               </div>
             </Link>
             <div className="flex items-center gap-4">
               {scopeSelector}
-              <span className="text-sm text-slate-600 hidden md:inline">{auth.email}</span>
-              <LogoutButton />
+              <span className="text-sm text-slate-600 hidden md:inline">
+                {((await cookies()).has("wgc_demo_mode")) ? "admin@gracecommunity.org" : auth.email}
+              </span>
+              {!(await cookies()).has("wgc_demo_mode") && <LogoutButton />}
             </div>
           </div>
           <main className="flex-grow px-6 md:px-10 py-8">

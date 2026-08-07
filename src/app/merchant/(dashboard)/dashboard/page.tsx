@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import BarChart from "@/components/merchant/BarChart";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import TrendFilter from "@/components/merchant/TrendFilter";
@@ -128,6 +129,7 @@ export default async function MerchantDashboardPage({
   const row2Metrics = selectedMetrics.slice(4, 8);
 
   const trendBuckets = computeTrendBuckets(trend);
+  
   const [volumeSums, settlementSums, depositSums] = await Promise.all([
     getTransferVolumeTrend(transferScope, trendBuckets),
     scopedUserId
@@ -163,7 +165,7 @@ export default async function MerchantDashboardPage({
             <DateRangePicker />
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {row1Metrics.map((key) => (
             <div key={key} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
@@ -174,7 +176,7 @@ export default async function MerchantDashboardPage({
           ))}
         </div>
         {row2Metrics.length > 0 && (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
             {row2Metrics.map((key) => (
               <div key={key} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">

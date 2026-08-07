@@ -31,5 +31,5 @@ export async function POST(req: Request) {
 
   await setPromotionLeadCookie(rawToken);
 
-  return NextResponse.json({ success: true, redirectTo: "/six-months-free/signup" });
+  return NextResponse.json({ success: true, redirectTo: "/start" });
 }

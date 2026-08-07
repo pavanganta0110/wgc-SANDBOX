@@ -36,6 +36,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
+      "media-src 'self' https: http:",
       // pay.google.com: Google Pay's client makes XHR calls to its own
       // origin during isReadyToPay/loadPaymentData.
       // connect.facebook.net / www.facebook.com: the Meta Pixel's own beacon
@@ -52,13 +53,14 @@ const securityHeaders = [
       // www.google.com: the reCAPTCHA challenge widget itself renders in an
       // iframe from here (same reasoning as js.finix.com above).
       "frame-src 'self' https://pay.google.com https://js.finix.com https://www.google.com",
-      // Prevent this page from being embedded anywhere
-      "frame-ancestors 'none'",
+      // Prevent this page from being embedded externally, but allow same-origin iframing for walkthroughs
+      "frame-ancestors 'self'",
     ].join("; "),
   },
 ];
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   async redirects() {
     return [
       { source: "/for-software-partners", destination: "/software-partners", permanent: true },
@@ -108,6 +110,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
+              "media-src 'self' https: http:",
               "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://pay.google.com https://cdn.sift.com",
               "frame-src 'self' https://pay.google.com https://js.finix.com",
               "frame-ancestors *",
