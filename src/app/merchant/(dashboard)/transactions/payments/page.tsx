@@ -16,6 +16,8 @@ import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation";
 import { resolveFundFilteredTransferIds } from "@/lib/giving/fundAssignment";
 
+const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
+
 export default async function PaymentsListPage({
   searchParams,
 }: {
