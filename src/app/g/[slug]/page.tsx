@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
+import MerchandiseGivingExperience from "@/components/giving/MerchandiseGivingExperience";
 import OrganizationLogo from "@/components/merchant/OrganizationLogo";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
 
@@ -49,33 +50,42 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           </p>
         )}
 
-        <GivingLinkForm
-          slug={slug}
-          finixMerchantId={church.finixMerchantId!}
-          churchName={church.name}
-          light={light}
-          amountType={link.amountType as "FIXED" | "VARIABLE"}
-          fixedAmountCents={link.fixedAmountCents}
-          minAmountCents={link.minAmountCents}
-          maxAmountCents={link.maxAmountCents}
-          suggestedAmountsCents={suggestedAmountsCents}
-          allowCustomAmount={link.allowCustomAmount}
-          recurringEnabled={link.recurringEnabled}
-          allowedFrequencies={allowedFrequencies}
-          allowedPaymentMethods={allowedPaymentMethods}
-          feeCoverEnabled={link.feeCoverEnabled}
-          feeCoverDefaultOn={link.feeCoverDefaultOn}
-          donorFieldSettings={donorFieldSettings}
-          collectMailingAddress={link.collectMailingAddress}
-          pricing={pricing}
-          thankYouMessage={branding.thankYouMessage}
-          googlePayGatewayMerchantId={googlePayGatewayMerchantId}
-          googlePayMerchantId={googlePayMerchantId}
-          googlePayEnvironment={googlePayEnvironment}
-          serverAvailability={serverAvailability}
-          fundSelectionEnabled={fundSelectionEnabled}
-          assignedFunds={assignedFunds}
-        />
+        {link.merchandiseEnabled ? (
+          // Separate, additive donation+merchandise checkout experience —
+          // see MerchandiseGivingExperience's doc comment. Every giving
+          // link defaults to merchandiseEnabled=false, so this branch is
+          // unreachable for any link that hasn't explicitly opted in, and
+          // the existing GivingLinkForm below is completely untouched.
+          <MerchandiseGivingExperience slug={slug} finixMerchantId={church.finixMerchantId!} churchName={church.name} />
+        ) : (
+          <GivingLinkForm
+            slug={slug}
+            finixMerchantId={church.finixMerchantId!}
+            churchName={church.name}
+            light={light}
+            amountType={link.amountType as "FIXED" | "VARIABLE"}
+            fixedAmountCents={link.fixedAmountCents}
+            minAmountCents={link.minAmountCents}
+            maxAmountCents={link.maxAmountCents}
+            suggestedAmountsCents={suggestedAmountsCents}
+            allowCustomAmount={link.allowCustomAmount}
+            recurringEnabled={link.recurringEnabled}
+            allowedFrequencies={allowedFrequencies}
+            allowedPaymentMethods={allowedPaymentMethods}
+            feeCoverEnabled={link.feeCoverEnabled}
+            feeCoverDefaultOn={link.feeCoverDefaultOn}
+            donorFieldSettings={donorFieldSettings}
+            collectMailingAddress={link.collectMailingAddress}
+            pricing={pricing}
+            thankYouMessage={branding.thankYouMessage}
+            googlePayGatewayMerchantId={googlePayGatewayMerchantId}
+            googlePayMerchantId={googlePayMerchantId}
+            googlePayEnvironment={googlePayEnvironment}
+            serverAvailability={serverAvailability}
+            fundSelectionEnabled={fundSelectionEnabled}
+            assignedFunds={assignedFunds}
+          />
+        )}
 
         {(() => {
           const wgcUrl = (() => {

@@ -20,6 +20,7 @@ import {
   Building2,
   ShieldCheck,
   FileText,
+  ShoppingBag,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -66,6 +67,15 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { name: "All Invoices", href: "/merchant/invoices" },
       { name: "Clients", href: "/merchant/clients" },
+    ],
+  },
+  {
+    name: "Merchandise",
+    href: "/merchant/merchandise",
+    icon: ShoppingBag,
+    children: [
+      { name: "Products", href: "/merchant/merchandise" },
+      { name: "Orders", href: "/merchant/merchandise/orders" },
     ],
   },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },

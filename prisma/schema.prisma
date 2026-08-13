@@ -2337,6 +2337,14 @@ model GivingLink {
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
 
+  // Printful merchandise: purely additive, defaults to false/null so every
+  // existing giving link is completely unaffected. When true, the public
+  // giving page renders the merchandise section built from this link's
+  // GivingPageMerchandise assignments (see prisma/schema.prisma's Printful
+  // section further below).
+  merchandiseEnabled     Boolean @default(false)
+  merchandiseSettingsJson Json?
+
   @@index([churchId, ownerUserId])
 }
 
@@ -3615,4 +3623,443 @@ model InvoiceSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// =============================================================================
+// PRINTFUL / MERCHANDISE INTEGRATION
+// =============================================================================
+// Purely additive. No existing model/field above this line is touched by
+// this feature. Church and GivingLink each gain exactly one nullable/
+// defaulted field (see the bottom of each model) so a church that never
+// enables Printful sees zero behavioral change. All money fields are Int
+// cents, matching the rest of this schema (see Payment.amountCents) — no
+// Decimal type, no Prisma enum blocks (this schema has none; string fields
+// with an inline comment listing allowed values are the established
+// convention — see GivingLink.status).
+//
+// Provider is a plain string ("PRINTFUL") rather than hard-coded into model
+// names, so a second print-on-demand provider could reuse these tables later
+// without a rename.
+
+// One Printful connection per church (multi-tenant: every merchant has its
+// own store/credentials, never shared). connectionType distinguishes how
+// the credential was obtained (OAuth vs a Printful "private/store" token vs
+// this sandbox's mock connection) since Printful may end up offering either
+// shape and the config layer must support both without a schema change.
+// Tokens are always stored via the versioned AES-256-GCM envelope used by
+// AplosConnection (see src/lib/integrations/printful/encryption.ts) —
+// never plaintext.
+model PrintfulConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  provider String @default("PRINTFUL")
+  status   String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | ERROR | DISCONNECTED
+
+  printfulStoreId   String?
+  printfulAccountId String?
+
+  // Versioned encrypted-envelope JSON strings (see encryption.ts
+  // serializeEnvelope/deserializeEnvelope) — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  scopesJson            Json?
+
+  connectionType String @default("mock") // oauth | private_token | mock
+  // SHA-256 fingerprint of the encryption key active when the token was
+  // encrypted — lets us detect key-rotation mismatches the same way
+  // AplosConnection does, without ever exposing the key or the secret.
+  encryptionKeyFingerprint String?
+
+  lastConnectedAt  DateTime?
+  lastSyncAt       DateTime?
+  lastSyncStatus   String? // SUCCESS | FAILED | PARTIAL
+  lastSyncError    String?
+
+  connectedByUserId String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  disconnectedAt DateTime?
+
+  products MerchandiseProduct[]
+  orders   MerchandiseOrder[]
+
+  @@index([churchId])
+  @@index([status])
+}
+
+// A product WGC knows about, synced (or mock-seeded) from Printful. One
+// price does not cover every variant — per-variant pricing lives on
+// MerchandiseVariant.
+model MerchandiseProduct {
+  id                   String  @id @default(cuid())
+  churchId             String
+  printfulConnectionId String?
+
+  provider         String @default("PRINTFUL")
+  externalProductId String // Printful's (or mock's) product id — unique per church+provider, see index below
+
+  name        String
+  description String?
+
+  thumbnailUrl    String?
+  primaryImageUrl String?
+
+  currency String @default("USD")
+
+  // Informational only at the product level (variants carry the real
+  // per-variant cost/price) — kept for quick list-view display before a
+  // merchant drills into variants.
+  baseCost    Int?
+  retailPrice Int?
+
+  active             Boolean @default(true)
+  visibleOnGivingPage Boolean @default(false)
+
+  syncStatus String @default("SYNCED") // SYNCED | STALE | UNAVAILABLE | ERROR
+
+  externalCreatedAt DateTime?
+  externalUpdatedAt DateTime?
+  lastSyncedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connection PrintfulConnection?     @relation(fields: [printfulConnectionId], references: [id])
+  variants   MerchandiseVariant[]
+  givingPageAssignments GivingPageMerchandise[]
+
+  @@unique([churchId, provider, externalProductId])
+  @@index([churchId])
+  @@index([churchId, visibleOnGivingPage])
+}
+
+model MerchandiseVariant {
+  id        String @id @default(cuid())
+  churchId  String
+  productId String
+
+  externalVariantId String
+
+  sku  String?
+  name String // e.g. "Medium / Black"
+
+  size  String?
+  color String?
+
+  imageUrl String?
+
+  providerCost   Int // cents — Printful's fulfillment cost, never shown to donors
+  merchantPrice  Int // cents — what WGC charges the donor
+  currency       String @default("USD")
+
+  available   Boolean @default(true)
+  stockStatus String  @default("IN_STOCK") // IN_STOCK | LOW_STOCK | OUT_OF_STOCK | DISCONTINUED
+
+  active Boolean @default(true)
+
+  externalDataJson Json?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastSyncedAt DateTime?
+
+  product MerchandiseProduct @relation(fields: [productId], references: [id])
+
+  @@unique([churchId, productId, externalVariantId])
+  @@index([churchId])
+  @@index([productId])
+  @@index([externalVariantId])
+}
+
+// Controls which products appear on which giving page, and how — a merchant
+// can have 50 synced products but show only 5 on a given page.
+model GivingPageMerchandise {
+  id           String @id @default(cuid())
+  churchId     String
+  givingPageId String // GivingLink.id
+  productId    String
+
+  enabled Boolean @default(true)
+
+  displayOrder Int     @default(0)
+  featured     Boolean @default(false)
+
+  customTitle       String?
+  customDescription String?
+  priceOverride     Int? // cents — overrides MerchandiseVariant.merchantPrice for this page only
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product MerchandiseProduct @relation(fields: [productId], references: [id])
+
+  @@unique([givingPageId, productId])
+  @@index([churchId])
+  @@index([givingPageId])
+}
+
+// The merchandise portion of a checkout. Deliberately NOT a donation — see
+// WgcCheckout below for how donation/merchandise/shipping/tax stay
+// separated in reporting. wgcOrderNumber is the stable idempotent reference
+// used both for WGC-side duplicate prevention and as Printful's external
+// order reference once real integration is live.
+model MerchandiseOrder {
+  id       String  @id @default(cuid())
+  churchId String
+  donorId  String?
+
+  givingPageId String? // GivingLink.id
+
+  wgcOrderNumber String @unique // e.g. "WGC-MERCH-XXXXXXXX"
+
+  printfulConnectionId String?
+  provider              String  @default("PRINTFUL")
+  externalOrderId       String?
+
+  // DRAFT | PAYMENT_PENDING | PAID | FULFILLMENT_PENDING | SUBMITTED |
+  // IN_FULFILLMENT | PARTIALLY_FULFILLED | SHIPPED | DELIVERED | CANCELLED |
+  // FAILED | REFUNDED
+  status             String @default("DRAFT")
+  fulfillmentStatus  String @default("UNFULFILLED") // UNFULFILLED | PENDING | IN_PROGRESS | PARTIALLY_FULFILLED | FULFILLED | FAILED | CANCELLED
+  paymentStatus      String @default("PENDING") // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED
+
+  customerEmail String?
+  customerPhone String?
+
+  shippingName       String?
+  shippingAddress1   String?
+  shippingAddress2   String?
+  shippingCity       String?
+  shippingState      String?
+  shippingPostalCode String?
+  shippingCountry    String?
+
+  subtotal              Int @default(0) // merchandise subtotal, cents, before shipping/tax
+  shippingAmount        Int @default(0)
+  taxAmount              Int @default(0)
+  discountAmount         Int @default(0)
+  totalMerchandiseAmount Int @default(0) // subtotal + shippingAmount + taxAmount - discountAmount
+
+  currency String @default("USD")
+
+  providerCost    Int? // sum of variant providerCost * qty, cents — internal only
+  merchantRevenue Int? // totalMerchandiseAmount - providerCost, cents — internal only
+
+  trackingNumber String?
+  trackingUrl    String?
+  carrier        String?
+
+  externalStatus String?
+  failureReason  String?
+
+  // Refunds tracked separately from donation refunds (see item 56 of the
+  // spec) — never mixed with a Payment's own refund fields.
+  donationRefundAmount    Int? // informational only; the donation itself lives on Payment, not here
+  merchandiseRefundAmount Int?
+  shippingRefundAmount    Int?
+
+  // Idempotency for order submission — every checkout attempt carries a
+  // stable clientAttemptId the same way PaymentAttempt does, so a retried
+  // request never creates a second order.
+  clientAttemptId String? @unique
+
+  // Links back to the Payment that actually charged the donor (Finix is
+  // always the payment processor — see WgcCheckout below). Nullable while
+  // status is DRAFT/PAYMENT_PENDING.
+  paymentId String?
+
+  placedAt              DateTime?
+  submittedToProviderAt DateTime?
+  fulfilledAt           DateTime?
+  shippedAt             DateTime?
+  deliveredAt           DateTime?
+  cancelledAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connection PrintfulConnection?    @relation(fields: [printfulConnectionId], references: [id])
+  items      MerchandiseOrderItem[]
+  checkout   WgcCheckout?
+
+  @@index([churchId])
+  @@index([donorId])
+  @@index([status])
+  @@index([churchId, createdAt])
+}
+
+// Snapshotted line item — never relies solely on the live product/variant
+// record, since prices/products can change after the order was placed.
+model MerchandiseOrderItem {
+  id      String @id @default(cuid())
+  churchId String
+  orderId String
+
+  productId String?
+  variantId String?
+
+  externalProductId String?
+  externalVariantId String?
+
+  productName String
+  variantName String?
+
+  size String?
+  color String?
+  sku  String?
+
+  quantity Int @default(1)
+
+  unitPrice Int // cents, snapshot
+  lineTotal Int // cents, snapshot = unitPrice * quantity
+
+  providerUnitCost Int? // cents, snapshot
+  providerLineCost Int? // cents, snapshot
+
+  imageUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order MerchandiseOrder @relation(fields: [orderId], references: [id])
+
+  @@index([churchId])
+  @@index([orderId])
+}
+
+// The parent checkout record that ties a single donor submission together —
+// this is the ONLY place donation + merchandise + shipping + tax + payment
+// are combined into one grand total, and it is deliberately structured so
+// that total can never be mistaken for a donation amount. Payment (the
+// existing donation model) already exists independently for the donation
+// portion; WgcCheckout references it rather than duplicating it.
+model WgcCheckout {
+  id           String  @id @default(cuid())
+  churchId     String
+  donorId      String?
+  givingPageId String? // GivingLink.id
+
+  donationAmount       Int @default(0) // cents — the ONLY amount ever counted as a charitable donation
+  merchandiseAmount    Int @default(0) // cents
+  shippingAmount       Int @default(0) // cents
+  taxAmount            Int @default(0) // cents — see note below; no tax engine built here
+  processingFeeAmount  Int @default(0) // cents
+  grandTotal           Int @default(0) // cents = sum of all of the above
+
+  currency String @default("USD")
+
+  finixTransferId String?
+  paymentStatus   String  @default("PENDING") // PENDING | SUCCEEDED | FAILED | REFUNDED
+
+  // Set only when this checkout actually charges through the existing
+  // donation Payment model (donationAmount > 0).
+  paymentId String?
+
+  merchandiseOrderId String? @unique
+
+  clientAttemptId String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  merchandiseOrder MerchandiseOrder? @relation(fields: [merchandiseOrderId], references: [id])
+
+  @@index([churchId])
+  @@index([donorId])
+}
+
+// Idempotent webhook ledger — mirrors FinixWebhookEvent exactly (unique on
+// provider + externalEventId, so a duplicate Printful delivery can never be
+// processed twice).
+model MerchandiseWebhookEvent {
+  id String @id @default(cuid())
+
+  provider        String @default("PRINTFUL")
+  externalEventId String
+
+  churchId     String?
+  connectionId String?
+
+  eventType String
+
+  payloadJson Json
+
+  status String @default("PENDING") // PENDING | PROCESSED | FAILED | IGNORED
+
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  processingAttempts Int @default(0)
+
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, externalEventId])
+  @@index([churchId])
+  @@index([status])
+}
+
+// Product sync run log — useful for merchant support/debugging, mirrors
+// AplosSyncRecord's role for Aplos.
+model MerchandiseSyncLog {
+  id           String  @id @default(cuid())
+  churchId     String
+  connectionId String?
+
+  syncType String @default("MANUAL") // MANUAL | SCHEDULED | WEBHOOK_TRIGGERED
+
+  status String @default("RUNNING") // RUNNING | SUCCESS | PARTIAL | FAILED
+
+  productsReceived Int @default(0)
+  productsCreated  Int @default(0)
+  productsUpdated  Int @default(0)
+  productsFailed   Int @default(0)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  errorMessage String?
+  metadataJson Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId])
+  @@index([churchId, startedAt])
+}
+
+// Merchant-level configuration — one row per church, created lazily on
+// first Printful settings visit (never required to exist for a church that
+// hasn't touched merchandise).
+model MerchandiseSettings {
+  id       String @id @default(cuid())
+  churchId String @unique
+
+  provider String  @default("PRINTFUL")
+  enabled  Boolean @default(false)
+
+  showMerchandiseOnGivingPages Boolean @default(false)
+
+  defaultMarkupType  String @default("PERCENTAGE") // PERCENTAGE | FIXED_AMOUNT | NONE
+  defaultMarkupValue Int    @default(0) // percentage bps (e.g. 5000 = 50%) or cents, depending on defaultMarkupType
+
+  allowMerchantPriceOverride Boolean @default(true)
+
+  shippingMode String @default("CALCULATED") // CALCULATED | FLAT_RATE | FREE — CALCULATED uses the shipping-rates endpoint (mock rates until Printful is live)
+
+  autoSubmitOrders Boolean @default(true)
+
+  supportEmail String?
+
+  termsUrl        String?
+  returnPolicyUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId])
 }

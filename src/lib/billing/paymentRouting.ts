@@ -23,7 +23,12 @@ export type MerchantChargeType =
   | "MERCHANT_DONATION"
   | "MERCHANT_RECURRING_DONATION"
   | "MERCHANT_INVOICE_PAYMENT"
-  | "MERCHANT_OTHER_PAYMENT";
+  | "MERCHANT_OTHER_PAYMENT"
+  // Printful/merchandise checkout — money belongs to the merchant, not
+  // WGC, so it resolves through the same Church.finixMerchantId branch as
+  // every other MerchantChargeType. Purely additive; does not change
+  // behavior for any existing charge type.
+  | "MERCHANT_MERCHANDISE_ORDER";
 
 export type ChargeType = WgcChargeType | MerchantChargeType;
 
