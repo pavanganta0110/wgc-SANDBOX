@@ -323,6 +323,51 @@ export async function sendWgcAdminOnboardingNotification(options: WgcAdminOnboar
   });
 }
 
+export interface WgcAdminIrsLetterNotificationOptions {
+  organizationName: string;
+  contactName: string;
+  contactEmail: string;
+  applicationId: string;
+  documentId: string;
+  originalFilename: string;
+  version: number;
+  uploadedByAdmin: boolean;
+}
+
+export async function sendWgcAdminIrsLetterNotification(options: WgcAdminIrsLetterNotificationOptions) {
+  const adminEmail = process.env.SUPPORT_EMAIL || "support@wgcpayments.com";
+  const { organizationName, contactName, contactEmail, applicationId, documentId, originalFilename, version, uploadedByAdmin } = options;
+
+  // Admin-uploaded replacements don't need to page the admin team back
+  // about their own action.
+  if (uploadedByAdmin) return;
+
+  const adminDashboardLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/admin/documents/${documentId}`;
+
+  const bodyHtml = `
+    <p>An organization submitted a 501(c)(3) IRS determination letter for WGC review.</p>
+    <table style="width: 100%; text-align: left; border-collapse: collapse; margin-top: 20px; font-size: 14px;">
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Organization Name:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${organizationName}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Contact Name:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${contactName}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>Contact Email:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${contactEmail}</td></tr>
+      <tr><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;"><strong>File:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #E2E8F0;">${originalFilename} (v${version})</td></tr>
+      <tr><td style="padding: 8px 0;"><strong>Application ID:</strong></td><td style="padding: 8px 0;">${applicationId}</td></tr>
+    </table>
+    <div style="margin-top: 30px; text-align: center;">
+      <a href="${adminDashboardLink}" style="display: inline-block; padding: 10px 20px; background-color: #0B5DBC; color: #FFFFFF; text-decoration: none; border-radius: 4px; font-weight: 600;">Review Document</a>
+    </div>
+  `;
+
+  return await sendWgcEmail({
+    to: adminEmail,
+    subject: `New 501(c)(3) Document Submitted — ${organizationName}`,
+    title: "New Document Submitted",
+    badgeText: "NEW",
+    badgeColor: "#0B5DBC",
+    bodyHtml,
+  });
+}
+
 // -----------------------------------------------------------------------------
 // FIRST LOOK LEADS
 // -----------------------------------------------------------------------------
