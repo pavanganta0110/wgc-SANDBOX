@@ -3,6 +3,13 @@
 import { useEffect, useState } from 'react';
 import IrsLetterReviewModal from '@/components/admin/IrsLetterReviewModal';
 
+// WGC's Finix partner dashboard is white-labeled at this custom domain —
+// the generic dashboard.finix.com does not resolve to WGC's actual account
+// (confirmed 2026-08-15: it bounced to a login page unrelated to WGC's
+// merchant records). Centralized here so any future domain change is a
+// one-line edit.
+const FINIX_DASHBOARD_BASE_URL = 'https://finix.payments-dashboard.com';
+
 interface MerchantDocument {
   id: string;
   fileName: string;
@@ -218,7 +225,7 @@ export default function MerchantApplicationsPage() {
                   </div>
                   {app.finixOnboardingFormId && app.onboardingStatus === 'MORE_INFORMATION_REQUIRED' && (
                     <div className="mt-2 text-xs">
-                       <a href={`https://dashboard.finix.com/onboarding_forms/${app.finixOnboardingFormId}`} target="_blank" className="text-blue-500 hover:underline font-semibold">
+                       <a href={`${FINIX_DASHBOARD_BASE_URL}/onboarding_forms/${app.finixOnboardingFormId}`} target="_blank" className="text-blue-500 hover:underline font-semibold">
                          Hosted Form Link
                        </a>
                     </div>
@@ -287,8 +294,8 @@ export default function MerchantApplicationsPage() {
                       Resend Status Email
                     </button>
                     {app.finixMerchantId && (
-                      <a 
-                        href={`https://dashboard.finix.com/merchants/${app.finixMerchantId}`}
+                      <a
+                        href={`${FINIX_DASHBOARD_BASE_URL}/merchants/${app.finixMerchantId}`}
                         target="_blank"
                         className="text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 px-2 py-1.5 rounded text-center transition-colors font-medium shadow-sm"
                       >
