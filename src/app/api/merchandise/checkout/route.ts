@@ -20,7 +20,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { slug, clientAttemptId, donationAmountCents, cartItems, shippingOptionId, address, donor, paymentInstrumentId, token, fraudSessionId, isAnonymous } = body;
+  const {
+    slug,
+    clientAttemptId,
+    donationAmountCents,
+    cartItems,
+    shippingOptionId,
+    address,
+    donor,
+    paymentInstrumentId,
+    token,
+    paymentMethod,
+    walletToken,
+    walletBillingContact,
+    fraudSessionId,
+    isAnonymous,
+  } = body;
 
   if (!slug || !clientAttemptId || !donor?.name || !donor?.email || !fraudSessionId) {
     return NextResponse.json({ success: false, error: "Missing required fields." }, { status: 400 });
@@ -41,6 +56,9 @@ export async function POST(req: Request) {
       donor,
       paymentInstrumentId,
       token,
+      paymentMethod: paymentMethod === "apple_pay" || paymentMethod === "google_pay" ? paymentMethod : "card",
+      walletToken,
+      walletBillingContact,
       fraudSessionId,
       isAnonymous: Boolean(isAnonymous),
     });

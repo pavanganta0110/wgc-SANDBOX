@@ -31,6 +31,19 @@ import type { WgcAddress } from "./types";
  * created.
  */
 
+export interface WalletBillingContact {
+  name: string;
+  email?: string;
+  address?: {
+    line1?: string;
+    line2?: string;
+    city?: string;
+    region?: string;
+    postal_code?: string;
+    country?: string;
+  };
+}
+
 export interface CheckoutInput {
   churchId: string;
   givingLinkId: string;
@@ -42,6 +55,15 @@ export interface CheckoutInput {
   donor: { name: string; email: string; phone?: string | null };
   paymentInstrumentId?: string;
   token?: string;
+  // Apple Pay / Google Pay — mirrors the existing donate route's wallet
+  // instrument shape exactly (type GOOGLE_PAY/APPLE_PAY, third_party_token,
+  // merchant_identity scoped to FINIX_APPLICATION_OWNER_ID, never the
+  // church's own Finix identity — wallet tokens are scoped to whichever
+  // identity they were tokenized against client-side, see googlePay.ts/
+  // applePay.ts).
+  paymentMethod?: "card" | "apple_pay" | "google_pay";
+  walletToken?: string;
+  walletBillingContact?: WalletBillingContact;
   fraudSessionId: string;
   isAnonymous?: boolean;
 }
@@ -99,6 +121,7 @@ export async function processCombinedCheckout(input: CheckoutInput) {
   if (grandTotal < 50) throw new CheckoutValidationError("Order total is too small to process.");
 
   // --- Donor identity + payment instrument (mirrors donate route's pattern) ---
+  const isWallet = input.paymentMethod === "apple_pay" || input.paymentMethod === "google_pay";
   let identityId: string;
   let instrumentId: string;
   if (input.paymentInstrumentId) {
@@ -106,6 +129,38 @@ export async function processCombinedCheckout(input: CheckoutInput) {
     const instrument = await finixClient.getPaymentInstrument(instrumentId);
     if (!instrument?.id) throw new CheckoutValidationError("Payment method not found.");
     identityId = instrument.identity;
+  } else if (isWallet) {
+    if (!input.walletToken) throw new CheckoutValidationError("Missing wallet payment token.");
+    const [firstName, ...rest] = input.donor.name.trim().split(" ");
+    const identity = await finixClient.createBuyerIdentity({ entity: { first_name: firstName, last_name: rest.join(" ") || firstName, email: input.donor.email, phone: input.donor.phone || undefined } });
+    identityId = identity?.id;
+    if (!identityId) throw new CheckoutValidationError("Could not verify identity with processor.");
+    // merchant_identity is FINIX_APPLICATION_OWNER_ID (application-wide),
+    // never the church's own Finix identity — a wallet token is scoped to
+    // whichever identity it was tokenized against client-side (see
+    // googlePay.ts/loadPublicGivingPageData.ts), confirmed by Finix's own
+    // rejection when this was tried with a per-church identity in the
+    // existing donate route. Actual per-church settlement routing still
+    // happens on the transfer call below via resolveProcessingMerchant.
+    const applicationOwnerId = process.env.FINIX_APPLICATION_OWNER_ID;
+    if (!applicationOwnerId) throw new CheckoutValidationError("Wallet payments are not configured for this environment.");
+    const instrument = await finixClient.createPaymentInstrument({
+      identity: identityId,
+      merchant_identity: applicationOwnerId,
+      type: input.paymentMethod === "google_pay" ? "GOOGLE_PAY" : "APPLE_PAY",
+      third_party_token: input.walletToken,
+      name: input.walletBillingContact?.name,
+      address: {
+        line1: input.walletBillingContact?.address?.line1,
+        line2: input.walletBillingContact?.address?.line2,
+        city: input.walletBillingContact?.address?.city,
+        region: input.walletBillingContact?.address?.region,
+        postal_code: input.walletBillingContact?.address?.postal_code,
+        country: input.walletBillingContact?.address?.country,
+      },
+    });
+    instrumentId = instrument?.id;
+    if (!instrumentId) throw new CheckoutValidationError("Could not process wallet payment instrument.");
   } else if (input.token) {
     const [firstName, ...rest] = input.donor.name.trim().split(" ");
     const identity = await finixClient.createBuyerIdentity({ entity: { first_name: firstName, last_name: rest.join(" ") || firstName, email: input.donor.email, phone: input.donor.phone || undefined } });

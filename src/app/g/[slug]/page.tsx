@@ -56,7 +56,16 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
           // link defaults to merchandiseEnabled=false, so this branch is
           // unreachable for any link that hasn't explicitly opted in, and
           // the existing GivingLinkForm below is completely untouched.
-          <MerchandiseGivingExperience slug={slug} finixMerchantId={church.finixMerchantId!} churchName={church.name} />
+          <MerchandiseGivingExperience
+            slug={slug}
+            finixMerchantId={church.finixMerchantId!}
+            churchName={church.name}
+            allowedPaymentMethods={allowedPaymentMethods}
+            googlePayGatewayMerchantId={googlePayGatewayMerchantId}
+            googlePayMerchantId={googlePayMerchantId}
+            googlePayEnvironment={googlePayEnvironment}
+            serverAvailability={serverAvailability}
+          />
         ) : (
           <GivingLinkForm
             slug={slug}
