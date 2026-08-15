@@ -7,7 +7,7 @@ import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
 import { redactFinixPayload } from "@/lib/finix/redact";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { mapFinixDisputeStateToWgcStatus } from "@/lib/finix/statusMapping";
-import { provisionChurchAccount } from "@/lib/auth/provisionChurchAccount";
+import { provisionChurchAndBillingGateOrAlert } from "@/lib/billing/provisionChurchAndBillingGate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { syncFeesForTransfer } from "@/lib/finix/sync/syncFees";
 import { linkTransfersToSettlement, recomputeSettlementAggregates } from "@/lib/finix/sync/syncSettlements";
@@ -1582,78 +1582,28 @@ export async function POST(req: Request) {
             adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
           });
 
-          // Provision the Church row + church_admin User account and send
-          // the separate "secure dashboard access" email referenced above.
-          // Wrapped so a failure here never blocks the approval flow itself.
-          try {
-            const provisioned = await provisionChurchAccount({
-              id: app.id,
-              organizationName: app.organizationName,
-              legalBusinessName: app.legalBusinessName,
-              contactEmail: app.contactEmail,
-              contactName: app.contactName,
-              finixMerchantId: app.finixMerchantId || data.id,
-              finixIdentityId: app.finixIdentityId,
-              finixApplicationId: app.finixApplicationId,
-            });
-
-            // WGC platform-billing gate: approved, but dashboard access
-            // stays restricted to subscription/billing setup until the
-            // owner completes activation — see requireMerchantSession's
-            // billing-gate check and /activate-subscription/[token].
-            // Wrapped independently so a failure here never blocks the
-            // approval/provisioning that already succeeded above.
-            try {
-              await prisma.church.update({
-                where: { id: provisioned.church.id },
-                data: { billingSetupStatus: "APPROVED_BILLING_REQUIRED" },
-              });
-
-              const { attachPromotionEntitlementIfLeadExists } = await import("@/lib/billing/promotionEntitlement");
-              const entitlement = await attachPromotionEntitlementIfLeadExists(app.id, provisioned.church.id);
-
-              const { createBillingActivationToken } = await import("@/lib/billing/billingActivation");
-              const rawActivationToken = await createBillingActivationToken(provisioned.church.id);
-
-              const { sendSubscriptionActivationEmail } = await import("@/lib/billing/billingEmails");
-              const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
-              await sendSubscriptionActivationEmail({
-                organizationId: provisioned.church.id,
-                organizationName: app.organizationName,
-                recipientEmail: app.contactEmail,
-                activationUrl: `${appUrl}/activate-subscription/${rawActivationToken}`,
-              });
-
-              const { logBillingAuditEvent } = await import("@/lib/billing/billingAudit");
-              await logBillingAuditEvent({
-                organizationId: provisioned.church.id,
-                action: "organization.finix_approved",
-                entityType: "Church",
-                entityId: provisioned.church.id,
-                newValue: { billingSetupStatus: "APPROVED_BILLING_REQUIRED" },
-                metadata: { onboardingApplicationId: app.id },
-              });
-              if (entitlement) {
-                await logBillingAuditEvent({
-                  organizationId: provisioned.church.id,
-                  action: "promotion.attached",
-                  entityType: "PromotionEntitlement",
-                  entityId: entitlement.entitlementId,
-                  metadata: { promotionId: entitlement.promotionId },
-                });
-              }
-              await logBillingAuditEvent({
-                organizationId: provisioned.church.id,
-                action: "billing.activation_link_created",
-                entityType: "Church",
-                entityId: provisioned.church.id,
-              });
-            } catch (billingGateError) {
-              console.error("Failed to set up billing-activation gate after approval:", billingGateError);
-            }
-          } catch (provisionError) {
-            console.error("Failed to provision church dashboard account:", provisionError);
-          }
+          // Provision the Church row + church_admin User account, and the
+          // WGC platform-billing gate (activation token + email) — see
+          // provisionChurchAndBillingGate.ts. Never throws (alerts WGC
+          // admins by email instead) so a failure here never blocks the
+          // approval response back to Finix, and — unlike the previous
+          // console.error-only behavior — is never silently lost: a
+          // provisioning failure used to mean the merchant was approved in
+          // Finix but simply never appeared in the Merchants Directory,
+          // with nobody notified (2026-08-15 admin bug report). The same
+          // function is also exposed as a manual retry action from
+          // /admin/merchant-applications for any application already
+          // caught in that state.
+          await provisionChurchAndBillingGateOrAlert({
+            id: app.id,
+            organizationName: app.organizationName,
+            legalBusinessName: app.legalBusinessName,
+            contactEmail: app.contactEmail,
+            contactName: app.contactName,
+            finixMerchantId: app.finixMerchantId || data.id,
+            finixIdentityId: app.finixIdentityId,
+            finixApplicationId: app.finixApplicationId,
+          });
         } else if (onboardingState === "UPDATE_REQUESTED") {
           if (app.onboardingStatus !== "MORE_INFORMATION_REQUIRED" && app.onboardingStatus !== "APPROVED") {
             updateData.onboardingStatus = "MORE_INFORMATION_REQUIRED";

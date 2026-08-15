@@ -29,6 +29,7 @@ interface Application {
   createdAt: string;
   finixOnboardingFormId: string | null;
   documents: MerchantDocument[];
+  churchId: string | null;
 }
 
 export default function MerchantApplicationsPage() {
@@ -40,6 +41,7 @@ export default function MerchantApplicationsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState<string | null>(null);
   const [irsLetterModalApp, setIrsLetterModalApp] = useState<{ id: string; organizationName: string } | null>(null);
 
   const fetchApps = () => {
@@ -100,6 +102,26 @@ export default function MerchantApplicationsPage() {
       alert("Error regenerating token.");
     } finally {
       setRegenerating(null);
+    }
+  };
+
+  const provisionChurch = async (appId: string) => {
+    if (!confirm("Create the missing Church dashboard account for this approved merchant?")) return;
+
+    setProvisioning(appId);
+    try {
+      const res = await fetch(`/api/admin/merchant-applications/${appId}/provision`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert("Church account provisioned. It will now appear in the Merchants Directory.");
+        fetchApps();
+      } else {
+        alert("Failed to provision: " + data.error);
+      }
+    } catch (err) {
+      alert("Error provisioning church account.");
+    } finally {
+      setProvisioning(null);
     }
   };
 
@@ -178,6 +200,9 @@ export default function MerchantApplicationsPage() {
                   {app.lastFinixEventType && (
                     <div className="text-[10px] text-gray-400 mt-1 uppercase">{app.lastFinixEventType}</div>
                   )}
+                  {app.onboardingStatus === 'APPROVED' && !app.churchId && (
+                    <div className="text-[10px] text-red-600 font-bold mt-1 uppercase">No dashboard account</div>
+                  )}
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-xs text-red-600">
@@ -228,6 +253,16 @@ export default function MerchantApplicationsPage() {
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col gap-2 w-32">
+                    {app.onboardingStatus === 'APPROVED' && !app.churchId && (
+                      <button
+                        onClick={() => provisionChurch(app.id)}
+                        disabled={provisioning === app.id}
+                        className="text-xs bg-red-100 hover:bg-red-200 text-red-800 px-2 py-1.5 rounded transition-colors font-semibold shadow-sm disabled:opacity-50"
+                        title="Approved in Finix but no dashboard account exists yet — this merchant is missing from the Merchants Directory."
+                      >
+                        {provisioning === app.id ? "Provisioning..." : "Provision Church Account"}
+                      </button>
+                    )}
                     {app.onboardingStatus === 'MORE_INFORMATION_REQUIRED' && (
                       <>
                         <button 
