@@ -26,15 +26,31 @@ export async function attachPromotionEntitlementIfLeadExists(
   const lead = await findPromotionLeadByOnboardingApplication(onboardingApplicationId);
   if (!lead) return null;
 
-  // Idempotent — a duplicate/replayed approval webhook must never create a
-  // second entitlement for the same lead.
-  const existing = await prisma.promotionEntitlement.findFirst({ where: { originalLeadId: lead.id } });
-  if (existing) return { entitlementId: existing.id, promotionId: existing.promotionId };
-
   const promotion = await prisma.promotion.findUnique({ where: { id: lead.promotionId } });
   if (!promotion || !promotion.active) return null;
 
+  // PromotionEntitlement.originalLeadId has no @unique constraint (a
+  // deliberate schema choice — see the model comment), so the
+  // check-then-create below isn't backed by a DB constraint. Two Finix
+  // events for the same merchant landing milliseconds apart (confirmed to
+  // happen in production — see provisionChurchAccount.ts) could otherwise
+  // both pass the findFirst check before either had written a row,
+  // granting the promo twice. pg_try_advisory_xact_lock makes the
+  // check-and-claim atomic, same pattern as provisionChurchAccount.ts and
+  // sendWebhookEmail — a losing concurrent caller re-reads and returns the
+  // winner's row instead of creating a second one.
+  const lockKey = `promotion-entitlement:${lead.id}`;
   const entitlement = await prisma.$transaction(async (tx) => {
+    const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(hashtext(${lockKey})) AS locked`;
+
+    // Idempotent — a duplicate/replayed approval webhook must never create
+    // a second entitlement for the same lead. Checked even when the lock
+    // wasn't acquired: the winning concurrent call may already have
+    // committed its row by the time we get here.
+    const existing = await tx.promotionEntitlement.findFirst({ where: { originalLeadId: lead.id } });
+    if (existing) return existing;
+    if (!locked) return null;
+
     const created = await tx.promotionEntitlement.create({
       data: {
         organizationId,
@@ -56,5 +72,6 @@ export async function attachPromotionEntitlementIfLeadExists(
     return created;
   });
 
+  if (!entitlement) return null;
   return { entitlementId: entitlement.id, promotionId: entitlement.promotionId };
 }

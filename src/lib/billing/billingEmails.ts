@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail } from "@/lib/email";
 import { formatCents } from "@/lib/format";
@@ -43,19 +44,35 @@ export async function sendIdempotentBillingEmail(input: SendBillingEmailInput): 
     return { sent: false, reason: "already_sent" };
   }
 
-  const log =
-    existing ??
-    (await prisma.billingEmailLog.create({
-      data: {
-        organizationId: input.organizationId,
-        recipientEmail: input.recipientEmail,
-        emailType: input.emailType,
-        idempotencyKey: input.idempotencyKey,
-        relatedSubscriptionId: input.relatedSubscriptionId,
-        relatedChargeId: input.relatedChargeId,
-        status: "PENDING",
-      },
-    }));
+  let log = existing;
+  if (!log) {
+    try {
+      log = await prisma.billingEmailLog.create({
+        data: {
+          organizationId: input.organizationId,
+          recipientEmail: input.recipientEmail,
+          emailType: input.emailType,
+          idempotencyKey: input.idempotencyKey,
+          relatedSubscriptionId: input.relatedSubscriptionId,
+          relatedChargeId: input.relatedChargeId,
+          status: "PENDING",
+        },
+      });
+    } catch (err) {
+      // A concurrent caller with the same idempotencyKey (e.g. two Finix
+      // webhook events for the same merchant landing milliseconds apart —
+      // confirmed to happen in production) won the race and already
+      // claimed this send (idempotencyKey is @unique). Re-read instead of
+      // letting the constraint violation propagate uncaught, which used to
+      // silently abort the rest of this call's caller (provisionChurchAndBillingGate's
+      // broad catch swallowed it with only a console.error).
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const raced = await prisma.billingEmailLog.findUnique({ where: { idempotencyKey: input.idempotencyKey } });
+        if (raced) return { sent: false, reason: raced.status === "SENT" ? "already_sent" : "send_in_progress_elsewhere" };
+      }
+      throw err;
+    }
+  }
 
   const result = await sendWgcEmail({
     to: input.recipientEmail,
