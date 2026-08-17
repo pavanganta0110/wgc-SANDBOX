@@ -543,13 +543,32 @@ async function handleDonate(req: Request, slug: string) {
     // request for the same attempt fails here with P2002 instead of ever
     // reaching createTransfer. Mirrors the same ordering already used by
     // take-payment/route.ts.
+    //
+    // existingAttempt (fetched way above, before the slow Finix identity/
+    // instrument calls) is stale by the time we get here — re-read
+    // immediately before deciding create-vs-update so a request that's been
+    // in flight this whole time (not just a literally-simultaneous insert)
+    // is still caught: if a concurrent request already finished, return its
+    // result instead of charging again; if one is still PROCESSING, basing
+    // the decision on a fresh read narrows (though doesn't eliminate) the
+    // window where two requests could both take the "update" branch.
+    const currentAttempt = await prisma.paymentAttempt.findUnique({ where: { clientAttemptId } });
+    if (currentAttempt && (currentAttempt.status === "SUCCEEDED" || currentAttempt.status === "PENDING")) {
+      return NextResponse.json({
+        success: true,
+        transferId: currentAttempt.finixTransferId,
+        state: currentAttempt.status,
+        duplicate: true,
+      });
+    }
+
     const attemptPaymentMethodType =
       paymentMethod === "apple_pay" ? "APPLE_PAY" : paymentMethod === "google_pay" ? "GOOGLE_PAY" : paymentMethod === "card" ? "PAYMENT_CARD" : "BANK_ACCOUNT";
     let attempt;
     try {
-      attempt = existingAttempt
+      attempt = currentAttempt
         ? await prisma.paymentAttempt.update({
-            where: { id: existingAttempt.id },
+            where: { id: currentAttempt.id },
             data: { status: "PROCESSING", updatedAt: new Date(), feeCents: feeCoveredCents, totalCents },
           })
         : await prisma.paymentAttempt.create({
