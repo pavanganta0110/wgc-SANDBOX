@@ -3,10 +3,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockSendWgcEmail = vi.fn();
 vi.mock("@/lib/email", () => ({ sendWgcEmail: (opts: unknown) => mockSendWgcEmail(opts) }));
 
-const mockPrisma = {
+const mockPrisma: any = {
   church: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   user: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   emailLog: { create: vi.fn().mockResolvedValue(undefined) },
+  // provisionChurchAccount wraps the existingUser check + create/update in
+  // pg_try_advisory_xact_lock via $transaction — the mock transaction just
+  // hands the same mockPrisma back as `tx` so existing assertions on
+  // mockPrisma.user.* still see the calls made inside the callback, and
+  // $queryRaw always reports the lock as acquired (single-caller tests).
+  $transaction: vi.fn((fn: any) => fn(mockPrisma)),
+  $queryRaw: vi.fn().mockResolvedValue([{ locked: true }]),
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -129,5 +136,17 @@ describe("provisionChurchAccount", () => {
     const { provisionChurchAccount } = await load();
     await provisionChurchAccount(baseApp());
     expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: "user-1" }, data: { churchId: "church-1" } });
+  });
+
+  it("skips sending entirely when a concurrent call already holds the advisory lock — the exact bug seen in production: two different Finix webhook events for the same merchant landing milliseconds apart both sent the DASHBOARD_ACCESS email", async () => {
+    mockPrisma.$queryRaw.mockResolvedValueOnce([{ locked: false }]);
+    const { provisionChurchAccount } = await load();
+    const result = await provisionChurchAccount(baseApp());
+
+    expect(mockPrisma.user.findUnique).not.toHaveBeenCalled();
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockSendWgcEmail).not.toHaveBeenCalled();
+    expect(result.emailSent).toBe(false);
+    expect(result.user).toBeNull();
   });
 });
