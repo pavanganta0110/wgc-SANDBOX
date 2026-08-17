@@ -68,11 +68,16 @@ async function checkApplePayDomainAssociation(): Promise<boolean | null> {
  * intentionally NOT duplicated here — deviceCheckRequired tells the caller
  * a client-side check is still needed before actually showing the button.
  */
-export async function getPaymentMethodAvailability(churchId: string): Promise<PaymentMethodAvailability[]> {
-  const church = await prisma.church.findUnique({
-    where: { id: churchId },
-    select: { onboardingApplicationId: true, finixMerchantId: true },
-  });
+export async function getPaymentMethodAvailability(
+  churchId: string,
+  preloadedChurch?: { onboardingApplicationId: string | null; finixMerchantId: string | null } | null
+): Promise<PaymentMethodAvailability[]> {
+  const church = preloadedChurch !== undefined
+    ? preloadedChurch
+    : await prisma.church.findUnique({
+        where: { id: churchId },
+        select: { onboardingApplicationId: true, finixMerchantId: true },
+      });
 
   const onboarding = church?.onboardingApplicationId
     ? await prisma.onboardingApplication.findUnique({ where: { id: church.onboardingApplicationId } })

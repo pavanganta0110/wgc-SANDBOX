@@ -93,6 +93,9 @@ export async function GET(req: Request) {
       ...(depositStatusParam === "unlinked" ? { finixSettlementId: { notIn: linkedSettlementIds ?? [] } } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
+    // Bounded so a long-tenured merchant's export can't load an unbounded
+    // number of rows into memory in one request.
+    take: 20000,
   });
 
   const settlementIds = settlements.map((s) => s.finixSettlementId);

@@ -1,3 +1,15 @@
+// A hung/slow Finix connection previously had no bound, holding the
+// calling serverless function open indefinitely. GET/HEAD requests are
+// safe to retry (no side effects); writes retry only on 429 with the
+// server's own Retry-After, never on ambiguous network/5xx failures.
+const FINIX_REQUEST_TIMEOUT_MS = 20_000;
+const FINIX_MAX_ATTEMPTS = 3;
+const FINIX_RETRY_BASE_DELAY_MS = 500;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export class FinixClient {
   private readonly baseUrl: string;
   private readonly authHeader: string;
@@ -44,27 +56,77 @@ export class FinixClient {
       ...(options.headers || {})
     };
 
-    const res = await fetch(url, { ...options, headers });
-    
-    // Parse response
-    let data;
-    const text = await res.text();
-    try {
-      data = text ? JSON.parse(text) : {};
-    } catch (e) {
-      data = text;
+    // Every Finix call gets a bounded timeout (previously unbounded — a
+    // hung Finix connection would hold the calling serverless function
+    // open indefinitely) plus limited retry on transient failures (5xx,
+    // network errors, and 429 honoring Retry-After). POST/PUT/PATCH are
+    // NOT retried here except for 429 — those calls (createTransfer etc.)
+    // already carry their own idempotency_id, but retrying an ambiguous
+    // network failure on a write could itself create a second charge
+    // attempt, which is worse than surfacing the error to the caller.
+    const method = (options.method || "GET").toUpperCase();
+    const isWrite = method !== "GET" && method !== "HEAD";
+    const maxAttempts = FINIX_MAX_ATTEMPTS;
+
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FINIX_REQUEST_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(url, { ...options, headers, signal: controller.signal });
+      } catch (err) {
+        clearTimeout(timeout);
+        lastErr = err;
+        const isAbort = err instanceof Error && err.name === "AbortError";
+        const retryable = !isWrite && attempt < maxAttempts;
+        console.error(`Finix API ${isAbort ? "timeout" : "network error"} on ${url} (attempt ${attempt}/${maxAttempts})`);
+        if (retryable) {
+          await sleep(FINIX_RETRY_BASE_DELAY_MS * attempt);
+          continue;
+        }
+        const timeoutErr: any = new Error(isAbort ? `Finix Error: request timed out after ${FINIX_REQUEST_TIMEOUT_MS}ms` : `Finix Error: ${err instanceof Error ? err.message : String(err)}`);
+        timeoutErr.status = null;
+        throw timeoutErr;
+      }
+      clearTimeout(timeout);
+
+      // Parse response
+      let data;
+      const text = await res.text();
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch (e) {
+        data = text;
+      }
+
+      if (!res.ok) {
+        const errorStr = typeof data === 'object' ? JSON.stringify(data) : data;
+        console.error(`Finix API Error [${res.status}] on ${url} (attempt ${attempt}/${maxAttempts}): ${errorStr}`);
+
+        // 429 means Finix rejected the request before doing anything with
+        // it — safe to retry even for a write. 5xx/network failures on a
+        // write are ambiguous (may have been applied), so those are only
+        // retried for GET/HEAD.
+        const retryableStatus = res.status === 429 || (!isWrite ? res.status >= 500 : false);
+        if (retryableStatus && attempt < maxAttempts) {
+          const retryAfterHeader = res.headers.get("Retry-After");
+          const retryAfterMs = retryAfterHeader ? Number(retryAfterHeader) * 1000 : NaN;
+          const delayMs = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : FINIX_RETRY_BASE_DELAY_MS * attempt;
+          await sleep(delayMs);
+          continue;
+        }
+
+        const err: any = new Error(`Finix Error: ${errorStr}`);
+        err.details = typeof data === 'object' ? data : null;
+        err.status = res.status;
+        throw err;
+      }
+
+      return data;
     }
 
-    if (!res.ok) {
-      const errorStr = typeof data === 'object' ? JSON.stringify(data) : data;
-      console.error(`Finix API Error [${res.status}] on ${url}: ${errorStr}`);
-      const err: any = new Error(`Finix Error: ${errorStr}`);
-      err.details = typeof data === 'object' ? data : null;
-      err.status = res.status;
-      throw err;
-    }
-
-    return data;
+    throw lastErr instanceof Error ? lastErr : new Error("Finix Error: request failed after retries");
   }
 
   // ==========================================

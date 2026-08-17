@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { setSessionCookie, type SessionPayload } from "@/lib/auth/session";
+import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
 import { cookies } from "next/headers";
 
 export async function POST(req: Request) {
@@ -10,6 +12,12 @@ export async function POST(req: Request) {
 
     if (!email || !password) {
       return NextResponse.json({ error: "Email and password are required." }, { status: 400 });
+    }
+
+    const headerList = await headers();
+    const ip = headerList.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    if (!checkMerchantAuthRateLimit(`merchant-login:${ip}`)) {
+      return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
     }
 
     const user = await prisma.user.findUnique({ where: { email } });

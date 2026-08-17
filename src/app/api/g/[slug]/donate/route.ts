@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
@@ -19,6 +20,7 @@ import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
+import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
 import crypto from "crypto";
 
 /**
@@ -64,6 +66,11 @@ async function handleDonate(req: Request, slug: string) {
   let claimedOneTimeLinkId: string | null = null;
 
   try {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    if (!checkDonationRateLimit(`donate:${ip}:${slug}`)) {
+      return NextResponse.json({ success: false, code: "RATE_LIMITED", message: "Too many attempts. Please wait a moment and try again.", retryable: true }, { status: 429 });
+    }
+
     const body = await req.json();
     logEvent("1_DONATION_REQUEST_RECEIVED", {
       donationAmountCents: body.donationAmountCents,
@@ -512,7 +519,7 @@ async function handleDonate(req: Request, slug: string) {
       return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Payment amount has changed. Please confirm and try again.", retryable: true }, { status: 400 });
     }
 
-    // 5. Check Idempotency
+    // 5. Check Idempotency (Finix-side, defense in depth)
     const idempotencyId = clientAttemptId || crypto.randomUUID();
     const existingTransfer = await finixClient.findTransferByIdempotencyId(idempotencyId);
     if (existingTransfer) {
@@ -527,6 +534,50 @@ async function handleDonate(req: Request, slug: string) {
           duplicate: true,
         });
       }
+    }
+
+    // 5b. Claim a local PaymentAttempt row keyed on the donor's
+    // clientAttemptId BEFORE any charge is attempted — this is the actual
+    // WGC-side duplicate-submission guard (double-click, browser retry).
+    // clientAttemptId/idempotencyId are both @unique, so a second concurrent
+    // request for the same attempt fails here with P2002 instead of ever
+    // reaching createTransfer. Mirrors the same ordering already used by
+    // take-payment/route.ts.
+    const attemptPaymentMethodType =
+      paymentMethod === "apple_pay" ? "APPLE_PAY" : paymentMethod === "google_pay" ? "GOOGLE_PAY" : paymentMethod === "card" ? "PAYMENT_CARD" : "BANK_ACCOUNT";
+    let attempt;
+    try {
+      attempt = existingAttempt
+        ? await prisma.paymentAttempt.update({
+            where: { id: existingAttempt.id },
+            data: { status: "PROCESSING", updatedAt: new Date(), feeCents: feeCoveredCents, totalCents },
+          })
+        : await prisma.paymentAttempt.create({
+            data: {
+              churchId: church.id,
+              donorId: donorRecord.id,
+              givingLinkId: link.id,
+              clientAttemptId,
+              idempotencyId,
+              amountCents: donationAmountCents,
+              feeCents: feeCoveredCents,
+              totalCents,
+              paymentMethodType: attemptPaymentMethodType,
+              fundId: resolvedFund.fundId,
+              fundName: resolvedFund.fundName,
+              isAnonymous: Boolean(donor?.isAnonymous),
+              fraudSessionId,
+              status: "PROCESSING",
+            },
+          });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const raced = await prisma.paymentAttempt.findUnique({ where: { clientAttemptId } });
+        if (raced && (raced.status === "SUCCEEDED" || raced.status === "PENDING")) {
+          return NextResponse.json({ success: true, transferId: raced.finixTransferId, state: raced.status, duplicate: true });
+        }
+      }
+      throw err;
     }
 
     // One-time link claim (after preview check passes, before charging)
@@ -597,6 +648,11 @@ async function handleDonate(req: Request, slug: string) {
           nextBillingDate: parseFinixDate(subscription.next_billing_date) ?? undefined,
           lastSyncedAt: new Date(),
         },
+      });
+
+      await prisma.paymentAttempt.update({
+        where: { id: attempt.id },
+        data: { status: "SUCCEEDED", donorId: donorRecord.id },
       });
 
       await sendReceiptEmail(donor.email, fullName, church.name, totalCents, true, interval, church.id, donorRecord.id);
@@ -672,11 +728,17 @@ async function handleDonate(req: Request, slug: string) {
       update: { state: transfer.state ?? undefined, lastSyncedAt: new Date() },
     });
 
+    await prisma.paymentAttempt.update({
+      where: { id: attempt.id },
+      data: { status: (transfer.state || "PENDING").toUpperCase(), finixTransferId: transfer.id, donorId: donorRecord.id },
+    });
+
     logEvent("9_PAYMENT_DATABASE_SAVE_COMPLETED", { transferId: transfer.id });
     const newPayment = await prisma.payment.create({
       data: {
         churchId: church.id,
         donorId: donorRecord.id,
+        paymentAttemptId: attempt.id,
         givingLinkId: link.id,
         // Team-access Checkpoint 3: snapshotted once here, at payment
         // creation — never re-derived from the giving link later (a

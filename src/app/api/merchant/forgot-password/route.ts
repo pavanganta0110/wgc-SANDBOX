@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail } from "@/lib/email";
+import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
 
 const GENERIC_MESSAGE =
   "If an account exists for that email, we've sent a link to reset your password.";
@@ -12,6 +14,12 @@ export async function POST(req: Request) {
 
     if (!email) {
       return NextResponse.json({ error: "Email is required." }, { status: 400 });
+    }
+
+    const headerList = await headers();
+    const ip = headerList.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    if (!checkMerchantAuthRateLimit(`merchant-forgot-password:${ip}`)) {
+      return NextResponse.json({ error: "Too many attempts. Please try again in a minute." }, { status: 429 });
     }
 
     const normalizedEmail = email.trim().toLowerCase();

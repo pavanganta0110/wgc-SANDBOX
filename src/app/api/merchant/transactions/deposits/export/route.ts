@@ -45,6 +45,10 @@ export async function GET(req: Request) {
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
+    // Bounded so a long-tenured merchant's export can't load an unbounded
+    // number of rows into memory in one request — matches the cap already
+    // used by transactionExport.ts.
+    take: 20000,
   });
 
   const church = await prisma.church.findUnique({ where: { id: auth.churchId } });

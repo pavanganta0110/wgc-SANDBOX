@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import crypto from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveRecurringPaymentAttribution } from "@/lib/auth/attributionSnapshot";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
@@ -1424,18 +1425,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Already processed" }, { status: 200 });
     }
 
-    const webhookEvent = await prisma.finixWebhookEvent.create({
-      data: {
-        finixEventId: eventId,
-        entity,
-        type: eventType,
-        occurredAt,
-        merchantId: merchantId || null,
-        identityId: identityId || null,
-        verificationId: verificationId || null,
-        rawPayloadJson: payload,
-      },
-    });
+    let webhookEvent;
+    try {
+      webhookEvent = await prisma.finixWebhookEvent.create({
+        data: {
+          finixEventId: eventId,
+          entity,
+          type: eventType,
+          occurredAt,
+          merchantId: merchantId || null,
+          identityId: identityId || null,
+          verificationId: verificationId || null,
+          rawPayloadJson: payload,
+        },
+      });
+    } catch (err) {
+      // A concurrent delivery of the same event ID won the race between our
+      // findUnique check above and this create (finixEventId is @unique) —
+      // return the same clean "already processed" response instead of a
+      // 500, so Finix doesn't redeliver and compound the burst.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        return NextResponse.json({ message: "Already processed" }, { status: 200 });
+      }
+      throw err;
+    }
 
     // WGC platform-subscription billing events — resolved by
     // finixSubscriptionId, never by trusting anything client-submitted.

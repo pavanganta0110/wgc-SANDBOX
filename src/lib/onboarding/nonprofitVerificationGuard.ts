@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Church } from "@prisma/client";
 
 export interface NonprofitVerificationResult {
   isApproved: boolean;
@@ -12,8 +13,14 @@ export interface NonprofitVerificationResult {
   * Central guard function to verify if an organization has satisfied
   * all WGC & Finix 501(c)(3) nonprofit verification requirements before
   * accepting donations or processing payments.
+  *
+  * `preloadedChurch` is an optional caller-supplied Church row for the same
+  * churchId — when the caller already has it in hand (e.g. the public
+  * giving page, which fetches Church once up front), this skips a redundant
+  * re-fetch. Never trust a stale/foreign row: callers only pass a value
+  * they just loaded for this same churchId in the same request.
   */
-export async function checkNonprofitVerificationStatus(churchId: string): Promise<NonprofitVerificationResult> {
+export async function checkNonprofitVerificationStatus(churchId: string, preloadedChurch?: Church | null): Promise<NonprofitVerificationResult> {
   if (!churchId) {
     return {
       isApproved: false,
@@ -22,9 +29,11 @@ export async function checkNonprofitVerificationStatus(churchId: string): Promis
     };
   }
 
-  const church = await prisma.church.findUnique({
-    where: { id: churchId },
-  });
+  const church = preloadedChurch !== undefined
+    ? preloadedChurch
+    : await prisma.church.findUnique({
+        where: { id: churchId },
+      });
 
   if (!church) {
     return {

@@ -48,7 +48,7 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
   const branding = parseBrandingSettings(link.brandingSettingsJson);
   const light = branding.light;
 
-  const verification = await checkNonprofitVerificationStatus(church.id);
+  const verification = await checkNonprofitVerificationStatus(church.id, church);
   if (!verification.isApproved) {
     return {
       ok: false,
@@ -95,7 +95,10 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
       ? "PRODUCTION"
       : "TEST";
 
-  const availability = await getPaymentMethodAvailability(church.id);
+  const availability = await getPaymentMethodAvailability(church.id, {
+    onboardingApplicationId: church.onboardingApplicationId,
+    finixMerchantId: church.finixMerchantId,
+  });
   const serverAvailability = {
     APPLE_PAY: { enabledForOrganization: availability.find((a) => a.method === "APPLE_PAY")?.enabledForOrganization ?? false },
     GOOGLE_PAY: { enabledForOrganization: availability.find((a) => a.method === "GOOGLE_PAY")?.enabledForOrganization ?? false },

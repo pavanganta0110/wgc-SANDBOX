@@ -225,6 +225,10 @@ model FinixWebhookEvent {
   processingStatus  String    @default("PENDING")
   errorMessage      String?
   createdAt         DateTime  @default(now())
+
+  @@index([merchantId])
+  @@index([processingStatus])
+  @@index([createdAt])
 }
 
 model MerchantDocument {
@@ -454,6 +458,9 @@ model Church {
   complianceForms         ComplianceForm[]
   synchronizationStates   SynchronizationState[]
   aplosConnection         AplosConnection?
+
+  @@unique([onboardingApplicationId])
+  @@index([finixMerchantId])
 }
 
 /// Mirrors Finix's `Compliance Form` resource (PCI SAQ attestation). Finix
@@ -985,6 +992,10 @@ model Payment {
 
   @@index([churchId, attributedUserId])
   @@index([churchId, pledgeId])
+  @@index([donorId])
+  @@index([finixTransferId])
+  @@index([churchId, status])
+  @@index([churchId, createdAt])
 }
 
 // One immutable snapshot per receipt version sent (or prepared) for a
@@ -2347,6 +2358,8 @@ model User {
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
   authAccounts              AuthAccount[]
+
+  @@index([churchId])
 }
 
 model FinixAuthorization {
