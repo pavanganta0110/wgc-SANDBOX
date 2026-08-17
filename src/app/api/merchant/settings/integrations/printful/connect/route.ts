@@ -2,17 +2,21 @@ import { NextResponse } from "next/server";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
-import { connectMockPrintful } from "@/lib/integrations/printful/service";
+import { connectMockPrintful, connectPrintfulWithPrivateToken } from "@/lib/integrations/printful/service";
 import { getPrintfulMode } from "@/lib/integrations/printful/config";
+import { PrintfulConnectionError } from "@/lib/integrations/printful/errors";
 
 /**
- * In mock mode (the only mode this sandbox runs in today), "Connect
- * Printful" creates/reuses a mock connection with zero external calls —
- * spec item 25. When real credentials eventually arrive, this route is
- * where the OAuth redirect/private-token exchange would be added; the mock
- * path stays in place as a fallback for local demos and tests.
+ * Two paths, both gated by PRINTFUL_MODE:
+ * - PRINTFUL_MODE=mock (default, sandbox demos): "Connect Printful"
+ *   creates/reuses a mock connection with zero external calls — spec item
+ *   25. Ignores any privateToken in the body.
+ * - PRINTFUL_MODE=live: requires a privateToken in the body (Printful
+ *   Store Private API Token) — validated against Printful's real API
+ *   before ever being stored. A future OAuth redirect flow would add a
+ *   third branch here without touching the mock path.
  */
-export async function POST() {
+export async function POST(req: Request) {
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -29,7 +33,32 @@ export async function POST() {
   }
 
   if (getPrintfulMode() !== "mock") {
-    return NextResponse.json({ error: "Real Printful OAuth connection is not available in this environment yet. Set PRINTFUL_MODE=mock to use the sandbox connection." }, { status: 400 });
+    let body: { privateToken?: string } = {};
+    try {
+      body = await req.json();
+    } catch {
+      // no body — fall through to the missing-token error below
+    }
+    if (!body.privateToken) {
+      return NextResponse.json({ error: "A Printful API token is required to connect." }, { status: 400 });
+    }
+
+    try {
+      const connection = await connectPrintfulWithPrivateToken({
+        churchId: auth.churchId,
+        privateToken: body.privateToken,
+        actorUserId: auth.userId,
+        actorEmail: auth.email,
+        actorRole: auth.role,
+        req,
+      });
+      return NextResponse.json({ success: true, connection: { status: connection.status, connectionType: connection.connectionType, storeId: connection.printfulStoreId } });
+    } catch (err) {
+      if (err instanceof PrintfulConnectionError) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      throw err;
+    }
   }
 
   const connection = await connectMockPrintful({ churchId: auth.churchId, actorUserId: auth.userId, actorEmail: auth.email, actorRole: auth.role });

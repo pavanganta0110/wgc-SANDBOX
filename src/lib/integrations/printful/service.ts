@@ -5,7 +5,7 @@ import { MockPrintfulProvider } from "./mockProvider";
 import { PrintfulProvider } from "./realProvider";
 import type { PrintProvider } from "./provider";
 import { mapProductToUpsertData, mapVariantToUpsertData } from "./mapper";
-import { decryptSecret, deserializeEnvelope } from "./encryption";
+import { decryptSecret, deserializeEnvelope, encryptSecret, serializeEnvelope, getActiveEncryptionKeyFingerprint } from "./encryption";
 import { PrintfulConnectionError } from "./errors";
 
 /**
@@ -83,6 +83,78 @@ export async function connectMockPrintful(params: { churchId: string; actorUserI
     entityType: "PrintfulConnection",
     entityId: connection.id,
     metadata: { connectionType: "mock" },
+    req: params.req,
+  });
+
+  return connection;
+}
+
+/**
+ * Real connection path — a merchant pastes in their Printful Store Private
+ * API Token (Printful account -> Settings -> Stores -> API). Validates the
+ * token against Printful's real API BEFORE ever storing it (never persist
+ * an unverified credential), then encrypts it the same way Aplos tokens are
+ * encrypted. Only usable when PRINTFUL_MODE=live — same env-gated pattern
+ * as the mock path is gated to PRINTFUL_MODE=mock in the connect route.
+ */
+export async function connectPrintfulWithPrivateToken(params: {
+  churchId: string;
+  privateToken: string;
+  actorUserId: string;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  req?: Request;
+}) {
+  const token = params.privateToken.trim();
+  if (!token) {
+    throw new PrintfulConnectionError("A Printful API token is required.");
+  }
+
+  const provider = new PrintfulProvider({ accessToken: token });
+  const testResult = await provider.testConnection();
+  if (!testResult.ok) {
+    throw new PrintfulConnectionError(testResult.message);
+  }
+  const connectionInfo = await provider.getConnectionInfo();
+
+  const envelope = encryptSecret(token);
+  const connection = await prisma.printfulConnection.upsert({
+    where: { churchId: params.churchId },
+    create: {
+      churchId: params.churchId,
+      status: "CONNECTED",
+      connectionType: "private_token",
+      printfulStoreId: connectionInfo.storeId,
+      printfulAccountId: connectionInfo.accountId,
+      accessTokenEncrypted: serializeEnvelope(envelope),
+      encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),
+      connectedByUserId: params.actorUserId,
+      lastConnectedAt: new Date(),
+    },
+    update: {
+      status: "CONNECTED",
+      connectionType: "private_token",
+      printfulStoreId: connectionInfo.storeId,
+      printfulAccountId: connectionInfo.accountId,
+      accessTokenEncrypted: serializeEnvelope(envelope),
+      encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),
+      disconnectedAt: null,
+      connectedByUserId: params.actorUserId,
+      lastConnectedAt: new Date(),
+    },
+  });
+
+  await getOrCreateSettings(params.churchId);
+
+  await logDashboardAction({
+    churchId: params.churchId,
+    actorUserId: params.actorUserId,
+    actorEmail: params.actorEmail,
+    actorRole: params.actorRole,
+    action: "printful.connection_created",
+    entityType: "PrintfulConnection",
+    entityId: connection.id,
+    metadata: { connectionType: "private_token" },
     req: params.req,
   });
 
