@@ -52,6 +52,33 @@ describe("connectPrintfulWithPrivateToken", () => {
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
   });
 
+  it("strips invisible paste artifacts (BOM/zero-width) that would make fetch reject the header", async () => {
+    const { connectPrintfulWithPrivateToken } = await load();
+
+    // A BOM mid-token is invisible in a password field but makes fetch()
+    // throw before the request is ever sent.
+    await connectPrintfulWithPrivateToken({
+      churchId: "church-1",
+      privateToken: "real-﻿token​-abc\n",
+      storeId: "store-123",
+      actorUserId: "user-1",
+    });
+
+    const upsertArgs = mockPrisma.printfulConnection.upsert.mock.calls[0][0];
+    expect(JSON.stringify(upsertArgs.create)).toContain("enc(real-token-abc)");
+  });
+
+  it("rejects a token still containing non-ASCII after sanitizing, with an actionable message", async () => {
+    const { connectPrintfulWithPrivateToken } = await load();
+
+    await expect(
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-tokén-abc", storeId: "store-123", actorUserId: "user-1" })
+    ).rejects.toThrow("Copy the token again directly from Printful");
+
+    expect(mockTestConnection).not.toHaveBeenCalled();
+    expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
+  });
+
   it("discovers the store id from Printful when the merchant leaves it blank", async () => {
     mockDiscoverStoreId.mockResolvedValue({ storeId: "discovered-store-9", attempts: [] });
     const { connectPrintfulWithPrivateToken } = await load();

@@ -32,6 +32,40 @@ export async function getProviderForChurch(churchId: string): Promise<PrintProvi
   return new PrintfulProvider({ accessToken, storeId: connection.printfulStoreId });
 }
 
+/**
+ * Strips characters that cannot legally appear in an HTTP header value from
+ * a pasted API token.
+ *
+ * Copying a token out of a browser or a document routinely drags along
+ * invisible characters — most commonly U+FEFF (a zero-width no-break
+ * space/BOM), but also zero-width spaces/joiners and stray newlines. These
+ * are impossible to see in a password field, yet fetch() rejects the whole
+ * request before it leaves the server ("Cannot convert argument to a
+ * ByteString because the character at index N has a value of 65279 which is
+ * greater than 255"), which reads like a network or permissions failure and
+ * sends everyone hunting in the wrong place. Confirmed happening against a
+ * real merchant's token. Note String.prototype.trim() does not save us
+ * here: it removes U+FEFF only at the ends, never in the middle.
+ */
+export function sanitizeApiToken(raw: string): string {
+  return raw
+    .replace(/[​-‍﻿]/g, "") // zero-width space/joiner family + BOM
+    .replace(/\s+/g, "") // newlines/tabs/spaces — never valid inside a token
+    .trim();
+}
+
+/** Rejects anything still outside printable ASCII after sanitizing, so a
+ * genuinely malformed token fails with an explanation instead of an opaque
+ * ByteString error from deep inside fetch(). */
+export function assertHeaderSafeToken(token: string): void {
+  const offending = [...token].findIndex((ch) => ch.charCodeAt(0) < 0x21 || ch.charCodeAt(0) > 0x7e);
+  if (offending !== -1) {
+    throw new PrintfulConnectionError(
+      `This token contains a character that can't be sent to Printful (position ${offending + 1}). Copy the token again directly from Printful — avoid retyping it or copying from a formatted document.`
+    );
+  }
+}
+
 export async function getOrCreateSettings(churchId: string) {
   const existing = await prisma.merchandiseSettings.findUnique({ where: { churchId } });
   if (existing) return existing;
@@ -115,11 +149,13 @@ export async function connectPrintfulWithPrivateToken(params: {
   actorRole?: string | null;
   req?: Request;
 }) {
-  const token = params.privateToken.trim();
+  const token = sanitizeApiToken(params.privateToken);
   if (!token) {
     throw new PrintfulConnectionError("A Printful API token is required.");
   }
-  let storeId = (params.storeId ?? "").trim();
+  assertHeaderSafeToken(token);
+  // Same invisible-character hazard as the token — this is pasted too.
+  let storeId = sanitizeApiToken(params.storeId ?? "");
   if (!storeId) {
     // Ask Printful rather than the merchant — see the storeId param's
     // comment above for why this is the default path, not a fallback.
