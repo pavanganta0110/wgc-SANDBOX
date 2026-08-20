@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     walletBillingContact,
     fraudSessionId,
     isAnonymous,
+    coverFees,
   } = body;
 
   if (!slug || !clientAttemptId || !donor?.name || !donor?.email || !fraudSessionId) {
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
       walletBillingContact,
       fraudSessionId,
       isAnonymous: Boolean(isAnonymous),
+      coverFees: Boolean(coverFees),
     });
 
     return NextResponse.json({
@@ -71,6 +73,7 @@ export async function POST(req: Request) {
       merchandiseAmount: checkout.merchandiseAmount,
       shippingAmount: checkout.shippingAmount,
       taxAmount: checkout.taxAmount,
+      processingFeeAmount: checkout.processingFeeAmount,
       grandTotal: checkout.grandTotal,
       merchandiseOrderId: checkout.merchandiseOrderId,
     });

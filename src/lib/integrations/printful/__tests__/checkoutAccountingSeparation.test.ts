@@ -24,6 +24,24 @@ vi.mock("@/lib/billing/paymentRouting", () => ({
   buildIdempotencyKey: (...parts: (string | number)[]) => parts.join(":"),
 }));
 vi.mock("@/lib/donors/resolveOrCreateDonor", () => ({ resolveOrCreateDonor: vi.fn() }));
+// Org-paid (no donor-covers-fee) — mirrors calculateWgcFeeAmounts' real
+// org-paid card branch: no markup added to the charge, WGC's cut is
+// withheld from settlement via fee_profile, never added on top here. This
+// keeps GRAND_TOTAL's existing numeric expectations in this file exactly
+// as before; env-var-dependent config resolution is mocked out entirely
+// rather than requiring real WGC_*_FEE_PROFILE_ID values in test env.
+vi.mock("@/lib/giving/serverFeeStrategy", () => ({
+  resolveWgcTransferFeeStrategy: vi.fn((input: any) => ({
+    feePaidBy: "ORGANIZATION",
+    amountToChargeCents: input.donationAmountCents,
+    expectedFeeCents: 0,
+    supplementalFeeCents: 0,
+    percentageBasisPoints: 230,
+    fixedFeeCents: 25,
+    normalizedCardBrand: "VISA",
+    feeProfileId: "FP_ORG_PAID_TEST",
+  })),
+}));
 vi.mock("@/lib/giving/generateReceipt", () => ({ sendDonationReceipt: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../orderService", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../orderService")>();

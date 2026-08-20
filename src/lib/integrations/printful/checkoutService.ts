@@ -5,6 +5,8 @@ import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
 import { priceCartServerSide, getShippingQuote, createMerchandiseOrder, type CartItemInput } from "./orderService";
 import { OrderSubmissionError } from "./errors";
+import { resolveWgcTransferFeeStrategy } from "@/lib/giving/serverFeeStrategy";
+import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
 import type { WgcAddress } from "./types";
 
 /**
@@ -66,6 +68,10 @@ export interface CheckoutInput {
   walletBillingContact?: WalletBillingContact;
   fraudSessionId: string;
   isAnonymous?: boolean;
+  // Mirrors the existing donation flow's coverFees flag exactly (see
+  // /api/g/[slug]/donate) — only takes effect when the giving link has
+  // feeCoverEnabled, same gate donations already respect.
+  coverFees?: boolean;
 }
 
 export class CheckoutValidationError extends Error {
@@ -117,18 +123,24 @@ export async function processCombinedCheckout(input: CheckoutInput) {
   // a real tax integration would eventually plug in.
   const taxAmount = 0;
 
-  const grandTotal = input.donationAmountCents + pricedCart.subtotal + shippingAmount + taxAmount;
-  if (grandTotal < 50) throw new CheckoutValidationError("Order total is too small to process.");
+  // baseTotal is what the cart/donation/shipping/tax actually cost before
+  // WGC's own processing fee is added — the fee itself is only computable
+  // once cardBrand is known (Amex prices differently), which requires the
+  // payment instrument to exist first, same ordering the donate route uses.
+  const baseTotal = input.donationAmountCents + pricedCart.subtotal + shippingAmount + taxAmount;
+  if (baseTotal < 50) throw new CheckoutValidationError("Order total is too small to process.");
 
   // --- Donor identity + payment instrument (mirrors donate route's pattern) ---
   const isWallet = input.paymentMethod === "apple_pay" || input.paymentMethod === "google_pay";
   let identityId: string;
   let instrumentId: string;
+  let cardBrand: string | null = null;
   if (input.paymentInstrumentId) {
     instrumentId = input.paymentInstrumentId;
     const instrument = await finixClient.getPaymentInstrument(instrumentId);
     if (!instrument?.id) throw new CheckoutValidationError("Payment method not found.");
     identityId = instrument.identity;
+    cardBrand = instrument.card?.brand || null;
   } else if (isWallet) {
     if (!input.walletToken) throw new CheckoutValidationError("Missing wallet payment token.");
     const [firstName, ...rest] = input.donor.name.trim().split(" ");
@@ -161,6 +173,7 @@ export async function processCombinedCheckout(input: CheckoutInput) {
     });
     instrumentId = instrument?.id;
     if (!instrumentId) throw new CheckoutValidationError("Could not process wallet payment instrument.");
+    cardBrand = instrument?.card?.brand || null;
   } else if (input.token) {
     const [firstName, ...rest] = input.donor.name.trim().split(" ");
     const identity = await finixClient.createBuyerIdentity({ entity: { first_name: firstName, last_name: rest.join(" ") || firstName, email: input.donor.email, phone: input.donor.phone || undefined } });
@@ -169,11 +182,31 @@ export async function processCombinedCheckout(input: CheckoutInput) {
     const instrument = await finixClient.createPaymentInstrument({ identity: identityId, token: input.token, type: "TOKEN" });
     instrumentId = instrument?.id;
     if (!instrumentId) throw new CheckoutValidationError("Could not process payment instrument.");
+    cardBrand = instrument?.card?.brand || null;
   } else {
     throw new CheckoutValidationError("Missing payment token.");
   }
 
   const donorRecord = await resolveOrCreateDonor({ churchId: input.churchId, finixIdentityId: identityId, name: input.donor.name, email: input.donor.email, phone: input.donor.phone ?? null });
+
+  // --- WGC processing fee — same fee matrix, same donor-covers-fee
+  // toggle, and same Finix fee_profile mechanism as the plain donation
+  // flow (/api/g/[slug]/donate). Previously entirely absent from
+  // merchandise checkout: the Finix transfer carried no fee_profile at
+  // all, so WGC collected nothing on merch/shipping regardless of the
+  // org's donation fee settings.
+  let feeStrategy;
+  try {
+    feeStrategy = resolveWgcTransferFeeStrategy({
+      donationAmountCents: baseTotal,
+      paymentMethod: "CARD",
+      cardBrand,
+      donorCoversFee: Boolean(link.feeCoverEnabled && input.coverFees),
+    });
+  } catch (err: any) {
+    throw new CheckoutValidationError(err?.message || "Pricing configuration error for this organization.");
+  }
+  const grandTotal = feeStrategy.amountToChargeCents;
 
   // --- One single Finix charge for the whole grand total (spec item 73 —
   // Printful never sees card data, never receives a payment token, and
@@ -181,25 +214,38 @@ export async function processCombinedCheckout(input: CheckoutInput) {
   const resolved = await resolveProcessingMerchant("MERCHANT_MERCHANDISE_ORDER", input.churchId);
   const idempotencyId = buildIdempotencyKey("merch_checkout", input.clientAttemptId);
 
+  const transferPayload: Record<string, unknown> = {
+    merchant: resolved.merchantId,
+    amount: grandTotal,
+    currency: "USD",
+    source: instrumentId,
+    fee_profile: feeStrategy.feeProfileId,
+    ...(input.fraudSessionId && { fraud_session_id: input.fraudSessionId }),
+    idempotency_id: idempotencyId,
+    statement_descriptor: (link.statementDescriptor || church.name).slice(0, 18).toUpperCase(),
+    tags: {
+      source: "wgc_merchandise_checkout",
+      givingLinkId: link.id,
+      churchId: church.id,
+      donation_amount_cents: String(input.donationAmountCents),
+      merchandise_amount_cents: String(pricedCart.subtotal),
+      shipping_amount_cents: String(shippingAmount),
+      processing_fee_cents: String(feeStrategy.expectedFeeCents),
+      donor_covers_fee: String(Boolean(link.feeCoverEnabled && input.coverFees)),
+      fee_strategy: feeStrategy.feePaidBy,
+      card_brand: feeStrategy.normalizedCardBrand || "NONE",
+      fee_percentage_bps: String(feeStrategy.percentageBasisPoints),
+      fee_fixed_cents: String(feeStrategy.fixedFeeCents),
+      fee_calculation_version: FEE_CALCULATION_VERSION,
+    },
+  };
+  if (feeStrategy.feePaidBy === "DONOR" && feeStrategy.supplementalFeeCents > 0) {
+    transferPayload.supplemental_fee = feeStrategy.supplementalFeeCents;
+  }
+
   let transfer;
   try {
-    transfer = await finixClient.createTransfer({
-      merchant: resolved.merchantId,
-      amount: grandTotal,
-      currency: "USD",
-      source: instrumentId,
-      ...(input.fraudSessionId && { fraud_session_id: input.fraudSessionId }),
-      idempotency_id: idempotencyId,
-      statement_descriptor: (link.statementDescriptor || church.name).slice(0, 18).toUpperCase(),
-      tags: {
-        source: "wgc_merchandise_checkout",
-        givingLinkId: link.id,
-        churchId: church.id,
-        donation_amount_cents: String(input.donationAmountCents),
-        merchandise_amount_cents: String(pricedCart.subtotal),
-        shipping_amount_cents: String(shippingAmount),
-      },
-    });
+    transfer = await finixClient.createTransfer(transferPayload as any);
   } catch (err: any) {
     // Payment-failure rule: nothing else is created (spec item 35).
     throw new CheckoutValidationError(err?.message || "We couldn't complete your payment. No charge was made.");
@@ -232,6 +278,11 @@ export async function processCombinedCheckout(input: CheckoutInput) {
         paymentMethodType: input.paymentInstrumentId ? "PAYMENT_CARD" : "PAYMENT_CARD",
         status: transfer.state ?? "PENDING",
         isAnonymous: Boolean(input.isAnonymous),
+        donorCoversFee: Boolean(link.feeCoverEnabled && input.coverFees),
+        cardBrand: feeStrategy.normalizedCardBrand || null,
+        percentageBps: feeStrategy.percentageBasisPoints,
+        fixedFeeCents: feeStrategy.fixedFeeCents,
+        feeCalculationVersion: FEE_CALCULATION_VERSION,
       },
     });
     paymentId = payment.id;
@@ -274,6 +325,7 @@ export async function processCombinedCheckout(input: CheckoutInput) {
       merchandiseAmount: pricedCart.subtotal,
       shippingAmount,
       taxAmount,
+      processingFeeAmount: feeStrategy.supplementalFeeCents,
       grandTotal,
       finixTransferId: transfer.id,
       paymentStatus: "SUCCEEDED",
