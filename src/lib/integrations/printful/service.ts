@@ -123,13 +123,16 @@ export async function connectPrintfulWithPrivateToken(params: {
   if (!storeId) {
     // Ask Printful rather than the merchant — see the storeId param's
     // comment above for why this is the default path, not a fallback.
-    const discovered = await new PrintfulProvider({ accessToken: token }).discoverStoreId();
-    if (!discovered) {
+    const discovery = await new PrintfulProvider({ accessToken: token }).discoverStoreId();
+    if (!discovery.storeId) {
+      // Surface exactly what Printful said to each attempt — without this
+      // a blocked merchant has nothing actionable to take to Printful
+      // support, which is the only remaining way to obtain the number.
       throw new PrintfulConnectionError(
-        "Printful requires a Store ID for this token, and it couldn't be read automatically (the token's scopes don't permit it). Ask Printful support for your numeric Store ID, then enter it below."
+        `Printful requires a Store ID for this token and it couldn't be read automatically. Ask Printful support for your numeric Store ID, then enter it in the Store ID field. Printful's replies: ${discovery.attempts.join(" | ")}`
       );
     }
-    storeId = discovered;
+    storeId = discovery.storeId;
   }
 
   const provider = new PrintfulProvider({ accessToken: token, storeId });

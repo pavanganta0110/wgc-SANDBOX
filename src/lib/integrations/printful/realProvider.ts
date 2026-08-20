@@ -107,31 +107,42 @@ export class PrintfulProvider implements PrintProvider {
    * the merchant chase Printful support for a number their own dashboard
    * won't show them. If none succeed, the caller falls back to asking.
    */
-  async discoverStoreId(): Promise<string | null> {
-    // 1. GET /stores — the documented way, but needs the stores_list/read
-    //    scope, which the store-scoped token screen does not offer.
-    try {
-      const { result } = await this.request<{ result: any }>("/stores");
-      const first = Array.isArray(result) ? result[0] : null;
-      if (first?.id != null) return String(first.id);
-    } catch {
-      // no stores_list/read scope (or endpoint unavailable) — try next
+  async discoverStoreId(): Promise<{ storeId: string | null; attempts: string[] }> {
+    const attempts: string[] = [];
+
+    // Several candidate endpoints are tried because Printful exposes the
+    // store id differently depending on how the token was issued. Each
+    // failure is recorded (not swallowed silently) so a merchant who ends
+    // up blocked can be told exactly what Printful said, rather than a
+    // generic "couldn't find it" that leaves nobody anything to act on.
+    const candidates: { path: string; pick: (body: any) => unknown }[] = [
+      // Documented, but needs the stores_list/read scope that the
+      // store-scoped token screen does not offer.
+      { path: "/stores", pick: (b) => (Array.isArray(b?.result) ? b.result[0]?.id : undefined) },
+      // Reports what an OAuth token is authorized for; for a store-scoped
+      // token that should identify the store. Field naming unconfirmed, so
+      // several plausible keys are checked rather than assuming one.
+      { path: "/oauth/scopes", pick: (b) => (b?.result ?? b)?.store_id ?? (b?.result ?? b)?.storeId ?? (b?.result ?? b)?.store?.id },
+      // Store-scoped list endpoints sometimes echo the owning store back
+      // on each record even when /store itself refuses without the header.
+      { path: "/store/products?limit=1", pick: (b) => (Array.isArray(b?.result) ? b.result[0]?.external_id ?? undefined : undefined) },
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const body = await this.request<any>(candidate.path);
+        const found = candidate.pick(body);
+        if (found != null && String(found).trim() !== "") {
+          return { storeId: String(found), attempts };
+        }
+        attempts.push(`${candidate.path}: responded, but carried no store id`);
+      } catch (err) {
+        const message = err instanceof PrintfulApiError ? err.message : err instanceof Error ? err.message : "unknown error";
+        attempts.push(`${candidate.path}: ${message}`);
+      }
     }
 
-    // 2. GET /oauth/scopes — on Printful's OAuth tokens this reports what
-    //    the token is authorized for, which for a store-scoped token
-    //    should identify the store itself. Unconfirmed field naming, so
-    //    several plausible keys are checked rather than assuming one.
-    try {
-      const body = await this.request<any>("/oauth/scopes");
-      const payload = body?.result ?? body;
-      const candidate = payload?.store_id ?? payload?.storeId ?? payload?.store?.id;
-      if (candidate != null) return String(candidate);
-    } catch {
-      // endpoint absent or not permitted — give up on discovery
-    }
-
-    return null;
+    return { storeId: null, attempts };
   }
 
   // GET /store — REQUIRES-LIVE-VERIFICATION: confirm field names (id vs

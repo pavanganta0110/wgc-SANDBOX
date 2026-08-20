@@ -33,7 +33,7 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockDiscoverStoreId.mockResolvedValue("discovered-store-9");
+  mockDiscoverStoreId.mockResolvedValue({ storeId: "discovered-store-9", attempts: [] });
   mockTestConnection.mockResolvedValue({ ok: true, message: "Connected to Test Store.", checkedAt: new Date() });
   mockGetConnectionInfo.mockResolvedValue({ connected: true, storeId: "store-123", accountId: "store-123", connectionType: "private_token", scopes: null });
   mockPrisma.printfulConnection.upsert.mockResolvedValue({ id: "conn-1", status: "CONNECTED", connectionType: "private_token", printfulStoreId: "store-123" });
@@ -53,7 +53,7 @@ describe("connectPrintfulWithPrivateToken", () => {
   });
 
   it("discovers the store id from Printful when the merchant leaves it blank", async () => {
-    mockDiscoverStoreId.mockResolvedValue("discovered-store-9");
+    mockDiscoverStoreId.mockResolvedValue({ storeId: "discovered-store-9", attempts: [] });
     const { connectPrintfulWithPrivateToken } = await load();
 
     await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" });
@@ -63,7 +63,7 @@ describe("connectPrintfulWithPrivateToken", () => {
   });
 
   it("only asks the merchant for a store id when Printful cannot supply one", async () => {
-    mockDiscoverStoreId.mockResolvedValue(null);
+    mockDiscoverStoreId.mockResolvedValue({ storeId: null, attempts: ["/stores: no scope"] });
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
