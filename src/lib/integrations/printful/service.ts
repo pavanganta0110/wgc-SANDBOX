@@ -54,6 +54,21 @@ export function sanitizeApiToken(raw: string): string {
     .trim();
 }
 
+/**
+ * A non-revealing description of a credential, for error messages.
+ *
+ * When Printful rejects a token there is no way to tell from the outside
+ * whether the right value was pasted, a truncated one, or an entire chunk
+ * of surrounding page text — and the field is masked, so the merchant
+ * cannot see it either. Reporting the length plus first/last few characters
+ * makes that immediately obvious while never putting the secret itself into
+ * a toast, a log, or a support ticket.
+ */
+export function describeToken(token: string): string {
+  if (token.length <= 8) return `${token.length} characters`;
+  return `${token.length} characters, starts "${token.slice(0, 4)}", ends "${token.slice(-4)}"`;
+}
+
 /** Rejects anything still outside printable ASCII after sanitizing, so a
  * genuinely malformed token fails with an explanation instead of an opaque
  * ByteString error from deep inside fetch(). */
@@ -165,7 +180,7 @@ export async function connectPrintfulWithPrivateToken(params: {
       // a blocked merchant has nothing actionable to take to Printful
       // support, which is the only remaining way to obtain the number.
       throw new PrintfulConnectionError(
-        `Printful requires a Store ID for this token and it couldn't be read automatically. Ask Printful support for your numeric Store ID, then enter it in the Store ID field. Printful's replies: ${discovery.attempts.join(" | ")}`
+        `Printful would not identify this token's store. Token sent: ${describeToken(token)}. Printful's replies: ${discovery.attempts.join(" | ")}`
       );
     }
     storeId = discovery.storeId;
@@ -174,7 +189,7 @@ export async function connectPrintfulWithPrivateToken(params: {
   const provider = new PrintfulProvider({ accessToken: token, storeId });
   const testResult = await provider.testConnection();
   if (!testResult.ok) {
-    throw new PrintfulConnectionError(testResult.message);
+    throw new PrintfulConnectionError(`${testResult.message} (Token sent: ${describeToken(token)}.)`);
   }
   const connectionInfo = await provider.getConnectionInfo();
 

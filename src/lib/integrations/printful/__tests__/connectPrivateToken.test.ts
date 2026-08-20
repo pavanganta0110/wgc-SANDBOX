@@ -89,13 +89,13 @@ describe("connectPrintfulWithPrivateToken", () => {
     expect(mockPrisma.printfulConnection.upsert).toHaveBeenCalled();
   });
 
-  it("only asks the merchant for a store id when Printful cannot supply one", async () => {
-    mockDiscoverStoreId.mockResolvedValue({ storeId: null, attempts: ["/stores: no scope"] });
+  it("reports the sent token's length and edges (never the value) when discovery fails", async () => {
+    mockDiscoverStoreId.mockResolvedValue({ storeId: null, attempts: ["/stores: The access token provided is invalid."] });
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
       connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" })
-    ).rejects.toThrow("Ask Printful support for your numeric Store ID");
+    ).rejects.toThrow('Token sent: 14 characters, starts "real", ends "-abc"');
 
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
   });
