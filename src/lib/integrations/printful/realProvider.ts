@@ -29,10 +29,22 @@ const REQUEST_TIMEOUT_MS = 20_000;
 export class PrintfulProvider implements PrintProvider {
   private accessToken: string;
   private apiBaseUrl: string;
+  // Printful's OAuth-scoped tokens (the kind generated with checkbox
+  // scopes in the Developer Portal, as opposed to a single-store Personal
+  // API token) are not implicitly bound to one store — a token can be
+  // authorized against multiple stores on the same Printful account. Every
+  // store-scoped endpoint (store info, products, orders) requires an
+  // explicit X-PF-Store-Id header, or Printful rejects the request with
+  // "This endpoint requires `store_id`!" even with a perfectly valid,
+  // fully-scoped token. When unset, discoverAndSetStoreId() must be called
+  // first (see testConnection/getConnectionInfo below) — confirmed against
+  // a real Printful account's actual error response, not just documentation.
+  private storeId: string | null;
 
   constructor(params: { accessToken: string; storeId?: string | null }) {
     this.accessToken = params.accessToken;
     this.apiBaseUrl = getPrintfulApiBaseUrl();
+    this.storeId = params.storeId ?? null;
   }
 
   private async request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
@@ -48,6 +60,7 @@ export class PrintfulProvider implements PrintProvider {
         headers: {
           Authorization: `Bearer ${this.accessToken}`,
           "Content-Type": "application/json",
+          ...(this.storeId ? { "X-PF-Store-Id": this.storeId } : {}),
           ...(options.headers || {}),
         },
       });

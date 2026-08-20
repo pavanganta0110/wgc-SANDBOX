@@ -42,8 +42,19 @@ describe("connectPrintfulWithPrivateToken", () => {
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "   ", actorUserId: "user-1" })
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "   ", storeId: "store-123", actorUserId: "user-1" })
     ).rejects.toThrow("A Printful API token is required.");
+
+    expect(mockTestConnection).not.toHaveBeenCalled();
+    expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing store ID without ever calling Printful or storing anything", async () => {
+    const { connectPrintfulWithPrivateToken } = await load();
+
+    await expect(
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", storeId: "  ", actorUserId: "user-1" })
+    ).rejects.toThrow("A Printful Store ID is required");
 
     expect(mockTestConnection).not.toHaveBeenCalled();
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
@@ -54,7 +65,7 @@ describe("connectPrintfulWithPrivateToken", () => {
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "bad-token", actorUserId: "user-1" })
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "bad-token", storeId: "store-123", actorUserId: "user-1" })
     ).rejects.toThrow("Could not connect to Printful: 401 Unauthorized");
 
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
@@ -62,7 +73,7 @@ describe("connectPrintfulWithPrivateToken", () => {
 
   it("stores the token encrypted (never plaintext) and marks the connection CONNECTED on success", async () => {
     const { connectPrintfulWithPrivateToken } = await load();
-    const connection = await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" });
+    const connection = await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", storeId: "store-123", actorUserId: "user-1" });
 
     expect(mockTestConnection).toHaveBeenCalledTimes(1);
     expect(mockPrisma.printfulConnection.upsert).toHaveBeenCalledWith(

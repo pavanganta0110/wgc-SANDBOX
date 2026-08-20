@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   }
 
   if (getPrintfulMode() !== "mock") {
-    let body: { privateToken?: string } = {};
+    let body: { privateToken?: string; storeId?: string } = {};
     try {
       body = await req.json();
     } catch {
@@ -42,11 +42,15 @@ export async function POST(req: Request) {
     if (!body.privateToken) {
       return NextResponse.json({ error: "A Printful API token is required to connect." }, { status: 400 });
     }
+    if (!body.storeId) {
+      return NextResponse.json({ error: "A Printful Store ID is required to connect — it's shown on the same page where you generated the API token." }, { status: 400 });
+    }
 
     try {
       const connection = await connectPrintfulWithPrivateToken({
         churchId: auth.churchId,
         privateToken: body.privateToken,
+        storeId: body.storeId,
         actorUserId: auth.userId,
         actorEmail: auth.email,
         actorRole: auth.role,

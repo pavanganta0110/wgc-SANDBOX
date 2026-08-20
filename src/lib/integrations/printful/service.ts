@@ -100,6 +100,16 @@ export async function connectMockPrintful(params: { churchId: string; actorUserI
 export async function connectPrintfulWithPrivateToken(params: {
   churchId: string;
   privateToken: string;
+  // Required for a store-scoped token generated from Printful's
+  // "authorized store" API-token page (Settings -> Stores -> a store ->
+  // API) — that token type is not implicitly bound to a store the way a
+  // whole-account Personal token is, and Printful rejects every
+  // store-scoped call ("This endpoint requires `store_id`!") without an
+  // explicit X-PF-Store-Id header. This screen offers no "list my stores"
+  // scope to auto-discover it (confirmed against a real account), so the
+  // merchant must supply it directly — it's shown on the same Printful
+  // page the token itself is generated from.
+  storeId: string;
   actorUserId: string;
   actorEmail?: string | null;
   actorRole?: string | null;
@@ -109,8 +119,12 @@ export async function connectPrintfulWithPrivateToken(params: {
   if (!token) {
     throw new PrintfulConnectionError("A Printful API token is required.");
   }
+  const storeId = params.storeId.trim();
+  if (!storeId) {
+    throw new PrintfulConnectionError("A Printful Store ID is required — it's shown on the same page where you generated the API token.");
+  }
 
-  const provider = new PrintfulProvider({ accessToken: token });
+  const provider = new PrintfulProvider({ accessToken: token, storeId });
   const testResult = await provider.testConnection();
   if (!testResult.ok) {
     throw new PrintfulConnectionError(testResult.message);
@@ -124,7 +138,7 @@ export async function connectPrintfulWithPrivateToken(params: {
       churchId: params.churchId,
       status: "CONNECTED",
       connectionType: "private_token",
-      printfulStoreId: connectionInfo.storeId,
+      printfulStoreId: connectionInfo.storeId ?? storeId,
       printfulAccountId: connectionInfo.accountId,
       accessTokenEncrypted: serializeEnvelope(envelope),
       encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),
@@ -134,7 +148,7 @@ export async function connectPrintfulWithPrivateToken(params: {
     update: {
       status: "CONNECTED",
       connectionType: "private_token",
-      printfulStoreId: connectionInfo.storeId,
+      printfulStoreId: connectionInfo.storeId ?? storeId,
       printfulAccountId: connectionInfo.accountId,
       accessTokenEncrypted: serializeEnvelope(envelope),
       encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),

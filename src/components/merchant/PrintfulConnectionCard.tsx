@@ -24,6 +24,7 @@ export default function PrintfulConnectionCard() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [privateToken, setPrivateToken] = useState("");
+  const [storeId, setStoreId] = useState("");
 
   const load = useCallback(() => {
     fetch("/api/merchant/settings/integrations/printful")
@@ -44,6 +45,7 @@ export default function PrintfulConnectionCard() {
         action === "connect" ? `Connected to Printful${result.connection?.connectionType === "mock" ? " (Mock / Sandbox)" : ""}.` : action === "disconnect" ? "Disconnected." : action === "test" ? "Connection is healthy." : `Sync complete — ${result.received ?? 0} products received.`
       );
       setPrivateToken("");
+      setStoreId("");
       load();
     } catch (err: any) {
       toast.error(err.message || "Something went wrong.");
@@ -113,14 +115,29 @@ export default function PrintfulConnectionCard() {
               placeholder="Paste your Printful API token"
               className="w-full max-w-md px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             />
+            <label htmlFor="printful-store-id" className="block text-xs font-semibold text-slate-700 pt-2">
+              Printful Store ID
+            </label>
+            <p className="text-xs text-slate-500">
+              Shown on the same Printful page where you generated the token above — this token type can't act on a store without it.
+            </p>
+            <input
+              id="printful-store-id"
+              type="text"
+              autoComplete="off"
+              value={storeId}
+              onChange={(e) => setStoreId(e.target.value)}
+              placeholder="e.g. 12345678"
+              className="w-full max-w-md px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            />
           </div>
         )}
 
         <div className="flex flex-wrap gap-3">
           {!isConnected ? (
             <button
-              onClick={() => call("connect", "/api/merchant/settings/integrations/printful/connect", isMock ? undefined : { privateToken })}
-              disabled={busy !== null || (!isMock && !privateToken.trim())}
+              onClick={() => call("connect", "/api/merchant/settings/integrations/printful/connect", isMock ? undefined : { privateToken, storeId })}
+              disabled={busy !== null || (!isMock && (!privateToken.trim() || !storeId.trim()))}
               className="px-5 py-2.5 rounded-xl font-bold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2 text-sm"
             >
               {busy === "connect" ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Connect Printful
