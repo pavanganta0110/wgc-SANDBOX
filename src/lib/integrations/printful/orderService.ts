@@ -4,6 +4,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getProviderForChurch } from "./service";
 import { mapProviderOrderStatusToWgc } from "./mapper";
 import { OrderSubmissionError, ProductUnavailableError, ShippingUnavailableError, VariantUnavailableError } from "./errors";
+import { sendMerchandiseOrderConfirmation, notifyNewMerchandiseOrder } from "./orderEmails";
 import type { WgcAddress } from "./types";
 
 /** WGC-MERCH-XXXXXXXX — the stable external reference used both for WGC's
@@ -172,6 +173,7 @@ export async function createMerchandiseOrder(params: {
       shippingCountry: params.address.country,
       subtotal: params.pricedCart.subtotal,
       shippingAmount: params.shippingAmount,
+      shippingOptionId: params.shippingOptionId ?? null,
       taxAmount: params.taxAmount,
       discountAmount: params.discountAmount ?? 0,
       totalMerchandiseAmount,
@@ -205,6 +207,12 @@ export async function createMerchandiseOrder(params: {
   });
 
   await logDashboardAction({ churchId: params.churchId, action: "merchandise_order.created", entityType: "MerchandiseOrder", entityId: order.id, metadata: { wgcOrderNumber: order.wgcOrderNumber, total: totalMerchandiseAmount } });
+
+  // Best-effort, non-blocking — the payment and order already succeeded;
+  // a failure to email either the donor or the seller must never undo or
+  // delay that (same rule the Printful submission below follows).
+  await sendMerchandiseOrderConfirmation(order.id).catch((err) => console.error(`Order confirmation email failed for ${order.wgcOrderNumber}:`, err?.message));
+  await notifyNewMerchandiseOrder(order.id).catch((err) => console.error(`Seller notification failed for ${order.wgcOrderNumber}:`, err?.message));
 
   // Best-effort immediate submission — failure here is expected and safe
   // (spec item 36); the order stays in a retryable state either way.
@@ -243,6 +251,12 @@ export async function submitOrderToProvider(orderId: string) {
         phone: order.customerPhone,
       },
       items: order.items.map((i) => ({ externalVariantId: i.externalVariantId || "", quantity: i.quantity, productName: i.productName, variantName: i.variantName })),
+      // Previously omitted entirely: the donor's selected/priced shipping
+      // rate was validated at checkout but never reached Printful's own
+      // order-creation call, so Printful would fall back to its own
+      // default shipping method instead of the one shippingAmount was
+      // actually computed from.
+      shippingOptionId: order.shippingOptionId,
     });
 
     const mapped = mapProviderOrderStatusToWgc(providerOrder.status);

@@ -7,6 +7,7 @@ export interface NotificationEventDef {
 /** Only events this codebase can actually detect and act on — no fabricated notification types. */
 export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   { key: "DISPUTE_OPENED", label: "New Dispute Opened", description: "A donor has disputed a payment and evidence may be required." },
+  { key: "NEW_MERCHANDISE_ORDER", label: "New Merchandise Order", description: "A donor purchased merchandise on one of your giving pages." },
   { key: "SUBSCRIPTION_PAYMENT_FAILED", label: "Recurring Payment Failed", description: "A scheduled recurring donation payment failed to process." },
   { key: "SETTLEMENT_FUNDED", label: "Settlement Funded", description: "Funds from a settlement batch have been deposited to your bank account." },
   { key: "TEAM_INVITE_ACCEPTED", label: "Team Invitation Accepted", description: "An invited teammate has accepted and set up their account." },

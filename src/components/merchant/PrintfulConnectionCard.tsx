@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Loader2, CheckCircle2, XCircle, RefreshCw, Package, FlaskConical } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, RefreshCw, Package, FlaskConical, AlertTriangle } from "lucide-react";
 
 interface StatusResponse {
   enabled: boolean;
@@ -94,6 +94,21 @@ export default function PrintfulConnectionCard() {
           <p className="text-xs text-slate-500 mb-4">
             Last synced {new Date(data.connection.lastSyncAt).toLocaleString()} — {data.connection.lastSyncStatus} {data.connection.lastSyncError ? `(${data.connection.lastSyncError})` : ""}
           </p>
+        )}
+
+        {!isMock && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800">
+              <strong>Printful bills you directly, not through WGC.</strong> Every donor purchase collects the retail
+              price through your normal WGC payment processing — but Printful separately charges{" "}
+              <em>your own</em> Printful account (its Wallet, funded by a card or PayPal you add in your Printful
+              account) for the production/fulfillment cost of each order. If your Printful billing method isn't set
+              up or your Wallet has no funds, orders will be accepted by WGC but fail on Printful's side and won't
+              ship — with no automatic warning back to you beyond the order sitting unfulfilled. Set this up under
+              Printful → Settings → Billing before going live.
+            </p>
+          </div>
         )}
 
         {!isConnected && !isMock && (

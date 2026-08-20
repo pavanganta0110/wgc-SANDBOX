@@ -3844,6 +3844,16 @@ model MerchandiseOrder {
   discountAmount         Int @default(0)
   totalMerchandiseAmount Int @default(0) // subtotal + shippingAmount + taxAmount - discountAmount
 
+  // The exact rate id the donor selected at checkout (from Printful's
+  // /shipping/rates response, e.g. "STANDARD" / "PRIORITY-EXPRESS") — was
+  // previously validated against the live quote to compute shippingAmount
+  // but never persisted, so it never reached Printful's own order-creation
+  // call. Without this, Printful silently falls back to its own default
+  // shipping method rather than the one the donor was actually charged
+  // for, which can mean a different (and possibly higher-cost-to-fulfill)
+  // method than what shippingAmount was priced on.
+  shippingOptionId String?
+
   currency String @default("USD")
 
   providerCost    Int? // sum of variant providerCost * qty, cents — internal only
