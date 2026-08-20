@@ -2,6 +2,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
+import InviteNewMember from "./InviteNewMember";
 
 export default async function MerchantUsersPage({
   params,
@@ -32,6 +33,7 @@ export default async function MerchantUsersPage({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold">Users</h2>
+        <InviteNewMember churchId={churchId} />
       </div>
 
       <div className="grid grid-cols-4 gap-4">

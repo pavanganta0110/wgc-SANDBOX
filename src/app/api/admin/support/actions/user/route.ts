@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { notifyAdminSupportChange } from "@/lib/support/ticketNotifications";
+import { sendWgcEmail } from "@/lib/email";
 
 export async function POST(req: Request) {
   try {
@@ -53,9 +54,16 @@ export async function POST(req: Request) {
     switch (actionType) {
       case "RESEND_INVITE":
       case "RESEND_PASSWORD_RESET": {
+        // Was previously only generating a token and console.logging it —
+        // no email was ever actually sent to the user, so this action was
+        // a no-op from their perspective despite the admin UI reporting
+        // success. Now sends the same real "set your password" link email
+        // the merchant's own Team-invite flow and the onboarding
+        // DASHBOARD_ACCESS email send, so the recipient can actually use
+        // it, not just a generic "something changed" notification.
         const token = crypto.randomBytes(32).toString("hex");
         const hash = crypto.createHash("sha256").update(token).digest("hex");
-        const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days, matching every other invite link in this codebase
 
         await prisma.user.update({
           where: { id: userId },
@@ -65,33 +73,46 @@ export async function POST(req: Request) {
           },
         });
 
-        // In a real app, send an email here using the `token`.
-        // For the sandbox, we'll just log it or rely on existing email utils if available.
-        console.log(
-          `[Support Action] Generated new token for ${user.email}: ${token}`,
-        );
+        const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/merchant/set-password/${token}`;
+        const isInvite = actionType === "RESEND_INVITE";
+        const emailResult = await sendWgcEmail({
+          to: user.email,
+          subject: isInvite ? "Your WGC Payments dashboard access" : "Reset your WGC Payments password",
+          title: isInvite ? "Set up your dashboard access" : "Reset your password",
+          badgeText: "Action Required",
+          badgeColor: "#0B5DBC",
+          bodyHtml: `<p>Hi ${user.name || church?.name || "there"},</p>
+                     <p>${isInvite
+                       ? `Your WGC Payments merchant dashboard is ready. Use the secure link below to set your password and log in.`
+                       : `Use the secure link below to set a new password for your WGC Payments account.`}</p>
+                     <p><a href="${setPasswordLink}">${isInvite ? "Set your password" : "Reset your password"}</a></p>
+                     <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`,
+        });
 
-        await prisma.auditLog.create({
+        await prisma.emailLog.create({
           data: {
-            action:
-              actionType === "RESEND_INVITE"
-                ? "USER_INVITE_RESENT"
-                : "USER_PASSWORD_RESET_RESENT",
-            actorEmail: adminEmail,
-            metadata: { userId, churchId, reason, ticketId },
+            type: "DASHBOARD_ACCESS",
+            to: user.email,
+            subject: isInvite ? "Your WGC Payments dashboard access" : "Reset your WGC Payments password",
+            status: emailResult.success ? "SENT" : "ERROR",
+            sentAt: emailResult.success ? new Date() : null,
+            error: emailResult.success ? null : String(emailResult.error ?? "unknown error"),
           },
         });
 
-        await notifyAdminSupportChange({
-          affectedUserEmail: user.email,
-          affectedUserName: user.name || "Unknown",
-          churchName: church?.name || "your organization",
-          changeDescription: actionType === "RESEND_INVITE" ? "Resend Invitation" : "Resend Password Reset",
-          reason,
-          ticketNumber
+        await prisma.auditLog.create({
+          data: {
+            action: isInvite ? "USER_INVITE_RESENT" : "USER_PASSWORD_RESET_RESENT",
+            actorEmail: adminEmail,
+            metadata: { userId, churchId, reason, ticketId, emailSent: emailResult.success },
+          },
         });
 
-        return NextResponse.json({ message: "Email triggered successfully" });
+        if (!emailResult.success) {
+          return NextResponse.json({ error: "Failed to send the email. Check the admin Email Logs for details." }, { status: 502 });
+        }
+
+        return NextResponse.json({ message: `Invitation email sent to ${user.email}.` });
       }
 
       case "REVOKE_SESSIONS": {

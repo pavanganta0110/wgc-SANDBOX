@@ -41,6 +41,26 @@ export default function UserSupportActions({
     }
   };
 
+  const onResendInvite = () => {
+    const reason = prompt("Enter reason for resending this invitation:");
+    if (reason) handleAction("RESEND_INVITE", { reason });
+  };
+
+  const onResendPasswordReset = () => {
+    const reason = prompt("Enter reason for resending a password reset:");
+    if (reason) handleAction("RESEND_PASSWORD_RESET", { reason });
+  };
+
+  const onRevokeSessions = () => {
+    const reason = prompt("Enter reason for revoking sessions:");
+    if (reason) handleAction("REVOKE_SESSIONS", { reason });
+  };
+
+  const onUnlock = () => {
+    const reason = prompt("Enter reason for unlocking this user:");
+    if (reason) handleAction("UNLOCK", { reason });
+  };
+
   const onDisable = () => {
     const reason = prompt("Enter reason for disabling this user:");
     if (reason) handleAction("DISABLE", { reason });
@@ -54,7 +74,8 @@ export default function UserSupportActions({
   const onCorrectProfile = () => {
     const name = prompt("Enter new name:", user.name || "");
     const email = prompt("Enter new email:", user.email || "");
-    if (name && email) handleAction("CORRECT_PROFILE", { name, email });
+    const reason = prompt("Enter reason for correcting this profile:");
+    if (name && email && reason) handleAction("CORRECT_PROFILE", { name, email, reason });
   };
 
   return (
@@ -76,7 +97,7 @@ export default function UserSupportActions({
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {(!user.passwordHash && !user.lastLoginAt && user.setPasswordTokenHash) && (
           <button
-            onClick={() => handleAction("RESEND_INVITE")}
+            onClick={onResendInvite}
             disabled={loading}
             className="px-4 py-2 bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 disabled:opacity-50 text-sm font-medium"
           >
@@ -84,14 +105,14 @@ export default function UserSupportActions({
           </button>
         )}
         <button
-          onClick={() => handleAction("RESEND_PASSWORD_RESET")}
+          onClick={onResendPasswordReset}
           disabled={loading}
           className="px-4 py-2 bg-blue-50 text-blue-700 rounded border border-blue-200 hover:bg-blue-100 disabled:opacity-50 text-sm font-medium"
         >
           Resend Password Reset
         </button>
         <button
-          onClick={() => handleAction("REVOKE_SESSIONS")}
+          onClick={onRevokeSessions}
           disabled={loading}
           className="px-4 py-2 bg-orange-50 text-orange-700 rounded border border-orange-200 hover:bg-orange-100 disabled:opacity-50 text-sm font-medium"
         >
@@ -123,7 +144,7 @@ export default function UserSupportActions({
           </button>
         )}
         <button
-          onClick={() => handleAction("UNLOCK")}
+          onClick={onUnlock}
           disabled={loading}
           className="px-4 py-2 bg-yellow-50 text-yellow-700 rounded border border-yellow-200 hover:bg-yellow-100 disabled:opacity-50 text-sm font-medium"
         >
