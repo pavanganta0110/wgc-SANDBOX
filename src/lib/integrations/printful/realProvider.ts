@@ -123,9 +123,13 @@ export class PrintfulProvider implements PrintProvider {
       // token that should identify the store. Field naming unconfirmed, so
       // several plausible keys are checked rather than assuming one.
       { path: "/oauth/scopes", pick: (b) => (b?.result ?? b)?.store_id ?? (b?.result ?? b)?.storeId ?? (b?.result ?? b)?.store?.id },
-      // Store-scoped list endpoints sometimes echo the owning store back
-      // on each record even when /store itself refuses without the header.
-      { path: "/store/products?limit=1", pick: (b) => (Array.isArray(b?.result) ? b.result[0]?.external_id ?? undefined : undefined) },
+      // A prior third candidate here (GET /store/products, reading
+      // result[0].external_id) was removed: external_id is the merchant's
+      // OWN identifier for that product, not Printful's store id — it
+      // returned a plausible-looking number that was actually wrong,
+      // silently sending a bad X-PF-Store-Id on every subsequent call.
+      // Confirmed against a real account: better to report "not found"
+      // than hand back a guess dressed up as an answer.
     ];
 
     for (const candidate of candidates) {
