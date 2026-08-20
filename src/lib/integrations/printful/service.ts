@@ -149,16 +149,6 @@ export async function connectMockPrintful(params: { churchId: string; actorUserI
 export async function connectPrintfulWithPrivateToken(params: {
   churchId: string;
   privateToken: string;
-  // Printful requires an explicit X-PF-Store-Id header on every
-  // store-scoped call ("This endpoint requires `store_id`!") even for a
-  // token generated against a single authorized store — that requirement
-  // is Printful's, not ours, so it cannot be skipped. It can, however, be
-  // discovered rather than demanded: left blank, we ask Printful for it
-  // (see PrintfulProvider.discoverStoreId) and only fall back to asking
-  // the merchant if that fails. Printful's own dashboard does not reliably
-  // surface this number anywhere, so never make it the first thing a
-  // merchant has to go hunting for.
-  storeId?: string | null;
   actorUserId: string;
   actorEmail?: string | null;
   actorRole?: string | null;
@@ -169,24 +159,19 @@ export async function connectPrintfulWithPrivateToken(params: {
     throw new PrintfulConnectionError("A Printful API token is required.");
   }
   assertHeaderSafeToken(token);
-  // Same invisible-character hazard as the token — this is pasted too.
-  let storeId = sanitizeApiToken(params.storeId ?? "");
-  if (!storeId) {
-    // Ask Printful rather than the merchant — see the storeId param's
-    // comment above for why this is the default path, not a fallback.
-    const discovery = await new PrintfulProvider({ accessToken: token }).discoverStoreId();
-    if (!discovery.storeId) {
-      // Surface exactly what Printful said to each attempt — without this
-      // a blocked merchant has nothing actionable to take to Printful
-      // support, which is the only remaining way to obtain the number.
-      throw new PrintfulConnectionError(
-        `Printful would not identify this token's store. Token sent: ${describeToken(token)}. Printful's replies: ${discovery.attempts.join(" | ")}`
-      );
-    }
-    storeId = discovery.storeId;
-  }
 
-  const provider = new PrintfulProvider({ accessToken: token, storeId });
+  // No store id is requested or discovered here — confirmed against
+  // Printful's own docs (developers.printful.com/docs/): a Private Token
+  // generated the normal way (Settings -> Stores -> a store -> API) is a
+  // "Store" access-level client, bound to one store server-side at
+  // creation time. It has no scope that could even reveal that store's
+  // numeric id, and it must NOT send X-PF-Store-Id (that header is
+  // documented as "required only for account level token" — sending it
+  // for a Store-level token is what produced this integration's earlier
+  // "requires store_id" / scope errors, not a missing id). See
+  // PrintfulProvider.verifyStoreScopedAccess for how the connection is
+  // actually verified instead.
+  const provider = new PrintfulProvider({ accessToken: token });
   const testResult = await provider.testConnection();
   if (!testResult.ok) {
     throw new PrintfulConnectionError(`${testResult.message} (Token sent: ${describeToken(token)}.)`);
@@ -200,7 +185,7 @@ export async function connectPrintfulWithPrivateToken(params: {
       churchId: params.churchId,
       status: "CONNECTED",
       connectionType: "private_token",
-      printfulStoreId: connectionInfo.storeId ?? storeId,
+      printfulStoreId: connectionInfo.storeId,
       printfulAccountId: connectionInfo.accountId,
       accessTokenEncrypted: serializeEnvelope(envelope),
       encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),
@@ -210,7 +195,7 @@ export async function connectPrintfulWithPrivateToken(params: {
     update: {
       status: "CONNECTED",
       connectionType: "private_token",
-      printfulStoreId: connectionInfo.storeId ?? storeId,
+      printfulStoreId: connectionInfo.storeId,
       printfulAccountId: connectionInfo.accountId,
       accessTokenEncrypted: serializeEnvelope(envelope),
       encryptionKeyFingerprint: getActiveEncryptionKeyFingerprint(),

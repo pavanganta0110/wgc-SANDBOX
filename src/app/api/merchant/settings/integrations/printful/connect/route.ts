@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   }
 
   if (getPrintfulMode() !== "mock") {
-    let body: { privateToken?: string; storeId?: string } = {};
+    let body: { privateToken?: string } = {};
     try {
       body = await req.json();
     } catch {
@@ -42,13 +42,10 @@ export async function POST(req: Request) {
     if (!body.privateToken) {
       return NextResponse.json({ error: "A Printful API token is required to connect." }, { status: 400 });
     }
-    // storeId is deliberately optional — the service discovers it from
-    // Printful when omitted, and only errors if that genuinely fails.
     try {
       const connection = await connectPrintfulWithPrivateToken({
         churchId: auth.churchId,
         privateToken: body.privateToken,
-        storeId: body.storeId,
         actorUserId: auth.userId,
         actorEmail: auth.email,
         actorRole: auth.role,

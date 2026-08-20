@@ -29,16 +29,14 @@ const REQUEST_TIMEOUT_MS = 20_000;
 export class PrintfulProvider implements PrintProvider {
   private accessToken: string;
   private apiBaseUrl: string;
-  // Printful's OAuth-scoped tokens (the kind generated with checkbox
-  // scopes in the Developer Portal, as opposed to a single-store Personal
-  // API token) are not implicitly bound to one store — a token can be
-  // authorized against multiple stores on the same Printful account. Every
-  // store-scoped endpoint (store info, products, orders) requires an
-  // explicit X-PF-Store-Id header, or Printful rejects the request with
-  // "This endpoint requires `store_id`!" even with a perfectly valid,
-  // fully-scoped token. When unset, discoverAndSetStoreId() must be called
-  // first (see testConnection/getConnectionInfo below) — confirmed against
-  // a real Printful account's actual error response, not just documentation.
+  // Only meaningful for an Account-level Private Token (can act across
+  // every store on the account) — per Printful's docs, X-PF-Store-Id is
+  // "required only for account level token". A Store-level token (the
+  // default from the per-store token page, and the only kind this
+  // integration's connect flow currently produces) is already bound to one
+  // store server-side and must NOT send this header. Left null by every
+  // current caller; kept as a constructor param for a future account-level
+  // connection path rather than removed outright.
   private storeId: string | null;
 
   constructor(params: { accessToken: string; storeId?: string | null }) {
@@ -92,92 +90,73 @@ export class PrintfulProvider implements PrintProvider {
   }
 
   /**
-   * Best-effort discovery of the store id this token belongs to, for the
-   * common case where a merchant genuinely cannot find it anywhere in
-   * Printful's UI (confirmed to happen with store-scoped tokens: the
-   * scopes screen shows only "...of the authorized store" permissions and
-   * never surfaces the numeric id).
+   * Confirmed against Printful's own published authentication docs
+   * (developers.printful.com/docs/, fetched directly — not inferred): a
+   * Private Token has one of two access levels.
+   *   - "Store" level (the default from Settings -> Stores -> a store ->
+   *     API, and the only kind the scope-checkbox screen this merchant
+   *     used can produce): bound to one store AT CREATION TIME, server-
+   *     side, invisibly to the token holder. It never needs (or is even
+   *     granted a scope to look up) X-PF-Store-Id — Printful already knows
+   *     which store it is. Its available scopes are exactly orders/
+   *     sync_products/file_library/webhooks (read and/or write) — there is
+   *     no "store info" scope at this level at all.
+   *   - "Account" level: can act across every store on the account, and
+   *     DOES require X-PF-Store-Id on every store-scoped call.
    *
-   * Each candidate below is tried in order and any failure is swallowed —
-   * this must never turn a recoverable "please enter your store id" into a
-   * hard connect failure. REQUIRES-LIVE-VERIFICATION: only the /stores
-   * endpoint is confirmed from Printful's published v1 reference; the
-   * others are plausible-but-unconfirmed shapes, included because the cost
-   * of an extra failed request at connect time is trivial next to making
-   * the merchant chase Printful support for a number their own dashboard
-   * won't show them. If none succeed, the caller falls back to asking.
+   * Every failure this integration hit (stores_list/read missing, then
+   * "requires store_id", then a wrong guess at that id) traces back to one
+   * mistake: testing the connection via GET /store, an endpoint outside
+   * every scope a Store-level token can be granted. There was never a
+   * store id to find — a Store-level token doesn't need one supplied by
+   * the caller at all. Connection verification below calls whichever
+   * store-scoped endpoint the merchant's chosen scopes actually cover,
+   * with no store-id header, and getStoreId()/discoverStoreId() are gone —
+   * see docs/integrations/printful.md for the account-level exception.
    */
-  async discoverStoreId(): Promise<{ storeId: string | null; attempts: string[] }> {
+  private async verifyStoreScopedAccess(): Promise<{ ok: true; via: string } | { ok: false; attempts: string[] }> {
     const attempts: string[] = [];
-
-    // Several candidate endpoints are tried because Printful exposes the
-    // store id differently depending on how the token was issued. Each
-    // failure is recorded (not swallowed silently) so a merchant who ends
-    // up blocked can be told exactly what Printful said, rather than a
-    // generic "couldn't find it" that leaves nobody anything to act on.
-    const candidates: { path: string; pick: (body: any) => unknown }[] = [
-      // Documented, but needs the stores_list/read scope that the
-      // store-scoped token screen does not offer.
-      { path: "/stores", pick: (b) => (Array.isArray(b?.result) ? b.result[0]?.id : undefined) },
-      // Reports what an OAuth token is authorized for; for a store-scoped
-      // token that should identify the store. Field naming unconfirmed, so
-      // several plausible keys are checked rather than assuming one.
-      { path: "/oauth/scopes", pick: (b) => (b?.result ?? b)?.store_id ?? (b?.result ?? b)?.storeId ?? (b?.result ?? b)?.store?.id },
-      // A prior third candidate here (GET /store/products, reading
-      // result[0].external_id) was removed: external_id is the merchant's
-      // OWN identifier for that product, not Printful's store id — it
-      // returned a plausible-looking number that was actually wrong,
-      // silently sending a bad X-PF-Store-Id on every subsequent call.
-      // Confirmed against a real account: better to report "not found"
-      // than hand back a guess dressed up as an answer.
-    ];
-
-    for (const candidate of candidates) {
+    // Ordered by how likely a merchant is to have checked that scope —
+    // "View store products" is the most natural first checkbox on that
+    // screen — but every candidate is tried since we can't see what they
+    // actually checked.
+    const candidates = ["/store/products?limit=1", "/webhooks", "/orders?limit=1", "/files?limit=1"];
+    for (const path of candidates) {
       try {
-        const body = await this.request<any>(candidate.path);
-        const found = candidate.pick(body);
-        if (found != null && String(found).trim() !== "") {
-          return { storeId: String(found), attempts };
-        }
-        attempts.push(`${candidate.path}: responded, but carried no store id`);
+        await this.request<any>(path);
+        return { ok: true, via: path };
       } catch (err) {
         const message = err instanceof PrintfulApiError ? err.message : err instanceof Error ? err.message : "unknown error";
-        attempts.push(`${candidate.path}: ${message}`);
+        attempts.push(`${path}: ${message}`);
       }
     }
-
-    return { storeId: null, attempts };
+    return { ok: false, attempts };
   }
 
-  // GET /store — REQUIRES-LIVE-VERIFICATION: confirm field names (id vs
-  // store_id, name) against a real response.
   async getConnectionInfo(): Promise<ProviderConnectionInfo> {
-    try {
-      const { result } = await this.request<{ result: any }>("/store");
-      return {
-        connected: true,
-        storeId: result?.id != null ? String(result.id) : null,
-        accountId: result?.id != null ? String(result.id) : null,
-        connectionType: "private_token",
-        scopes: null,
-      };
-    } catch (err) {
-      if (err instanceof PrintfulApiError) {
-        return { connected: false, storeId: null, accountId: null, connectionType: "private_token", scopes: null };
-      }
-      throw err;
-    }
+    const result = await this.verifyStoreScopedAccess();
+    return {
+      connected: result.ok,
+      // Store-level tokens never reveal their own numeric store id (see
+      // class doc comment) — null here is expected and harmless, not a
+      // missing feature.
+      storeId: null,
+      accountId: null,
+      connectionType: "private_token",
+      scopes: null,
+    };
   }
 
   async testConnection(): Promise<ProviderTestResult> {
-    try {
-      const { result } = await this.request<{ result: any }>("/store");
-      const storeName = result?.name || result?.id || "your Printful store";
-      return { ok: true, message: `Connected to ${storeName}.`, checkedAt: new Date() };
-    } catch (err) {
-      const message = err instanceof PrintfulApiError ? err.message : err instanceof Error ? err.message : "Unknown error";
-      return { ok: false, message: `Could not connect to Printful: ${message}`, checkedAt: new Date() };
+    const result = await this.verifyStoreScopedAccess();
+    if (result.ok) {
+      return { ok: true, message: "Connected to your Printful store.", checkedAt: new Date() };
     }
+    return {
+      ok: false,
+      message: `Could not connect to Printful: none of the granted scopes could be verified (${result.attempts.join(" | ")}). Make sure at least one "View" scope is checked when generating the token.`,
+      checkedAt: new Date(),
+    };
   }
 
   // GET /store/products (list) then GET /store/products/{id} (detail) per

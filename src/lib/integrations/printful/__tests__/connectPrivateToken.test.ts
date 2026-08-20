@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockTestConnection = vi.fn();
 const mockGetConnectionInfo = vi.fn();
-const mockDiscoverStoreId = vi.fn();
 vi.mock("../realProvider", () => ({
   PrintfulProvider: vi.fn().mockImplementation(function (this: any) {
     this.testConnection = mockTestConnection;
     this.getConnectionInfo = mockGetConnectionInfo;
-    this.discoverStoreId = mockDiscoverStoreId;
   }),
 }));
 
@@ -33,10 +31,11 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockDiscoverStoreId.mockResolvedValue({ storeId: "discovered-store-9", attempts: [] });
-  mockTestConnection.mockResolvedValue({ ok: true, message: "Connected to Test Store.", checkedAt: new Date() });
-  mockGetConnectionInfo.mockResolvedValue({ connected: true, storeId: "store-123", accountId: "store-123", connectionType: "private_token", scopes: null });
-  mockPrisma.printfulConnection.upsert.mockResolvedValue({ id: "conn-1", status: "CONNECTED", connectionType: "private_token", printfulStoreId: "store-123" });
+  mockTestConnection.mockResolvedValue({ ok: true, message: "Connected to your Printful store.", checkedAt: new Date() });
+  // Store-level tokens never reveal their own store id (see realProvider's
+  // class doc comment) — null is the real, expected shape here, not a gap.
+  mockGetConnectionInfo.mockResolvedValue({ connected: true, storeId: null, accountId: null, connectionType: "private_token", scopes: null });
+  mockPrisma.printfulConnection.upsert.mockResolvedValue({ id: "conn-1", status: "CONNECTED", connectionType: "private_token", printfulStoreId: null });
   mockPrisma.merchandiseSettings.findUnique.mockResolvedValue({ id: "settings-1" });
 });
 
@@ -45,7 +44,7 @@ describe("connectPrintfulWithPrivateToken", () => {
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "   ", storeId: "store-123", actorUserId: "user-1" })
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "   ", actorUserId: "user-1" })
     ).rejects.toThrow("A Printful API token is required.");
 
     expect(mockTestConnection).not.toHaveBeenCalled();
@@ -60,7 +59,6 @@ describe("connectPrintfulWithPrivateToken", () => {
     await connectPrintfulWithPrivateToken({
       churchId: "church-1",
       privateToken: "real-﻿token​-abc\n",
-      storeId: "store-123",
       actorUserId: "user-1",
     });
 
@@ -72,25 +70,15 @@ describe("connectPrintfulWithPrivateToken", () => {
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-tokén-abc", storeId: "store-123", actorUserId: "user-1" })
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-tokén-abc", actorUserId: "user-1" })
     ).rejects.toThrow("Copy the token again directly from Printful");
 
     expect(mockTestConnection).not.toHaveBeenCalled();
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
   });
 
-  it("discovers the store id from Printful when the merchant leaves it blank", async () => {
-    mockDiscoverStoreId.mockResolvedValue({ storeId: "discovered-store-9", attempts: [] });
-    const { connectPrintfulWithPrivateToken } = await load();
-
-    await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" });
-
-    expect(mockDiscoverStoreId).toHaveBeenCalled();
-    expect(mockPrisma.printfulConnection.upsert).toHaveBeenCalled();
-  });
-
-  it("reports the sent token's length and edges (never the value) when discovery fails", async () => {
-    mockDiscoverStoreId.mockResolvedValue({ storeId: null, attempts: ["/stores: The access token provided is invalid."] });
+  it("reports the sent token's length and edges (never the value) when Printful rejects it", async () => {
+    mockTestConnection.mockResolvedValue({ ok: false, message: "Could not connect to Printful: The access token provided is invalid.", checkedAt: new Date() });
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
@@ -105,7 +93,7 @@ describe("connectPrintfulWithPrivateToken", () => {
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "bad-token", storeId: "store-123", actorUserId: "user-1" })
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "bad-token", actorUserId: "user-1" })
     ).rejects.toThrow("Could not connect to Printful: 401 Unauthorized");
 
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
@@ -113,7 +101,7 @@ describe("connectPrintfulWithPrivateToken", () => {
 
   it("stores the token encrypted (never plaintext) and marks the connection CONNECTED on success", async () => {
     const { connectPrintfulWithPrivateToken } = await load();
-    const connection = await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", storeId: "store-123", actorUserId: "user-1" });
+    const connection = await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" });
 
     expect(mockTestConnection).toHaveBeenCalledTimes(1);
     expect(mockPrisma.printfulConnection.upsert).toHaveBeenCalledWith(
@@ -122,7 +110,7 @@ describe("connectPrintfulWithPrivateToken", () => {
         create: expect.objectContaining({
           connectionType: "private_token",
           status: "CONNECTED",
-          printfulStoreId: "store-123",
+          printfulStoreId: null,
           accessTokenEncrypted: expect.stringContaining("enc(real-token-abc)"),
         }),
       })
