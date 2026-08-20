@@ -100,16 +100,16 @@ export async function connectMockPrintful(params: { churchId: string; actorUserI
 export async function connectPrintfulWithPrivateToken(params: {
   churchId: string;
   privateToken: string;
-  // Required for a store-scoped token generated from Printful's
-  // "authorized store" API-token page (Settings -> Stores -> a store ->
-  // API) — that token type is not implicitly bound to a store the way a
-  // whole-account Personal token is, and Printful rejects every
-  // store-scoped call ("This endpoint requires `store_id`!") without an
-  // explicit X-PF-Store-Id header. This screen offers no "list my stores"
-  // scope to auto-discover it (confirmed against a real account), so the
-  // merchant must supply it directly — it's shown on the same Printful
-  // page the token itself is generated from.
-  storeId: string;
+  // Printful requires an explicit X-PF-Store-Id header on every
+  // store-scoped call ("This endpoint requires `store_id`!") even for a
+  // token generated against a single authorized store — that requirement
+  // is Printful's, not ours, so it cannot be skipped. It can, however, be
+  // discovered rather than demanded: left blank, we ask Printful for it
+  // (see PrintfulProvider.discoverStoreId) and only fall back to asking
+  // the merchant if that fails. Printful's own dashboard does not reliably
+  // surface this number anywhere, so never make it the first thing a
+  // merchant has to go hunting for.
+  storeId?: string | null;
   actorUserId: string;
   actorEmail?: string | null;
   actorRole?: string | null;
@@ -119,9 +119,17 @@ export async function connectPrintfulWithPrivateToken(params: {
   if (!token) {
     throw new PrintfulConnectionError("A Printful API token is required.");
   }
-  const storeId = params.storeId.trim();
+  let storeId = (params.storeId ?? "").trim();
   if (!storeId) {
-    throw new PrintfulConnectionError("A Printful Store ID is required — it's shown on the same page where you generated the API token.");
+    // Ask Printful rather than the merchant — see the storeId param's
+    // comment above for why this is the default path, not a fallback.
+    const discovered = await new PrintfulProvider({ accessToken: token }).discoverStoreId();
+    if (!discovered) {
+      throw new PrintfulConnectionError(
+        "Printful requires a Store ID for this token, and it couldn't be read automatically (the token's scopes don't permit it). Ask Printful support for your numeric Store ID, then enter it below."
+      );
+    }
+    storeId = discovered;
   }
 
   const provider = new PrintfulProvider({ accessToken: token, storeId });

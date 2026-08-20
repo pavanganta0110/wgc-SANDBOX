@@ -91,6 +91,49 @@ export class PrintfulProvider implements PrintProvider {
     return (body && typeof body === "object" && "result" in body ? body : { result: body }) as T;
   }
 
+  /**
+   * Best-effort discovery of the store id this token belongs to, for the
+   * common case where a merchant genuinely cannot find it anywhere in
+   * Printful's UI (confirmed to happen with store-scoped tokens: the
+   * scopes screen shows only "...of the authorized store" permissions and
+   * never surfaces the numeric id).
+   *
+   * Each candidate below is tried in order and any failure is swallowed —
+   * this must never turn a recoverable "please enter your store id" into a
+   * hard connect failure. REQUIRES-LIVE-VERIFICATION: only the /stores
+   * endpoint is confirmed from Printful's published v1 reference; the
+   * others are plausible-but-unconfirmed shapes, included because the cost
+   * of an extra failed request at connect time is trivial next to making
+   * the merchant chase Printful support for a number their own dashboard
+   * won't show them. If none succeed, the caller falls back to asking.
+   */
+  async discoverStoreId(): Promise<string | null> {
+    // 1. GET /stores — the documented way, but needs the stores_list/read
+    //    scope, which the store-scoped token screen does not offer.
+    try {
+      const { result } = await this.request<{ result: any }>("/stores");
+      const first = Array.isArray(result) ? result[0] : null;
+      if (first?.id != null) return String(first.id);
+    } catch {
+      // no stores_list/read scope (or endpoint unavailable) — try next
+    }
+
+    // 2. GET /oauth/scopes — on Printful's OAuth tokens this reports what
+    //    the token is authorized for, which for a store-scoped token
+    //    should identify the store itself. Unconfirmed field naming, so
+    //    several plausible keys are checked rather than assuming one.
+    try {
+      const body = await this.request<any>("/oauth/scopes");
+      const payload = body?.result ?? body;
+      const candidate = payload?.store_id ?? payload?.storeId ?? payload?.store?.id;
+      if (candidate != null) return String(candidate);
+    } catch {
+      // endpoint absent or not permitted — give up on discovery
+    }
+
+    return null;
+  }
+
   // GET /store — REQUIRES-LIVE-VERIFICATION: confirm field names (id vs
   // store_id, name) against a real response.
   async getConnectionInfo(): Promise<ProviderConnectionInfo> {

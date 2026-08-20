@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockTestConnection = vi.fn();
 const mockGetConnectionInfo = vi.fn();
+const mockDiscoverStoreId = vi.fn();
 vi.mock("../realProvider", () => ({
   PrintfulProvider: vi.fn().mockImplementation(function (this: any) {
     this.testConnection = mockTestConnection;
     this.getConnectionInfo = mockGetConnectionInfo;
+    this.discoverStoreId = mockDiscoverStoreId;
   }),
 }));
 
@@ -31,6 +33,7 @@ async function load() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockDiscoverStoreId.mockResolvedValue("discovered-store-9");
   mockTestConnection.mockResolvedValue({ ok: true, message: "Connected to Test Store.", checkedAt: new Date() });
   mockGetConnectionInfo.mockResolvedValue({ connected: true, storeId: "store-123", accountId: "store-123", connectionType: "private_token", scopes: null });
   mockPrisma.printfulConnection.upsert.mockResolvedValue({ id: "conn-1", status: "CONNECTED", connectionType: "private_token", printfulStoreId: "store-123" });
@@ -49,14 +52,24 @@ describe("connectPrintfulWithPrivateToken", () => {
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
   });
 
-  it("rejects a missing store ID without ever calling Printful or storing anything", async () => {
+  it("discovers the store id from Printful when the merchant leaves it blank", async () => {
+    mockDiscoverStoreId.mockResolvedValue("discovered-store-9");
+    const { connectPrintfulWithPrivateToken } = await load();
+
+    await connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" });
+
+    expect(mockDiscoverStoreId).toHaveBeenCalled();
+    expect(mockPrisma.printfulConnection.upsert).toHaveBeenCalled();
+  });
+
+  it("only asks the merchant for a store id when Printful cannot supply one", async () => {
+    mockDiscoverStoreId.mockResolvedValue(null);
     const { connectPrintfulWithPrivateToken } = await load();
 
     await expect(
-      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", storeId: "  ", actorUserId: "user-1" })
-    ).rejects.toThrow("A Printful Store ID is required");
+      connectPrintfulWithPrivateToken({ churchId: "church-1", privateToken: "real-token-abc", actorUserId: "user-1" })
+    ).rejects.toThrow("Ask Printful support for your numeric Store ID");
 
-    expect(mockTestConnection).not.toHaveBeenCalled();
     expect(mockPrisma.printfulConnection.upsert).not.toHaveBeenCalled();
   });
 
