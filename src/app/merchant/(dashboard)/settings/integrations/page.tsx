@@ -37,6 +37,9 @@ export default async function IntegrationsSettingsPage() {
   const printfulStatus = auth
     ? (await prisma.printfulConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
     : "NOT_CONNECTED";
+  const quickBooksStatus = auth
+    ? (await prisma.quickBooksConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
+    : "NOT_CONNECTED";
 
   return (
     <div className="space-y-6">
@@ -83,6 +86,22 @@ export default async function IntegrationsSettingsPage() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <StateBadge state={printfulStatus} />
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+      </Link>
+
+      <Link
+        href="/merchant/settings/integrations/quickbooks"
+        className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:border-slate-300 transition"
+      >
+        <div>
+          <div className="text-sm font-bold text-slate-900">QuickBooks Online</div>
+          <p className="text-xs text-slate-500 mt-0.5 max-w-lg">
+            Connect your own QuickBooks Online company to sync contributions and customers automatically.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <StateBadge state={quickBooksStatus} />
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>
       </Link>

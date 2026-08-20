@@ -1470,15 +1470,15 @@ model BillingTermsVersion {
 /// retroactively to already-computed gracePeriodEndsAt values on existing
 /// WgcSubscription rows.
 model WgcBillingSettings {
-  id                       String   @id @default("singleton")
-  gracePeriodDays          Int      @default(14)
-  pastDueReminderDays      Int[]    @default([1, 3, 7, 12])
-  trialEndingReminderDays  Int[]    @default([14, 3, 1])
-  restrictedFeatureKeys    String[] @default([])
-  supportContactEmail      String?
-  updatedByUserId          String?
-  updatedAt                DateTime @updatedAt
-  createdAt                DateTime @default(now())
+  id                      String   @id @default("singleton")
+  gracePeriodDays         Int      @default(14)
+  pastDueReminderDays     Int[]    @default([1, 3, 7, 12])
+  trialEndingReminderDays Int[]    @default([14, 3, 1])
+  restrictedFeatureKeys   String[] @default([])
+  supportContactEmail     String?
+  updatedByUserId         String?
+  updatedAt               DateTime @updatedAt
+  createdAt               DateTime @default(now())
 }
 
 // =========================================================================
@@ -2342,7 +2342,7 @@ model GivingLink {
   // giving page renders the merchandise section built from this link's
   // GivingPageMerchandise assignments (see prisma/schema.prisma's Printful
   // section further below).
-  merchandiseEnabled     Boolean @default(false)
+  merchandiseEnabled      Boolean @default(false)
   merchandiseSettingsJson Json?
 
   @@index([churchId, ownerUserId])
@@ -3667,16 +3667,16 @@ model PrintfulConnection {
   tokenExpiresAt        DateTime?
   scopesJson            Json?
 
-  connectionType String @default("mock") // oauth | private_token | mock
+  connectionType           String  @default("mock") // oauth | private_token | mock
   // SHA-256 fingerprint of the encryption key active when the token was
   // encrypted — lets us detect key-rotation mismatches the same way
   // AplosConnection does, without ever exposing the key or the secret.
   encryptionKeyFingerprint String?
 
-  lastConnectedAt  DateTime?
-  lastSyncAt       DateTime?
-  lastSyncStatus   String? // SUCCESS | FAILED | PARTIAL
-  lastSyncError    String?
+  lastConnectedAt DateTime?
+  lastSyncAt      DateTime?
+  lastSyncStatus  String? // SUCCESS | FAILED | PARTIAL
+  lastSyncError   String?
 
   connectedByUserId String?
 
@@ -3699,7 +3699,7 @@ model MerchandiseProduct {
   churchId             String
   printfulConnectionId String?
 
-  provider         String @default("PRINTFUL")
+  provider          String @default("PRINTFUL")
   externalProductId String // Printful's (or mock's) product id — unique per church+provider, see index below
 
   name        String
@@ -3716,7 +3716,7 @@ model MerchandiseProduct {
   baseCost    Int?
   retailPrice Int?
 
-  active             Boolean @default(true)
+  active              Boolean @default(true)
   visibleOnGivingPage Boolean @default(false)
 
   syncStatus String @default("SYNCED") // SYNCED | STALE | UNAVAILABLE | ERROR
@@ -3728,8 +3728,8 @@ model MerchandiseProduct {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  connection PrintfulConnection?     @relation(fields: [printfulConnectionId], references: [id])
-  variants   MerchandiseVariant[]
+  connection            PrintfulConnection?     @relation(fields: [printfulConnectionId], references: [id])
+  variants              MerchandiseVariant[]
   givingPageAssignments GivingPageMerchandise[]
 
   @@unique([churchId, provider, externalProductId])
@@ -3752,9 +3752,9 @@ model MerchandiseVariant {
 
   imageUrl String?
 
-  providerCost   Int // cents — Printful's fulfillment cost, never shown to donors
-  merchantPrice  Int // cents — what WGC charges the donor
-  currency       String @default("USD")
+  providerCost  Int // cents — Printful's fulfillment cost, never shown to donors
+  merchantPrice Int // cents — what WGC charges the donor
+  currency      String @default("USD")
 
   available   Boolean @default(true)
   stockStatus String  @default("IN_STOCK") // IN_STOCK | LOW_STOCK | OUT_OF_STOCK | DISCONTINUED
@@ -3817,15 +3817,15 @@ model MerchandiseOrder {
   wgcOrderNumber String @unique // e.g. "WGC-MERCH-XXXXXXXX"
 
   printfulConnectionId String?
-  provider              String  @default("PRINTFUL")
-  externalOrderId       String?
+  provider             String  @default("PRINTFUL")
+  externalOrderId      String?
 
   // DRAFT | PAYMENT_PENDING | PAID | FULFILLMENT_PENDING | SUBMITTED |
   // IN_FULFILLMENT | PARTIALLY_FULFILLED | SHIPPED | DELIVERED | CANCELLED |
   // FAILED | REFUNDED
-  status             String @default("DRAFT")
-  fulfillmentStatus  String @default("UNFULFILLED") // UNFULFILLED | PENDING | IN_PROGRESS | PARTIALLY_FULFILLED | FULFILLED | FAILED | CANCELLED
-  paymentStatus      String @default("PENDING") // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED
+  status            String @default("DRAFT")
+  fulfillmentStatus String @default("UNFULFILLED") // UNFULFILLED | PENDING | IN_PROGRESS | PARTIALLY_FULFILLED | FULFILLED | FAILED | CANCELLED
+  paymentStatus     String @default("PENDING") // PENDING | SUCCEEDED | FAILED | REFUNDED | PARTIALLY_REFUNDED
 
   customerEmail String?
   customerPhone String?
@@ -3838,8 +3838,8 @@ model MerchandiseOrder {
   shippingPostalCode String?
   shippingCountry    String?
 
-  subtotal              Int @default(0) // merchandise subtotal, cents, before shipping/tax
-  shippingAmount        Int @default(0)
+  subtotal               Int @default(0) // merchandise subtotal, cents, before shipping/tax
+  shippingAmount         Int @default(0)
   taxAmount              Int @default(0)
   discountAmount         Int @default(0)
   totalMerchandiseAmount Int @default(0) // subtotal + shippingAmount + taxAmount - discountAmount
@@ -3895,9 +3895,9 @@ model MerchandiseOrder {
 // Snapshotted line item — never relies solely on the live product/variant
 // record, since prices/products can change after the order was placed.
 model MerchandiseOrderItem {
-  id      String @id @default(cuid())
+  id       String @id @default(cuid())
   churchId String
-  orderId String
+  orderId  String
 
   productId String?
   variantId String?
@@ -3908,9 +3908,9 @@ model MerchandiseOrderItem {
   productName String
   variantName String?
 
-  size String?
+  size  String?
   color String?
-  sku  String?
+  sku   String?
 
   quantity Int @default(1)
 
@@ -3943,12 +3943,12 @@ model WgcCheckout {
   donorId      String?
   givingPageId String? // GivingLink.id
 
-  donationAmount       Int @default(0) // cents — the ONLY amount ever counted as a charitable donation
-  merchandiseAmount    Int @default(0) // cents
-  shippingAmount       Int @default(0) // cents
-  taxAmount            Int @default(0) // cents — see note below; no tax engine built here
-  processingFeeAmount  Int @default(0) // cents
-  grandTotal           Int @default(0) // cents = sum of all of the above
+  donationAmount      Int @default(0) // cents — the ONLY amount ever counted as a charitable donation
+  merchandiseAmount   Int @default(0) // cents
+  shippingAmount      Int @default(0) // cents
+  taxAmount           Int @default(0) // cents — see note below; no tax engine built here
+  processingFeeAmount Int @default(0) // cents
+  grandTotal          Int @default(0) // cents = sum of all of the above
 
   currency String @default("USD")
 
@@ -4062,4 +4062,103 @@ model MerchandiseSettings {
   updatedAt DateTime @updatedAt
 
   @@index([churchId])
+}
+
+// =========================================================================
+// QuickBooks Online accounting integration — OAuth2 only (Intuit does not
+// offer a private-token connection mode, unlike Aplos/Printful). Built
+// ahead of real Intuit Developer credentials being available: the OAuth
+// exchange, refresh flow, and API client are all real, driven entirely by
+// env vars (see src/lib/integrations/quickbooks/config.ts) so no code
+// change is needed once QUICKBOOKS_CLIENT_ID/SECRET are supplied — only
+// tested end-to-end (real authorize/callback round trip) once those exist.
+// =========================================================================
+
+/// One QuickBooks connection per church. Structurally closest to
+/// PrintfulConnection (real access+refresh token pair, versioned
+/// AES-256-GCM envelope encryption — see encryption.ts) rather than
+/// AplosConnection (single long-lived private key), since QuickBooks OAuth2
+/// access tokens expire hourly and refresh tokens rotate on every use.
+model QuickBooksConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  provider String @default("QUICKBOOKS")
+  status   String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // Intuit's company/tenant identifier — required on every QBO API call,
+  // returned alongside the authorization code on the OAuth callback.
+  realmId     String?
+  companyName String?
+
+  // Versioned encrypted-envelope JSON strings (see encryption.ts
+  // serializeEnvelope/deserializeEnvelope) — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime? // access token expiry (~1hr for QBO)
+  refreshTokenExpiresAt DateTime? // refresh token expiry (~100 days) — reconnection required once this passes
+  scopesJson            Json?
+
+  connectionType           String  @default("oauth") // oauth — QuickBooks has no other supported mode
+  // SHA-256 fingerprint of the encryption key active when the tokens were
+  // encrypted — detects key-rotation mismatches explicitly at decrypt time
+  // rather than an opaque GCM auth-tag failure, same as Aplos/Printful.
+  encryptionKeyFingerprint String?
+
+  connectedAt          DateTime?
+  lastConnectionTestAt DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String? // SUCCESS | FAILED | PARTIAL
+  lastSyncError        String?
+  lastErrorAt          DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+
+  automaticSyncEnabled Boolean @default(false)
+  syncVersion          Int     @default(1)
+
+  connectedByUserId String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  disconnectedAt DateTime?
+
+  syncRecords QuickBooksSyncRecord[]
+
+  @@index([status])
+  @@index([automaticSyncEnabled])
+}
+
+/// One row per synced entity per push — mirrors AplosSyncRecord's shape.
+/// Not wired to a live sync engine yet (no Intuit credentials to test
+/// against); the model exists so the connection/service layer has
+/// somewhere real to write once sync is built out, rather than a second
+/// schema migration being needed later.
+model QuickBooksSyncRecord {
+  id                     String @id @default(cuid())
+  quickBooksConnectionId String
+  churchId               String
+
+  // CUSTOMER | INVOICE | PAYMENT | ITEM
+  entityType    String
+  // The WGC-side record this sync row represents (Donor.id, Payment.id, etc.)
+  localEntityId String
+
+  quickBooksEntityId String? // Intuit's Id for the created/matched object
+  syncTokenSnapshot  String? // QBO's optimistic-concurrency SyncToken at last write
+
+  // PENDING | SUCCEEDED | FAILED | SKIPPED
+  status       String  @default("PENDING")
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connection QuickBooksConnection @relation(fields: [quickBooksConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([quickBooksConnectionId])
+  @@index([churchId])
+  @@index([entityType, localEntityId])
 }
