@@ -56,6 +56,24 @@ describe("provisionChurchAccount", () => {
     expect(result.emailSent).toBe(true);
   });
 
+  it("grants the org's first-ever user role \"owner\" and sets Church.primaryOwnerUserId — a church with no owner used to deadlock every merchant that hit it: activation and team-role editing both require role owner, and nothing could ever grant it", async () => {
+    mockPrisma.church.create.mockResolvedValue({ id: "church-1", primaryOwnerUserId: null });
+    const { provisionChurchAccount } = await load();
+    await provisionChurchAccount(baseApp());
+
+    expect(mockPrisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ role: "owner" }) }));
+    expect(mockPrisma.church.update).toHaveBeenCalledWith({ where: { id: "church-1" }, data: { primaryOwnerUserId: "user-1" } });
+  });
+
+  it("keeps role \"church_admin\" and never touches Church.primaryOwnerUserId when the church already has an owner", async () => {
+    mockPrisma.church.create.mockResolvedValue({ id: "church-1", primaryOwnerUserId: "existing-owner" });
+    const { provisionChurchAccount } = await load();
+    await provisionChurchAccount(baseApp());
+
+    expect(mockPrisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ role: "church_admin" }) }));
+    expect(mockPrisma.church.update).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ primaryOwnerUserId: expect.anything() }) }));
+  });
+
   it("logs a SENT EmailLog entry of type DASHBOARD_ACCESS on success — previously this send was never logged at all", async () => {
     const { provisionChurchAccount } = await load();
     await provisionChurchAccount(baseApp());

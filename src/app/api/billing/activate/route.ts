@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { hasPermission } from "@/lib/auth/permissions";
 import { resolveBillingActivationToken, consumeBillingActivationToken } from "@/lib/billing/billingActivation";
 import { activateWgcSubscription, WgcSubscriptionError } from "@/lib/billing/wgcSubscriptionService";
 import { sendActivationConfirmationEmail } from "@/lib/billing/billingEmails";
@@ -30,11 +31,14 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  // Only the owner may complete initial billing activation — matches the
-  // spec's "only owner or user with billing-management permission" rule,
-  // and provisionChurchAccount only ever creates one owner account at
-  // approval time, so this is the natural first gate.
-  if (auth.role !== "owner") {
+  // canManageSubscription is a structural (non-overridable) permission that
+  // only the "owner" role grants (see ROLE_PERMISSIONS in roles.ts). Check
+  // the permission rather than the literal role string: orgs provisioned by
+  // provisionChurchAccount.ts don't always end up with an "owner"-role user
+  // (see canManageSubscription's own gate on the subscription page), so a
+  // hardcoded role check here could leave an org with no one able to
+  // activate billing at all.
+  if (!hasPermission(auth, "canManageSubscription")) {
     return NextResponse.json({ error: "Only the organization owner can activate the subscription." }, { status: 403 });
   }
 

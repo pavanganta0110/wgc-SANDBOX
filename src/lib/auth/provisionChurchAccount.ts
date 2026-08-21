@@ -122,20 +122,47 @@ export async function provisionChurchAccount(app: {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    // contactName is a required field on OnboardingApplication (always
+    // captured at signup) but was never copied onto the User row here,
+    // leaving the admin Merchants Directory's "Primary Owner" column
+    // showing "Unnamed owner" for every organization that hadn't had a
+    // WGC support agent manually patch it in later. Only backfills an
+    // existing user's name if it's currently unset — never overwrites a
+    // name the merchant (or a support agent) has since set themselves.
+    // A church with no primaryOwnerUserId yet has no "owner"-role user at
+    // all (this function is the only place a church's first user gets
+    // created), which used to deadlock the org: billing activation and
+    // team-role editing both require role "owner", and nothing could ever
+    // grant it. The first user provisioned for a church becomes its owner;
+    // later invites (existingUser already set up, or a church that already
+    // has an owner) keep the non-owner "church_admin" role as before.
+    const grantsOwner = !church.primaryOwnerUserId;
+
     const user = existingUser
       ? await tx.user.update({
           where: { id: existingUser.id },
-          data: { churchId: church.id, setPasswordTokenHash: tokenHash, setPasswordTokenExpiresAt: expiresAt },
+          data: {
+            churchId: church.id,
+            setPasswordTokenHash: tokenHash,
+            setPasswordTokenExpiresAt: expiresAt,
+            ...(existingUser.name ? {} : { name: app.contactName }),
+            ...(grantsOwner ? { role: "owner" } : {}),
+          },
         })
       : await tx.user.create({
           data: {
             email: app.contactEmail,
-            role: "church_admin",
+            name: app.contactName,
+            role: grantsOwner ? "owner" : "church_admin",
             churchId: church.id,
             setPasswordTokenHash: tokenHash,
             setPasswordTokenExpiresAt: expiresAt,
           },
         });
+
+    if (grantsOwner) {
+      await tx.church.update({ where: { id: church.id }, data: { primaryOwnerUserId: user.id } });
+    }
 
     return { alreadySetUp: false as const, user, rawToken };
   });
