@@ -65,6 +65,8 @@ export default async function GivingLinkPublicPage({ params }: { params: Promise
             googlePayMerchantId={googlePayMerchantId}
             googlePayEnvironment={googlePayEnvironment}
             serverAvailability={serverAvailability}
+            feeCoverEnabled={link.feeCoverEnabled}
+            feeCoverDefaultOn={link.feeCoverDefaultOn}
           />
         ) : (
           <GivingLinkForm

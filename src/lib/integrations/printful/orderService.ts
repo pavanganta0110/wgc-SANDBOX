@@ -118,7 +118,12 @@ export async function getShippingQuote(params: { churchId: string; address: WgcA
     return { options: rates.map((r) => ({ id: r.id, name: r.name, rate: r.rate, minDays: r.minDeliveryDays, maxDays: r.maxDeliveryDays })) };
   } catch (err) {
     if (err instanceof ShippingUnavailableError) throw err;
-    throw new ShippingUnavailableError();
+    // Previously discarded the real Printful error and always threw the
+    // generic default message — the donor (and we, debugging it) never
+    // saw what actually failed. Printful's own error messages are already
+    // safe to show (see PrintfulApiError — built from Printful's own
+    // error.message/result field, never a raw stack trace).
+    throw new ShippingUnavailableError(err instanceof Error ? err.message : undefined);
   }
 }
 

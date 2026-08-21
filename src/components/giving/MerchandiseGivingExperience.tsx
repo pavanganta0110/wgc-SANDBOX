@@ -7,6 +7,7 @@ import { getFraudSessionId } from "@/lib/finix/fraudSession";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
+import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 
 /**
  * Rendered ONLY when GivingLink.merchandiseEnabled is true (see
@@ -70,6 +71,8 @@ export default function MerchandiseGivingExperience({
   googlePayMerchantId = null,
   googlePayEnvironment = "TEST",
   serverAvailability,
+  feeCoverEnabled = false,
+  feeCoverDefaultOn = false,
 }: {
   slug: string;
   finixMerchantId: string;
@@ -79,6 +82,8 @@ export default function MerchandiseGivingExperience({
   googlePayMerchantId?: string | null;
   googlePayEnvironment?: "TEST" | "PRODUCTION";
   serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
+  feeCoverEnabled?: boolean;
+  feeCoverDefaultOn?: boolean;
 }) {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [donationAmount, setDonationAmount] = useState<number | null>(SUGGESTED_AMOUNTS[1]);
@@ -91,6 +96,7 @@ export default function MerchandiseGivingExperience({
   const [shippingOptions, setShippingOptions] = useState<{ id: string; name: string; rate: number; minDays: number | null; maxDays: number | null }[]>([]);
   const [shippingOptionId, setShippingOptionId] = useState<string | null>(null);
   const [shippingLoading, setShippingLoading] = useState(false);
+  const [coverFees, setCoverFees] = useState(feeCoverDefaultOn);
 
   const [submitting, setSubmitting] = useState(false);
   const [walletProcessing, setWalletProcessing] = useState<"apple_pay" | "google_pay" | null>(null);
@@ -128,7 +134,17 @@ export default function MerchandiseGivingExperience({
 
   const cartSubtotal = useMemo(() => cart.reduce((sum, i) => sum + i.price * i.quantity, 0), [cart]);
   const shippingRate = useMemo(() => shippingOptions.find((o) => o.id === shippingOptionId)?.rate ?? 0, [shippingOptions, shippingOptionId]);
-  const grandTotal = donationCents + cartSubtotal + (cart.length > 0 ? shippingRate : 0);
+  const baseTotal = donationCents + cartSubtotal + (cart.length > 0 ? shippingRate : 0);
+
+  // Client-side preview only, mirroring checkoutService.ts's real
+  // server-side calculation exactly (calculateWgcFeeAmounts is a pure
+  // function safe for frontend previews per its own doc comment) — the
+  // server always recomputes this itself before charging, so a stale or
+  // manipulated client value here can never change what's actually
+  // charged, only what's displayed before submission.
+  const donorCoveredFeeResult = calculateWgcFeeAmounts({ donationAmountCents: baseTotal, paymentMethod: "CARD", cardBrand: null, donorCoversFee: true });
+  const feeCoveredCents = donorCoveredFeeResult.supplementalFeeCents;
+  const grandTotal = feeCoverEnabled && coverFees ? baseTotal + feeCoveredCents : baseTotal;
 
   const donorInfoValid = Boolean(donor.name.trim() && donor.email.trim());
 
@@ -206,9 +222,23 @@ export default function MerchandiseGivingExperience({
       });
       const data = await res.json();
       if (res.ok) {
+        setError(null);
         setShippingOptions(data.options || []);
         if (data.options?.length && !shippingOptionId) setShippingOptionId(data.options[0].id);
+        // An empty-but-successful response is itself worth surfacing —
+        // previously this silently showed $0 shipping and let checkout
+        // proceed, undercharging the donor for a real shipping cost.
+        if (!data.options?.length) setError("We couldn't calculate shipping for this address. Please double-check it or try again.");
+      } else {
+        // Previously did nothing at all on failure — shippingOptions stayed
+        // empty with no explanation, and the order summary showed $0.00
+        // shipping as if that were correct instead of unresolved.
+        setShippingOptions([]);
+        setError(data.error || "We couldn't calculate shipping for this address. Please double-check it or try again.");
       }
+    } catch {
+      setShippingOptions([]);
+      setError("We couldn't calculate shipping right now. Please try again.");
     } finally {
       setShippingLoading(false);
     }
@@ -239,6 +269,7 @@ export default function MerchandiseGivingExperience({
           shippingOptionId,
           address: cart.length > 0 ? address : null,
           donor,
+          coverFees: feeCoverEnabled ? coverFees : false,
           ...payload,
         }),
       });
@@ -556,11 +587,26 @@ export default function MerchandiseGivingExperience({
               </div>
             </>
           )}
+          {feeCoverEnabled && coverFees && (
+            <div className="flex justify-between">
+              <span className="text-slate-600">Processing fee</span>
+              <span>${(feeCoveredCents / 100).toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between pt-1 border-t border-slate-200 font-bold text-slate-900">
             <span>Total</span>
             <span>${(grandTotal / 100).toFixed(2)}</span>
           </div>
         </div>
+
+        {feeCoverEnabled && baseTotal > 0 && (
+          <label className="flex items-start gap-2 text-sm text-slate-600 mb-3">
+            <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
+            <span>
+              I&apos;ll cover the ${(feeCoveredCents / 100).toFixed(2)} processing fee so my full ${(baseTotal / 100).toFixed(2)} goes to {churchName}.
+            </span>
+          </label>
+        )}
 
         {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
 
