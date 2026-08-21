@@ -110,3 +110,54 @@ export async function notifyNewMerchandiseOrder(orderId: string) {
 
   await logDashboardAction({ churchId: order.churchId, action: "merchandise_order.seller_notified", entityType: "MerchandiseOrder", entityId: order.id });
 }
+
+/**
+ * Sent to the donor the first time a tracking number appears on their
+ * order — previously nothing notified them at all once an order shipped;
+ * the confirmation email at checkout was the only email an order ever
+ * generated. Called from webhooks.ts only when trackingNumber transitions
+ * from unset to set (see the caller's own comment) so a later webhook
+ * carrying the same tracking number — e.g. a "delivered" status update —
+ * never re-sends this. Includes the shipping amount the donor already
+ * paid at checkout, for their own reference against the carrier's charge.
+ */
+export async function sendShipmentNotification(orderId: string) {
+  const order = await prisma.merchandiseOrder.findUnique({ where: { id: orderId }, include: { items: true } });
+  if (!order) throw new Error("Order not found");
+  if (!order.customerEmail) return { success: false, error: "Order has no customer email on file" };
+  if (!order.trackingNumber) return { success: false, error: "Order has no tracking number yet" };
+
+  const church = await prisma.church.findUnique({ where: { id: order.churchId }, select: { name: true } });
+  const orgName = church?.name || "the organization you supported";
+
+  const result = await sendWgcEmail({
+    to: order.customerEmail,
+    subject: `Your order ${order.wgcOrderNumber} has shipped`,
+    title: "Your order has shipped",
+    badgeText: "Shipped",
+    badgeColor: "#16A34A",
+    bodyHtml: `
+      <p>Good news — your order from <strong>${orgName}</strong> is on its way!</p>
+      <table style="width:100%;text-align:left;border-collapse:collapse;margin-top:16px;font-size:14px;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Order:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${order.wgcOrderNumber}</td></tr>
+        ${order.carrier ? `<tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Carrier:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${order.carrier}</td></tr>` : ""}
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Tracking number:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${order.trackingNumber}</td></tr>
+        <tr><td style="padding:8px 0;"><strong>Shipping paid:</strong></td><td style="padding:8px 0;">${formatCents(order.shippingAmount)}</td></tr>
+      </table>
+      ${order.trackingUrl ? `<p><a href="${order.trackingUrl}">Track your package</a></p>` : ""}
+    `,
+  });
+
+  await prisma.emailLog.create({
+    data: {
+      type: "MERCHANDISE_ORDER_SHIPPED",
+      to: order.customerEmail,
+      subject: `Your order ${order.wgcOrderNumber} has shipped`,
+      status: result.success ? "SENT" : "ERROR",
+      sentAt: result.success ? new Date() : null,
+      error: result.success ? null : String(result.error ?? "unknown error"),
+    },
+  });
+
+  return result;
+}

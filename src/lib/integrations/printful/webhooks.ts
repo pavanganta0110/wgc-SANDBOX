@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { mapProviderOrderStatusToWgc } from "./mapper";
+import { sendShipmentNotification } from "./orderEmails";
 import type { ParsedWebhookEvent } from "./types";
 
 /**
@@ -68,6 +69,8 @@ async function applyWebhookEventToOrder(event: ParsedWebhookEvent) {
     if (event.status === "FULFILLED" || event.status === "IN_FULFILLMENT") data.fulfilledAt = new Date();
   }
 
+  const isFirstTrackingNumber = !order.trackingNumber && Boolean(data.trackingNumber);
+
   await prisma.merchandiseOrder.update({ where: { id: order.id }, data });
 
   await logDashboardAction({
@@ -77,6 +80,16 @@ async function applyWebhookEventToOrder(event: ParsedWebhookEvent) {
     entityId: order.id,
     metadata: { eventType: event.eventType, status: event.status },
   });
+
+  // Fires exactly once per order — checked against the PRE-update row
+  // (order.trackingNumber, read before the update above) so a later
+  // webhook that still carries the same tracking number (e.g. a
+  // "delivered" status update) never re-sends this. Best-effort: an email
+  // failure must never roll back the tracking data that was already
+  // successfully saved above.
+  if (isFirstTrackingNumber) {
+    await sendShipmentNotification(order.id).catch((err) => console.error(`Shipment notification email failed for order ${order.wgcOrderNumber}:`, err?.message));
+  }
 }
 
 /**
