@@ -212,7 +212,7 @@ export default function MerchandiseGivingExperience({
   };
 
   const fetchShippingRates = async () => {
-    if (cart.length === 0 || !address.postalCode || !address.city || !address.state) return;
+    if (cart.length === 0 || !address.addressLine1 || !address.postalCode || !address.city || !address.state) return;
     setShippingLoading(true);
     try {
       const res = await fetch("/api/merchandise/shipping-rates", {
@@ -243,6 +243,23 @@ export default function MerchandiseGivingExperience({
       setShippingLoading(false);
     }
   };
+
+  // Previously this only ran on individual onBlur handlers for city/state/
+  // ZIP — browser/password-manager autofill routinely fills every address
+  // field at once without firing a blur event on each one in sequence (or
+  // fires it before later fields are populated), so the fetch could simply
+  // never run at all. This effect is the reliable trigger: it fires
+  // whenever the address is actually complete, regardless of how it got
+  // that way (typing, autofill, paste), debounced so fast typing doesn't
+  // spam Printful's live rate endpoint on every keystroke.
+  useEffect(() => {
+    if (cart.length === 0 || !address.addressLine1 || !address.city || !address.state || !address.postalCode) return;
+    const timer = setTimeout(() => {
+      fetchShippingRates();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length, address.addressLine1, address.city, address.state, address.postalCode, address.country]);
 
   /** Shared pre-payment validation for all three payment paths (card, Apple
    * Pay, Google Pay) — returns an error string, or null if everything's OK. */
@@ -504,9 +521,9 @@ export default function MerchandiseGivingExperience({
           <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Shipping Address</h4>
           <div className="grid grid-cols-2 gap-2 mb-2">
             <input placeholder="Address Line 1" value={address.addressLine1} onChange={(e) => setAddress((a) => ({ ...a, addressLine1: e.target.value }))} className="col-span-2 px-3 py-2 rounded-lg border border-slate-200 text-sm" />
-            <input placeholder="City" value={address.city} onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))} onBlur={fetchShippingRates} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
-            <input placeholder="State" value={address.state} onChange={(e) => setAddress((a) => ({ ...a, state: e.target.value }))} onBlur={fetchShippingRates} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
-            <input placeholder="ZIP" value={address.postalCode} onChange={(e) => setAddress((a) => ({ ...a, postalCode: e.target.value }))} onBlur={fetchShippingRates} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+            <input placeholder="City" value={address.city} onChange={(e) => setAddress((a) => ({ ...a, city: e.target.value }))} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+            <input placeholder="State" value={address.state} onChange={(e) => setAddress((a) => ({ ...a, state: e.target.value }))} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+            <input placeholder="ZIP" value={address.postalCode} onChange={(e) => setAddress((a) => ({ ...a, postalCode: e.target.value }))} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
             <input placeholder="Country" value={address.country} onChange={(e) => setAddress((a) => ({ ...a, country: e.target.value }))} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
           </div>
 
