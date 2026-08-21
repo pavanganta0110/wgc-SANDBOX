@@ -31,6 +31,11 @@ export async function GET() {
       name: p.name,
       description: p.description,
       thumbnailUrl: p.thumbnailUrl,
+      // Printful doesn't always set a product-level thumbnail_url — the
+      // UI falls back to this (the first variant's own catalog/mockup
+      // image) rather than showing nothing, which is what was happening
+      // before this field was ever exposed here.
+      primaryImageUrl: p.primaryImageUrl,
       currency: p.currency,
       active: p.active,
       visibleOnGivingPage: p.visibleOnGivingPage,
@@ -43,6 +48,7 @@ export async function GET() {
         size: v.size,
         color: v.color,
         sku: v.sku,
+        imageUrl: v.imageUrl,
         providerCost: v.providerCost,
         merchantPrice: v.merchantPrice,
         available: v.available,

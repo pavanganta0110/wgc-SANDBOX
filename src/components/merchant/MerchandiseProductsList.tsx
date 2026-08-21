@@ -11,6 +11,7 @@ interface Variant {
   size: string | null;
   color: string | null;
   sku: string | null;
+  imageUrl: string | null;
   providerCost: number;
   merchantPrice: number;
   available: boolean;
@@ -23,6 +24,7 @@ interface Product {
   name: string;
   description: string | null;
   thumbnailUrl: string | null;
+  primaryImageUrl: string | null;
   active: boolean;
   visibleOnGivingPage: boolean;
   syncStatus: string;
@@ -83,7 +85,11 @@ export default function MerchandiseProductsList() {
       {products.map((p) => (
         <div key={p.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center gap-4 p-5">
-            {p.thumbnailUrl && <img src={p.thumbnailUrl} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0" />}
+            {p.thumbnailUrl || p.primaryImageUrl ? (
+              <img src={p.thumbnailUrl || p.primaryImageUrl || undefined} alt="" className="w-14 h-14 rounded-xl object-cover shrink-0 bg-slate-100" />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-slate-100 shrink-0" />
+            )}
             <div className="flex-grow min-w-0">
               <p className="font-bold text-slate-900">{p.name}</p>
               <p className="text-xs text-slate-500">
@@ -121,8 +127,13 @@ export default function MerchandiseProductsList() {
                   {p.variants.map((v) => (
                     <tr key={v.id} className="border-t border-slate-100">
                       <td className="py-2 pr-4">
-                        {v.name}
-                        {v.size || v.color ? <span className="text-slate-400"> ({[v.size, v.color].filter(Boolean).join(" / ")})</span> : null}
+                        <div className="flex items-center gap-2">
+                          {v.imageUrl && <img src={v.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0 bg-slate-100" />}
+                          <span>
+                            {v.name}
+                            {v.size || v.color ? <span className="text-slate-400"> ({[v.size, v.color].filter(Boolean).join(" / ")})</span> : null}
+                          </span>
+                        </div>
                       </td>
                       <td className="py-2 pr-4 text-slate-500 font-mono text-xs">{v.sku}</td>
                       <td className="py-2 pr-4 text-slate-500">{formatCents(v.providerCost)}</td>

@@ -225,7 +225,29 @@ export class PrintfulProvider implements PrintProvider {
         name: v.name || v.product?.name || "Variant",
         size,
         color,
-        imageUrl: v.files?.find((f: any) => f.type === "preview")?.preview_url || v.product?.image || null,
+        // Confirmed against Printful's real documented response shape
+        // (developers.printful.com "Get a Sync Product"): each files[]
+        // entry is { type, id, url, filename, ... } — the field is `url`,
+        // never `preview_url` (that field name doesn't exist in their
+        // schema; this was a guess that silently produced `undefined` for
+        // every real product, which is why thumbnails never rendered).
+        // "preview" is preferred when present (the mockup image donors
+        // should see), falling back to "default", then whatever the first
+        // file is, then the catalog variant's own image.
+        imageUrl:
+          v.files?.find((f: any) => f.type === "preview")?.url ||
+          v.files?.find((f: any) => f.type === "default")?.url ||
+          v.files?.[0]?.url ||
+          v.product?.image ||
+          null,
+        // REQUIRES-LIVE-VERIFICATION: Printful's documented sync_variant/
+        // product schema has no confirmed "cost to merchant" field at all
+        // (retail_price is the only price field Printful's own docs show
+        // here) — v.product?.price was a guess that resolves to
+        // `undefined` on every real account, hence the $0.00 seen live.
+        // Left as 0 rather than guessing a second wrong field; the real
+        // cost likely requires a separate Printful endpoint (e.g. the
+        // Catalog/Product Templates pricing API) not yet built here.
         providerCost: Math.round(Number(v.product?.price ?? v.cost ?? 0) * 100),
         suggestedRetailPrice: Math.round(Number(v.retail_price ?? v.product?.price ?? 0) * 100),
         currency: v.currency || "USD",
