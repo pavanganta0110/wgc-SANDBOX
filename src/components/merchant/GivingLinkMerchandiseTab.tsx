@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
-import { Loader2, GripVertical, Star } from "lucide-react";
+import { Loader2, GripVertical, Star, ExternalLink } from "lucide-react";
 
 interface AvailableProduct {
   id: string;
@@ -27,7 +27,7 @@ interface Assignment {
  * existing and new link) is completely unaffected by this component
  * existing; nothing here runs until a merchant opens this tab.
  */
-export default function GivingLinkMerchandiseTab({ givingLinkId }: { givingLinkId: string }) {
+export default function GivingLinkMerchandiseTab({ givingLinkId, publicSlug }: { givingLinkId: string; publicSlug: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [merchandiseEnabled, setMerchandiseEnabled] = useState(false);
@@ -94,13 +94,28 @@ export default function GivingLinkMerchandiseTab({ givingLinkId }: { givingLinkI
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
-      <label className="flex items-center gap-3 cursor-pointer">
-        <input type="checkbox" checked={merchandiseEnabled} onChange={(e) => setMerchandiseEnabled(e.target.checked)} className="w-5 h-5 text-blue-600 rounded" />
-        <span className="font-bold text-slate-900">Enable Merchandise on this giving page</span>
-      </label>
-      <p className="text-sm text-slate-500 -mt-4 ml-8">
-        When enabled, donors visiting this giving page can add the products you select below to their order, alongside (or instead of) a donation.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" checked={merchandiseEnabled} onChange={(e) => setMerchandiseEnabled(e.target.checked)} className="w-5 h-5 text-blue-600 rounded" />
+            <span className="font-bold text-slate-900">Enable Merchandise on this giving page</span>
+          </label>
+          <p className="text-sm text-slate-500 mt-1.5 ml-8 max-w-lg">
+            This is the same public link as your donation page — turning this on replaces its checkout with a combined
+            donate-and-shop experience for every visitor. It never creates a second, separate page.
+          </p>
+        </div>
+        {merchandiseEnabled && (
+          <a
+            href={`/g/${publicSlug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+          >
+            <ExternalLink className="w-4 h-4" /> Preview
+          </a>
+        )}
+      </div>
 
       {merchandiseEnabled && (
         <div className="border-t border-slate-100 pt-6">

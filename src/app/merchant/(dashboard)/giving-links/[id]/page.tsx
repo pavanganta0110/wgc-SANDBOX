@@ -94,7 +94,7 @@ export default async function GivingLinkDetailPage({
 
       {tab === "sharing" && <GivingLinkSharingHistoryTable givingLinkId={id} churchId={churchId} />}
 
-      {tab === "merchandise" && <GivingLinkMerchandiseTab givingLinkId={id} />}
+      {tab === "merchandise" && <GivingLinkMerchandiseTab givingLinkId={id} publicSlug={link.publicSlug} />}
     </div>
   );
 }
