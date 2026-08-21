@@ -260,19 +260,24 @@ export class PrintfulProvider implements PrintProvider {
         name: v.name || v.product?.name || "Variant",
         size,
         color,
-        // Confirmed against Printful's real documented response shape
-        // (developers.printful.com "Get a Sync Product"): each files[]
-        // entry is { type, id, url, filename, ... } — the field is `url`,
-        // never `preview_url` (that field name doesn't exist in their
-        // schema; this was a guess that silently produced `undefined` for
-        // every real product, which is why thumbnails never rendered).
-        // "preview" is preferred when present (the mockup image donors
-        // should see), falling back to "default", then whatever the first
-        // file is, then the catalog variant's own image.
+        // Confirmed against a REAL synced variant's actual stored response
+        // (MerchandiseVariant.externalDataJson, this account's own "All-
+        // Over Print" product) — not documentation, which turned out
+        // unreliable here: every files[] entry's `url` field is null;
+        // the real image lives at `preview_url` (and `thumbnail_url`).
+        // A prior version of this code read `.url` based on generic docs
+        // that didn't match this product type, which is why every synced
+        // product fell through to the generic catalog stock photo
+        // (v.product.image) instead of showing this org's actual design.
+        // "preview" type is the customer-facing print-position mockup
+        // (what a donor should see); "default" type's preview_url points
+        // at a print-file technical preview instead, kept only as a
+        // fallback for a product with no "preview" file at all.
         imageUrl:
-          v.files?.find((f: any) => f.type === "preview")?.url ||
-          v.files?.find((f: any) => f.type === "default")?.url ||
-          v.files?.[0]?.url ||
+          v.files?.find((f: any) => f.type === "preview")?.preview_url ||
+          v.files?.find((f: any) => f.type === "preview")?.thumbnail_url ||
+          v.files?.find((f: any) => f.type === "default")?.preview_url ||
+          v.files?.[0]?.preview_url ||
           v.product?.image ||
           null,
         // REQUIRES-LIVE-VERIFICATION: Printful's documented sync_variant/
