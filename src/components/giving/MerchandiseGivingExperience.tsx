@@ -92,7 +92,7 @@ export default function MerchandiseGivingExperience({
   const [pickers, setPickers] = useState<Record<string, string>>({}); // productId -> selected variantId
 
   const [donor, setDonor] = useState({ name: "", email: "", phone: "" });
-  const [address, setAddress] = useState({ addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", country: "USA" });
+  const [address, setAddress] = useState({ addressLine1: "", addressLine2: "", city: "", state: "", postalCode: "", country: "US" });
   const [shippingOptions, setShippingOptions] = useState<{ id: string; name: string; rate: number; minDays: number | null; maxDays: number | null }[]>([]);
   const [shippingOptionId, setShippingOptionId] = useState<string | null>(null);
   const [shippingLoading, setShippingLoading] = useState(false);

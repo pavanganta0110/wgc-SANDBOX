@@ -26,6 +26,40 @@ import type {
 // rather than assuming one.
 const REQUEST_TIMEOUT_MS = 20_000;
 
+/**
+ * Printful's shipping/order APIs expect ISO 3166-1 alpha-2 country codes
+ * (e.g. "US"), matching every carrier API convention (USPS/UPS/FedEx all
+ * use the same 2-letter codes). The giving-page address form's country
+ * field is free text — a donor (or the form's own default value) can
+ * easily produce "USA", "United States", or a lowercase variant, any of
+ * which a strict carrier-rate endpoint will most likely reject or silently
+ * return zero rates for rather than error clearly. Normalized here, at the
+ * one place every address reaches Printful, so it can't be reintroduced by
+ * a future call site forgetting to convert it. Only the handful of
+ * countries donors are realistically shipping within/from are mapped —
+ * anything else passes through unchanged (already-correct 2-letter codes,
+ * or a country this list doesn't recognize, which Printful can reject with
+ * its own real error rather than us guessing further).
+ */
+const COUNTRY_CODE_ALIASES: Record<string, string> = {
+  USA: "US",
+  "UNITED STATES": "US",
+  "UNITED STATES OF AMERICA": "US",
+  CA: "CA",
+  CAN: "CA",
+  CANADA: "CA",
+  UK: "GB",
+  "UNITED KINGDOM": "GB",
+  GBR: "GB",
+};
+
+export function normalizeCountryCode(raw: string | null | undefined): string {
+  const trimmed = (raw || "").trim().toUpperCase();
+  if (!trimmed) return "US"; // giving pages are US-first today; an empty value must never silently produce a malformed request
+  if (trimmed.length === 2) return trimmed;
+  return COUNTRY_CODE_ALIASES[trimmed] || trimmed;
+}
+
 export class PrintfulProvider implements PrintProvider {
   private accessToken: string;
   private apiBaseUrl: string;
@@ -281,7 +315,7 @@ export class PrintfulProvider implements PrintProvider {
           address2: input.address.addressLine2 || undefined,
           city: input.address.city,
           state_code: input.address.state,
-          country_code: input.address.country,
+          country_code: normalizeCountryCode(input.address.country),
           zip: input.address.postalCode,
         },
         items: input.items.map((i) => ({ variant_id: i.externalVariantId, quantity: i.quantity })),
@@ -321,7 +355,7 @@ export class PrintfulProvider implements PrintProvider {
           address2: input.recipient.addressLine2 || undefined,
           city: input.recipient.city,
           state_code: input.recipient.state,
-          country_code: input.recipient.country,
+          country_code: normalizeCountryCode(input.recipient.country),
           zip: input.recipient.postalCode,
           phone: input.recipient.phone || undefined,
           email: input.recipient.email || undefined,
