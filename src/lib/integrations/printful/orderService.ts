@@ -24,6 +24,7 @@ export interface ServerPricedCart {
     variantId: string;
     productId: string;
     externalVariantId: string;
+    catalogVariantId: string | null;
     productName: string;
     variantName: string;
     size: string | null;
@@ -90,6 +91,7 @@ export async function priceCartServerSide(params: { churchId: string; givingPage
       variantId: variant.id,
       productId: variant.productId,
       externalVariantId: variant.externalVariantId,
+      catalogVariantId: variant.catalogVariantId,
       productName: variant.product.name,
       variantName: variant.name,
       size: variant.size,
@@ -113,7 +115,7 @@ export async function getShippingQuote(params: { churchId: string; address: WgcA
   try {
     const rates = await provider.getShippingRates({
       address: params.address,
-      items: params.pricedCart.items.map((i) => ({ externalVariantId: i.externalVariantId, quantity: i.quantity })),
+      items: params.pricedCart.items.map((i) => ({ externalVariantId: i.externalVariantId, catalogVariantId: i.catalogVariantId, quantity: i.quantity })),
     });
     return { options: rates.map((r) => ({ id: r.id, name: r.name, rate: r.rate, minDays: r.minDeliveryDays, maxDays: r.maxDeliveryDays })) };
   } catch (err) {

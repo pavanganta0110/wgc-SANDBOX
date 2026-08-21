@@ -24,6 +24,11 @@ export interface WgcAddress {
 
 export interface WgcVariant {
   externalVariantId: string;
+  // The underlying Printful catalog variant id — distinct from
+  // externalVariantId (this sync product's own store-specific id). Needed
+  // specifically for the shipping-rates endpoint; see MerchandiseVariant's
+  // schema comment for how this was confirmed.
+  catalogVariantId: string | null;
   sku: string | null;
   name: string;
   size: string | null;
@@ -51,7 +56,7 @@ export interface WgcProduct {
 
 export interface ShippingRateRequest {
   address: Pick<WgcAddress, "addressLine1" | "addressLine2" | "city" | "state" | "postalCode" | "country">;
-  items: { externalVariantId: string; quantity: number }[];
+  items: { externalVariantId: string; catalogVariantId: string | null; quantity: number }[];
 }
 
 export interface ShippingRateOption {

@@ -28,6 +28,7 @@ export function mapVariantToUpsertData(variant: WgcProduct["variants"][number], 
   return {
     churchId,
     externalVariantId: variant.externalVariantId,
+    catalogVariantId: variant.catalogVariantId,
     sku: variant.sku,
     name: variant.name,
     size: variant.size,

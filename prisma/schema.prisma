@@ -3744,6 +3744,16 @@ model MerchandiseVariant {
 
   externalVariantId String
 
+  // Printful's own docs distinguish this sync_variant's store-specific
+  // "id" (externalVariantId above — what order-creation's sync_variant_id
+  // field expects) from the underlying Printful CATALOG variant's own id
+  // (this field, from the sync_variant response's own "variant_id" field)
+  // — the shipping-rates endpoint needs this one specifically. Confirmed
+  // by a real error ("Invalid variant ID: <externalVariantId>") when the
+  // sync id was sent there instead — the two are genuinely different ID
+  // spaces, not interchangeable.
+  catalogVariantId String?
+
   sku  String?
   name String // e.g. "Medium / Black"
 

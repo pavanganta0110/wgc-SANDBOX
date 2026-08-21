@@ -255,6 +255,7 @@ export class PrintfulProvider implements PrintProvider {
 
       return {
         externalVariantId: String(v.id),
+        catalogVariantId: v.variant_id != null ? String(v.variant_id) : v.product?.variant_id != null ? String(v.product.variant_id) : null,
         sku: v.sku || null,
         name: v.name || v.product?.name || "Variant",
         size,
@@ -318,7 +319,15 @@ export class PrintfulProvider implements PrintProvider {
           country_code: normalizeCountryCode(input.address.country),
           zip: input.address.postalCode,
         },
-        items: input.items.map((i) => ({ variant_id: i.externalVariantId, quantity: i.quantity })),
+        // variant_id here means Printful's CATALOG variant id, not this
+        // sync product's own store-specific id (externalVariantId) — a
+        // real account confirmed this with "Invalid variant ID: <sync id>"
+        // when the wrong one was sent. Falls back to externalVariantId
+        // only if catalogVariantId genuinely wasn't captured (e.g. a
+        // product synced before this fix existed) rather than omitting
+        // the item outright — Printful's own error is more informative
+        // than an item silently vanishing from the rate calculation.
+        items: input.items.map((i) => ({ variant_id: i.catalogVariantId || i.externalVariantId, quantity: i.quantity })),
       }),
     });
 

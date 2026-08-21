@@ -23,6 +23,7 @@ function variant(params: {
 }): WgcVariant {
   return {
     externalVariantId: params.id,
+    catalogVariantId: params.id, // mock data — no distinct catalog id to model
     sku: `MOCK-${params.id}`,
     name: params.name,
     size: params.size ?? null,
