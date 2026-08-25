@@ -119,7 +119,11 @@ export type PermissionKey =
   | "canUpdateBillingMethod"
   | "canCancelSubscription"
   | "canDownloadBillingReceipts"
-  | "canViewInvoiceBilling";
+  | "canViewInvoiceBilling"
+  // Reporting read access itself piggybacks on canViewDonors (report pages
+  // show nothing canViewDonors already wouldn't) — this one key is only
+  // for creating/renaming/deleting a Saved Report.
+  | "canManageSavedReports";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -172,6 +176,7 @@ const ALL_FALSE: PermissionMatrix = {
   canCancelSubscription: false,
   canDownloadBillingReceipts: false,
   canViewInvoiceBilling: false,
+  canManageSavedReports: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -227,6 +232,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canCancelSubscription: true,
     canDownloadBillingReceipts: true,
     canViewInvoiceBilling: true,
+    canManageSavedReports: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -267,6 +273,7 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewBillingHistory: true,
     canViewInvoiceBilling: true,
     canDownloadBillingReceipts: true,
+    canManageSavedReports: true,
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and

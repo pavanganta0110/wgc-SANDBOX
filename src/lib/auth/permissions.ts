@@ -59,6 +59,7 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canCancelSubscription",
   "canDownloadBillingReceipts",
   "canViewInvoiceBilling",
+  "canManageSavedReports",
 ];
 
 /**
@@ -143,6 +144,7 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canCancelSubscription: false,
       canDownloadBillingReceipts: false,
       canViewInvoiceBilling: false,
+      canManageSavedReports: false,
     };
   }
 

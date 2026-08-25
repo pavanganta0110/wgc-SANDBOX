@@ -2510,6 +2510,39 @@ model AnnualDonationStatementLine {
   @@index([annualStatementId])
 }
 
+/// A merchant-saved Donor Analytics & Reporting configuration (Reporting ->
+/// Saved Reports). Stores only the report DEFINITION (date-range logic,
+/// filters, columns, grouping, sorting, donation-source toggles, gross/net
+/// selection) as JSON, never generated donor/financial results — results
+/// are always regenerated fresh from live data when a saved report is
+/// opened, so a saved report can never go stale or leak data the viewer
+/// isn't currently authorized to see.
+model SavedReport {
+  id              String   @id @default(cuid())
+  churchId        String
+  createdByUserId String
+  name            String
+  // "DONORS" | "GIVING" | "ANNUAL" | "RECURRING" | "LAPSED" | "FUND_CAMPAIGN"
+  // | "YEAR_OVER_YEAR" — see ReportType in lib/reporting/types.ts, the
+  // single source of truth for valid values (validated server-side on
+  // every write, never trusted as an arbitrary string from the client).
+  reportType String
+  // Full ReportDefinition (dateRange, filters, columns, groupBy, sortBy,
+  // sources, amountCalculation) — validated against the same Zod schema
+  // used by the query/export APIs before being persisted.
+  configuration Json
+  // PRIVATE = only createdByUserId can see/use it. ORGANIZATION = any team
+  // member with canViewDonors can see/use it, but only the creator (or an
+  // owner/admin, per canManageSavedReports) can rename/edit/delete it.
+  visibility String @default("PRIVATE")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([churchId])
+  @@index([createdByUserId])
+  @@index([reportType])
+}
+
 model SynchronizationState {
   id               String    @id @default(cuid())
   churchId         String

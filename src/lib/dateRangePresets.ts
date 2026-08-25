@@ -109,11 +109,64 @@ export const RANGE_PRESETS: { key: string; label: string; compute: () => DateRan
     },
   },
   {
+    key: "this_week",
+    label: "This Week",
+    compute: () => {
+      const now = new Date();
+      const from = new Date(now);
+      from.setDate(now.getDate() - now.getDay()); // back to Sunday
+      return { from: startOfDay(from), to: endOfDay(now) };
+    },
+  },
+  {
+    key: "90d",
+    label: "Previous 90 Days",
+    compute: () => {
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 90);
+      return { from: startOfDay(from), to: endOfDay(to) };
+    },
+  },
+  {
+    key: "12m",
+    label: "Previous 12 Months",
+    compute: () => {
+      const to = new Date();
+      const from = new Date();
+      from.setMonth(from.getMonth() - 12);
+      return { from: startOfDay(from), to: endOfDay(to) };
+    },
+  },
+  {
+    key: "last_year",
+    label: "Last Year",
+    compute: () => {
+      const now = new Date();
+      const from = new Date(now.getFullYear() - 1, 0, 1);
+      const to = new Date(now.getFullYear() - 1, 11, 31);
+      return { from: startOfDay(from), to: endOfDay(to) };
+    },
+  },
+  {
     key: "all",
     label: "All Time",
     compute: () => ({ from: null, to: null }),
   },
 ];
+
+/**
+ * Arbitrary calendar-year bounds (America/Chicago) — powers the "select a
+ * year" control on Annual Giving / Year-over-Year reports. Never hardcode
+ * a list of valid years; any integer is accepted, matching how the annual
+ * statement system (yearEndStatements.ts's yearBoundsCentral) already
+ * treats taxYear as an open-ended integer.
+ */
+export function resolveYearRange(year: number): DateRange {
+  const from = new Date(year, 0, 1);
+  const to = new Date(year, 11, 31);
+  return { from: startOfDay(from), to: endOfDay(to) };
+}
 
 export const DEFAULT_RANGE_KEY = "6m";
 

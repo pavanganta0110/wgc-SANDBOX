@@ -20,6 +20,7 @@ import {
   Building2,
   ShieldCheck,
   FileText,
+  BarChart3,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -42,6 +43,19 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { name: "Home", href: "/merchant/dashboard", icon: LayoutDashboard },
   { name: "Insights", href: "/merchant/insights", icon: LineChart },
+  {
+    name: "Reporting",
+    href: "/merchant/reporting",
+    icon: BarChart3,
+    children: [
+      { name: "Overview", href: "/merchant/reporting" },
+      { name: "Donor Report", href: "/merchant/reporting/donors" },
+      { name: "Annual Giving", href: "/merchant/reporting/annual" },
+      { name: "Recurring Giving", href: "/merchant/reporting/recurring" },
+      { name: "Lapsed Donors", href: "/merchant/reporting/lapsed" },
+      { name: "Saved Reports", href: "/merchant/reporting/saved" },
+    ],
+  },
   {
     name: "Transactions",
     href: "/merchant/transactions",

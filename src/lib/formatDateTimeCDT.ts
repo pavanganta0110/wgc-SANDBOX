@@ -26,6 +26,28 @@ export function formatDateCDT(date: Date | string | null | undefined): string {
   });
 }
 
+/**
+ * For calendar-date-only fields with no real intraday meaning — e.g.
+ * WgcSubscription.nextChargeAt, built from Finix's next_billing_date
+ * {year, month, day} object via Date.UTC(year, month - 1, day), always
+ * midnight UTC. Formatting a UTC-midnight timestamp with formatDateCDT
+ * (or any timeZone-converting formatter) shifts it back into the PREVIOUS
+ * calendar day for any US timezone — confirmed: a subscription's next
+ * charge on Aug 24 displayed as "Aug 23" in Central time. Reads the UTC
+ * date components directly instead of converting to a named zone, so the
+ * calendar date shown always matches the calendar date Finix actually
+ * reported, regardless of viewer timezone.
+ */
+export function formatCalendarDateUTC(date: Date | string | null | undefined): string {
+  if (!date) return "—";
+  return new Date(date).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export function formatTimeCDT(date: Date | string | null | undefined): string {
   if (!date) return "";
   return new Date(date).toLocaleTimeString("en-US", {
