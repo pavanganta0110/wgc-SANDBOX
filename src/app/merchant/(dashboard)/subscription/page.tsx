@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import StateBadge from "@/components/merchant/StateBadge";
 import ComingSoon from "@/components/merchant/ComingSoon";
-import { formatDateCDT, formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatDateTimeCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import RefreshPricingButton from "@/components/merchant/RefreshPricingButton";
 import { WGC_PRICING } from "@/lib/giving/feeCalculator";
 import CancelSubscriptionButton from "@/components/billing/CancelSubscriptionButton";
@@ -123,7 +123,7 @@ export default async function SubscriptionPage() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <Row label="Plan" value={plan?.planName || "—"} />
             <Row label="Price" value={`${formatCents(subscription.amountCents)} / ${titleCase(subscription.billingInterval)}`} />
-            <Row label="Next Billing Date" value={formatDate(subscription.nextChargeAt)} />
+            <Row label="Next Billing Date" value={formatCalendarDateUTC(subscription.nextChargeAt)} />
             <Row label="Last Payment" value={formatDate(subscription.lastChargeAt)} />
             {subscription.canceledAt && <Row label="Canceled" value={formatDate(subscription.canceledAt)} />}
             {billingAccount?.billingMethodType && (

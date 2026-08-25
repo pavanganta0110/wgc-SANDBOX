@@ -1,6 +1,7 @@
 import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 
 function formatCurrency(cents: number | null | undefined, currency: string = "USD") {
   if (cents == null) return "-";
@@ -74,7 +75,7 @@ export default async function MerchantRecurringPage({ params }: { params: Promis
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        {s.nextBillingDate ? new Date(s.nextBillingDate).toLocaleDateString() : '-'}
+                        {s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : '-'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         {s.fundName || '-'}

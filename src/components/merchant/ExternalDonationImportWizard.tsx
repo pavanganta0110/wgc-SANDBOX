@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { IMPORT_FIELD_KEYS, IMPORT_FIELD_LABELS, REQUIRED_IMPORT_FIELDS, type ImportFieldKey } from "@/lib/donations/externalDonationImport";
 import { formatCents } from "@/lib/format";
 
@@ -476,7 +477,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
                         : row.input.donorEmail || "—"}
                     </td>
                     <td className="px-3 py-2 text-right">{row.amountCents != null ? formatCents(row.amountCents) : "—"}</td>
-                    <td className="px-3 py-2">{row.donationDateISO ? new Date(row.donationDateISO).toLocaleDateString() : "—"}</td>
+                    <td className="px-3 py-2">{row.donationDateISO ? formatCalendarDateUTC(row.donationDateISO) : "—"}</td>
                     <td className="px-3 py-2 text-xs text-slate-500 max-w-xs">
                       {[...row.errors, ...row.warnings, row.duplicateReason].filter(Boolean).join("; ")}
                     </td>

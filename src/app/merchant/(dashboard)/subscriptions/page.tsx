@@ -6,7 +6,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import SubscriptionDrawer from "@/components/merchant/SubscriptionDrawer";
@@ -208,7 +208,7 @@ export default async function SubscriptionsPage({
                       <td className="px-6 py-3 text-slate-600">{frequencyLabel(s.billingInterval)}</td>
                       <td className="px-6 py-3 text-right text-slate-600">{formatCents(s.monthlyValueCents)}</td>
                       <td className="px-6 py-3"><StateBadge state={s.displayStatus} /></td>
-                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{s.nextBillingDate ? formatDateCDT(s.nextBillingDate) : "—"}</td>
+                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : "—"}</td>
                       <td className="px-6 py-3 text-slate-600">{s.paymentMethod ? `${s.paymentMethod.brand || "Bank"} ••••${s.paymentMethod.last4 || ""}` : "—"}</td>
                       <td className="px-6 py-3 text-right text-slate-600">{s.failedAttempts > 0 ? <span className="text-red-600 font-semibold">{s.failedAttempts}</span> : "0"}</td>
                       <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(s.lifetimeCollectedCents)}</td>

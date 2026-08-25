@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 
 interface OrgBillingRow {
   id: string;
@@ -238,7 +239,7 @@ export default function AdminBillingPage() {
                 <td className="px-4 py-3 text-slate-500">{o.subscription?.status || "None"}</td>
                 <td className="px-4 py-3 text-slate-500">{cents(o.subscription?.amountCents)}</td>
                 <td className="px-4 py-3 text-slate-500">{fmt(o.subscription?.trialEndsAt ?? null)}</td>
-                <td className="px-4 py-3 text-slate-500">{fmt(o.subscription?.nextChargeAt ?? null)}</td>
+                <td className="px-4 py-3 text-slate-500">{formatCalendarDateUTC(o.subscription?.nextChargeAt ?? null)}</td>
                 <td className="px-4 py-3 text-slate-500">{o.promotion ? `${o.promotion.source} (${o.promotion.status})` : "—"}</td>
                 <td className="px-4 py-3 text-slate-500">{o.maskedBillingDetails || "—"}</td>
                 <td className="px-4 py-3 text-right">

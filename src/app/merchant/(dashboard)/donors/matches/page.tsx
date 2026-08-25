@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
@@ -90,7 +91,7 @@ export default async function PossibleDonorMatchesPage({ searchParams }: { searc
                   <p className="font-semibold text-slate-800">{formatPersonName(candidate?.name)}</p>
                   <p className="text-xs text-slate-500">{candidate?.email || "—"} · {candidate?.phone || "—"}</p>
                   {m.donationAmountCents != null && (
-                    <p className="text-xs text-slate-500 mt-1">{formatCents(m.donationAmountCents)} on {m.donationDate ? new Date(m.donationDate).toLocaleDateString() : "—"}</p>
+                    <p className="text-xs text-slate-500 mt-1">{formatCents(m.donationAmountCents)} on {m.donationDate ? formatCalendarDateUTC(m.donationDate) : "—"}</p>
                   )}
                 </div>
               </div>

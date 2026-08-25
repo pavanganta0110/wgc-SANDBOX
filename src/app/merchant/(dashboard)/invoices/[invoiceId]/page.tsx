@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
@@ -85,8 +86,8 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
       <div className="grid grid-cols-2 gap-4 mb-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 text-sm space-y-2">
           <h4 className="text-sm font-bold text-slate-900 mb-2">Details</h4>
-          <div className="flex justify-between"><span className="text-slate-500">Issue date</span><span>{invoice.issueDate.toLocaleDateString()}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Due date</span><span>{invoice.dueDate.toLocaleDateString()}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Issue date</span><span>{formatCalendarDateUTC(invoice.issueDate)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Due date</span><span>{formatCalendarDateUTC(invoice.dueDate)}</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Classification</span><span>{invoice.classification.replace(/_/g, " ")}</span></div>
           <div className="flex justify-between"><span className="text-slate-500">Created by</span><span>{invoice.createdByEmail || "—"}</span></div>
         </div>

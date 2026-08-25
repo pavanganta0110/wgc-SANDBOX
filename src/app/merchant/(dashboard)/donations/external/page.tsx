@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
@@ -151,7 +152,7 @@ export default async function ExternalDonationsPage({
                 <div className="text-sm">
                   <span className="font-semibold text-slate-900">{formatCents(d.donationAmountCents)}</span>{" "}
                   <span className="text-slate-500">
-                    · {EXTERNAL_PAYMENT_METHOD_LABELS[d.paymentMethod as ExternalPaymentMethod]} · {d.donationDate.toLocaleDateString()}
+                    · {EXTERNAL_PAYMENT_METHOD_LABELS[d.paymentMethod as ExternalPaymentMethod]} · {formatCalendarDateUTC(d.donationDate)}
                   </span>
                 </div>
                 <ExternalDonationRowActions
@@ -203,7 +204,7 @@ export default async function ExternalDonationsPage({
                       </div>
                     </td>
                     <td className="px-5 py-3 text-right font-semibold whitespace-nowrap">{formatCents(d.donationAmountCents)}</td>
-                    <td className="px-5 py-3 whitespace-nowrap">{d.donationDate.toLocaleDateString()}</td>
+                    <td className="px-5 py-3 whitespace-nowrap">{formatCalendarDateUTC(d.donationDate)}</td>
                     <td className="px-5 py-3 whitespace-nowrap">{d.paymentMethod === "OTHER" ? d.otherPaymentMethodName : EXTERNAL_PAYMENT_METHOD_LABELS[d.paymentMethod as ExternalPaymentMethod]}</td>
                     <td className="px-5 py-3 text-slate-500">{d.fundName || SOURCE_LABELS[d.source as keyof typeof SOURCE_LABELS] || "—"}</td>
                     <td className="px-5 py-3 whitespace-nowrap">

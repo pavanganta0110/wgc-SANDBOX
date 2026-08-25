@@ -6,7 +6,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import { ViewAllDetailsButton } from "@/components/merchant/PaymentDetailActions";
 import { Section, Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { loadSubscriptionCandidates } from "@/lib/subscriptions/subscriptionAggregates";
 import { prisma } from "@/lib/prisma";
@@ -71,7 +71,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
         <Row label="Annualized Recurring Value" value={formatCents(monthlyValueCents * 12)} />
         <Row label="Active Subscriptions" value={String(active.length)} />
         <Row label="Total Subscriptions" value={String(subscriptions.length)} />
-        <Row label="Next Billing Date" value={nextBillingDate ? formatDateCDT(nextBillingDate) : "—"} />
+        <Row label="Next Billing Date" value={nextBillingDate ? formatCalendarDateUTC(nextBillingDate) : "—"} />
         <Row label="Last Successful Payment" value={lastPayment ? `${formatCents(lastPayment.amountCents)} on ${formatDateCDT(lastPayment.date)}` : "—"} />
         <Row label="Failed Recurring Payments" value={String(failedPayments)} />
         <Row label="Lifetime Recurring Donated" value={formatCents(lifetimeCents)} />
@@ -92,7 +92,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
               <div key={s.id} className="flex items-center justify-between text-sm">
                 <div>
                   <p className="text-slate-700">{frequencyLabel(s.billingInterval)}</p>
-                  <p className="text-xs text-slate-400">Next: {s.nextBillingDate ? formatDateCDT(s.nextBillingDate) : "—"}</p>
+                  <p className="text-xs text-slate-400">Next: {s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : "—"}</p>
                 </div>
                 <p className="font-semibold text-slate-900">{formatCents(s.amountCents)}</p>
               </div>

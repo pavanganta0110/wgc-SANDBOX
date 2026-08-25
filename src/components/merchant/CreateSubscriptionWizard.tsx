@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { CreditCard, Send, ArrowLeft, CheckCircle2 } from "lucide-react";
@@ -202,7 +203,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
               <p>Start Date: {new Date(result.startDate).toLocaleDateString("en-US")}</p>
               <p>Payment Method: •••• {result.paymentMethodLastFour}</p>
               {result.nextBillingDate ? (
-                <p>Next Billing Date: {new Date(result.nextBillingDate).toLocaleDateString("en-US")} (confirmed)</p>
+                <p>Next Billing Date: {formatCalendarDateUTC(result.nextBillingDate)} (confirmed)</p>
               ) : (
                 <p className="text-amber-600">Next billing date pending processor confirmation.</p>
               )}

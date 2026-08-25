@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
@@ -48,7 +49,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
               External / Offline
             </span>
           </div>
-          <span className="text-sm text-slate-500">{donation.donationDate.toLocaleDateString()}</span>
+          <span className="text-sm text-slate-500">{formatCalendarDateUTC(donation.donationDate)}</span>
         </div>
         <p className="text-sm text-slate-500 mt-1">
           {methodLabel} · {SOURCE_LABELS[donation.source as keyof typeof SOURCE_LABELS]}

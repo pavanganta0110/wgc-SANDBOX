@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft, Pencil } from "lucide-react";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
@@ -151,7 +152,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ c
                     <Link href={`/merchant/invoices/${inv.id}`} className="font-semibold text-slate-900 hover:underline">{inv.invoiceNumber}</Link>
                   </td>
                   <td className="px-6 py-3"><StateBadge state={inv.status} /></td>
-                  <td className="px-6 py-3 text-slate-600">{inv.dueDate.toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-slate-600">{formatCalendarDateUTC(inv.dueDate)}</td>
                   <td className="px-6 py-3 text-right">{formatCents(inv.totalCents)}</td>
                   <td className="px-6 py-3 text-right">{formatCents(inv.amountPaidCents)}</td>
                   <td className="px-6 py-3 text-right">{formatCents(inv.balanceCents)}</td>

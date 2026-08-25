@@ -7,7 +7,7 @@ import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import { ViewAllDetailsButton } from "@/components/merchant/PaymentDetailActions";
 import { Section, Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
 import { formatPersonName } from "@/lib/formatPersonName";
-import { formatDateTimeCDT as formatDateTime, formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateTimeCDT as formatDateTime, formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
 import { loadDonorDetail } from "@/lib/donors/donorDetail";
 import { DONOR_DISPLAY_STATUS_LABELS } from "@/lib/donors/donorStatus";
@@ -115,7 +115,7 @@ export default async function DonorDetailPanel({
               <div key={s.id} className="flex items-center justify-between text-sm">
                 <div>
                   <p className="text-slate-700">{titleCase(s.billingInterval)}</p>
-                  <p className="text-xs text-slate-400">Next: {formatDateCDT(s.nextBillingDate)}</p>
+                  <p className="text-xs text-slate-400">Next: {formatCalendarDateUTC(s.nextBillingDate)}</p>
                 </div>
                 <p className="font-semibold text-slate-900">{formatCents(s.amountCents ?? 0)}</p>
               </div>

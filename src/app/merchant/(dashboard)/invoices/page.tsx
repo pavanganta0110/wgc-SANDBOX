@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Plus } from "lucide-react";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
@@ -152,7 +153,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pro
                     </Link>
                   </td>
                   <td className="px-6 py-3 text-slate-700">{invoice.clientDisplayName}</td>
-                  <td className="px-6 py-3 text-slate-600">{invoice.dueDate.toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-slate-600">{formatCalendarDateUTC(invoice.dueDate)}</td>
                   <td className="px-6 py-3 text-right text-slate-900">{formatCents(invoice.totalCents)}</td>
                   <td className="px-6 py-3 text-right text-slate-900">{formatCents(invoice.balanceCents)}</td>
                   <td className="px-6 py-3"><StateBadge state={invoice.status} /></td>

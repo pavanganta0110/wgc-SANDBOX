@@ -6,7 +6,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import { ViewAllDetailsButton } from "@/components/merchant/PaymentDetailActions";
 import { Section, Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { loadSubscriptionCandidates } from "@/lib/subscriptions/subscriptionAggregates";
 import { getSession } from "@/lib/auth/session";
@@ -81,7 +81,7 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
             )
           }
         />
-        <Row label="Next Billing Date" value={s.nextBillingDate ? formatDateCDT(s.nextBillingDate) : "—"} />
+        <Row label="Next Billing Date" value={s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : "—"} />
         <Row label="Lifetime Collected" value={formatCents(s.lifetimeCollectedCents)} />
       </Section>
 

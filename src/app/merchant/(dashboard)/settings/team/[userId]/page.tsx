@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, Download } from "lucide-react";
 import { formatCents } from "@/lib/format";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { canOpenTeamMemberDetail, canExportTeamMemberData } from "@/lib/settings/teamMemberAccess";
@@ -309,7 +309,7 @@ async function RecurringTab({ churchId, userId }: { churchId: string; userId: st
               <td className="px-6 py-3 text-slate-600">{frequencyLabel(s.billingInterval)}</td>
               <td className="px-6 py-3"><StateBadge state={s.displayStatus} /></td>
               <td className="px-6 py-3 text-slate-600">{s.givingLinkName || "—"}</td>
-              <td className="px-6 py-3 text-slate-600">{s.nextBillingDate ? formatDateCDT(s.nextBillingDate) : "—"}</td>
+              <td className="px-6 py-3 text-slate-600">{s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : "—"}</td>
             </tr>
           ))}
         </tbody>

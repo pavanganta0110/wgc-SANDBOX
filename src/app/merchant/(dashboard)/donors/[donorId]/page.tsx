@@ -10,7 +10,7 @@ import DonorAddressCard from "@/components/merchant/DonorAddressCard";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import { Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
-import { formatDateTimeCDT as formatDateTime, formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateTimeCDT as formatDateTime, formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
@@ -562,7 +562,7 @@ async function RecurringTab({ instrumentIds, churchId, scopedUserId }: { instrum
                   <td className="py-2 pr-4 text-right font-semibold text-slate-900">{formatCents(s.amountCents ?? 0)}</td>
                   <td className="py-2 pr-4 text-slate-600">{titleCase(s.billingInterval)}</td>
                   <td className="py-2 pr-4"><StateBadge state={s.state} /></td>
-                  <td className="py-2 pr-4 text-slate-600 whitespace-nowrap">{formatDateCDT(s.nextBillingDate)}</td>
+                  <td className="py-2 pr-4 text-slate-600 whitespace-nowrap">{formatCalendarDateUTC(s.nextBillingDate)}</td>
                   <td className="py-2 text-slate-600 whitespace-nowrap">{formatDateTime(s.updatedAt)}</td>
                 </tr>
               ))}

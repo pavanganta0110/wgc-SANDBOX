@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
@@ -107,7 +108,7 @@ export default async function PossibleDonorMatchDetailPage({ params }: { params:
             <tbody className="divide-y divide-slate-100">
               {candidateExternalDonations.map((d) => (
                 <tr key={d.id}>
-                  <td className="py-1.5">{new Date(d.donationDate).toLocaleDateString()}</td>
+                  <td className="py-1.5">{formatCalendarDateUTC(d.donationDate)}</td>
                   <td className="py-1.5">{formatCents(d.donationAmountCents)}</td>
                   <td className="py-1.5">{d.paymentMethod}</td>
                 </tr>

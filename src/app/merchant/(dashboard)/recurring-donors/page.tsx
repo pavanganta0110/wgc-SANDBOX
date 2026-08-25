@@ -6,7 +6,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
 import RecurringDonorDrawer from "@/components/merchant/RecurringDonorDrawer";
@@ -249,7 +249,7 @@ export default async function RecurringDonorsPage({
                       <td className="px-6 py-3 text-slate-600">
                         {d.frequencies.length === 0 ? "—" : `${frequencyLabel(d.frequencies[0])}${d.frequencies.length > 1 ? ` +${d.frequencies.length - 1} more` : ""}`}
                       </td>
-                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{d.nextBillingDate ? formatDateCDT(d.nextBillingDate) : "—"}</td>
+                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{d.nextBillingDate ? formatCalendarDateUTC(d.nextBillingDate) : "—"}</td>
                       <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
                         {d.lastSuccessfulPayment ? `${formatCents(d.lastSuccessfulPayment.amountCents)} · ${formatDateCDT(d.lastSuccessfulPayment.date)}` : "—"}
                       </td>

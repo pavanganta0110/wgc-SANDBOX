@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/auth/permissions";
 import { formatCents } from "@/lib/format";
-import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import type { MerchantAuthContext } from "@/lib/auth/requireMerchantSession";
 
 /**
@@ -72,7 +72,7 @@ export default async function SubscriptionSummaryCard({ auth }: { auth: Merchant
         <div className="text-sm space-y-1">
           <p>Plan: WGC Platform</p>
           <p>Price: {formatCents(subscription.amountCents)}/month</p>
-          <p>Next payment: {subscription.nextChargeAt ? formatDateCDT(subscription.nextChargeAt) : "—"}</p>
+          <p>Next payment: {subscription.nextChargeAt ? formatCalendarDateUTC(subscription.nextChargeAt) : "—"}</p>
           <p className="text-slate-500">Status: {subscription.status === "ACTIVE" ? "Active" : subscription.status}</p>
         </div>
       )}

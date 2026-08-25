@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import toast from "react-hot-toast";
 import { CheckCircle2 } from "lucide-react";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
@@ -108,7 +109,7 @@ export default function SetupLinkForm({
         <div className="bg-slate-50 rounded-xl p-4 text-sm text-left space-y-1">
           <p>Amount: <strong>{formatCents(data.amountCents)}</strong></p>
           <p>Payment Method: •••• {data.paymentMethodLastFour}</p>
-          {data.nextBillingDate && <p>Next Billing Date: {new Date(data.nextBillingDate).toLocaleDateString("en-US")}</p>}
+          {data.nextBillingDate && <p>Next Billing Date: {formatCalendarDateUTC(data.nextBillingDate)}</p>}
         </div>
       </div>
     );
