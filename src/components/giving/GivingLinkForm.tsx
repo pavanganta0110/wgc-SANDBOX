@@ -165,6 +165,7 @@ export default function GivingLinkForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [companyName, setCompanyName] = useState("");
   // Mailing address — collapsed by default, never required. Values persist
   // across close/reopen (plain component state, not reset on toggle) per
   // spec ("preserve entered address information if the donor closes and
@@ -366,6 +367,7 @@ export default function GivingLinkForm({
             email: email.trim() || walletResult.billingContact.email,
             phone: phone.trim() || undefined,
             note: note.trim() || undefined,
+            companyName: companyName.trim() || undefined,
             isAnonymous,
           },
           mailingAddress: mailingAddressPayload,
@@ -812,6 +814,7 @@ export default function GivingLinkForm({
                 email: email.trim(),
                 phone: phone.trim() || undefined,
                 note: note.trim() || undefined,
+                companyName: companyName.trim() || undefined,
                 isAnonymous,
               },
               mailingAddress: mailingAddressPayload,
@@ -1190,6 +1193,23 @@ export default function GivingLinkForm({
             />
           </div>
         </div>
+        {isFieldVisible("companyName") && (
+          <div className="mb-3">
+            <label htmlFor="donor-company-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              Company/Organization Name {donorFieldSettings.companyName === "REQUIRED" && <span aria-hidden="true">*</span>}
+            </label>
+            <input
+              id="donor-company-name"
+              required={donorFieldSettings.companyName === "REQUIRED"}
+              aria-required={donorFieldSettings.companyName === "REQUIRED"}
+              placeholder="Company/Organization name (optional)"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+        )}
         <div className="mb-3">
           <label htmlFor="donor-email" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
             Email <span aria-hidden="true">*</span>
