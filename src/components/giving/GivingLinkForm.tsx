@@ -1013,7 +1013,7 @@ export default function GivingLinkForm({
               <div className="flex items-center gap-3 rounded-lg border px-2 py-1" style={{ borderColor: light.borderColor }}>
                 <button
                   type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  onClick={() => setQuantity((q) => Math.max(0, q - 1))}
                   className="w-7 h-7 rounded-md text-lg font-bold"
                   style={{ color: light.bodyTextColor }}
                   aria-label="Decrease quantity"
@@ -1035,7 +1035,7 @@ export default function GivingLinkForm({
               </div>
             </div>
             <label className="block text-xs mb-1" style={{ color: light.bodyTextColor }}>
-              Add extra (optional)
+              Additional Donation Amount
             </label>
             <input
               type="number"

@@ -813,7 +813,7 @@ export default function GivingLinkBuilderForm({
                     className={inputClass}
                   />
                   <p className="text-xs text-slate-400 mt-1">
-                    Shown next to the quantity selector on the giving page (e.g. "$75 / Backpack"). Donors can always add extra on top.
+                    Shown next to the quantity selector on the giving page (e.g. "$75 / Backpack"). Donors can set quantity to 0 and give any Additional Donation Amount on its own — e.g. $25 instead of the full $75.
                   </p>
                 </div>
               </>

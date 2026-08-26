@@ -163,13 +163,18 @@ async function handleDonate(req: Request, slug: string) {
       if (link.fixedAmountCents == null) {
         return NextResponse.json({ error: "This giving link is not configured correctly" }, { status: 400 });
       }
+      // Quantity may be 0 — a donor can skip the item entirely and give
+      // only the additional donation amount below (e.g. $25 instead of a
+      // full $75 item). The overall $1.00 minimum is still enforced by the
+      // generic donationAmountCents check above, so 0 quantity + $0 extra
+      // is already rejected there.
       const quantity = Number(body.quantity);
-      if (!Number.isInteger(quantity) || quantity < 1) {
+      if (!Number.isInteger(quantity) || quantity < 0) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Please select a valid quantity", retryable: true }, { status: 400 });
       }
       const extraAmountCents = body.extraAmountCents ? Number(body.extraAmountCents) : 0;
       if (!Number.isInteger(extraAmountCents) || extraAmountCents < 0) {
-        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Invalid extra amount", retryable: true }, { status: 400 });
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Invalid additional donation amount", retryable: true }, { status: 400 });
       }
       const expectedAmountCents = link.fixedAmountCents * quantity + extraAmountCents;
       if (donationAmountCents !== expectedAmountCents) {
