@@ -59,12 +59,13 @@ interface BuilderState {
   internalName: string;
   publicTitle: string;
   description: string;
-  amountType: "FIXED" | "VARIABLE";
+  amountType: "FIXED" | "VARIABLE" | "FIXED_QUANTITY";
   fixedAmount: string;
   minAmount: string;
   maxAmount: string;
   suggestedAmounts: string;
   allowCustomAmount: boolean;
+  quantityItemLabel: string;
   linkType: "ONE_TIME" | "MULTI_USE";
   validityKey: string;
   customExpiresAt: string;
@@ -100,6 +101,7 @@ function defaultState(): BuilderState {
     maxAmount: "",
     suggestedAmounts: "25, 50, 100, 250",
     allowCustomAmount: true,
+    quantityItemLabel: "",
     linkType: "MULTI_USE",
     validityKey: "none",
     customExpiresAt: "",
@@ -414,7 +416,7 @@ export default function GivingLinkBuilderForm({
   const isValid = 
     state.internalName.trim() !== "" && 
     state.publicTitle.trim() !== "" && 
-    (state.amountType !== "FIXED" || (state.fixedAmount !== "" && parseFloat(state.fixedAmount) >= 1)) && 
+    ((state.amountType !== "FIXED" && state.amountType !== "FIXED_QUANTITY") || (state.fixedAmount !== "" && parseFloat(state.fixedAmount) >= 1)) &&
     state.allowedPaymentMethods.length > 0;
 
   const update = <K extends keyof BuilderState>(key: K, value: BuilderState[K]) => {
@@ -463,8 +465,8 @@ export default function GivingLinkBuilderForm({
       toast.error("Internal name and public title are required");
       return;
     }
-    if (state.amountType === "FIXED" && (!state.fixedAmount || parseFloat(state.fixedAmount) < 1)) {
-      toast.error("Fixed amount must be at least $1.00");
+    if ((state.amountType === "FIXED" || state.amountType === "FIXED_QUANTITY") && (!state.fixedAmount || parseFloat(state.fixedAmount) < 1)) {
+      toast.error("Amount must be at least $1.00");
       return;
     }
     if (state.allowedPaymentMethods.length === 0) {
@@ -485,11 +487,12 @@ export default function GivingLinkBuilderForm({
       publicTitle: state.publicTitle.trim(),
       description: state.description.trim() || null,
       amountType: state.amountType,
-      fixedAmountCents: state.amountType === "FIXED" ? Math.round(parseFloat(state.fixedAmount || "0") * 100) : undefined,
+      fixedAmountCents: state.amountType === "FIXED" || state.amountType === "FIXED_QUANTITY" ? Math.round(parseFloat(state.fixedAmount || "0") * 100) : undefined,
       minAmountCents: state.amountType === "VARIABLE" && state.minAmount ? Math.round(parseFloat(state.minAmount) * 100) : null,
       maxAmountCents: state.amountType === "VARIABLE" && state.maxAmount ? Math.round(parseFloat(state.maxAmount) * 100) : null,
       suggestedAmountsCents: amountsToCents(state.suggestedAmounts),
       allowCustomAmount: state.allowCustomAmount,
+      quantityItemLabel: state.amountType === "FIXED_QUANTITY" ? state.quantityItemLabel.trim() || null : null,
       linkType: state.linkType,
       maxSuccessfulUses: state.maxSuccessfulUses ? parseInt(state.maxSuccessfulUses, 10) : null,
       maxCollectedAmountCents: state.maxCollectedAmount ? Math.round(parseFloat(state.maxCollectedAmount) * 100) : null,
@@ -761,6 +764,12 @@ export default function GivingLinkBuilderForm({
                   Fixed Amount
                 </button>
                 <button
+                  onClick={() => update("amountType", "FIXED_QUANTITY")}
+                  className={`flex-1 py-2 rounded-lg text-sm font-semibold ${state.amountType === "FIXED_QUANTITY" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+                >
+                  Fixed + Quantity
+                </button>
+                <button
                   onClick={() => update("amountType", "VARIABLE")}
                   className={`flex-1 py-2 rounded-lg text-sm font-semibold ${state.amountType === "VARIABLE" ? "bg-slate-900 text-white" : "text-slate-600"}`}
                 >
@@ -781,6 +790,33 @@ export default function GivingLinkBuilderForm({
                   className={inputClass}
                 />
               </div>
+            ) : state.amountType === "FIXED_QUANTITY" ? (
+              <>
+                <div>
+                  <FieldLabel>Price Per Item ($) *</FieldLabel>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    value={state.fixedAmount}
+                    onChange={(e) => update("fixedAmount", e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Item Name (optional)</FieldLabel>
+                  <input
+                    type="text"
+                    placeholder="e.g. Backpack"
+                    value={state.quantityItemLabel}
+                    onChange={(e) => update("quantityItemLabel", e.target.value)}
+                    className={inputClass}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Shown next to the quantity selector on the giving page (e.g. "$75 / Backpack"). Donors can always add extra on top.
+                  </p>
+                </div>
+              </>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -1141,6 +1177,7 @@ export default function GivingLinkBuilderForm({
             maxAmountCents={state.maxAmount ? Math.round(parseFloat(state.maxAmount) * 100) : null}
             suggestedAmountsCents={amountsToCents(state.suggestedAmounts)}
             allowCustomAmount={state.allowCustomAmount}
+            quantityItemLabel={state.quantityItemLabel}
             recurringEnabled={state.recurringEnabled}
             allowedFrequencies={state.allowedFrequencies}
             allowedPaymentMethods={state.allowedPaymentMethods}

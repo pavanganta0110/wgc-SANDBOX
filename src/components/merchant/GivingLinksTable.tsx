@@ -137,9 +137,14 @@ export default async function GivingLinksTable({
                       </td>
                     )}
                     <td className="px-6 py-3">
-                      <p className="text-slate-700">{l.amountType === "VARIABLE" ? "Variable Amount" : "Fixed Amount"}</p>
-                      {l.amountType === "FIXED" && l.fixedAmountCents != null && (
-                        <p className="text-xs text-slate-400">{formatCents(l.fixedAmountCents)}</p>
+                      <p className="text-slate-700">
+                        {l.amountType === "VARIABLE" ? "Variable Amount" : l.amountType === "FIXED_QUANTITY" ? "Fixed + Quantity" : "Fixed Amount"}
+                      </p>
+                      {(l.amountType === "FIXED" || l.amountType === "FIXED_QUANTITY") && l.fixedAmountCents != null && (
+                        <p className="text-xs text-slate-400">
+                          {formatCents(l.fixedAmountCents)}
+                          {l.amountType === "FIXED_QUANTITY" ? ` / ${l.quantityItemLabel || "item"}` : ""}
+                        </p>
                       )}
                     </td>
                     <td className="px-6 py-3 text-slate-700">

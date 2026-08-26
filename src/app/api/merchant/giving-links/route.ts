@@ -64,6 +64,7 @@ export async function POST(req: Request) {
     maxAmountCents,
     suggestedAmountsCents,
     allowCustomAmount,
+    quantityItemLabel,
     linkType,
     maxSuccessfulUses,
     maxCollectedAmountCents,
@@ -101,9 +102,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal name and public title are required" }, { status: 400 });
   }
 
-  const resolvedAmountType = amountType === "VARIABLE" ? "VARIABLE" : "FIXED";
-  if (resolvedAmountType === "FIXED" && (!fixedAmountCents || fixedAmountCents < 100)) {
-    return NextResponse.json({ error: "Fixed amount must be at least $1.00" }, { status: 400 });
+  const resolvedAmountType = amountType === "VARIABLE" ? "VARIABLE" : amountType === "FIXED_QUANTITY" ? "FIXED_QUANTITY" : "FIXED";
+  if ((resolvedAmountType === "FIXED" || resolvedAmountType === "FIXED_QUANTITY") && (!fixedAmountCents || fixedAmountCents < 100)) {
+    return NextResponse.json({ error: "Amount must be at least $1.00" }, { status: 400 });
   }
   if (resolvedAmountType === "VARIABLE") {
     if (minAmountCents != null && maxAmountCents != null && minAmountCents > maxAmountCents) {
@@ -174,11 +175,12 @@ export async function POST(req: Request) {
       description: description?.trim() || null,
       status: "ACTIVE",
       amountType: resolvedAmountType,
-      fixedAmountCents: resolvedAmountType === "FIXED" ? fixedAmountCents : null,
+      fixedAmountCents: resolvedAmountType === "FIXED" || resolvedAmountType === "FIXED_QUANTITY" ? fixedAmountCents : null,
       minAmountCents: resolvedAmountType === "VARIABLE" ? minAmountCents ?? null : null,
       maxAmountCents: resolvedAmountType === "VARIABLE" ? maxAmountCents ?? null : null,
       suggestedAmountsJson: Array.isArray(suggestedAmountsCents) ? suggestedAmountsCents : [2500, 5000, 10000, 25000],
       allowCustomAmount: allowCustomAmount ?? true,
+      quantityItemLabel: resolvedAmountType === "FIXED_QUANTITY" ? (quantityItemLabel?.trim() || null) : null,
       linkType: linkType === "ONE_TIME" ? "ONE_TIME" : "MULTI_USE",
       maxSuccessfulUses: maxSuccessfulUses || null,
       maxCollectedAmountCents: maxCollectedAmountCents || null,

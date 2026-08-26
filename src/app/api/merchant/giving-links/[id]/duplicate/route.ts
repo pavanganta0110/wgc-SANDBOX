@@ -40,6 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       maxAmountCents: source.maxAmountCents,
       suggestedAmountsJson: source.suggestedAmountsJson ?? undefined,
       allowCustomAmount: source.allowCustomAmount,
+      quantityItemLabel: source.quantityItemLabel,
       linkType: source.linkType,
       maxSuccessfulUses: source.maxSuccessfulUses,
       maxCollectedAmountCents: source.maxCollectedAmountCents,

@@ -86,12 +86,13 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           finixMerchantId={church.finixMerchantId!}
           churchName={church.name}
           light={light}
-          amountType={link.amountType as "FIXED" | "VARIABLE"}
+          amountType={link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY"}
           fixedAmountCents={link.fixedAmountCents}
           minAmountCents={link.minAmountCents}
           maxAmountCents={link.maxAmountCents}
           suggestedAmountsCents={suggestedAmountsCents}
           allowCustomAmount={link.allowCustomAmount}
+          quantityItemLabel={link.quantityItemLabel}
           recurringEnabled={link.recurringEnabled}
           allowedFrequencies={allowedFrequencies}
           allowedPaymentMethods={allowedPaymentMethods}

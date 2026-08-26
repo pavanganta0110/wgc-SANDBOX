@@ -2276,12 +2276,18 @@ model GivingLink {
   publicTitle               String
   description               String?
   status                    String    @default("ACTIVE") // ACTIVE | INACTIVE | EXPIRED | ARCHIVED
-  amountType                String    @default("FIXED") // FIXED | VARIABLE
-  fixedAmountCents          Int?
+  amountType                String    @default("FIXED") // FIXED | VARIABLE | FIXED_QUANTITY
+  fixedAmountCents          Int?      // also the per-item price when amountType is FIXED_QUANTITY
   minAmountCents            Int?
   maxAmountCents            Int?
   suggestedAmountsJson      Json?
   allowCustomAmount         Boolean   @default(true)
+  // FIXED_QUANTITY only: optional noun shown next to the quantity stepper
+  // on the public giving page (e.g. "Backpack") — purely cosmetic, never
+  // parsed. A donor on a FIXED_QUANTITY link can always add an extra
+  // dollar amount on top of quantity * fixedAmountCents; that's not a
+  // separate toggle, just always-on for this mode.
+  quantityItemLabel         String?
   linkType                  String    @default("MULTI_USE") // ONE_TIME | MULTI_USE
   maxSuccessfulUses         Int?
   maxCollectedAmountCents   Int?

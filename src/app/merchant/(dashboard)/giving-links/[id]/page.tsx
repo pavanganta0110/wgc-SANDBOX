@@ -57,7 +57,7 @@ export default async function GivingLinkDetailPage({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
           <MetricCard label="Public Title" value={link.publicTitle} />
-          <MetricCard label="Amount Type" value={link.amountType === "VARIABLE" ? "Variable" : "Fixed"} />
+          <MetricCard label="Amount Type" value={link.amountType === "VARIABLE" ? "Variable" : link.amountType === "FIXED_QUANTITY" ? "Fixed + Quantity" : "Fixed"} />
           <MetricCard label="Link Type" value={link.linkType === "ONE_TIME" ? "One-Time" : "Multi-Use"} />
           <MetricCard label="Expires" value={link.expiresAt ? new Date(link.expiresAt).toLocaleDateString() : "No expiration"} />
           <MetricCard label="Total Attempts" value={String(link.totalAttempts)} />

@@ -12,6 +12,7 @@ const LINK_TYPES = [
 ];
 const AMOUNT_TYPES = [
   { value: "FIXED", label: "Fixed Amount" },
+  { value: "FIXED_QUANTITY", label: "Fixed + Quantity" },
   { value: "VARIABLE", label: "Variable Amount" },
 ];
 

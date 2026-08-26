@@ -76,6 +76,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         maxAmountCents: link.maxAmountCents,
         suggestedAmountsCents,
         allowCustomAmount: link.allowCustomAmount,
+        quantityItemLabel: link.quantityItemLabel,
       },
       recurring: { enabled: link.recurringEnabled, allowedFrequencies },
       funds: {

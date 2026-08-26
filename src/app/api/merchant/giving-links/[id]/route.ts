@@ -58,6 +58,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     maxAmountCents,
     suggestedAmountsCents,
     allowCustomAmount,
+    quantityItemLabel,
     linkType,
     maxSuccessfulUses,
     maxCollectedAmountCents,
@@ -123,7 +124,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  const resolvedAmountType = amountType === "VARIABLE" || amountType === "FIXED" ? amountType : undefined;
+  const resolvedAmountType = amountType === "VARIABLE" || amountType === "FIXED" || amountType === "FIXED_QUANTITY" ? amountType : undefined;
 
   const resolvedFundSelectionEnabled: boolean | undefined = fundSelectionEnabled !== undefined ? !!fundSelectionEnabled : undefined;
   let validatedFundAssignments: FundAssignmentInput[] | undefined;
@@ -158,6 +159,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(maxAmountCents !== undefined ? { maxAmountCents } : {}),
       ...(suggestedAmountsCents !== undefined ? { suggestedAmountsJson: suggestedAmountsCents } : {}),
       ...(allowCustomAmount !== undefined ? { allowCustomAmount } : {}),
+      ...(quantityItemLabel !== undefined ? { quantityItemLabel: quantityItemLabel?.trim() || null } : {}),
       ...(linkType === "ONE_TIME" || linkType === "MULTI_USE" ? { linkType } : {}),
       ...(maxSuccessfulUses !== undefined ? { maxSuccessfulUses: maxSuccessfulUses || null } : {}),
       ...(maxCollectedAmountCents !== undefined ? { maxCollectedAmountCents: maxCollectedAmountCents || null } : {}),

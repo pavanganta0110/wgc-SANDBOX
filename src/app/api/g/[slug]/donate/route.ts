@@ -155,6 +155,26 @@ async function handleDonate(req: Request, slug: string) {
       if (link.fixedAmountCents != null && donationAmountCents !== link.fixedAmountCents) {
         return NextResponse.json({ error: "This giving link only accepts a fixed donation amount" }, { status: 400 });
       }
+    } else if (link.amountType === "FIXED_QUANTITY") {
+      // Never trust the client's donationAmountCents directly here — it's
+      // recomputed server-side from quantity * per-item price + extra, and
+      // rejected outright on any mismatch (rather than silently overwriting
+      // it), same tamper-resistance the FIXED branch above already has.
+      if (link.fixedAmountCents == null) {
+        return NextResponse.json({ error: "This giving link is not configured correctly" }, { status: 400 });
+      }
+      const quantity = Number(body.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1) {
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Please select a valid quantity", retryable: true }, { status: 400 });
+      }
+      const extraAmountCents = body.extraAmountCents ? Number(body.extraAmountCents) : 0;
+      if (!Number.isInteger(extraAmountCents) || extraAmountCents < 0) {
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Invalid extra amount", retryable: true }, { status: 400 });
+      }
+      const expectedAmountCents = link.fixedAmountCents * quantity + extraAmountCents;
+      if (donationAmountCents !== expectedAmountCents) {
+        return NextResponse.json({ error: "Donation amount does not match the selected quantity" }, { status: 400 });
+      }
     } else {
       if (link.minAmountCents != null && donationAmountCents < link.minAmountCents) {
         return NextResponse.json({ error: "Donation amount is below the minimum for this link" }, { status: 400 });

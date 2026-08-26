@@ -387,12 +387,20 @@
     }
 
     html += '<div class="wgc-inline-field"><label>Amount</label><div class="wgc-inline-amounts" data-role="amounts">';
-    var suggested = cfg.amount.type === "FIXED" && cfg.amount.fixedAmountCents ? [cfg.amount.fixedAmountCents] : cfg.amount.suggestedAmountsCents || [];
+    // FIXED_QUANTITY links (a fixed per-item price with a quantity stepper
+    // on the hosted giving page) degrade to a single fixed amount here at
+    // quantity 1 — this lightweight inline widget doesn't implement the
+    // quantity stepper/extra-amount UI. Never falls through to the
+    // suggested-amounts/custom-amount branch below, which would send a
+    // donationAmountCents the server's FIXED_QUANTITY validation (which
+    // requires a `quantity` field) would reject outright.
+    var isFixedQuantity = cfg.amount.type === "FIXED_QUANTITY";
+    var suggested = (cfg.amount.type === "FIXED" || isFixedQuantity) && cfg.amount.fixedAmountCents ? [cfg.amount.fixedAmountCents] : cfg.amount.suggestedAmountsCents || [];
     for (var a = 0; a < suggested.length; a++) {
       html += '<button type="button" class="wgc-inline-amount-btn" data-amount="' + suggested[a] + '">' + formatCents(suggested[a]) + "</button>";
     }
     html += "</div>";
-    if (cfg.amount.type !== "FIXED" && cfg.amount.allowCustomAmount) {
+    if (cfg.amount.type !== "FIXED" && !isFixedQuantity && cfg.amount.allowCustomAmount) {
       html += '<input class="wgc-inline-input" data-role="custom-amount" type="text" inputmode="decimal" placeholder="Other amount" style="margin-top:8px;" />';
     }
     html += "</div>";
@@ -700,6 +708,15 @@
       clientAttemptId: state.clientAttemptId,
       fundId: state.selectedFundId,
     };
+    // FIXED_QUANTITY links show a quantity stepper + optional extra amount
+    // on the hosted giving page, but this lightweight inline widget doesn't
+    // implement that UI — it always submits at quantity 1, no extra, so the
+    // server's FIXED_QUANTITY validation (which requires `quantity`) still
+    // accepts the charge instead of rejecting it outright.
+    if (cfg.amount.type === "FIXED_QUANTITY") {
+      body.quantity = 1;
+      body.extraAmountCents = 0;
+    }
 
     fetch(WGC_ORIGIN + "/api/g/" + encodeURIComponent(state.slug) + "/donate", {
       method: "POST",

@@ -71,6 +71,7 @@ export default function GivingLinkForm({
   maxAmountCents,
   suggestedAmountsCents,
   allowCustomAmount,
+  quantityItemLabel,
   recurringEnabled,
   allowedFrequencies,
   allowedPaymentMethods,
@@ -94,12 +95,13 @@ export default function GivingLinkForm({
   finixMerchantId: string;
   churchName: string;
   light: BrandingModeSettings;
-  amountType: "FIXED" | "VARIABLE";
+  amountType: "FIXED" | "VARIABLE" | "FIXED_QUANTITY";
   fixedAmountCents: number | null;
   minAmountCents: number | null;
   maxAmountCents: number | null;
   suggestedAmountsCents: number[];
   allowCustomAmount: boolean;
+  quantityItemLabel?: string | null;
   recurringEnabled: boolean;
   allowedFrequencies: FrequencyKey[];
   allowedPaymentMethods: PaymentMethodKey[];
@@ -127,6 +129,8 @@ export default function GivingLinkForm({
 }) {
   const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [extraAmount, setExtraAmount] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<FrequencyKey>(allowedFrequencies[0] ?? "MONTHLY");
   const [coverFees, setCoverFees] = useState(feeCoverDefaultOn);
@@ -291,7 +295,15 @@ export default function GivingLinkForm({
   // uses the card rate regardless of which manual-entry tab (card/bank)
   // happens to be selected — kept separate from the card/bank form's own
   // paymentMethod-driven totalCents/feeCoveredCents declared further below.
-  const effectiveAmountCents = amountType === "FIXED" ? (fixedAmountCents ?? 0) : customAmount ? Math.round(parseFloat(customAmount) * 100) : amountCents;
+  const extraAmountCents = extraAmount ? Math.round(parseFloat(extraAmount) * 100) || 0 : 0;
+  const effectiveAmountCents =
+    amountType === "FIXED"
+      ? (fixedAmountCents ?? 0)
+      : amountType === "FIXED_QUANTITY"
+        ? (fixedAmountCents ?? 0) * quantity + extraAmountCents
+        : customAmount
+          ? Math.round(parseFloat(customAmount) * 100)
+          : amountCents;
   
   const walletFeeResult = calculateWgcFeeAmounts({
     donationAmountCents: effectiveAmountCents || 0,
@@ -326,6 +338,7 @@ export default function GivingLinkForm({
           walletToken: walletResult.walletToken,
           walletBillingContact: walletResult.billingContact,
           donationAmountCents: effectiveAmountCents,
+          ...(amountType === "FIXED_QUANTITY" ? { quantity, extraAmountCents } : {}),
           coverFees: feeCoverEnabled ? coverFees : false,
           isRecurring: false,
           fraudSessionId,
@@ -774,6 +787,7 @@ export default function GivingLinkForm({
             body: JSON.stringify({
               token: response.data.id,
               donationAmountCents: effectiveAmountCents,
+              ...(amountType === "FIXED_QUANTITY" ? { quantity, extraAmountCents } : {}),
               coverFees: feeCoverEnabled ? coverFees : false,
               isRecurring: recurringEnabled ? isRecurring : false,
               billingInterval: isRecurring ? frequency : undefined,
@@ -990,6 +1004,53 @@ export default function GivingLinkForm({
           <p className="text-2xl font-bold" style={{ color: light.headingColor }}>
             {formatCents(fixedAmountCents ?? 0)}
           </p>
+        ) : amountType === "FIXED_QUANTITY" ? (
+          <>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <span className="text-sm" style={{ color: light.bodyTextColor }}>
+                {formatCents(fixedAmountCents ?? 0)} {quantityItemLabel ? `/ ${quantityItemLabel}` : "each"}
+              </span>
+              <div className="flex items-center gap-3 rounded-lg border px-2 py-1" style={{ borderColor: light.borderColor }}>
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className="w-7 h-7 rounded-md text-lg font-bold"
+                  style={{ color: light.bodyTextColor }}
+                  aria-label="Decrease quantity"
+                >
+                  −
+                </button>
+                <span className="w-8 text-center font-semibold" style={{ color: light.headingColor }}>
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className="w-7 h-7 rounded-md text-lg font-bold"
+                  style={{ color: light.bodyTextColor }}
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <label className="block text-xs mb-1" style={{ color: light.bodyTextColor }}>
+              Add extra (optional)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="$0.00"
+              value={extraAmount}
+              onChange={(e) => setExtraAmount(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none mb-2"
+              style={{ borderColor: light.borderColor }}
+            />
+            <p className="text-2xl font-bold" style={{ color: light.headingColor }}>
+              {formatCents(effectiveAmountCents)}
+            </p>
+          </>
         ) : (
           <>
             <div className="grid grid-cols-3 gap-2 mb-2">

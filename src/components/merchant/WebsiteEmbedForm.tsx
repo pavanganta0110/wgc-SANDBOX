@@ -20,12 +20,13 @@ interface EmbedConfig {
   organization: { name: string; logoUrl: string | null };
   givingPage: { title: string; description: string };
   amount: {
-    type: "FIXED" | "VARIABLE";
+    type: "FIXED" | "VARIABLE" | "FIXED_QUANTITY";
     fixedAmountCents: number | null;
     minAmountCents: number | null;
     maxAmountCents: number | null;
     suggestedAmountsCents: number[];
     allowCustomAmount: boolean;
+    quantityItemLabel?: string | null;
   };
   recurring: { enabled: boolean; allowedFrequencies: string[] };
   funds: { selectionEnabled: boolean; options: { id: string; name: string; isDefault: boolean }[] };
@@ -333,6 +334,7 @@ export default function WebsiteEmbedForm({
                     maxAmountCents={config.amount.maxAmountCents}
                     suggestedAmountsCents={config.amount.suggestedAmountsCents}
                     allowCustomAmount={config.amount.allowCustomAmount}
+                    quantityItemLabel={config.amount.quantityItemLabel}
                     recurringEnabled={config.recurring.enabled}
                     allowedFrequencies={config.recurring.allowedFrequencies as never}
                     allowedPaymentMethods={config.paymentMethods as never}

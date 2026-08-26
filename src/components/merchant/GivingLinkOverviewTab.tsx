@@ -55,9 +55,17 @@ export default async function GivingLinkOverviewTab({
           <h3 className="text-sm font-bold text-slate-900 mb-4">Giving Information</h3>
           <Row label="Public Title" value={link.publicTitle} />
           <Row label="Description" value={link.description || "—"} />
-          <Row label="Amount Type" value={link.amountType === "VARIABLE" ? "Variable Amount" : "Fixed Amount"} />
+          <Row
+            label="Amount Type"
+            value={link.amountType === "VARIABLE" ? "Variable Amount" : link.amountType === "FIXED_QUANTITY" ? "Fixed + Quantity" : "Fixed Amount"}
+          />
           {link.amountType === "FIXED" ? (
             <Row label="Amount" value={link.fixedAmountCents != null ? formatCents(link.fixedAmountCents) : "—"} />
+          ) : link.amountType === "FIXED_QUANTITY" ? (
+            <>
+              <Row label="Price Per Item" value={link.fixedAmountCents != null ? formatCents(link.fixedAmountCents) : "—"} />
+              <Row label="Item Name" value={link.quantityItemLabel || "—"} />
+            </>
           ) : (
             <>
               <Row label="Minimum Amount" value={link.minAmountCents != null ? formatCents(link.minAmountCents) : "—"} />
