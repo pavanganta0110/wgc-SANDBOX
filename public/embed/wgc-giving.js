@@ -119,6 +119,12 @@
       ".wgc-inline-amounts{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;}" +
       ".wgc-inline-amount-btn{flex:1 1 30%;padding:10px 6px;font-size:14px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;background:#fff;cursor:pointer;color:#0f172a;}" +
       ".wgc-inline-amount-btn.wgc-selected{border-color:#EAB308;background:#FEF9C3;}" +
+      ".wgc-inline-qty-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}" +
+      ".wgc-inline-qty-price{font-size:13px;color:#475569;}" +
+      ".wgc-inline-qty-stepper{display:flex;align-items:center;gap:10px;border:1px solid #cbd5e1;border-radius:8px;padding:4px 8px;}" +
+      ".wgc-inline-qty-btn{width:26px;height:26px;border:none;background:transparent;font-size:16px;font-weight:700;cursor:pointer;color:#334155;line-height:1;padding:0;}" +
+      ".wgc-inline-qty-value{min-width:20px;text-align:center;font-weight:700;color:#0f172a;font-size:14px;}" +
+      ".wgc-inline-qty-total{font-size:22px;font-weight:700;color:#0f172a;margin-top:8px;}" +
       ".wgc-inline-row2{display:flex;gap:8px;}" +
       ".wgc-inline-row2 .wgc-inline-field{flex:1;}" +
       ".wgc-inline-toggle{display:flex;gap:8px;margin-bottom:12px;}" +
@@ -319,6 +325,8 @@
       fraudSessionId: null,
       selectedAmountCents: 0,
       customAmountCents: null,
+      quantity: 1,
+      additionalAmountCents: 0,
       selectedFundId: null,
       isRecurring: false,
       interval: "MONTHLY",
@@ -386,24 +394,36 @@
       html += "</select></div>";
     }
 
-    html += '<div class="wgc-inline-field"><label>Amount</label><div class="wgc-inline-amounts" data-role="amounts">';
-    // FIXED_QUANTITY links (a fixed per-item price with a quantity stepper
-    // on the hosted giving page) degrade to a single fixed amount here at
-    // quantity 1 — this lightweight inline widget doesn't implement the
-    // quantity stepper/extra-amount UI. Never falls through to the
-    // suggested-amounts/custom-amount branch below, which would send a
-    // donationAmountCents the server's FIXED_QUANTITY validation (which
-    // requires a `quantity` field) would reject outright.
     var isFixedQuantity = cfg.amount.type === "FIXED_QUANTITY";
-    var suggested = (cfg.amount.type === "FIXED" || isFixedQuantity) && cfg.amount.fixedAmountCents ? [cfg.amount.fixedAmountCents] : cfg.amount.suggestedAmountsCents || [];
-    for (var a = 0; a < suggested.length; a++) {
-      html += '<button type="button" class="wgc-inline-amount-btn" data-amount="' + suggested[a] + '">' + formatCents(suggested[a]) + "</button>";
+    if (isFixedQuantity) {
+      // Mirrors the quantity stepper + Additional Donation Amount UI on the
+      // hosted giving page (GivingLinkForm.tsx) — quantity can go to 0 (a
+      // donor can skip the item entirely and give only the additional
+      // amount), state.quantity/additionalAmountCents drive currentAmountCents().
+      var perItemLabel = cfg.amount.quantityItemLabel ? "/ " + escapeHtml(cfg.amount.quantityItemLabel) : "each";
+      html += '<div class="wgc-inline-field"><label>Amount</label>';
+      html += '<div class="wgc-inline-qty-row"><span class="wgc-inline-qty-price">' + formatCents(cfg.amount.fixedAmountCents || 0) + " " + perItemLabel + "</span>";
+      html += '<div class="wgc-inline-qty-stepper">';
+      html += '<button type="button" class="wgc-inline-qty-btn" data-role="qty-decrease" aria-label="Decrease quantity">−</button>';
+      html += '<span class="wgc-inline-qty-value" data-role="qty-value">' + state.quantity + "</span>";
+      html += '<button type="button" class="wgc-inline-qty-btn" data-role="qty-increase" aria-label="Increase quantity">+</button>';
+      html += "</div></div>";
+      html += '<label style="margin-top:10px;">Additional Donation Amount</label>';
+      html += '<input class="wgc-inline-input" data-role="additional-amount" type="text" inputmode="decimal" placeholder="$0.00" />';
+      html += '<div class="wgc-inline-qty-total" data-role="qty-total">' + formatCents(state.quantity * (cfg.amount.fixedAmountCents || 0)) + "</div>";
+      html += "</div>";
+    } else {
+      html += '<div class="wgc-inline-field"><label>Amount</label><div class="wgc-inline-amounts" data-role="amounts">';
+      var suggested = cfg.amount.type === "FIXED" && cfg.amount.fixedAmountCents ? [cfg.amount.fixedAmountCents] : cfg.amount.suggestedAmountsCents || [];
+      for (var a = 0; a < suggested.length; a++) {
+        html += '<button type="button" class="wgc-inline-amount-btn" data-amount="' + suggested[a] + '">' + formatCents(suggested[a]) + "</button>";
+      }
+      html += "</div>";
+      if (cfg.amount.type !== "FIXED" && cfg.amount.allowCustomAmount) {
+        html += '<input class="wgc-inline-input" data-role="custom-amount" type="text" inputmode="decimal" placeholder="Other amount" style="margin-top:8px;" />';
+      }
+      html += "</div>";
     }
-    html += "</div>";
-    if (cfg.amount.type !== "FIXED" && !isFixedQuantity && cfg.amount.allowCustomAmount) {
-      html += '<input class="wgc-inline-input" data-role="custom-amount" type="text" inputmode="decimal" placeholder="Other amount" style="margin-top:8px;" />';
-    }
-    html += "</div>";
 
     if (cfg.recurring.enabled) {
       html += '<div class="wgc-inline-toggle" data-role="frequency-toggle">';
@@ -520,6 +540,39 @@
       });
     }
 
+    // FIXED_QUANTITY: quantity stepper (can go to 0 — a donor can skip the
+    // item entirely and give only the Additional Donation Amount) plus a
+    // live total, mirroring the hosted giving page's same UI.
+    var qtyValueEl = q(state, '[data-role="qty-value"]');
+    var qtyTotalEl = q(state, '[data-role="qty-total"]');
+    var unitPriceCents = (state.config.amount.fixedAmountCents || 0);
+    function updateQtyTotal() {
+      if (qtyValueEl) qtyValueEl.textContent = String(state.quantity);
+      if (qtyTotalEl) qtyTotalEl.textContent = formatCents(unitPriceCents * state.quantity + state.additionalAmountCents);
+    }
+    var qtyDecrease = q(state, '[data-role="qty-decrease"]');
+    if (qtyDecrease) {
+      qtyDecrease.addEventListener("click", function () {
+        state.quantity = Math.max(0, state.quantity - 1);
+        updateQtyTotal();
+      });
+    }
+    var qtyIncrease = q(state, '[data-role="qty-increase"]');
+    if (qtyIncrease) {
+      qtyIncrease.addEventListener("click", function () {
+        state.quantity += 1;
+        updateQtyTotal();
+      });
+    }
+    var additionalAmountInput = q(state, '[data-role="additional-amount"]');
+    if (additionalAmountInput) {
+      additionalAmountInput.addEventListener("input", function () {
+        var dollars = parseFloat(additionalAmountInput.value.replace(/[^0-9.]/g, ""));
+        state.additionalAmountCents = isNaN(dollars) ? 0 : Math.round(dollars * 100);
+        updateQtyTotal();
+      });
+    }
+
     var fundSelect = q(state, '[data-role="fund"]');
     if (fundSelect) {
       fundSelect.addEventListener("change", function () {
@@ -625,6 +678,9 @@
   }
 
   function currentAmountCents(state) {
+    if (state.config.amount.type === "FIXED_QUANTITY") {
+      return (state.config.amount.fixedAmountCents || 0) * state.quantity + state.additionalAmountCents;
+    }
     return state.customAmountCents != null ? state.customAmountCents : state.selectedAmountCents;
   }
 
@@ -708,14 +764,9 @@
       clientAttemptId: state.clientAttemptId,
       fundId: state.selectedFundId,
     };
-    // FIXED_QUANTITY links show a quantity stepper + optional extra amount
-    // on the hosted giving page, but this lightweight inline widget doesn't
-    // implement that UI — it always submits at quantity 1, no extra, so the
-    // server's FIXED_QUANTITY validation (which requires `quantity`) still
-    // accepts the charge instead of rejecting it outright.
     if (cfg.amount.type === "FIXED_QUANTITY") {
-      body.quantity = 1;
-      body.extraAmountCents = 0;
+      body.quantity = state.quantity;
+      body.extraAmountCents = state.additionalAmountCents;
     }
 
     fetch(WGC_ORIGIN + "/api/g/" + encodeURIComponent(state.slug) + "/donate", {
