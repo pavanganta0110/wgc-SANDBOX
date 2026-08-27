@@ -63,14 +63,16 @@ describe("DONOR COVERS FEE — $25.00 donations", () => {
     expect(r.percentageBasisPoints).toBe(300);
   });
 
-  // Test 2: Mastercard, donor covers → 3.00% (same as Visa), no $0.25
-  it("2. $25 Mastercard, donor covers: fee=$0.75, charge=$25.75, supplemental=75, fixed=$0", () => {
+  // Test 2: Mastercard, donor covers → 3.50% (same rate as Amex on this path
+  // only — org-covered Mastercard, test 7 below, is unchanged at 2.30%),
+  // no $0.25. Math.round(2500*350/10000)=88
+  it("2. $25 Mastercard, donor covers: fee=$0.88, charge=$25.88, supplemental=88, fixed=$0", () => {
     const r = calc(2500, true, "CARD", "MASTERCARD");
-    expect(r.expectedFeeCents).toBe(75);
-    expect(r.amountToChargeCents).toBe(2575);
-    expect(r.supplementalFeeCents).toBe(75);
+    expect(r.expectedFeeCents).toBe(88);
+    expect(r.amountToChargeCents).toBe(2588);
+    expect(r.supplementalFeeCents).toBe(88);
     expect(r.fixedFeeCents).toBe(0);
-    expect(r.percentageBasisPoints).toBe(300);
+    expect(r.percentageBasisPoints).toBe(350);
   });
 
   // Test 3: Discover, donor covers → 3.00%, no $0.25

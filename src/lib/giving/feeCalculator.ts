@@ -1,6 +1,7 @@
 export const WGC_PRICING = {
   donorCovered: {
     nonAmexCardBasisPoints: 300,
+    mastercardBasisPoints: 350,
     amexCardBasisPoints: 350,
     achFixedFeeCents: 25,
   },
@@ -12,7 +13,7 @@ export const WGC_PRICING = {
   },
 } as const;
 
-export const FEE_CALCULATION_VERSION = "wgc_fee_matrix_v3";
+export const FEE_CALCULATION_VERSION = "wgc_fee_matrix_v4";
 
 export function normalizeCardBrand(brand: string | null | undefined): string {
   if (!brand) return "UNKNOWN";
@@ -50,6 +51,7 @@ export function calculateWgcFeeAmounts(input: FeeCalculationInput): FeeCalculati
   const isAch = paymentMethod === "ACH";
   const normalizedCardBrand = isAch ? "NONE" : normalizeCardBrand(cardBrand);
   const isAmex = normalizedCardBrand === "AMERICAN_EXPRESS";
+  const isMastercard = normalizedCardBrand === "MASTERCARD";
 
   if (isAch) {
     if (donorCoversFee) {
@@ -77,7 +79,11 @@ export function calculateWgcFeeAmounts(input: FeeCalculationInput): FeeCalculati
 
   // Card
   if (donorCoversFee) {
-    const percentageBasisPoints = isAmex ? WGC_PRICING.donorCovered.amexCardBasisPoints : WGC_PRICING.donorCovered.nonAmexCardBasisPoints;
+    const percentageBasisPoints = isAmex
+      ? WGC_PRICING.donorCovered.amexCardBasisPoints
+      : isMastercard
+        ? WGC_PRICING.donorCovered.mastercardBasisPoints
+        : WGC_PRICING.donorCovered.nonAmexCardBasisPoints;
     const feeCents = Math.round((donationAmountCents * percentageBasisPoints) / 10000);
     return {
       feePaidBy: "DONOR",

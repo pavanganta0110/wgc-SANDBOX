@@ -277,7 +277,15 @@ async function handleDonate(req: Request, slug: string) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Payment method not found on Finix", retryable: true }, { status: 404 });
       }
       identityId = instrument.identity;
-      cardBrand = instrument.card?.brand || null;
+      // Finix's GET/POST /payment_instruments response has `brand` as a flat
+      // top-level field, not nested under a `card` object — confirmed
+      // against a real API response in syncPaymentInstruments.ts, which
+      // reads `instrument.brand` for the exact same resource. Reading
+      // `instrument.card?.brand` here always evaluated to undefined, so
+      // cardBrand was always null at fee-calculation time regardless of the
+      // real card brand — meaning every Amex donor-covered donation was
+      // silently charged the non-Amex rate (3.00% instead of 3.50%).
+      cardBrand = instrument.brand || null;
 
       donorRecord = await resolveOrCreateDonor({
         churchId: church.id,
@@ -393,7 +401,15 @@ async function handleDonate(req: Request, slug: string) {
         return toSafePaymentErrorResponse(new Error("Failed to create payment instrument"), "PAYMENT_FAILED", "Could not process payment instrument. No charge was made.", true, { action: "createPaymentInstrument" });
       }
 
-      cardBrand = instrument.card?.brand || null;
+      // Finix's GET/POST /payment_instruments response has `brand` as a flat
+      // top-level field, not nested under a `card` object — confirmed
+      // against a real API response in syncPaymentInstruments.ts, which
+      // reads `instrument.brand` for the exact same resource. Reading
+      // `instrument.card?.brand` here always evaluated to undefined, so
+      // cardBrand was always null at fee-calculation time regardless of the
+      // real card brand — meaning every Amex donor-covered donation was
+      // silently charged the non-Amex rate (3.00% instead of 3.50%).
+      cardBrand = instrument.brand || null;
 
       donorRecord = await resolveOrCreateDonor({
         churchId: church.id,

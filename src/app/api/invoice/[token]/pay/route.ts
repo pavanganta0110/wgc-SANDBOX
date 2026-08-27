@@ -221,7 +221,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     feeStrategy = resolveWgcTransferFeeStrategy({
       donationAmountCents: amountCents,
       paymentMethod: method === "bank" ? "ACH" : "CARD",
-      cardBrand: instrument.card?.brand,
+      // Finix's payment_instrument response has `brand` as a flat top-level
+      // field, not nested under `card` — see the identical fix in
+      // donate/route.ts. `instrument.card?.brand` always evaluated to
+      // undefined, silently charging every Amex invoice payment (with the
+      // payer covering the fee) at the non-Amex rate.
+      cardBrand: instrument.brand,
       donorCoversFee: effectiveCoverFee,
     });
   } catch (err) {
