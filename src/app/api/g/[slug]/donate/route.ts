@@ -98,8 +98,15 @@ async function handleDonate(req: Request, slug: string) {
     if (isWallet ? !walletToken : (!token && !paymentInstrumentId)) {
       return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Missing payment token", retryable: true }, { status: 400 });
     }
-    if (!fraudSessionId) {
-      return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Missing fraud session", retryable: true }, { status: 400 });
+    // Bank/ACH transfers never carry a fraud_session_id (see the
+    // `paymentMethod !== "bank"` guard on the actual Finix transfer payload
+    // below) — Finix.Auth's callback never fires for bank on the client, so
+    // both GivingLinkForm.tsx and the inline embed widget deliberately send
+    // "" for bank rather than awaiting a callback that will never resolve.
+    // This check must exempt bank the same way, or every ACH donation is
+    // rejected here before ever reaching that correctly-conditioned logic.
+    if (paymentMethod !== "bank" && !fraudSessionId) {
+      return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "We couldn't verify this session. Please refresh the page and try again.", retryable: true }, { status: 400 });
     }
 
     const link = await prisma.givingLink.findUnique({ where: { publicSlug: slug } });
