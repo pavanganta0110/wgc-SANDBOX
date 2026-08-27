@@ -437,6 +437,7 @@ async function handleDonate(req: Request, slug: string) {
         paymentMethod: paymentMethod === "bank" ? "ACH" : "CARD",
         cardBrand,
         donorCoversFee: link.feeCoverEnabled && coverFees,
+        isWallet,
       });
       logEvent("6_FEE_PROFILE_VALIDATION_PASSED", {
         feeProfileCategory: feeStrategy.feePaidBy === "DONOR" ? "ZERO" : "ORGANIZATION_PAID",

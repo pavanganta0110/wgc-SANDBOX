@@ -30,6 +30,16 @@ export type FeeCalculationInput = {
   paymentMethod: "CARD" | "ACH";
   cardBrand?: string | null;
   donorCoversFee: boolean;
+  // Apple Pay / Google Pay: the underlying card's brand can never be known
+  // before the donor authorizes a fixed dollar amount inside Apple/Google's
+  // own native payment sheet — Finix only reports the real brand afterward,
+  // once tokenized. Rather than risk under-collecting on a wallet backed by
+  // an Amex card (silently, with no way to correct it after the fact), the
+  // donor-covered rate for any wallet payment always uses the Amex-
+  // equivalent rate, regardless of the real brand. Org-paid wallet fees are
+  // unaffected — this only changes what a donor who checks "I'll cover the
+  // fee" actually pays.
+  isWallet?: boolean;
 };
 
 export type FeeCalculationResult = {
@@ -47,7 +57,7 @@ export type FeeCalculationResult = {
  * Follows the WGC Pricing Matrix exactly.
  */
 export function calculateWgcFeeAmounts(input: FeeCalculationInput): FeeCalculationResult {
-  const { donationAmountCents, donorCoversFee, paymentMethod, cardBrand } = input;
+  const { donationAmountCents, donorCoversFee, paymentMethod, cardBrand, isWallet } = input;
   const isAch = paymentMethod === "ACH";
   const normalizedCardBrand = isAch ? "NONE" : normalizeCardBrand(cardBrand);
   const isAmex = normalizedCardBrand === "AMERICAN_EXPRESS";
@@ -79,7 +89,7 @@ export function calculateWgcFeeAmounts(input: FeeCalculationInput): FeeCalculati
 
   // Card
   if (donorCoversFee) {
-    const percentageBasisPoints = isAmex
+    const percentageBasisPoints = isWallet || isAmex
       ? WGC_PRICING.donorCovered.amexCardBasisPoints
       : isMastercard
         ? WGC_PRICING.donorCovered.mastercardBasisPoints

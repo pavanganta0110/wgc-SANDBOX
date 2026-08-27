@@ -286,3 +286,52 @@ describe("$100 cross-check", () => {
     expect(r.supplementalFeeCents).toBe(0);
   });
 });
+
+// ─── Apple Pay / Google Pay: donor-covered fee always uses the Amex rate ─────
+// The underlying card's brand is unknowable before the donor authorizes a
+// fixed amount inside Apple/Google's own payment sheet, so a wallet payment
+// can never be undercharged after the fact the way a plain Amex card could
+// be — this deliberately always charges the higher (Amex-equivalent) rate.
+
+describe("WALLET (Apple Pay / Google Pay) — donor covers fee always uses 3.50%", () => {
+  it("$75 wallet, donor covers, no cardBrand known: 3.50%=$2.63, charge=$77.63", () => {
+    const r = calculateWgcFeeAmounts({
+      donationAmountCents: 7500,
+      donorCoversFee: true,
+      paymentMethod: "CARD",
+      cardBrand: null,
+      isWallet: true,
+    });
+    expect(r.percentageBasisPoints).toBe(350);
+    expect(r.expectedFeeCents).toBe(263);
+    expect(r.amountToChargeCents).toBe(7763);
+    expect(r.fixedFeeCents).toBe(0);
+  });
+
+  it("wallet + a known non-Amex brand still uses 3.50% (isWallet takes priority)", () => {
+    const r = calculateWgcFeeAmounts({
+      donationAmountCents: 7500,
+      donorCoversFee: true,
+      paymentMethod: "CARD",
+      cardBrand: "VISA",
+      isWallet: true,
+    });
+    expect(r.percentageBasisPoints).toBe(350);
+  });
+
+  it("wallet org-covers fee is unaffected — stays at the standard non-Amex org rate", () => {
+    const r = calculateWgcFeeAmounts({
+      donationAmountCents: 7500,
+      donorCoversFee: false,
+      paymentMethod: "CARD",
+      cardBrand: null,
+      isWallet: true,
+    });
+    expect(r.percentageBasisPoints).toBe(230);
+  });
+
+  it("non-wallet card payments are unaffected by the isWallet flag being absent", () => {
+    const r = calc(7500, true, "CARD", "VISA");
+    expect(r.percentageBasisPoints).toBe(300);
+  });
+});

@@ -310,6 +310,7 @@ export default function GivingLinkForm({
     paymentMethod: "CARD",
     cardBrand: null,
     donorCoversFee: feeCoverEnabled ? coverFees : false,
+    isWallet: true,
   });
   const walletTotalCents = (feeCoverEnabled && coverFees) ? walletFeeResult.amountToChargeCents : (effectiveAmountCents || 0);
 
