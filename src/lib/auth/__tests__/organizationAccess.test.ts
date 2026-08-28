@@ -13,6 +13,7 @@ function makeAuth(churchId: string): MerchantAuthContext {
     isWgcAdmin: false,
     permissionsJson: null,
     authVersion: 1,
+    authTime: null,
   };
 }
 

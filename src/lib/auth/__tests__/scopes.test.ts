@@ -12,6 +12,7 @@ function makeAuth(overrides: Partial<MerchantAuthContext> = {}): MerchantAuthCon
     isWgcAdmin: false,
     permissionsJson: null,
     authVersion: 1,
+    authTime: null,
     ...overrides,
   };
 }
