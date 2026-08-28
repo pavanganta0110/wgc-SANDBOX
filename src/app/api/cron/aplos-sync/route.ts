@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { isAplosSyncGloballyEnabled } from "@/lib/integrations/aplos/config";
 import { processSettlement, type SyncSettlementOutcome } from "@/lib/integrations/aplos/syncEngine";
 import { getReadyConnectionToken } from "@/lib/integrations/aplos/resourceService";
@@ -31,6 +32,7 @@ export async function GET(req: Request) {
   if (process.env.NODE_ENV === "production") {
     if (!process.env.CRON_SECRET) {
       console.error("CRON_SECRET is not configured in production");
+      alertCronMisconfiguration("aplos-sync");
       return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
     }
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

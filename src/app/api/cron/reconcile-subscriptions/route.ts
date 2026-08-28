@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { reconcileWgcSubscriptions } from "@/lib/billing/subscriptionReconciliation";
+import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 
 /** Same CRON_SECRET auth pattern as /api/cron/reconcile. */
 export async function GET(req: Request) {
@@ -7,6 +8,7 @@ export async function GET(req: Request) {
   if (process.env.NODE_ENV === "production") {
     if (!process.env.CRON_SECRET) {
       console.error("CRON_SECRET is not configured in production");
+      alertCronMisconfiguration("reconcile-subscriptions");
       return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
     }
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {

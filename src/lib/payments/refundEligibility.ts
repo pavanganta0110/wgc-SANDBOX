@@ -3,6 +3,11 @@ import { FinixTransfer, FinixRefundOrReversal, BankReturn } from "@prisma/client
 export interface RefundEligibility {
   eligible: boolean;
   reason?: string;
+  // Remaining refundable balance, present whenever eligible is true — the
+  // caller's own amount validation should bound against this, not the
+  // original transfer.amountCents, or a second partial refund could be
+  // allowed to request up to the full original amount again.
+  remainingCents?: number;
 }
 
 export function checkRefundEligibility(
@@ -47,5 +52,5 @@ export function checkRefundEligibility(
     return { eligible: false, reason: "This payment has already been fully refunded." };
   }
 
-  return { eligible: true };
+  return { eligible: true, remainingCents };
 }

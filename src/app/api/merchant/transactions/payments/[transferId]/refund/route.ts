@@ -57,7 +57,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ transfe
   const body = await req.json().catch(() => ({}));
   const amountCents = typeof body.amountCents === "number" ? Math.round(body.amountCents) : undefined;
 
-  if (amountCents != null && (amountCents <= 0 || amountCents > (transfer.amountCents ?? 0))) {
+  // Bound against the remaining refundable balance (original amount minus
+  // prior SUCCEEDED/PENDING refunds, computed by checkRefundEligibility
+  // above), not the original transfer.amountCents — otherwise a second
+  // partial refund could request up to the full original amount again.
+  if (amountCents != null && (amountCents <= 0 || amountCents > (eligibility.remainingCents ?? 0))) {
     return toSafeErrorResponse("The refund amount cannot exceed the remaining refundable balance.", 400);
   }
 

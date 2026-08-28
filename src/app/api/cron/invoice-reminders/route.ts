@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendDueInvoiceReminders } from "@/lib/invoices/invoiceReminders";
+import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 
 /**
  * Daily cron (see vercel.json) — sends every invoice reminder whose
@@ -11,6 +12,7 @@ export async function GET(req: Request) {
   if (process.env.NODE_ENV === "production") {
     if (!process.env.CRON_SECRET) {
       console.error("CRON_SECRET is not configured in production");
+      alertCronMisconfiguration("invoice-reminders");
       return NextResponse.json({ error: "Configuration Error" }, { status: 500 });
     }
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
