@@ -653,45 +653,39 @@ export async function loadDonorAggregates(
 }
 
 /**
- * Recurring donations (FinixSubscription) carry no donorId directly — donor
- * is resolved through finixPaymentInstrumentId -> FinixPaymentInstrumentSnapshot.donorId,
- * the same join the existing Recurring Donors page uses. ChurchSubscription
- * is a distinct, unrelated model (WGC's own SaaS billing of the organization,
- * not a donor recurring gift) and is intentionally not used here.
+ * FinixSubscription.donorId is queried directly here — it's a denormalized
+ * column (set at subscription-creation time, self-healed by the existing
+ * reconciliation sweep if ever missing) that exists specifically so this
+ * kind of donor lookup doesn't need to bridge through
+ * FinixPaymentInstrumentSnapshot.donorId. Bridging through the instrument
+ * snapshot instead (the previous approach here) silently undercounts any
+ * subscription whose instrument was never synced/snapshotted, even though
+ * the subscription's own donorId is correctly set — this is the direct,
+ * reliable source. ChurchSubscription is a distinct, unrelated model (WGC's
+ * own SaaS billing of the organization, not a donor recurring gift) and is
+ * intentionally not used here.
  */
 async function loadActiveSubscriptionCounts(
   donorIds: string[],
   churchId: string,
   attributedUserId?: string,
 ): Promise<Map<string, number>> {
-  const instruments = await prisma.finixPaymentInstrumentSnapshot.findMany({
-    where: { churchId, donorId: { in: donorIds } },
-    select: { finixPaymentInstrumentId: true, donorId: true },
-  });
-  const instrumentToDonor = new Map(
-    instruments.map((i) => [i.finixPaymentInstrumentId, i.donorId!]),
-  );
-  const instrumentIds = [...instrumentToDonor.keys()];
-  if (instrumentIds.length === 0) return new Map();
+  if (donorIds.length === 0) return new Map();
 
   const subs = await prisma.finixSubscription.findMany({
-    // FinixSubscription carries attributedUserId directly — no bridging needed.
     where: {
       churchId,
-      finixPaymentInstrumentId: { in: instrumentIds },
+      donorId: { in: donorIds },
       state: "ACTIVE",
       ...(attributedUserId ? { attributedUserId } : {}),
     },
-    select: { finixPaymentInstrumentId: true },
+    select: { donorId: true },
   });
 
   const counts = new Map<string, number>();
   for (const s of subs) {
-    const donorId = s.finixPaymentInstrumentId
-      ? instrumentToDonor.get(s.finixPaymentInstrumentId)
-      : undefined;
-    if (!donorId) continue;
-    counts.set(donorId, (counts.get(donorId) ?? 0) + 1);
+    if (!s.donorId) continue;
+    counts.set(s.donorId, (counts.get(s.donorId) ?? 0) + 1);
   }
   return counts;
 }

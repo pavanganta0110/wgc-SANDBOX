@@ -141,10 +141,18 @@ export async function loadDonorExternalDonationsTab(donorId: string, churchId: s
   });
 }
 
-export async function loadDonorRecurringTab(instrumentIds: string[], churchId: string, attributedUserId?: string) {
-  if (instrumentIds.length === 0) return [];
+/**
+ * Queried directly by FinixSubscription.donorId — a denormalized column set
+ * at subscription-creation time and self-healed by the existing
+ * reconciliation sweep if ever missing. Previously this bridged through
+ * finixPaymentInstrumentId -> FinixPaymentInstrumentSnapshot.donorId, which
+ * silently dropped any subscription whose instrument was never
+ * synced/snapshotted even though the subscription's own donorId was
+ * already correctly set.
+ */
+export async function loadDonorRecurringTab(donorId: string, churchId: string, attributedUserId?: string) {
   return prisma.finixSubscription.findMany({
-    where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, ...(attributedUserId ? { attributedUserId } : {}) },
+    where: { churchId, donorId, ...(attributedUserId ? { attributedUserId } : {}) },
     orderBy: { createdAtFinix: "desc" },
   });
 }

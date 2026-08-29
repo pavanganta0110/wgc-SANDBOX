@@ -64,7 +64,7 @@ describe("CP4B: donor detail history scoping — a fundraiser cannot see another
     const { loadDonorRecurringTab } = await import("@/lib/donors/donorTabs");
     vi.mocked(prisma.finixSubscription.findMany).mockResolvedValue([{ id: "sub-1" }] as never);
 
-    await loadDonorRecurringTab(["i1"], "church-a", "fundraiser-a");
+    await loadDonorRecurringTab("donor-1", "church-a", "fundraiser-a");
 
     expect(prisma.finixSubscription.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ attributedUserId: "fundraiser-a" }) })

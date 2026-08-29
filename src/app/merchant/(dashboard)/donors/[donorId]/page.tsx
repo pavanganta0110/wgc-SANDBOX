@@ -241,7 +241,7 @@ export default async function DonorProfilePage({
         <DonationsTab instrumentIds={instrumentIds} churchId={churchId} page={Math.max(1, parseInt(sp.page || "1", 10) || 1)} scopedUserId={scopedUserId} />
       )}
       {tab === "external" && <ExternalDonationsTab donorId={donor.id} churchId={churchId} scopedUserId={scopedUserId} />}
-      {tab === "recurring" && <RecurringTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
+      {tab === "recurring" && <RecurringTab donorId={donorId} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "payment-methods" && <PaymentMethodsTab instruments={instruments} instrumentIds={instrumentIds} churchId={churchId} />}
       {tab === "giving-links" && <GivingLinksTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
       {tab === "refunds" && <RefundsTab instrumentIds={instrumentIds} churchId={churchId} scopedUserId={scopedUserId} />}
@@ -534,8 +534,8 @@ async function ExternalDonationsTab({ donorId, churchId, scopedUserId }: { donor
   );
 }
 
-async function RecurringTab({ instrumentIds, churchId, scopedUserId }: { instrumentIds: string[]; churchId: string; scopedUserId?: string }) {
-  const subs = await loadDonorRecurringTab(instrumentIds, churchId, scopedUserId);
+async function RecurringTab({ donorId, churchId, scopedUserId }: { donorId: string; churchId: string; scopedUserId?: string }) {
+  const subs = await loadDonorRecurringTab(donorId, churchId, scopedUserId);
   return (
     <Card title="Recurring Donations">
       {subs.length === 0 ? (
