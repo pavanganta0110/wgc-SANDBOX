@@ -128,6 +128,14 @@ export async function POST(req: Request) {
       <p><a href="${setupUrl}" style="display:inline-block;padding:12px 24px;background:#0f172a;color:#fff;border-radius:8px;text-decoration:none;">Review and Set Up</a></p>
       <p style="font-size:12px;color:#64748b;">This link expires on ${expiresAt.toLocaleDateString("en-US")} and can only be used once.</p>
     `,
+    log: {
+      churchId,
+      donorId: resolvedDonorId,
+      category: "SUBSCRIPTION_SETUP_LINK",
+      relatedEntityType: "SubscriptionSetupLink",
+      relatedEntityId: link.id,
+      createdByUserId: auth.userId,
+    },
   });
 
   await prisma.subscriptionSetupLink.update({

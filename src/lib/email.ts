@@ -1,4 +1,5 @@
 import { Resend } from 'resend';
+import { prisma } from '@/lib/prisma';
 
 // Lazy — constructing Resend eagerly at module load time throws whenever
 // RESEND_API_KEY is unset/empty (confirmed: this crashes locally today),
@@ -21,6 +22,38 @@ interface WgcEmailOptions {
   badgeColor?: string; // e.g. "#C99A2E" or "#10B981"
   bodyHtml: string;
   attachments?: { filename: string; content: Buffer }[];
+
+  // When present, sendWgcEmail writes an OrgEmailLog row after the send
+  // attempt (success or failure) — this is the ONLY place that decides
+  // whether an email is donor/org-facing (logged) vs internal WGC-admin
+  // (never logged). Every internal sender in this file (sendWgcAdminEmail,
+  // sendWgcAdminOnboardingNotification, sendFirstLookInternalNotification,
+  // etc.) simply never passes this, so no separate filtering logic is
+  // needed anywhere else in the app.
+  log?: {
+    churchId: string;
+    donorId?: string | null;
+    recipientName?: string | null;
+    category:
+      | "DONATION_RECEIPT"
+      | "EXTERNAL_DONATION_RECEIPT"
+      | "RECURRING_CONFIRMATION"
+      | "ANNUAL_STATEMENT"
+      | "INVOICE"
+      | "MERCHANDISE_ORDER"
+      | "SUBSCRIPTION_SETUP_LINK"
+      | "OTHER";
+    relatedEntityType?: string | null;
+    relatedEntityId?: string | null;
+    createdByUserId?: string | null;
+    // True when this specific call is itself a merchant-triggered resend —
+    // lets sendWgcEmail set resendCount on write rather than every caller
+    // reimplementing that. This is an append-only log (each send/resend
+    // creates its own new row), so resendCount here just marks whether
+    // THIS row is a resend, not a running total across resends of the
+    // same logical email.
+    isResend?: boolean;
+  };
 }
 
 const WGC_LOGO_URL = "https://www.wgcpayments.com/wgc-logo.png";
@@ -104,7 +137,9 @@ export function generateWgcEmailHtml(options: WgcEmailOptions) {
 export async function sendWgcEmail(options: WgcEmailOptions) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY is not set. Email not sent.");
-    return { success: false, error: "Missing API Key" };
+    const result: { success: boolean; data?: any; error?: any } = { success: false, error: "Missing API Key" };
+    await writeOrgEmailLog(options, result);
+    return result;
   }
 
   const html = generateWgcEmailHtml(options);
@@ -130,6 +165,7 @@ WGC Payments Team
 support@wgcpayments.com
   `.trim();
 
+  let result: { success: boolean; data?: any; error?: any };
   try {
     const response = await getResendClient().emails.send({
       from: process.env.EMAIL_FROM || "WGC Payments <no-reply@wgcpayments.com>",
@@ -143,14 +179,45 @@ support@wgcpayments.com
 
     if (response.error) {
       console.error("Resend API returned error:", response.error);
-      return { success: false, error: response.error };
+      result = { success: false, error: response.error };
+    } else {
+      console.log("WGC Email sent successfully:", response.data);
+      result = { success: true, data: response.data };
     }
-
-    console.log("WGC Email sent successfully:", response.data);
-    return { success: true, data: response.data };
   } catch (error) {
     console.error("Failed to send WGC email:", error);
-    return { success: false, error };
+    result = { success: false, error };
+  }
+
+  await writeOrgEmailLog(options, result);
+  return result;
+}
+
+async function writeOrgEmailLog(options: WgcEmailOptions, result: { success: boolean; data?: any; error?: any }) {
+  if (!options.log) return;
+  try {
+    const { churchId, donorId, recipientName, category, relatedEntityType, relatedEntityId, createdByUserId, isResend } = options.log;
+    await prisma.orgEmailLog.create({
+      data: {
+        churchId,
+        donorId: donorId ?? null,
+        recipientEmail: options.to,
+        recipientName: recipientName ?? null,
+        category,
+        relatedEntityType: relatedEntityType ?? null,
+        relatedEntityId: relatedEntityId ?? null,
+        subject: options.subject,
+        status: result.success ? "SENT" : "FAILED",
+        providerMessageId: result.success ? (result.data?.id ?? null) : null,
+        failureReason: result.success ? null : String(result.error?.message ?? result.error ?? "Email send failed"),
+        resendCount: isResend ? 1 : 0,
+        sentAt: result.success ? new Date() : null,
+        createdByUserId: createdByUserId ?? null,
+      },
+    });
+  } catch (err) {
+    // Logging must never break the actual send/return path.
+    console.error("Failed to write OrgEmailLog:", err);
   }
 }
 

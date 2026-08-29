@@ -248,6 +248,15 @@ export async function sendYearEndStatementEmail(statementId: string, churchId: s
       <p style="font-size: 12px; color: #94a3b8;">This statement is provided for record-keeping purposes and does not constitute tax advice.</p>
     `,
     attachments: [{ filename: `${statement.taxYear}-donation-statement.pdf`, content: pdf }],
+    log: {
+      churchId,
+      donorId: statement.donorId,
+      recipientName: donorName,
+      category: "ANNUAL_STATEMENT",
+      relatedEntityType: "AnnualDonationStatement",
+      relatedEntityId: statementId,
+      isResend: Boolean(statement.sentAt),
+    },
   });
 
   const resendCount = statement.sentAt ? statement.resendCount + 1 : statement.resendCount;

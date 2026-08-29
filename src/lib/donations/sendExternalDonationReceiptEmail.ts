@@ -141,6 +141,16 @@ export async function sendExternalDonationReceiptEmail(
     previewText: `Receipt for your ${formatCents(donation.donationAmountCents)} gift`,
     bodyHtml: lines.join("\n"),
     attachments: [{ filename: `receipt-${receiptNumber}.pdf`, content: pdf as unknown as Buffer }],
+    log: {
+      churchId,
+      donorId: donor.id,
+      recipientName: donorName,
+      category: "EXTERNAL_DONATION_RECEIPT",
+      relatedEntityType: "ExternalDonation",
+      relatedEntityId: externalDonationId,
+      createdByUserId: actorUserId,
+      isResend,
+    },
   });
 
   await prisma.externalDonation.update({

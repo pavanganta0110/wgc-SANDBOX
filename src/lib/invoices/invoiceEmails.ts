@@ -85,6 +85,14 @@ export async function sendInvoiceEmail(invoiceId: string, token: string): Promis
       <p style="font-size:13px;color:#8A94A6;">If the button doesn't work, copy and paste this link: ${payUrl}</p>
     `,
     attachments: pdfAttachment,
+    log: {
+      churchId: invoice.churchId,
+      donorId: null,
+      recipientName: client.displayName,
+      category: "INVOICE",
+      relatedEntityType: "Invoice",
+      relatedEntityId: invoiceId,
+    },
   });
 
   await recordDelivery({
@@ -150,6 +158,14 @@ export async function sendInvoicePaymentReceiptEmail(invoiceId: string, paymentI
         ${branding.thankYouMessage ? `<p>${branding.thankYouMessage}</p>` : ""}
       `,
       attachments: pdfAttachment,
+      log: {
+        churchId: invoice.churchId,
+        donorId: null,
+        recipientName: client.displayName,
+        category: "INVOICE",
+        relatedEntityType: "InvoicePayment",
+        relatedEntityId: paymentId,
+      },
     });
   } catch (err) {
     console.error("Failed to send invoice payment receipt email:", err);
@@ -184,6 +200,15 @@ export async function sendInvoiceReminderEmail(invoiceId: string, token: string,
         <a href="${payUrl}" style="display:inline-block;padding:14px 28px;background-color:#0B5DBC;color:#ffffff;border-radius:8px;text-decoration:none;font-weight:600;">View &amp; Pay Invoice</a>
       </p>
     `,
+    log: {
+      churchId: invoice.churchId,
+      donorId: null,
+      recipientName: client.displayName,
+      category: "INVOICE",
+      relatedEntityType: "Invoice",
+      relatedEntityId: invoiceId,
+      isResend: reminderType === "MANUAL",
+    },
   });
 
   await recordDelivery({

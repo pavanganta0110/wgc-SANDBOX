@@ -17,7 +17,9 @@ export async function sendReceiptEmail(
   organizationName: string,
   amountCents: number,
   isRecurring: boolean,
-  interval?: string
+  interval?: string,
+  churchId?: string,
+  donorId?: string
 ) {
   const amount = (amountCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
 
@@ -33,6 +35,9 @@ export async function sendReceiptEmail(
         <p>Thank you for your ${isRecurring ? `recurring (${(interval || "monthly").toLowerCase()})` : ""} gift of <strong>${amount}</strong> to <strong>${organizationName}</strong>.</p>
         <p>This receipt is confirmation of your generosity. Keep it for your tax records.</p>
       `,
+      ...(churchId
+        ? { log: { churchId, donorId: donorId ?? null, recipientName: name, category: "RECURRING_CONFIRMATION" as const } }
+        : {}),
     });
   } catch (err) {
     console.error("Failed to send donation receipt:", err);

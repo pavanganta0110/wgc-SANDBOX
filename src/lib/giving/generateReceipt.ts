@@ -132,6 +132,16 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     badgeColor: "#10B981",
     bodyHtml: lines.join("\n"),
     attachments: [{ filename: `receipt-${receiptNumber}${nextVersion > 1 ? `-v${nextVersion}` : ""}.pdf`, content: pdf as unknown as Buffer }],
+    log: {
+      churchId,
+      donorId: donor?.id ?? null,
+      recipientName: donorName,
+      category: "DONATION_RECEIPT",
+      relatedEntityType: "Payment",
+      relatedEntityId: paymentId,
+      createdByUserId: actorUserId,
+      isResend: nextVersion > 1,
+    },
   });
 
   await prisma.donationReceipt.create({
