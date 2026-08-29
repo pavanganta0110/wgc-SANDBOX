@@ -163,7 +163,14 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
   const finixSubscriptionIds = subscriptions.map((s) => s.finixSubscriptionId);
 
   const [donors, instruments, givingLinks, transferStats, funds] = await Promise.all([
-    donorIds.length ? prisma.donor.findMany({ where: { id: { in: donorIds } } }) : Promise.resolve([]),
+    // churchId is required here, not just id: FinixSubscription.donorId is a
+    // plain string FK with no referential integrity, and a subscription
+    // whose donorId points at a Donor row from a DIFFERENT church (bad data,
+    // a bug elsewhere, or a future data-migration mistake) must never be
+    // allowed to leak that other organization's donor (name/email/phone)
+    // into this church's dashboard — it should fall back to "Unknown Donor"
+    // like any other unresolvable donorId, not silently cross tenants.
+    donorIds.length ? prisma.donor.findMany({ where: { id: { in: donorIds }, churchId } }) : Promise.resolve([]),
     instrumentIds.length ? prisma.finixPaymentInstrumentSnapshot.findMany({ where: { finixPaymentInstrumentId: { in: instrumentIds } } }) : Promise.resolve([]),
     givingLinkIds.length ? prisma.givingLink.findMany({ where: { id: { in: givingLinkIds } }, select: { id: true, internalName: true, fundId: true, fundName: true } }) : Promise.resolve([]),
     loadTransferStatsBatch(finixSubscriptionIds, churchId),
