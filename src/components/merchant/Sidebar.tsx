@@ -26,6 +26,7 @@ import {
   ChevronDown,
   HandCoins,
   Target,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
@@ -72,6 +73,7 @@ const NAV_ITEMS: NavItem[] = [
   { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true },
   { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true },
   { name: "Donors", href: "/merchant/donors", icon: Users },
+  { name: "Email Logs", href: "/merchant/email-logs", icon: Mail },
   { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
   {

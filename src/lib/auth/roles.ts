@@ -139,7 +139,18 @@ export type PermissionKey =
   | "canEditPledge"
   | "canCancelPledge"
   | "canRecordPledgeFulfillment"
-  | "canExportPledges";
+  | "canExportPledges"
+  // Email Logs — canViewEmailLogs gates seeing the per-organization log of
+  // every donor/org-facing email sent (receipts, statements, invoices,
+  // etc.). canResendEmails is a single, uniform gate for resending any
+  // logged email regardless of its underlying type — the categories map to
+  // wildly different existing permissions (canSendExternalDonationReceipt,
+  // canSendInvoices, ...), so this page intentionally does not reuse them:
+  // a merchant looking at one unified list expects one consistent
+  // resend-or-not answer per row, not silently-disabled buttons for
+  // reasons unrelated to email itself.
+  | "canViewEmailLogs"
+  | "canResendEmails";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -202,6 +213,8 @@ const ALL_FALSE: PermissionMatrix = {
   canCancelPledge: false,
   canRecordPledgeFulfillment: false,
   canExportPledges: false,
+  canViewEmailLogs: false,
+  canResendEmails: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -267,6 +280,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canCancelPledge: true,
     canRecordPledgeFulfillment: true,
     canExportPledges: true,
+    canViewEmailLogs: true,
+    canResendEmails: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -315,6 +330,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditPledge: true,
     canRecordPledgeFulfillment: true,
     canExportPledges: true,
+    canViewEmailLogs: true,
+    // canResendEmails: false by default, override-able — an outbound
+    // donor-facing action, same trust tier as canVoidExternalDonation/
+    // canRefundInvoicePayments above.
     // canArchivePledgeCampaign, canCancelPledge: false by default,
     // override-able — archiving a campaign and canceling a pledge are
     // treated like canVoidExternalDonation/canVoidInvoices, not a
@@ -371,6 +390,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canRecordPledgeFulfillment: true,
     // No campaign creation/management, no editing/canceling an existing
     // pledge, no export by default — override-able.
+    // canViewEmailLogs/canResendEmails: false by default, override-able —
+    // no existing "owns donor communications" precedent for this role
+    // (unlike invoices, which fundraisers create themselves, these emails
+    // are system-triggered).
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,
@@ -445,3 +468,5 @@ export const BILLING_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canDownloadBillingReceipts",
   "canViewInvoiceBilling",
 ];
+
+export const EMAIL_LOG_PERMISSION_KEYS: readonly PermissionKey[] = ["canViewEmailLogs", "canResendEmails"];

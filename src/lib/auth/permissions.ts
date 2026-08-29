@@ -69,6 +69,8 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canCancelPledge",
   "canRecordPledgeFulfillment",
   "canExportPledges",
+  "canViewEmailLogs",
+  "canResendEmails",
 ];
 
 /**
@@ -163,6 +165,8 @@ export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "rol
       canCancelPledge: false,
       canRecordPledgeFulfillment: false,
       canExportPledges: false,
+      canViewEmailLogs: false,
+      canResendEmails: false,
     };
   }
 
