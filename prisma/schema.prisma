@@ -1452,6 +1452,64 @@ model BillingEmailLog {
   @@index([organizationId, emailType])
 }
 
+/// Church-scoped log of every donor/organization-facing email WGC sends on
+/// an organization's behalf (donation receipts, external-donation receipts,
+/// recurring-signup confirmations, annual statements, invoices, merchandise
+/// order confirmations, subscription setup links). Written automatically by
+/// sendWgcEmail() whenever its optional `log` block is supplied — internal/
+/// admin-only emails (sendWgcAdminEmail, onboarding notices, etc.) never
+/// pass that block and are therefore never written here, which is the
+/// entire mechanism keeping this table donor-facing-only with no filtering
+/// logic required elsewhere. A row is written on both the success and
+/// failure path of a send, so a failed send is still visible/auditable
+/// per-organization. No idempotency/unique constraint (unlike
+/// BillingEmailLog) — donor emails are legitimately resent by design,
+/// so uniqueness would fight the resend flow; resendCount plays that role
+/// instead (0 or 1 per row — this is an append-only log, not an
+/// update-in-place record, so it marks whether THIS row is itself a
+/// resend, not a running total across resends of the same logical email).
+model OrgEmailLog {
+  id       String @id @default(cuid())
+  churchId String
+
+  // Plain string FK, no @relation — matches this codebase's established
+  // convention for cross-references. Null for recipients that aren't a
+  // Donor row (e.g. an Invoice's Client, a SubscriptionSetupLink not yet
+  // matched to a donor).
+  donorId        String?
+  recipientEmail String
+  recipientName  String?
+
+  // DONATION_RECEIPT | EXTERNAL_DONATION_RECEIPT | RECURRING_CONFIRMATION |
+  // ANNUAL_STATEMENT | INVOICE | MERCHANDISE_ORDER |
+  // SUBSCRIPTION_SETUP_LINK | OTHER
+  category String
+
+  // Lets the resend dispatcher (POST /api/merchant/email-logs/[id]/resend)
+  // look up and re-trigger the correct original sender — e.g.
+  // relatedEntityType="Payment", relatedEntityId=payment.id for
+  // DONATION_RECEIPT.
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  subject           String
+  status            String    @default("SENT") // SENT | FAILED
+  providerMessageId String?
+  failureReason     String?
+  resendCount       Int       @default(0)
+  sentAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  // Null for a donor-triggered automatic send (e.g. a public giving-link
+  // completion); set to the merchant user's id for a merchant-triggered
+  // manual resend from this page.
+  createdByUserId String?
+
+  @@index([churchId, createdAt])
+  @@index([churchId, donorId])
+  @@index([churchId, category])
+}
+
 /// Versioned legal text for subscription terms / cancellation policy /
 /// billing authorization / promotion terms / invoice billing terms. An
 /// accepted WgcBillingAccount.authorizationTermsVersion always points at one
