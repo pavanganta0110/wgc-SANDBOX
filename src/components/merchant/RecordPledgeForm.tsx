@@ -12,13 +12,15 @@ interface DonorOption {
 export default function RecordPledgeForm({
   pledgeCampaignId,
   donors,
-  unitLabel,
-  unitAmountCents,
+  campaigns,
 }: {
-  pledgeCampaignId: string;
+  pledgeCampaignId?: string;
   donors: DonorOption[];
-  unitLabel: string | null;
-  unitAmountCents: number | null;
+  // When provided, renders a campaign picker instead of trusting a fixed
+  // pledgeCampaignId prop — used by the main Pledges page's "Add Pledge"
+  // form, which isn't scoped to a single campaign the way the campaign
+  // detail page's copy of this form is.
+  campaigns?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -31,18 +33,23 @@ export default function RecordPledgeForm({
     setError(null);
     const form = new FormData(e.currentTarget);
     const amountDollars = form.get("pledgeAmount");
-    const unitCount = form.get("unitCount");
+    const selectedCampaignId = pledgeCampaignId || (form.get("pledgeCampaignId") as string);
+
+    if (!selectedCampaignId) {
+      setError("Please select a campaign");
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const res = await fetch("/api/merchant/pledges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pledgeCampaignId,
+          pledgeCampaignId: selectedCampaignId,
           donorId: form.get("donorId") || undefined,
           isAnonymous,
           pledgeAmountCents: amountDollars ? Math.round(Number(amountDollars) * 100) : undefined,
-          unitCount: unitCount ? Number(unitCount) : undefined,
           dueDate: form.get("dueDate") || undefined,
           notes: form.get("notes") || undefined,
         }),
@@ -65,6 +72,17 @@ export default function RecordPledgeForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {campaigns && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Campaign</label>
+          <select name="pledgeCampaignId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" required>
+            <option value="">— Select campaign —</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <input id="pledge-anonymous" type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
         <label htmlFor="pledge-anonymous" className="text-sm text-slate-700">Anonymous pledge (no donor)</label>
@@ -80,17 +98,10 @@ export default function RecordPledgeForm({
           </select>
         </div>
       )}
-      {unitAmountCents != null ? (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">{unitLabel ? `Number of ${unitLabel}s` : "Units"}</label>
-          <input name="unitCount" type="number" min="1" step="1" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" required />
-        </div>
-      ) : (
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Pledge Amount ($)</label>
-          <input name="pledgeAmount" type="number" min="0.01" step="0.01" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" required />
-        </div>
-      )}
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-1">Pledge Amount ($)</label>
+        <input name="pledgeAmount" type="number" min="0.01" step="0.01" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" required />
+      </div>
       <div>
         <label className="block text-sm font-medium text-slate-700 mb-1">Due Date (optional)</label>
         <input name="dueDate" type="date" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />

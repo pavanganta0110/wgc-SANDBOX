@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { computeCampaignProgress } from "@/lib/pledges/pledgeFulfillment";
 import { loadPledgesList } from "@/lib/pledges/loadPledgesList";
 import RecordPledgeForm from "@/components/merchant/RecordPledgeForm";
+import LinkPledgeFulfillmentButton from "@/components/merchant/LinkPledgeFulfillmentButton";
 
 export default async function PledgeCampaignDetailPage({ params }: { params: Promise<{ campaignId: string }> }) {
   let auth;
@@ -83,6 +84,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Fulfilled</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Status</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Pledged On</th>
+                    {hasPermission(auth, "canRecordPledgeFulfillment") && <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">&nbsp;</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -101,6 +103,13 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
                         <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700">{p.status}</span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-500">{formatDateCDT(p.pledgedAt)}</td>
+                      {hasPermission(auth, "canRecordPledgeFulfillment") && (
+                        <td className="px-4 py-3 text-sm">
+                          {p.donorId && (p.status === "PROMISED" || p.status === "PARTIALLY_FULFILLED") ? (
+                            <LinkPledgeFulfillmentButton pledgeId={p.id} />
+                          ) : null}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -113,12 +122,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
           <div>
             <h3 className="text-sm font-bold text-slate-900 mb-3">Record a Pledge</h3>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-              <RecordPledgeForm
-                pledgeCampaignId={campaign.id}
-                donors={donors}
-                unitLabel={campaign.unitLabel}
-                unitAmountCents={campaign.unitAmountCents}
-              />
+              <RecordPledgeForm pledgeCampaignId={campaign.id} donors={donors} />
             </div>
           </div>
         )}
