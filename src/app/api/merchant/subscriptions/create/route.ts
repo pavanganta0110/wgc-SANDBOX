@@ -57,6 +57,15 @@ export async function POST(req: Request) {
     internalNote,
     consentConfirmed,
     idempotencyKey,
+    // Installment pledge fields — optional. When totalAmountCents is
+    // present this subscription is flagged isPledge and gets a
+    // completion check (see subscriptionPledgeCompletion.ts, wired into
+    // reconcileStaleActiveSubscriptions) that cancels it once the pledge
+    // total is collected. Finix's subscriptions API has no total/count/
+    // end-date concept — this is entirely WGC-side bookkeeping, never
+    // sent to Finix.
+    totalAmountCents,
+    installmentsTotal,
   } = body;
 
   if (!idempotencyKey || typeof idempotencyKey !== "string") {
@@ -96,6 +105,20 @@ export async function POST(req: Request) {
   }
   if (consentConfirmed !== true) {
     return NextResponse.json({ error: "Donor consent confirmation is required" }, { status: 400 });
+  }
+
+  // Pledge fields are optional, but if either is present both must be
+  // valid — a pledge subscription with no known total is meaningless
+  // (the completion check would never fire and it would just run as a
+  // normal open-ended recurring gift forever).
+  const isPledge = totalAmountCents != null || installmentsTotal != null;
+  if (isPledge) {
+    if (!Number.isFinite(totalAmountCents) || totalAmountCents < amountCents) {
+      return NextResponse.json({ error: "Pledge total must be at least the recurring amount" }, { status: 400 });
+    }
+    if (installmentsTotal != null && (!Number.isInteger(installmentsTotal) || installmentsTotal < 1)) {
+      return NextResponse.json({ error: "Number of installments must be a whole number of at least 1" }, { status: 400 });
+    }
   }
 
   // Ownership validation — never trust donorId/paymentInstrumentId from the
@@ -184,6 +207,10 @@ export async function POST(req: Request) {
         createdByUserId: auth.userId,
         consentSource: "ADMIN_CONFIRMED",
         lastSyncedAt: new Date(),
+        isPledge,
+        totalAmountCents: isPledge ? totalAmountCents : null,
+        installmentsTotal: isPledge && installmentsTotal != null ? installmentsTotal : null,
+        installmentsCompleted: isPledge ? 0 : null,
       },
     });
 
@@ -195,6 +222,9 @@ export async function POST(req: Request) {
       fundId: fundId || null,
       organizationName: church.name,
       internalNote: internalNote || null,
+      isPledge,
+      totalAmountCents: isPledge ? totalAmountCents : null,
+      installmentsTotal: isPledge ? installmentsTotal ?? null : null,
     };
 
     await prisma.subscriptionConsent.create({
@@ -225,6 +255,9 @@ export async function POST(req: Request) {
       startDate: startDate.toISOString(),
       nextBillingDate: record.nextBillingDate,
       paymentMethodLastFour: instrument.cardLast4 || instrument.bankLast4 || null,
+      isPledge,
+      totalAmountCents: isPledge ? totalAmountCents : null,
+      installmentsTotal: isPledge ? installmentsTotal ?? null : null,
     };
 
     await prisma.subscriptionAction.update({

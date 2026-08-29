@@ -25,6 +25,7 @@ import {
   PanelLeftOpen,
   ChevronDown,
   HandCoins,
+  Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
@@ -84,6 +85,15 @@ const NAV_ITEMS: NavItem[] = [
   },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
+  {
+    name: "Pledges",
+    href: "/merchant/pledges",
+    icon: Target,
+    children: [
+      { name: "All Pledges", href: "/merchant/pledges" },
+      { name: "Campaigns", href: "/merchant/pledge-campaigns" },
+    ],
+  },
   { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true },
   { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck, organizationOnly: true },
   { name: "Team", href: "/merchant/settings/team", icon: Users, organizationOnly: true },

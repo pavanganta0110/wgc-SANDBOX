@@ -88,6 +88,7 @@ export default function GivingLinkForm({
   serverAvailability,
   fundSelectionEnabled = false,
   assignedFunds = [],
+  pledgeId,
   onFormError,
   onResult,
 }: {
@@ -122,6 +123,8 @@ export default function GivingLinkForm({
   serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
   fundSelectionEnabled?: boolean;
   assignedFunds?: AssignedActiveFund[];
+  /** Optional campaign pledge this donation should be tagged against — passed straight through to /donate as pledgeId, server-validated there. */
+  pledgeId?: string;
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
@@ -345,6 +348,7 @@ export default function GivingLinkForm({
           fraudSessionId,
           clientAttemptId: attemptId,
           fundId: selectedFundId || undefined,
+          pledgeId: pledgeId || undefined,
           // Donor Information is now required and collected before any
           // wallet button is reachable (see donorInfoValid gating below),
           // so the entered fields — not the wallet's own billing contact,
@@ -796,6 +800,7 @@ export default function GivingLinkForm({
               fraudSessionId,
               clientAttemptId: attemptId,
               fundId: selectedFundId || undefined,
+              pledgeId: pledgeId || undefined,
               donor: {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),

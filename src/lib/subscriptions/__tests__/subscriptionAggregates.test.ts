@@ -34,6 +34,11 @@ function makeRow(overrides: Partial<SubscriptionRow>): SubscriptionRow {
     attentionReasons: [],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
+    isPledge: false,
+    totalAmountCents: null,
+    installmentsTotal: null,
+    installmentsCompleted: null,
+    pledgeFulfilledAt: null,
     ...overrides,
   };
 }

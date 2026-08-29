@@ -17,6 +17,7 @@ import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
+import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
 import crypto from "crypto";
 
 /**
@@ -85,6 +86,7 @@ async function handleDonate(req: Request, slug: string) {
       expectedTotalCents,
       clientAttemptId,
       fundId: submittedFundId,
+      pledgeId: submittedPledgeId,
     } = body;
 
     const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
@@ -155,6 +157,21 @@ async function handleDonate(req: Request, slug: string) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: err.message, retryable: true }, { status: 400 });
       }
       throw err;
+    }
+
+    // Campaign pledge fulfillment tagging: resolved and validated entirely
+    // server-side, same pattern as resolvedFund above — a client-supplied
+    // pledgeId is only ever trusted after confirming it belongs to this
+    // same church and hasn't already been canceled. Never blocks the
+    // donation itself if the pledge lookup fails or doesn't match; the
+    // donation still goes through untagged.
+    let resolvedPledgeId: string | null = null;
+    if (typeof submittedPledgeId === "string" && submittedPledgeId) {
+      const pledge = await prisma.pledge.findFirst({
+        where: { id: submittedPledgeId, churchId: church.id, status: { not: "CANCELED" } },
+        select: { id: true },
+      });
+      resolvedPledgeId = pledge?.id ?? null;
     }
 
     // Amount rules
@@ -691,6 +708,7 @@ async function handleDonate(req: Request, slug: string) {
         merchantExpectedNetCents: totalCents - feeStrategy.expectedFeeCents,
         fundId: resolvedFund.fundId,
         fundName: resolvedFund.fundName || link.fundName || null,
+        pledgeId: resolvedPledgeId,
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
         note: fieldSettings.donorNote !== "HIDDEN" ? donor.note?.trim() || null : null,
       },
@@ -711,6 +729,14 @@ async function handleDonate(req: Request, slug: string) {
       linkUpdateData.status = "ACTIVE";
     }
     await prisma.givingLink.update({ where: { id: link.id }, data: linkUpdateData });
+
+    if (succeeded && resolvedPledgeId) {
+      try {
+        await computePledgeFulfillment(resolvedPledgeId);
+      } catch (err) {
+        console.error("Failed to update pledge fulfillment:", err);
+      }
+    }
 
     const receiptSettings = link.receiptSettingsJson as { sendAutomatically?: boolean } | null;
     if (succeeded && (receiptSettings?.sendAutomatically ?? true)) {

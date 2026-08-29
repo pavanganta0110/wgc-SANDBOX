@@ -38,7 +38,14 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
       <div className="px-5 py-4 border-b border-slate-100">
         <div className="flex items-center justify-between mb-2">
           <p className="text-lg font-bold text-slate-900">{s.donorName}</p>
-          <StateBadge state={s.displayStatus} />
+          <div className="flex items-center gap-1.5">
+            {s.isPledge && (
+              <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+                Pledge
+              </span>
+            )}
+            <StateBadge state={s.displayStatus} />
+          </div>
         </div>
         <div className="space-y-1.5 text-sm">
           <Row label="Subscription ID" value={<CopyableIdBadge id={s.finixSubscriptionId} />} />
@@ -84,6 +91,29 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
         <Row label="Next Billing Date" value={s.nextBillingDate ? formatCalendarDateUTC(s.nextBillingDate) : "—"} />
         <Row label="Lifetime Collected" value={formatCents(s.lifetimeCollectedCents)} />
       </Section>
+
+      {s.isPledge && (
+        <Section title="Pledge Progress">
+          <Row label="Pledge Total" value={s.totalAmountCents != null ? formatCents(s.totalAmountCents) : "—"} />
+          {s.totalAmountCents != null && (
+            <div className="mt-1 mb-2">
+              <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-purple-500"
+                  style={{ width: `${Math.min(100, Math.round((s.lifetimeCollectedCents / s.totalAmountCents) * 100))}%` }}
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {formatCents(s.lifetimeCollectedCents)} of {formatCents(s.totalAmountCents)} collected
+              </p>
+            </div>
+          )}
+          {s.installmentsTotal != null && (
+            <Row label="Installments" value={`${s.installmentsCompleted ?? 0} of ${s.installmentsTotal}`} />
+          )}
+          {s.pledgeFulfilledAt && <Row label="Fulfilled" value={formatDateCDT(s.pledgeFulfilledAt)} />}
+        </Section>
+      )}
 
       <Section title="Payment Method">
         {s.paymentMethod ? (

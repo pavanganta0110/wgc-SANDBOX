@@ -8,6 +8,7 @@ import {
   type SubscriptionDisplayStatus,
 } from "@/lib/subscriptions/subscriptionStatus";
 import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
+import { checkPledgeCompletions } from "@/lib/subscriptions/subscriptionPledgeCompletion";
 
 /**
  * Same bounded-candidate-then-aggregate-in-memory tradeoff as
@@ -64,6 +65,11 @@ export interface SubscriptionRow {
   attentionReasons: string[];
   createdAt: Date;
   updatedAt: Date;
+  isPledge: boolean;
+  totalAmountCents: number | null;
+  installmentsTotal: number | null;
+  installmentsCompleted: number | null;
+  pledgeFulfilledAt: Date | null;
 }
 
 interface TransferStats {
@@ -131,6 +137,11 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
       await reconcileStaleActiveSubscriptions(churchId);
     } catch (err) {
       console.error("Stale-subscription reconciliation pass failed:", err);
+    }
+    try {
+      await checkPledgeCompletions(churchId);
+    } catch (err) {
+      console.error("Pledge completion check failed:", err);
     }
   });
 
@@ -241,6 +252,11 @@ export async function loadSubscriptionCandidates(churchId: string, filters: Subs
       attentionReasons,
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
+      isPledge: s.isPledge,
+      totalAmountCents: s.totalAmountCents,
+      installmentsTotal: s.installmentsTotal,
+      installmentsCompleted: s.installmentsCompleted,
+      pledgeFulfilledAt: s.pledgeFulfilledAt,
     };
   });
 

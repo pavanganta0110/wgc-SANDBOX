@@ -972,6 +972,11 @@ model Payment {
   merchantExpectedNetCents          Int?
   actualFinixFeesCents              Int?
   finixSubscriptionId               String?
+  // Set when a donor fulfills a Pledge through the normal Finix giving
+  // flow (the public campaign page's "Give now" action). Purely a tag
+  // for rollup/reporting — no Payment behavior branches on it. See
+  // pledgeFulfillment.ts.
+  pledgeId                          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -979,6 +984,7 @@ model Payment {
   receipts DonationReceipt[]
 
   @@index([churchId, attributedUserId])
+  @@index([churchId, pledgeId])
 }
 
 // One immutable snapshot per receipt version sent (or prepared) for a
@@ -1934,6 +1940,33 @@ model FinixSubscription {
   // correct donor — never auto-matched by name alone.
   needsDonorMatching     Boolean   @default(false)
 
+  // Pledge fields — present only when this subscription was created to
+  // fulfill a fixed-total pledge (e.g. "$600 over 12 months") rather than
+  // an open-ended recurring gift. Finix's own subscriptions API has no
+  // total-amount/installment-count/end-date concept (confirmed in
+  // src/lib/finix/client.ts createSubscription) — Finix only drives
+  // amount + billingInterval on its own schedule. Everything below is
+  // WGC-side bookkeeping, computed/enforced locally by
+  // subscriptionPledgeCompletion.ts, never sent to Finix.
+  isPledge          Boolean @default(false)
+  totalAmountCents  Int?
+  installmentsTotal Int?
+  // Denormalized progress counter, updated only by the completion-check
+  // routine after each reconcile — never authoritative for the
+  // dollar-total decision (lifetimeCollectedCents, computed from
+  // FinixTransfer rows, is authoritative for that). Exists purely so
+  // list views can show "8 of 12 payments" without re-summing transfers
+  // per row. Can diverge from totalAmountCents if amountCents is later
+  // changed via the existing update-amount cancel/recreate flow.
+  installmentsCompleted Int?
+  // Set by the pledge-completion routine the first time the pledge total
+  // is reached, immediately before it calls finixClient.cancelSubscription().
+  // Distinct from completedAt (reserved for Finix itself reporting a
+  // natural end) and from a plain admin cancellation — a pledge-fulfilled
+  // cancellation sets cancelReason = "PLEDGE_FULFILLED" and this
+  // timestamp together.
+  pledgeFulfilledAt DateTime?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastSyncedAt DateTime?
@@ -1941,6 +1974,7 @@ model FinixSubscription {
   @@index([churchId, donorId])
   @@index([churchId, state])
   @@index([churchId, attributedUserId])
+  @@index([churchId, isPledge])
 }
 
 /// Immutable record of donor authorization for a recurring donation —
@@ -2695,6 +2729,11 @@ model ExternalDonation {
   campaign        String?
   givingPageLabel String?
   donationPurpose String?
+  // Set when this offline donation is recorded as fulfillment toward a
+  // Pledge — optional, additive, never required. Does not change any
+  // other invariant on this table; a pledge-linked row is still a normal
+  // ExternalDonation in every other query. See pledgeFulfillment.ts.
+  pledgeId        String?
 
   // Never usernames, passwords, full card/bank numbers — see field-level
   // notes below and the form-layer validation that enforces this.
@@ -2798,6 +2837,7 @@ model ExternalDonation {
   @@index([churchId, donorMatchStatus])
   @@index([churchId, importFingerprint])
   @@index([importBatchId])
+  @@index([churchId, pledgeId])
 }
 
 /// A single CSV/spreadsheet upload of external donations. One batch per
@@ -2900,6 +2940,150 @@ model ExternalDonationAuditLog {
   externalDonation ExternalDonation @relation(fields: [externalDonationId], references: [id], onDelete: Cascade)
 
   @@index([externalDonationId])
+}
+
+// ============================================================================
+// Pledges — a donor's promise to give a specific amount toward a
+// fundraising campaign or event, recorded now, fulfilled later (possibly
+// manually, cash/check, possibly through a normal donation) rather than
+// automatically charged. Deliberately not built on ExternalDonation: that
+// model's donationAmountCents/donationDate are non-nullable and its
+// status enum has no "promised, not yet given" state — its entire shape
+// assumes money already changed hands. A Pledge instead links OUT to
+// ExternalDonation/Payment rows as fulfillment evidence accumulates, via
+// pledgeId on those tables. This is the "campaign pledge" type — for the
+// separate "installment pledge" type (a fixed-total commitment paid
+// automatically over time), see the isPledge/totalAmountCents fields on
+// FinixSubscription above; a campaign pledge here is never itself an
+// auto-charging subscription.
+// ============================================================================
+
+/// A fundraising campaign or event a merchant tracks pledges against
+/// (building campaign, mission trip, per-mile run, annual gala goal,
+/// etc). Deliberately separate from Fund: Fund is a flat, permanent,
+/// dateless designation catalog for routing money; a campaign has a
+/// goal, a date range, and a progress rollup, and may span multiple
+/// funds or reuse the same fund across many campaigns over time. A
+/// campaign optionally points at the Fund pledged money should ultimately
+/// be recorded against, but is never itself a place money is "in."
+model PledgeCampaign {
+  id          String  @id @default(cuid())
+  churchId    String
+  name        String
+  description String?
+  // GENERAL | BUILDING | MISSION | EVENT | OTHER — purely descriptive,
+  // never branches behavior.
+  campaignType String @default("GENERAL")
+  // ACTIVE | COMPLETED | ARCHIVED. COMPLETED/ARCHIVED are never auto-set —
+  // always an explicit merchant action; a campaign reaching its goal does
+  // not by itself stop new pledges or fulfillments.
+  status String @default("ACTIVE")
+
+  // Snapshotted convenience label, same rationale as
+  // FinixSubscription.fundName — never re-read from Fund after pledge
+  // creation so a later fund rename doesn't rewrite history on pledges
+  // already routed here.
+  fundId   String?
+  fundName String?
+
+  goalAmountCents Int?
+  startDate       DateTime?
+  endDate         DateTime?
+
+  // Optional per-unit pledge support (e.g. "$X per mile run") — when set,
+  // the public/merchant pledge form may collect a unitCount instead of
+  // (or in addition to) a flat amount; Pledge.unitCount * unitAmountCents
+  // is computed into Pledge.pledgeAmountCents once at creation time,
+  // never recomputed later if unitAmountCents here changes.
+  unitLabel       String? // e.g. "mile", "lap"
+  unitAmountCents Int?
+
+  // Public donor-facing page slug (see /campaign/[slug]) — mirrors
+  // GivingLink.publicSlug's exact convention. Null until a merchant
+  // publishes the campaign publicly; a merchant-only campaign never
+  // needs one.
+  publicSlug String? @unique
+
+  // Optional link to an existing GivingLink for the public campaign
+  // page's "Give now" button — snapshotted slug, same rationale as
+  // fundName above, so a later giving-link rename/rotation doesn't break
+  // an already-shared campaign URL. Null means the campaign page shows
+  // only the pledge form, no direct online-giving shortcut.
+  givingLinkId   String?
+  givingLinkSlug String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pledges Pledge[]
+
+  @@index([churchId, status])
+}
+
+/// A donor's recorded promise to give a specific amount toward a
+/// PledgeCampaign — recorded now, fulfilled later, possibly never through
+/// Finix at all (cash/check) and possibly not through a single payment
+/// (partial fulfillments over time).
+model Pledge {
+  id               String @id @default(cuid())
+  churchId         String
+  pledgeCampaignId String
+
+  donorId String?
+  // MATCHED | ANONYMOUS | UNMATCHED — same three states and same UI
+  // treatment as ExternalDonation.donorMatchStatus (an "Unmatched
+  // Pledges" queue), for a merchant recording a pledge on behalf of
+  // someone not yet in the donor list.
+  donorMatchStatus String  @default("MATCHED")
+  isAnonymous      Boolean @default(false)
+
+  pledgeAmountCents Int
+  currency          String @default("USD")
+  // Set only when the campaign has unitLabel/unitAmountCents configured
+  // (e.g. "pledged $10/mile x 26 miles"); null for a flat-amount pledge.
+  unitCount Int?
+
+  pledgedAt DateTime @default(now())
+  // Merchant/donor-stated target date for fulfillment — informational
+  // only, never enforced or auto-actioned when it passes.
+  dueDate DateTime?
+
+  // PROMISED | PARTIALLY_FULFILLED | FULFILLED | CANCELED. Never
+  // DEPOSITED/CLEARED/RETURNED — those are money-movement states that
+  // belong on the linked ExternalDonation/Payment row, not the promise
+  // itself. Rolled up from linked fulfillment rows' amounts vs.
+  // pledgeAmountCents (see pledgeFulfillment.ts) but persisted here too,
+  // written only by that same rollup routine, so list/summary queries
+  // don't have to join and sum on every request.
+  status                String    @default("PROMISED")
+  fulfilledAmountCents  Int       @default(0)
+  fulfilledAt           DateTime?
+  canceledAt            DateTime?
+  cancelReason          String?
+
+  // How the pledge was captured — mirrors
+  // FinixSubscription.consentSource's ADMIN_CONFIRMED | DONOR_DIRECT
+  // distinction. MERCHANT_ENTERED is written by the merchant-dashboard
+  // creation flow; DONOR_SELF_SERVICE by the public campaign page.
+  source String @default("MERCHANT_ENTERED") // MERCHANT_ENTERED | DONOR_SELF_SERVICE
+
+  notes           String?
+  createdByUserId String?
+  // Team-access Checkpoint 3 pattern: snapshotted attribution, same
+  // plain-string-FK rationale as Payment.attributedUserId /
+  // FinixSubscription.attributedUserId.
+  attributedUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pledgeCampaign PledgeCampaign @relation(fields: [pledgeCampaignId], references: [id])
+
+  @@index([churchId, pledgeCampaignId])
+  @@index([churchId, donorId])
+  @@index([churchId, status])
+  @@index([churchId, attributedUserId])
 }
 
 // ============================================================================
