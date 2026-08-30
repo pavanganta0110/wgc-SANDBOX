@@ -26,11 +26,11 @@ export default async function DepositDetailPanel({
     );
   }
 
-  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
+  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount, liveAccountHolderName } = detail;
   const state = (deposit.state || "").toUpperCase();
   const netAmount = deposit.netAmountCents ?? deposit.amountCents ?? 0;
   const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
-  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || null;
+  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || liveAccountHolderName || null;
   const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || resolvedBankAccount?.last4 || null;
   const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || resolvedBankAccount?.accountType || null;
 

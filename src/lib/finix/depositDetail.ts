@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
+import { finixClient } from "@/lib/finix/client";
 
 /**
  * Shared data loader for a single deposit's full detail view — used by both
@@ -82,7 +83,29 @@ export async function loadDepositDetail(depositId: string, churchId: string) {
     resolvedBankAccount = await resolveActiveBankAccount(churchId);
   }
 
-  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount };
+  // Third fallback tier, account-holder-name only: confirmed against the
+  // real OnboardingApplication schema — it has no field for this at all
+  // (bankName/bankLast4/bankAccountType exist, account holder name does
+  // not), so tier 2 above can never supply it for an onboarding-sourced
+  // account. Finix's own Payment Instrument object does carry it
+  // (`instrument.name` — the exact field the bank-account/change route
+  // already reads for the same purpose), so this fetches it live rather
+  // than leaving a real, retrievable value permanently blank. Only called
+  // when every cheaper local source has already come up empty, and never
+  // allowed to break the page — a failed/slow Finix call just leaves the
+  // field blank, same as today.
+  let liveAccountHolderName: string | null = null;
+  const knownAccountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || null;
+  if (!knownAccountHolderName && deposit.destinationPaymentInstrumentId) {
+    try {
+      const instrument = await finixClient.getPaymentInstrument(deposit.destinationPaymentInstrumentId);
+      liveAccountHolderName = instrument?.name ?? null;
+    } catch (err) {
+      console.error(`Failed to fetch live payment instrument ${deposit.destinationPaymentInstrumentId} for account holder name:`, err);
+    }
+  }
+
+  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount, liveAccountHolderName };
 }
 
 type DepositDetail = NonNullable<Awaited<ReturnType<typeof loadDepositDetail>>>;
