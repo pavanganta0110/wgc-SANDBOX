@@ -9,6 +9,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
+import { mapFeeType } from "@/lib/fees/feeTypeLabels";
 import { Row } from "@/components/merchant/detail/DetailDrawerPrimitives";
 import { TransactionTimeline } from "@/components/merchant/detail/TransactionTimeline";
 import { RelatedResources } from "@/components/merchant/detail/RelatedResources";
@@ -222,7 +223,7 @@ export default async function SettlementFullDetailPage({
             ) : (
               <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                 {[...feeTotalsByType.entries()].map(([type, total]) => (
-                  <Row key={type} label={titleCase(type)} value={formatCents(total)} />
+                  <Row key={type} label={mapFeeType(type).label} value={formatCents(total)} />
                 ))}
               </div>
             )}
@@ -232,7 +233,7 @@ export default async function SettlementFullDetailPage({
                   <thead>
                     <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       <th className="py-2 pr-4">Fee ID</th>
-                      <th className="py-2 pr-4">Payment ID</th>
+                      <th className="py-2 pr-4">Linked To</th>
                       <th className="py-2 pr-4">Fee Type</th>
                       <th className="py-2 pr-4 text-right">Amount</th>
                       <th className="py-2 pr-4">Created</th>
@@ -244,7 +245,7 @@ export default async function SettlementFullDetailPage({
                       <tr key={fee.id} className="border-t border-slate-50">
                         <td className="py-2 pr-4">{fee.finixFeeId ? <CopyableIdBadge id={fee.finixFeeId} label={fee.finixFeeId} variant="link" /> : "—"}</td>
                         <td className="py-2 pr-4">{fee.linkedToId ? <CopyableIdBadge id={fee.linkedToId} label={fee.linkedToId} variant="link" /> : "—"}</td>
-                        <td className="py-2 pr-4 text-slate-700">{titleCase(fee.feeType)}</td>
+                        <td className="py-2 pr-4 text-slate-700">{mapFeeType(fee.feeType).label}</td>
                         <td className="py-2 pr-4 text-right text-slate-900 font-semibold">{formatCents(fee.amountCents ?? 0)}</td>
                         <td className="py-2 pr-4 text-slate-600 whitespace-nowrap">{formatDateTime(fee.createdAtFinix)}</td>
                         <td className="py-2 text-slate-600">{fee.description || "—"}</td>

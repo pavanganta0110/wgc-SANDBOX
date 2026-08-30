@@ -20,6 +20,12 @@ export function mapFeeType(rawFeeType: string | null | undefined): MappedFeeType
       description: "Additional fee associated with this transaction under the organization's processing configuration.",
     };
   }
+  if (type.includes("SETTLEMENT_FUNDING") || type.includes("SETTLEMENT FUNDING")) {
+    return {
+      label: "Settlement Funding Fee",
+      description: "Fee charged on the settlement's own funding transfer (the payout to your bank), not on any single transaction.",
+    };
+  }
   if (type.includes("ACH")) {
     return { label: "ACH Fee", description: "Fee charged for processing this transaction as an ACH/bank transfer." };
   }

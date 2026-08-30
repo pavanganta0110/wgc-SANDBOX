@@ -39,7 +39,7 @@ export async function loadSettlementDetail(finixSettlementId: string, churchId: 
   });
   const transferIds = transfers.map((t) => t.finixTransferId);
 
-  const [payments, refunds, bankReturns, disputes, fees, deposit] = await Promise.all([
+  const [payments, refunds, bankReturns, disputes, transferFees, deposit] = await Promise.all([
     transferIds.length
       ? prisma.payment.findMany({ where: { finixTransferId: { in: transferIds }, churchId } })
       : Promise.resolve([]),
@@ -61,6 +61,23 @@ export async function loadSettlementDetail(finixSettlementId: string, churchId: 
       orderBy: { createdAtFinix: "desc" },
     }),
   ]);
+
+  // Fees like SETTLEMENT_FUNDING_TRANSFER_ACH_FIXED aren't linked to any
+  // donation transfer at all — Finix attaches them to the settlement's own
+  // ACH funding transfer (a distinct Transfer object from any payment), so
+  // they're invisible to the transferIds-scoped query above. Confirmed
+  // against live data: a fee's linkedToId there matches
+  // FinixFundingTransferAttempt.finixFundingTransferAttemptId, not any
+  // FinixTransfer tied to a donation. Fetched separately and merged so the
+  // settlement's real, live fee total (which already includes this) is
+  // actually itemized instead of silently missing from the breakdown.
+  const fundingFees = deposit?.finixFundingTransferAttemptId
+    ? await prisma.finixFee.findMany({
+        where: { linkedToId: deposit.finixFundingTransferAttemptId, churchId },
+        orderBy: { createdAtFinix: "desc" },
+      })
+    : [];
+  const fees = [...transferFees, ...fundingFees];
 
   const donorIds = [...new Set(payments.map((p) => p.donorId).filter((id): id is string => !!id))];
   const donors = donorIds.length ? await prisma.donor.findMany({ where: { id: { in: donorIds } } }) : [];

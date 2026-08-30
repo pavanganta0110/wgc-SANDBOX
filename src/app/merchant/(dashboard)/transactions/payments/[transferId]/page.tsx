@@ -336,6 +336,20 @@ export default async function PaymentFullDetailPage({
                       * Reconciled from historical Finix Transfer metadata.
                     </p>
                   )}
+
+                  {settlement && settlement.netAmountCents != null && (
+                    <p className="text-[11px] text-slate-500 pt-2 mt-1 border-t border-slate-100">
+                      This net is an estimate based on this transaction&apos;s own processing fee. The settlement it
+                      belongs to may include additional settlement-level fees (e.g. a funding/payout fee) not reflected
+                      here.{" "}
+                      <Link
+                        href={`/merchant/settlements/${settlement.finixSettlementId}`}
+                        className="text-blue-600 hover:underline font-semibold"
+                      >
+                        View this settlement&apos;s actual net: {formatCents(settlement.netAmountCents)}
+                      </Link>
+                    </p>
+                  )}
                 </div>
               </div>
             );
