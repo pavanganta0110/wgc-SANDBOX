@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
 
 /**
  * Shared data loader for a single deposit's full detail view — used by both
@@ -63,7 +64,25 @@ export async function loadDepositDetail(depositId: string, churchId: string) {
     });
   }
 
-  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount };
+  // Second fallback tier: OrganizationBankAccount itself can be empty for
+  // an org whose payout bank was only ever captured at onboarding time
+  // (confirmed against live data — 3 real organizations have real bank
+  // details sitting in OnboardingApplication.bankName/bankLast4/
+  // bankAccountType with a finixPaymentInstrumentId that matches this
+  // exact deposit's destination, but no corresponding
+  // OrganizationBankAccount row was ever created). resolveActiveBankAccount
+  // already encodes this exact fallback chain (explicit mapping ->
+  // instrument snapshot -> onboarding -> deposit history) for the
+  // Organization Profile page — reused here rather than re-deriving it,
+  // per the "don't duplicate this logic" spirit of that function's own
+  // module comment. Only consulted when the narrower lookup above still
+  // came up empty, so it costs nothing on the common path.
+  let resolvedBankAccount: Awaited<ReturnType<typeof resolveActiveBankAccount>> | null = null;
+  if (!depositBankAccount?.bankName && !deposit.bankName) {
+    resolvedBankAccount = await resolveActiveBankAccount(churchId);
+  }
+
+  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount };
 }
 
 type DepositDetail = NonNullable<Awaited<ReturnType<typeof loadDepositDetail>>>;

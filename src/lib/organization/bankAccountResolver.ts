@@ -123,9 +123,18 @@ export async function resolveActiveBankAccount(churchId: string): Promise<Resolv
     }
   }
 
+  // "COMPLETED" was never actually the real state Finix reports for a
+  // succeeded deposit (confirmed against live data — every real deposit in
+  // production has state "SUCCEEDED"; "COMPLETED" was an earlier, incorrect
+  // assumption, same class of bug already fixed in the deposit detail
+  // pages' Transaction Flow logic), which made this whole fallback tier
+  // unreachable for any real organization. arrivedAt is also null on every
+  // real deposit today (same root cause), so createdAtFinix is included as
+  // a tiebreaker rather than relying solely on a column that's currently
+  // always empty.
   const latestDeposit = await prisma.finixFundingTransferAttempt.findFirst({
-    where: { churchId, state: "COMPLETED" },
-    orderBy: { arrivedAt: "desc" },
+    where: { churchId, state: { in: ["COMPLETED", "SUCCEEDED"] } },
+    orderBy: [{ arrivedAt: "desc" }, { createdAtFinix: "desc" }],
   });
   if (latestDeposit) {
     return {

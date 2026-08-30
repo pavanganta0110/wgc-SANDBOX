@@ -31,11 +31,11 @@ export default async function DepositFullDetailPage({
     );
   }
 
-  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount } = detail;
-  const bankName = depositBankAccount?.bankName || deposit.bankName || null;
-  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || null;
-  const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || null;
-  const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || null;
+  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
+  const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
+  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || null;
+  const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || resolvedBankAccount?.last4 || null;
+  const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || resolvedBankAccount?.accountType || null;
   const state = (deposit.state || "").toUpperCase();
   const netAmount = deposit.netAmountCents ?? deposit.amountCents ?? 0;
   const tags = (deposit.rawJsonRedacted as { tags?: Record<string, string> } | null)?.tags ?? null;
