@@ -26,9 +26,13 @@ export default async function DepositDetailPanel({
     );
   }
 
-  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns } = detail;
+  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount } = detail;
   const state = (deposit.state || "").toUpperCase();
   const netAmount = deposit.netAmountCents ?? deposit.amountCents ?? 0;
+  const bankName = depositBankAccount?.bankName || deposit.bankName || null;
+  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || null;
+  const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || null;
+  const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || null;
 
   return (
     <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm h-fit lg:sticky lg:top-6">
@@ -57,7 +61,7 @@ export default async function DepositDetailPanel({
           Organization: <span className="font-semibold text-slate-900">{church?.name || "—"}</span>
           {" · "}
           Destination: <span className="font-semibold text-slate-900">
-            {deposit.bankName || "Bank"} ••••{deposit.bankAccountLast4 || "----"}
+            {bankName || "Bank"} ••••{bankAccountLast4 || "----"}
           </span>
         </p>
         {deposit.failureCode && (
@@ -82,19 +86,19 @@ export default async function DepositDetailPanel({
           <FlowStep
             label="Deposit Processing"
             detail={state === "PROCESSING" ? "In progress" : undefined}
-            status={["PROCESSING", "SENT", "COMPLETED"].includes(state) ? "done" : state === "PENDING" ? "pending" : "upcoming"}
+            status={["PROCESSING", "SENT", "COMPLETED", "SUCCEEDED"].includes(state) ? "done" : state === "PENDING" ? "pending" : "upcoming"}
           />
           <FlowStep
             label="Deposit Sent"
             detail={formatDateTimeCDT(deposit.sentAt)}
-            status={["SENT", "COMPLETED"].includes(state) || deposit.sentAt ? "done" : "upcoming"}
+            status={["SENT", "COMPLETED", "SUCCEEDED"].includes(state) || deposit.sentAt ? "done" : "upcoming"}
           />
           <FlowStep
             label={state === "FAILED" ? "Deposit Failed" : state === "RETURNED" ? "Deposit Returned" : state === "CANCELED" ? "Deposit Canceled" : "Deposit Completed"}
             detail={formatDateTimeCDT(deposit.arrivedAt)}
             status={
               state === "FAILED" || state === "RETURNED" ? "failed" :
-              state === "COMPLETED" || deposit.arrivedAt ? "done" :
+              state === "COMPLETED" || state === "SUCCEEDED" || deposit.arrivedAt ? "done" :
               state === "CANCELED" ? "failed" : "upcoming"
             }
           />
@@ -125,11 +129,11 @@ export default async function DepositDetailPanel({
       <div className="px-5 py-4 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Destination Bank</h4>
         <div className="space-y-0.5">
-          <Row label="Bank Name" value={deposit.bankName || "—"} />
-          <Row label="Account Holder" value={deposit.accountHolderName || "—"} />
-          <Row label="Masked Account Number" value={deposit.bankAccountLast4 ? `•••• ${deposit.bankAccountLast4}` : "—"} />
-          <Row label="Account Type" value={deposit.bankAccountType || "—"} />
-          <Row label="Last Four" value={deposit.bankAccountLast4 || "—"} />
+          <Row label="Bank Name" value={bankName || "—"} />
+          <Row label="Account Holder" value={accountHolderName || "—"} />
+          <Row label="Masked Account Number" value={bankAccountLast4 ? `•••• ${bankAccountLast4}` : "—"} />
+          <Row label="Account Type" value={bankAccountType || "—"} />
+          <Row label="Last Four" value={bankAccountLast4 || "—"} />
           <Row label="Bank Account State" value={titleCase(deposit.state)} />
         </div>
       </div>

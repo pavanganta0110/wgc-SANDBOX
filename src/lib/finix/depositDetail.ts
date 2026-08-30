@@ -48,7 +48,22 @@ export async function loadDepositDetail(depositId: string, churchId: string) {
       })
     : [];
 
-  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns };
+  // Enrich the deposit's bank display from the verified payout bank
+  // account (Organization Profile's own source of truth) whenever the
+  // funding-transfer row itself is missing bank name/type — Finix's
+  // funding-transfer payload doesn't always carry this, confirmed against
+  // live data (every production deposit has these fields null on the
+  // FinixFundingTransferAttempt row itself). Same pattern already used by
+  // the Settlement detail view (settlementDetail.ts) — matched via the
+  // destination payment-instrument id, never by guessing.
+  let depositBankAccount: Awaited<ReturnType<typeof prisma.organizationBankAccount.findFirst>> | null = null;
+  if (deposit.destinationPaymentInstrumentId && (!deposit.bankName || !deposit.bankAccountType)) {
+    depositBankAccount = await prisma.organizationBankAccount.findFirst({
+      where: { churchId, finixPaymentInstrumentId: deposit.destinationPaymentInstrumentId },
+    });
+  }
+
+  return { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount };
 }
 
 type DepositDetail = NonNullable<Awaited<ReturnType<typeof loadDepositDetail>>>;
