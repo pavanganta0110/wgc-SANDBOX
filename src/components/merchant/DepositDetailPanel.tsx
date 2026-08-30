@@ -26,11 +26,10 @@ export default async function DepositDetailPanel({
     );
   }
 
-  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount, liveAccountHolderName } = detail;
+  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
   const state = (deposit.state || "").toUpperCase();
   const netAmount = deposit.netAmountCents ?? deposit.amountCents ?? 0;
   const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
-  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || liveAccountHolderName || null;
   const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || resolvedBankAccount?.last4 || null;
   const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || resolvedBankAccount?.accountType || null;
 
@@ -130,7 +129,6 @@ export default async function DepositDetailPanel({
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Destination Bank</h4>
         <div className="space-y-0.5">
           <Row label="Bank Name" value={bankName || "—"} />
-          <Row label="Account Holder" value={accountHolderName || "—"} />
           <Row label="Masked Account Number" value={bankAccountLast4 ? `•••• ${bankAccountLast4}` : "—"} />
           <Row label="Account Type" value={bankAccountType || "—"} />
           <Row label="Last Four" value={bankAccountLast4 || "—"} />

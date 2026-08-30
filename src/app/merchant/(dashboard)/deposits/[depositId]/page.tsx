@@ -31,9 +31,8 @@ export default async function DepositFullDetailPage({
     );
   }
 
-  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount, liveAccountHolderName } = detail;
+  const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
   const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
-  const accountHolderName = depositBankAccount?.accountHolderName || deposit.accountHolderName || resolvedBankAccount?.accountHolderName || liveAccountHolderName || null;
   const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || resolvedBankAccount?.last4 || null;
   const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || resolvedBankAccount?.accountType || null;
   const state = (deposit.state || "").toUpperCase();
@@ -169,7 +168,6 @@ export default async function DepositFullDetailPage({
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Bank Account</h3>
             <Row label="Bank Name" value={bankName || "—"} />
-            <Row label="Account Holder" value={accountHolderName || "—"} />
             <Row label="Masked Account Number" value={bankAccountLast4 ? `•••• ${bankAccountLast4}` : "—"} />
             <Row label="Account Type" value={bankAccountType || "—"} />
             <Row label="Last Four" value={bankAccountLast4 || "—"} />
