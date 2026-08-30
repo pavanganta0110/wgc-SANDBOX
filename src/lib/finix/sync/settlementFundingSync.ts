@@ -2,6 +2,7 @@ import { finixClient } from "@/lib/finix/client";
 import { prisma } from "@/lib/prisma";
 import { redactFinixPayload } from "@/lib/finix/redact";
 import { toSettlementFieldsForCreate, toSettlementFieldsForUpdate, linkTransfersToSettlement, recomputeSettlementAggregates } from "@/lib/finix/sync/syncSettlements";
+import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
 
 /**
  * Live settlement + merchant-deposit refresh, following the same
@@ -54,11 +55,19 @@ export function selectMerchantFundingTransfer(fundingTransfers: any[], finixMerc
 /**
  * Maps one raw Finix funding-transfer object to this app's DB field shape.
  * Confirmed against a real sandbox response: this Transfer object has no
- * bank_name/masked_account_number/account_type/funding_speed fields at
- * all — those were an earlier, incorrect assumption. Bank display info
- * comes exclusively from resolving `destination` (a payment-instrument
- * id) against OrganizationBankAccount (see settlementDetail.ts), never
- * from this object directly.
+ * bank_name/masked_account_number/account_type fields at all — those were
+ * an earlier, incorrect assumption. Bank display info comes exclusively
+ * from resolving `destination` (a payment-instrument id) against
+ * OrganizationBankAccount (see settlementDetail.ts), never from this
+ * object directly.
+ *
+ * fundingSpeed IS derivable here, though — per Finix's documented Transfer
+ * schema (not yet confirmed against a live payload for this account, only
+ * against the docs), operation_key encodes it directly (e.g.
+ * INSTANT_MERCHANT_FUNDING_PUSH_TO_ACH vs
+ * STANDARD_MERCHANT_FUNDING_PULL_FROM_ACH) — see
+ * deriveFundingSpeedFromOperationKey. Verify against a real synced deposit
+ * before relying on this in production.
  */
 export function mapFundingTransferFields(transfer: any) {
   return {
@@ -66,7 +75,7 @@ export function mapFundingTransferFields(transfer: any) {
     amountCents: transfer.amount ?? null,
     netAmountCents: transfer.amount ?? null,
     currency: transfer.currency ?? null,
-    fundingSpeed: null,
+    fundingSpeed: deriveFundingSpeedFromOperationKey(transfer.operation_key),
     bankAccountLast4: null,
     bankAccountType: null,
     bankName: null,

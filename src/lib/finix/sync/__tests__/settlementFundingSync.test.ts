@@ -69,6 +69,16 @@ describe("mapFundingTransferFields", () => {
     expect(mapped.bankName).toBeNull();
     expect(mapped.bankAccountLast4).toBeNull();
     expect(mapped.bankAccountType).toBeNull();
+  });
+
+  it("derives fundingSpeed from operation_key — confirmed against this real captured payload (STANDARD_MERCHANT_FUNDING_PUSH_TO_ACH)", () => {
+    const mapped = mapFundingTransferFields(REAL_MERCHANT_TRANSFER);
+    expect(mapped.fundingSpeed).toBe("STANDARD");
+  });
+
+  it("returns null fundingSpeed for a transfer with no operation_key, rather than guessing", () => {
+    const { operation_key, ...withoutOperationKey } = REAL_MERCHANT_TRANSFER;
+    const mapped = mapFundingTransferFields(withoutOperationKey);
     expect(mapped.fundingSpeed).toBeNull();
   });
 

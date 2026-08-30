@@ -16,6 +16,7 @@ import { syncAllChurchesPricing, syncChurchPricingForMerchantProfile } from "@/l
 import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
+import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
 import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
 // Credentials pasted into a dashboard env editor routinely pick up a trailing
@@ -911,7 +912,13 @@ export async function syncFinixDataFromWebhookEvent(
         // mirrors amountCents unless a future Finix API change adds one.
         netAmountCents: data.net_amount ?? data.amount ?? null,
         currency: data.currency ?? null,
-        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? null,
+        // funding_speed/ready_to_settle_upon aren't real fields per Finix's
+        // documented Transfer schema (checked, not confirmed against a live
+        // payload) — operation_key is what actually encodes it (e.g.
+        // INSTANT_MERCHANT_FUNDING_PUSH_TO_ACH). Kept as a fallback chain
+        // rather than replacing the old fields outright, in case a future
+        // Finix payload does carry one of them after all.
+        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? deriveFundingSpeedFromOperationKey(data.operation_key) ?? null,
         settlementCount: data.settlement_count ?? null,
         paymentCount: data.transfer_count ?? data.payment_count ?? null,
         bankAccountLast4: data.masked_account_number ?? null,
@@ -939,7 +946,7 @@ export async function syncFinixDataFromWebhookEvent(
         finixSettlementId: data.settlement ?? undefined,
         destinationPaymentInstrumentId: data.destination ?? undefined,
         netAmountCents: data.net_amount ?? undefined,
-        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? undefined,
+        fundingSpeed: data.funding_speed ?? data.ready_to_settle_upon ?? deriveFundingSpeedFromOperationKey(data.operation_key) ?? undefined,
         settlementCount: data.settlement_count ?? undefined,
         paymentCount: data.transfer_count ?? data.payment_count ?? undefined,
         bankAccountLast4: data.masked_account_number ?? undefined,
