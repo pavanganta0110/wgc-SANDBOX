@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { resolveActiveImpersonation } from "./impersonation";
 
 export { SESSION_COOKIE_NAME } from "./sessionConstants";
 import { SESSION_COOKIE_NAME } from "./sessionConstants";
@@ -110,6 +111,42 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!token) return null;
   const payload = verifySessionToken(token);
   if (!payload) return null;
+
+  // View as Merchant support: ~30 merchant pages/routes still call
+  // getSession() directly instead of requireMerchantSession() (see that
+  // function's own migration-debt comment). Without this branch, an
+  // impersonating admin's real session — churchId always null, and never
+  // passing the authVersion check below since admin logins never set it —
+  // would silently look like "no session" to every one of those pages,
+  // bouncing the admin back to /merchant/dashboard instead of showing the
+  // page. Mirrors requireMerchantSession()'s own impersonation branch
+  // exactly: re-verifies the admin is still valid (password-change-based,
+  // same as getAdminSession()), then requires a DB-verified active
+  // impersonation session — never falls back to treating a raw admin
+  // session as a merchant one.
+  if (payload.role === "wgc_admin" || payload.role === "wgc_super_admin") {
+    const adminUser = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { disabledAt: true, passwordChangedAt: true },
+    });
+    if (!adminUser || adminUser.disabledAt) return null;
+    const dbChangedAt = adminUser.passwordChangedAt ? adminUser.passwordChangedAt.getTime() : null;
+    if (dbChangedAt !== (payload.passwordChangedAt ?? null)) return null;
+
+    const impersonation = await resolveActiveImpersonation(payload.userId);
+    if (!impersonation) return null;
+
+    return {
+      userId: impersonation.adminUserId,
+      email: impersonation.adminEmail,
+      role: "owner",
+      churchId: impersonation.targetChurchId,
+      authVersion: payload.authVersion,
+      passwordChangedAt: payload.passwordChangedAt,
+      exp: payload.exp,
+      authTime: payload.authTime,
+    };
+  }
 
   // Team-access Checkpoint 1: this used to be a purely stateless check
   // (signature + expiry only) — a role change, permission change, or
