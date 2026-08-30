@@ -60,7 +60,7 @@ export default async function RecurringDonorDetailPage({
     throw err;
   }
   const churchId = auth.churchId;
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   const { donorId } = await params;
   const sp = await searchParams;
   const tab = (TABS.some((t) => t.key === sp.tab) ? sp.tab : "overview") as TabKey;

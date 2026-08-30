@@ -26,7 +26,7 @@ export async function DELETE(
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDisputePermissions(auth.rawRole);
+  const permissions = getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canDelete) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

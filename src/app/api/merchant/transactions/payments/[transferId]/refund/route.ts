@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
 
 export async function POST(req: Request, { params }: { params: Promise<{ transferId: string }> }) {
   let auth;
@@ -24,6 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ transfe
     // Refunding is a financial mutation, not a reporting action — blocked
     // while viewing another user's scope, same as team/bank/billing changes.
     await requireFullOrganizationContext(auth);
+    await auditImpersonatedWrite(auth, req);
   } catch (err) {
     if (isAuthError(err)) return toSafeErrorResponse(err.message, err.status);
     throw err;

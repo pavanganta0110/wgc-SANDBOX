@@ -14,7 +14,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ conta
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getOrganizationPermissions(auth.rawRole);
+  const permissions = getOrganizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canManageContacts) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

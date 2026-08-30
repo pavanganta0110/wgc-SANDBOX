@@ -20,7 +20,7 @@ export default async function OrganizationBankAccountPage() {
     if (isAuthError(err)) redirect("/merchant/dashboard");
     throw err;
   }
-  const permissions = getOrganizationPermissions(auth.rawRole);
+  const permissions = getOrganizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) {
     redirect("/merchant/dashboard");
   }

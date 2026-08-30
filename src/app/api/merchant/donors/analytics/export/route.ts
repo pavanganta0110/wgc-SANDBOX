@@ -29,7 +29,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

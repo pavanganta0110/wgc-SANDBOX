@@ -13,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ disput
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDisputePermissions(auth.rawRole);
+  const permissions = getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canUpload) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

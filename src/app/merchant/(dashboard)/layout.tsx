@@ -6,6 +6,8 @@ import Sidebar from "@/components/merchant/Sidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
 import ComplianceBanner from "@/components/merchant/ComplianceBanner";
 import BillingGateBanner from "@/components/merchant/BillingGateBanner";
+import ImpersonationBanner from "@/components/merchant/ImpersonationBanner";
+import { IMPERSONATION_COOKIE_NAME } from "@/lib/auth/impersonation";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { reconcileComplianceFormsForChurch, resolveComplianceStatus } from "@/lib/finix/sync/complianceForms";
@@ -35,7 +37,15 @@ export default async function MerchantDashboardLayout({
   try {
     auth = await requireMerchantSession(true);
   } catch (err) {
-    if (isAuthError(err)) redirect("/merchant/login");
+    if (isAuthError(err)) {
+      // A failed "View as Merchant" impersonation attempt (expired,
+      // ended, or a target org disabled mid-session) still carries the
+      // real identity of a WGC admin, not a merchant — send them back to
+      // the admin login rather than the merchant one, so they land
+      // somewhere their own credentials actually work.
+      const cookieStore = await cookies();
+      redirect(cookieStore.has(IMPERSONATION_COOKIE_NAME) ? "/admin/login" : "/merchant/login");
+    }
     throw err;
   }
 
@@ -103,8 +113,11 @@ export default async function MerchantDashboardLayout({
     );
   }
 
+  const isDemoMode = (await cookies()).has("wgc_demo_mode");
+
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
+      {auth.impersonation && <ImpersonationBanner orgName={auth.impersonation.targetChurchName} />}
       <ComplianceBanner status={complianceStatus} />
       {billingGateActive && <BillingGateBanner state={auth.orgAccessState ?? "NO_GATE"} />}
       <div className="flex-grow flex">
@@ -114,7 +127,7 @@ export default async function MerchantDashboardLayout({
             <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
               <div>
                 <h1 className="text-lg font-bold text-slate-900">
-                  {((await cookies()).has("wgc_demo_mode")) ? "Grace Community Church" : church.name}
+                  {isDemoMode ? "Grace Community Church" : church.name}
                 </h1>
                 <p className="text-[11px] text-slate-500">Powered by WGC Payments</p>
               </div>
@@ -122,9 +135,13 @@ export default async function MerchantDashboardLayout({
             <div className="flex items-center gap-4">
               {scopeSelector}
               <span className="text-sm text-slate-600 hidden md:inline">
-                {((await cookies()).has("wgc_demo_mode")) ? "admin@gracecommunity.org" : auth.email}
+                {isDemoMode ? "admin@gracecommunity.org" : auth.email}
               </span>
-              {!(await cookies()).has("wgc_demo_mode") && <LogoutButton />}
+              {/* The impersonation banner's own "Exit Merchant View" button
+                  is the correct action here, not the merchant logout — it
+                  would clear the admin's real wgc_session, which is never
+                  the intent while returning from a merchant view. */}
+              {!isDemoMode && !auth.impersonation && <LogoutButton />}
             </div>
           </div>
           <main className="flex-grow px-6 md:px-10 py-8">

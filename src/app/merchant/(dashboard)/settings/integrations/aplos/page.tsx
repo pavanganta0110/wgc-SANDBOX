@@ -21,7 +21,7 @@ export default async function AplosIntegrationPage() {
     if (isAuthError(err)) redirect("/merchant/dashboard");
     throw err;
   }
-  const settingsPermissions = getSettingsPermissions(auth.rawRole);
+  const settingsPermissions = getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!settingsPermissions.canView) redirect("/merchant/dashboard");
 
   const canManage = hasPermission(auth, "canManageIntegrations");

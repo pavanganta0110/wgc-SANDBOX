@@ -1884,6 +1884,31 @@ model DashboardAuditLog {
   @@index([entityType, entityId])
 }
 
+// "View as Merchant" admin impersonation session lifecycle (start/end/
+// expiry) — the DB-backed source of truth every read of the signed
+// wgc_impersonation cookie re-verifies against, so a revoked/expired/ended
+// session (or a target org disabled mid-session) fails closed on the very
+// next request rather than only at cookie-expiry time. Per-action writes
+// made while impersonating are logged into the existing DashboardAuditLog
+// (metadata carries actorType/actorAdminId/impersonationSessionId), not a
+// second table here — this model is only the umbrella session record.
+model AdminImpersonationSession {
+  id               String    @id @default(cuid())
+  adminUserId      String
+  adminEmail       String
+  targetChurchId   String
+  targetChurchName String
+  startedAt        DateTime  @default(now())
+  expiresAt        DateTime
+  endedAt          DateTime?
+  endedReason      String?
+  ipAddress        String?
+  userAgent        String?
+
+  @@index([adminUserId, endedAt])
+  @@index([targetChurchId, startedAt])
+}
+
 model FinixPaymentInstrumentSnapshot {
   id                       String    @id @default(cuid())
   churchId                 String?

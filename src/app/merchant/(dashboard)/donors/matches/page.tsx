@@ -23,7 +23,7 @@ export default async function PossibleDonorMatchesPage({ searchParams }: { searc
     if (isAuthError(err)) redirect("/merchant/donors");
     throw err;
   }
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canReviewMatches) redirect("/merchant/donors");
 
   const sp = await searchParams;

@@ -70,7 +70,7 @@ export default async function DisputesPage({
   // payment's attribution (resolveScopedTransferIds) — FUNDRAISER/VIEWER
   // see only disputes tied to payments attributed to them, rather than
   // being denied entirely.
-  if (!getDisputePermissions(auth.rawRole).canView) {
+  if (!getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole).canView) {
     redirect("/merchant/dashboard");
   }
   const churchId = auth.churchId;

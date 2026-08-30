@@ -16,7 +16,7 @@ export async function GET() {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getOrganizationPermissions(auth.rawRole);
+  const permissions = getOrganizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getOrganizationPermissions(auth.rawRole);
+  const permissions = getOrganizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canUploadDocuments) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

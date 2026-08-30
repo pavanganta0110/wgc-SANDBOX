@@ -44,7 +44,7 @@ export default async function AuthorizationsListPage({
     if (isAuthError(err)) redirect("/merchant/dashboard");
     throw err;
   }
-  const permissions = getAuthorizationPermissions(auth.rawRole);
+  const permissions = getAuthorizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) redirect("/merchant/dashboard");
   const churchId = auth.churchId;
   const { state, range, from, to, buyer, last4, org, captured, id } = await searchParams;

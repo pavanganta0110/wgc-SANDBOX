@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   // string (plus wgc_admin) — migrated to the centralized settings
   // permission (OWNER/authorized ADMIN via canEdit), never available while
   // viewing another user's scope.
-  const permissions = getSettingsPermissions(auth.rawRole);
+  const permissions = getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canEdit) {
     return toSafeErrorResponse("Unauthorized", 401);
   }

@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     throw err;
   }
 
-  const permissions = getDisputePermissions(auth.rawRole);
+  const permissions = getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

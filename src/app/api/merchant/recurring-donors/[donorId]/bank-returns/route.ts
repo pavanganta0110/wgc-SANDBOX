@@ -18,7 +18,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ donorId:
   // Team-access Checkpoint 4A: ACH returns have no row-level attribution
   // wired yet — FUNDRAISER/VIEWER denied entirely per the approved fallback
   // policy, same as the main bank-returns page/export.
-  if (!getSettlementPermissions(auth.rawRole).canView) {
+  if (!getSettlementPermissions(auth.impersonation ? "owner" : auth.rawRole).canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

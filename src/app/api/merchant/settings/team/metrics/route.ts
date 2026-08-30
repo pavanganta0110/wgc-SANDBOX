@@ -21,7 +21,7 @@ export async function GET() {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSettingsPermissions(auth.rawRole);
+  const permissions = getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canManageTeam) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

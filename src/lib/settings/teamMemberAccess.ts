@@ -26,5 +26,5 @@ export function canOpenTeamMemberDetail(
 export function canExportTeamMemberData(auth: MerchantAuthContext, target: { id: string; churchId: string | null }): boolean {
   if (!canOpenTeamMemberDetail(auth, target)) return false;
   if (target.id === auth.userId) return true;
-  return getSettingsPermissions(auth.rawRole).canManageTeam;
+  return getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole).canManageTeam;
 }

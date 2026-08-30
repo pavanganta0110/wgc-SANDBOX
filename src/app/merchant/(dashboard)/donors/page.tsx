@@ -114,7 +114,7 @@ export default async function DonorsPage({
     throw err;
   }
   const churchId = auth.churchId;
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   const sp = await searchParams;
   const pendingMatchCount = permissions.canReviewMatches
     ? await prisma.possibleDonorMatch.count({ where: { churchId, status: "PENDING" } })

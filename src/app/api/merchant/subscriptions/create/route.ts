@@ -32,7 +32,7 @@ export async function POST(req: Request) {
   // from the centralized role-permission matrix (canCreate = canManageRecurring,
   // true for owner/admin, false for fundraiser/viewer) — no inline role
   // check needed anymore.
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canCreate) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

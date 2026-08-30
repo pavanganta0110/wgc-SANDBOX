@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canCancel) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

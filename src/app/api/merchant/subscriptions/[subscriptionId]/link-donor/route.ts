@@ -14,7 +14,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ subscrip
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canUpdateAmount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -49,7 +49,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ subscr
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canUpdateAmount) {
     // Reuses the existing "can manage subscription details" permission tier
     // rather than inventing a new one for this narrow admin-only action.

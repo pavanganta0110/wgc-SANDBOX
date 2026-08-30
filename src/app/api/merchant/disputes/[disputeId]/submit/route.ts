@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ dispute
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDisputePermissions(auth.rawRole);
+  const permissions = getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canSubmit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

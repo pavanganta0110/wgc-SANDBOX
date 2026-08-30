@@ -97,8 +97,19 @@ export function parsePermissionOverrides(raw: unknown): Partial<PermissionMatrix
  * have and deny one it does (explicit false always wins over the role
  * default), per the approved spec.
  */
-export function resolveEffectivePermissions(auth: Pick<MerchantAuthContext, "role" | "isWgcAdmin" | "permissionsJson">): PermissionMatrix {
-  const base = auth.isWgcAdmin
+export function resolveEffectivePermissions(
+  auth: Pick<MerchantAuthContext, "role" | "isWgcAdmin" | "permissionsJson" | "impersonation">
+): PermissionMatrix {
+  // A "View as Merchant" impersonation session already carries role:"owner"
+  // on the context (set in requireMerchantSession.ts) specifically so it
+  // resolves through ROLE_PERMISSIONS["owner"] here — full parity with what
+  // a real owner sees/can do, per the approved spec. A raw (non-
+  // impersonating) admin session still resolves to the separate, narrow,
+  // fixed WGC_ADMIN_PERMISSIONS matrix below — unchanged, and in practice
+  // now unreachable via requireMerchantSession() (a raw admin session is
+  // rejected before returning), kept only as a defense-in-depth fallback
+  // for any other caller that might construct isWgcAdmin:true directly.
+  const base = auth.isWgcAdmin && !auth.impersonation
     ? WGC_ADMIN_PERMISSIONS
     : auth.role
       ? ROLE_PERMISSIONS[auth.role]

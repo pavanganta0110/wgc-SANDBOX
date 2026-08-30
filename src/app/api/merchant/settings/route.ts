@@ -15,7 +15,7 @@ export async function PATCH(req: Request) {
   // Team-access Checkpoint 4D: was gated on the literal "church_admin" role
   // string only (no other role could ever pass) — migrated to the
   // centralized settings permission.
-  if (!getSettingsPermissions(auth.rawRole).canEdit) {
+  if (!getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole).canEdit) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

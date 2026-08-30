@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { formatCents } from "@/lib/format";
 import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVerificationGuard";
+import OpenMerchantDashboardButton from "@/components/admin/OpenMerchantDashboardButton";
 
 export default async function MerchantOverviewPage({ params }: { params: Promise<{ churchId: string }> | { churchId: string } }) {
   const session = await getAdminSession();
@@ -85,20 +86,25 @@ export default async function MerchantOverviewPage({ params }: { params: Promise
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold leading-6 text-gray-900">Merchant Overview</h2>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${
-            nonprofitVerification.isApproved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-          }`}>
-            {nonprofitVerification.isApproved ? "501(c)(3) Verified" : "Verification Pending"}
-          </span>
-          <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${
-            church.finixMerchantId ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-          }`}>
-            {church.finixMerchantId ? "Finix Activated" : "Pending Activation"}
-          </span>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold leading-6 text-gray-900">Merchant Overview</h2>
+          <div className="mt-2 flex items-center gap-2">
+            <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${
+              nonprofitVerification.isApproved ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+            }`}>
+              {nonprofitVerification.isApproved ? "501(c)(3) Verified" : "Verification Pending"}
+            </span>
+            <span className={`inline-flex items-center rounded-md px-2.5 py-0.5 text-xs font-semibold ${
+              church.finixMerchantId ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+            }`}>
+              {church.finixMerchantId ? "Finix Activated" : "Pending Activation"}
+            </span>
+          </div>
         </div>
+        {session.role === "wgc_super_admin" && church.status === "ACTIVE" && (
+          <OpenMerchantDashboardButton churchId={church.id} />
+        )}
       </div>
 
       <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">

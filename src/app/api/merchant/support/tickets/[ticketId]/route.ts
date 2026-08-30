@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ ticketI
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSupportPermissions(auth.rawRole);
+  const permissions = getSupportPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ticket
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSupportPermissions(auth.rawRole);
+  const permissions = getSupportPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canCloseReopen) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

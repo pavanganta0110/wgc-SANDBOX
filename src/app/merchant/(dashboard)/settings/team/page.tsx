@@ -15,7 +15,7 @@ export default async function TeamSettingsPage() {
     if (isAuthError(err)) redirect("/merchant/dashboard");
     throw err;
   }
-  const permissions = getSettingsPermissions(auth.rawRole);
+  const permissions = getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) redirect("/merchant/dashboard");
 
   const [users, church] = await Promise.all([

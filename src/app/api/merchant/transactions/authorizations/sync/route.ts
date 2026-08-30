@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getAuthorizationPermissions(auth.rawRole);
+  const permissions = getAuthorizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canTriggerSync) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   // Team-access Checkpoint 4A: same policy as the bank-returns page —
   // no row-level attribution exists for ACH returns yet, so FUNDRAISER/VIEWER
   // are denied entirely rather than shown organization-wide data.
-  if (!getSettlementPermissions(auth.rawRole).canExport) {
+  if (!getSettlementPermissions(auth.impersonation ? "owner" : auth.rawRole).canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

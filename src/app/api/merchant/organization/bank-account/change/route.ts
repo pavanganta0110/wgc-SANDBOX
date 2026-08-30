@@ -8,6 +8,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
+import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
 
 /**
  * Creates the new bank instrument in Finix directly from the client-side
@@ -39,10 +40,11 @@ export async function POST(req: Request) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getOrganizationPermissions(auth.rawRole);
+  const permissions = getOrganizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canUpdateBankAccount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  await auditImpersonatedWrite(auth, req);
   // Team-access Checkpoint 4B: bank-account mutations are blocked while
   // viewing another user's scope.
   try {

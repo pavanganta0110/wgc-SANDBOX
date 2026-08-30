@@ -17,7 +17,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ donorId:
   }
   // Team-access Checkpoint 4A: disputes have no row-level attribution wired
   // yet — FUNDRAISER/VIEWER denied entirely per the approved fallback policy.
-  if (!getDisputePermissions(auth.rawRole).canView) {
+  if (!getDisputePermissions(auth.impersonation ? "owner" : auth.rawRole).canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

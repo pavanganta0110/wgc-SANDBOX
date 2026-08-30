@@ -13,7 +13,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ donorId:
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -40,7 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ donorId
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canAddNote) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -31,7 +31,7 @@ export async function GET(req: Request) {
   // all — per the approved fallback policy, this stays organization-scope
   // only (OWNER always, ADMIN per canViewSettlements), FUNDRAISER/VIEWER
   // denied entirely rather than exposing unscoped organization-wide data.
-  const permissions = getAuthorizationPermissions(auth.rawRole);
+  const permissions = getAuthorizationPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

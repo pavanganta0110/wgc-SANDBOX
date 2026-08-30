@@ -117,13 +117,7 @@ export default function PricingPage() {
                     <span className="text-6xl font-bold text-wgc-navy-950 tracking-tighter">2.3%</span>
                     <span className="text-2xl font-bold text-wgc-navy-400">+ $0.25</span>
                   </div>
-                  <p className="text-[11px] font-bold text-wgc-navy-400 mb-6 uppercase tracking-widest">Per transaction*</p>
-                  
-                  <div className="mb-10 bg-wgc-navy-50/50 p-4 rounded-xl border border-wgc-navy-100/50">
-                    <p className="text-[12px] font-medium text-wgc-navy-600 leading-relaxed italic">
-                      *This is the highest possible rate. As volume and processing efficiency increase, pricing is reduced — never increased.
-                    </p>
-                  </div>
+                  <p className="text-[11px] font-bold text-wgc-navy-400 mb-10 uppercase tracking-widest">Per transaction</p>
                   <div className="w-12 h-1 bg-wgc-gold-500 rounded-full group-hover:w-full transition-all duration-700"></div>
                 </div>
  

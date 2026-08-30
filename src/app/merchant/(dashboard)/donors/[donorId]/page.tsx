@@ -67,7 +67,7 @@ export default async function DonorProfilePage({
 }) {
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
-  const permissions = getDonorPermissions(auth.rawRole);
+  const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
   const { donorId } = await params;
   const sp = await searchParams;
   const tab: TabKey = (TABS.find((t) => t.key === sp.tab)?.key ?? "overview") as TabKey;

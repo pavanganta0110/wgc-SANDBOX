@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ ticketI
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSupportPermissions(auth.rawRole);
+  const permissions = getSupportPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canReply) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

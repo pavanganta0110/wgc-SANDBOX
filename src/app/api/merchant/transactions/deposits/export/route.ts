@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   // Team-access Checkpoint 4B: deposits are settlement-level financial
   // information — same policy as settlements (OWNER always, ADMIN only
   // with canViewSettlements, FUNDRAISER/VIEWER denied).
-  const permissions = getSettlementPermissions(auth.rawRole);
+  const permissions = getSettlementPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

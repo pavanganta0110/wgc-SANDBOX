@@ -39,7 +39,7 @@ export async function GET(req: Request) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
   }
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canExport) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

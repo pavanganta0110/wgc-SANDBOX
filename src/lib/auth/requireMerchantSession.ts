@@ -6,6 +6,7 @@ import { verifySessionToken } from "./session";
 import { normalizeMerchantRole, type NormalizedOrgRole, type RawUserRole } from "./roles";
 import { UnauthorizedError, BillingAccessRestrictedError } from "./errors";
 import { resolveOrgAccessState, type OrgAccessState } from "@/lib/billing/accessGate";
+import { resolveActiveImpersonation, type ActiveImpersonation } from "./impersonation";
 
 export interface MerchantAuthContext {
   userId: string;
@@ -25,6 +26,14 @@ export interface MerchantAuthContext {
    * construct a MerchantAuthContext literal for permission-matrix testing
    * don't all need updating — treat a missing value as "no gate." */
   orgAccessState?: OrgAccessState;
+  /** Set only when this context was resolved via an active "View as
+   * Merchant" admin impersonation session (see impersonation.ts). When set,
+   * churchId/role above reflect the TARGET merchant (tenant), while this
+   * field carries the REAL actor (a WGC admin) — write-audit call sites use
+   * it to attribute actions to the admin instead of the merchant. Absent
+   * (undefined) for every normal merchant session — never present and
+   * false, so `if (auth.impersonation)` is the one check needed everywhere. */
+  impersonation?: ActiveImpersonation;
 }
 
 const ACCESS_STATE_MESSAGES: Record<OrgAccessState, string> = {
@@ -92,6 +101,12 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
       disabledAt: true,
       authVersion: true,
       permissionsJson: true,
+      // Only ever read for the wgc_admin/wgc_super_admin impersonation
+      // branch below — admin sessions are invalidated by password change
+      // (passwordChangedAt), not authVersion, matching getAdminSession()'s
+      // own check in session.ts. Selected unconditionally since Prisma
+      // select shape can't branch on the role we haven't read yet.
+      passwordChangedAt: true,
     },
   });
 
@@ -100,22 +115,62 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
 
   const rawRole = user.role as RawUserRole;
 
-  // Checkpoint 2 correction: wgc_admin/wgc_super_admin are WGC's own
-  // internal roles, not a merchant organization role. There is currently
-  // no support-access flow (selected churchId + acting admin + reason +
-  // expiration + audit record + read-only default) — until that exists,
-  // requireMerchantSession() must not admit either into merchant/
-  // organization routes at all, even read-only ones. This is deliberate
-  // and explicit rather than an incidental side effect of the churchId
-  // check below: either role could theoretically end up with a non-null
-  // churchId (e.g. a future provisioning bug) and must still be rejected
-  // here regardless. wgc_super_admin is live's higher-privilege internal
-  // admin-panel role (manages wgc_admin accounts) — same shared User.role
-  // column, same rejection.
+  // Checkpoint 2 correction, extended by the "View as Merchant" feature:
+  // wgc_admin/wgc_super_admin are WGC's own internal roles, not a merchant
+  // organization role, and by default still cannot admit into merchant/
+  // organization routes at all — even read-only ones. The one exception is
+  // the support-access flow this comment used to say didn't exist yet: a
+  // valid, DB-verified "View as Merchant" impersonation session (see
+  // impersonation.ts). That check happens here, inline, rather than a
+  // separate entry point, specifically so it benefits every one of this
+  // function's ~50+ existing callers for free instead of requiring each to
+  // be rewritten. Any failure below — no cookie, invalid cookie, ended/
+  // expired session, cookie replayed under a different admin, target org
+  // disabled — falls through to the same rejection every raw admin session
+  // has always gotten. This never silently falls back to treating the
+  // admin as themselves; there is no "self" for a wgc_admin to fall back to.
   if (rawRole === "wgc_admin" || rawRole === "wgc_super_admin") {
-    throw new UnauthorizedError(
-      "WGC internal accounts cannot access merchant organization data through this session. Use the WGC support-access flow instead."
-    );
+    // Admin sessions are invalidated by password change, not authVersion —
+    // mirrors getAdminSession()'s own dbChangedAt comparison exactly (see
+    // session.ts). Using the merchant-side authVersion check here would
+    // reject every real admin session, since admin logins never set
+    // authVersion on the token payload in the first place.
+    const dbChangedAt = user.passwordChangedAt ? user.passwordChangedAt.getTime() : null;
+    if (dbChangedAt !== (payload.passwordChangedAt ?? null)) {
+      throw new UnauthorizedError("Session is stale — please log in again.");
+    }
+
+    const impersonation = await resolveActiveImpersonation(user.id);
+    if (!impersonation) {
+      throw new UnauthorizedError(
+        "WGC internal accounts cannot access merchant organization data through this session. Use the WGC support-access flow instead."
+      );
+    }
+
+    const access = await resolveOrgAccessState(impersonation.targetChurchId);
+    if (!access.fullAccessAllowed && !allowRestrictedAccess) {
+      throw new BillingAccessRestrictedError(access.state, ACCESS_STATE_MESSAGES[access.state] || "Dashboard access is currently restricted.");
+    }
+
+    return {
+      userId: impersonation.adminUserId,
+      email: impersonation.adminEmail,
+      churchId: impersonation.targetChurchId,
+      rawRole,
+      // Deliberately "owner", not null and not a bespoke matrix — see
+      // resolveEffectivePermissions() in permissions.ts for the full
+      // rationale (this is what makes the impersonated dashboard match a
+      // real owner's read/write access instead of the narrow, fixed
+      // WGC_ADMIN_PERMISSIONS matrix a raw admin session would otherwise
+      // get, which would 403 most of the merchant dashboard).
+      role: "owner",
+      isWgcAdmin: true,
+      permissionsJson: null,
+      authVersion: user.authVersion,
+      authTime: payload.authTime ?? null,
+      orgAccessState: access.state,
+      impersonation,
+    };
   }
 
   if (!user.churchId) throw new UnauthorizedError("User has no associated organization.");
@@ -134,11 +189,9 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
     churchId: user.churchId,
     rawRole,
     role: normalizeMerchantRole(rawRole),
-    // Always false here — wgc_admin never reaches this return (see the throw
-    // above; TS narrows rawRole to exclude "wgc_admin" past that point).
-    // Field kept on the type for the future WGC support-access flow, which
-    // will need its own separate entry point (not this function) with its
-    // own churchId-selection/reason/expiration requirements.
+    // Always false here — wgc_admin/wgc_super_admin always return from the
+    // impersonation branch above (or throw) and never reach this point; TS
+    // narrows rawRole to exclude both past that point.
     isWgcAdmin: false,
     permissionsJson: user.permissionsJson,
     authVersion: user.authVersion,

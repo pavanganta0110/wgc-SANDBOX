@@ -54,7 +54,7 @@ export default async function SubscriptionsPage({
     throw err;
   }
   const churchId = auth.churchId;
-  const permissions = getSubscriptionPermissions(auth.rawRole);
+  const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
   const sp = await searchParams;
 
   const page = Math.max(1, parseInt(sp.page || "1", 10) || 1);

@@ -9,6 +9,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
+import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
 
 // Team-access Checkpoint 4: the set of role strings that represent a real,
 // manageable organization member on the Team page — mirrors
@@ -59,7 +60,7 @@ export async function GET() {
     throw err;
   }
 
-  const permissions = getSettingsPermissions(auth.rawRole);
+  const permissions = getSettingsPermissions(auth.impersonation ? "owner" : auth.rawRole);
   if (!permissions.canView) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -82,6 +83,7 @@ export async function POST(req: Request) {
     auth = await requireMerchantSession();
     requirePermission(auth, "canManageTeam");
     await requireFullOrganizationContext(auth);
+    await auditImpersonatedWrite(auth, req);
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
