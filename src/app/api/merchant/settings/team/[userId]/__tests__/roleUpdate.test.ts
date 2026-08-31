@@ -63,6 +63,26 @@ describe("PATCH /api/merchant/settings/team/[userId] — role edit + grant-only 
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
+  it("an admin cannot change their own role/permissions through this route — closes a self-escalation path (grant themselves canManageBankAccount etc. via permissionOverrides)", async () => {
+    const { PATCH, createSessionToken } = await loadModule();
+    const { prisma } = await import("@/lib/prisma");
+    mockCookieStore.get.mockReturnValue({ value: sessionCookie(createSessionToken, "admin", "admin-1") });
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(mockUser("admin-1", "admin", { permissionsJson: { canManageTeam: true } }) as never) // requireMerchantSession
+      .mockResolvedValueOnce(mockUser("admin-1", "admin", { permissionsJson: { canManageTeam: true } }) as never); // loadTargetInOrg
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ primaryOwnerUserId: "owner-1" } as never);
+
+    const res = await PATCH(
+      new Request("http://x", {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update_role", role: "admin", permissionOverrides: { canManageBankAccount: true } }),
+      }),
+      { params: Promise.resolve({ userId: "admin-1" }) }
+    );
+    expect(res.status).toBe(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it("fundraiser cannot change anyone's role (requirePermission canManageTeam fails)", async () => {
     const { PATCH, createSessionToken } = await loadModule();
     const { prisma } = await import("@/lib/prisma");

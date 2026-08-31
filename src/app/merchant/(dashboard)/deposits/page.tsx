@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -39,7 +41,16 @@ export default async function DepositsPage({
   }>;
 }) {
   const session = await getSession();
-  const churchId = session!.churchId!;
+  // Deposits are organization-level payout data (destination bank account,
+  // net settled amounts) — same tier as Settlements, so gated by the same
+  // permission. Previously this page had no role gate at all beyond the
+  // coarse middleware session check, so any authenticated org member —
+  // including FUNDRAISER/VIEWER — could load every deposit and the org's
+  // bank destination details.
+  if (!session?.churchId || !getSettlementPermissions(session.role).canView) {
+    redirect("/merchant/dashboard");
+  }
+  const churchId = session.churchId;
   const { state, range, from, to, amount, org, cols, id } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
+import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
@@ -15,7 +17,12 @@ export default async function DepositFullDetailPage({
   params: Promise<{ depositId: string }>;
 }) {
   const session = await getSession();
-  const churchId = session!.churchId!;
+  // Same permission tier as the deposits list page and Settlements — see
+  // that page's comment for the gap this closes.
+  if (!session?.churchId || !getSettlementPermissions(session.role).canView) {
+    redirect("/merchant/dashboard");
+  }
+  const churchId = session.churchId;
   const { depositId } = await params;
 
   const detail = await loadDepositDetail(depositId, churchId);

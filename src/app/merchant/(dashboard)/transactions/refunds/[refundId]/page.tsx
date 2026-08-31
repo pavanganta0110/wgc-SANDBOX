@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
@@ -14,8 +14,8 @@ export default async function RefundFullDetailPage({
 }: {
   params: Promise<{ refundId: string }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  const auth = await requireMerchantSession();
+  const churchId = auth.churchId;
   const { refundId } = await params;
 
   const detail = await loadRefundDetail(refundId, churchId);

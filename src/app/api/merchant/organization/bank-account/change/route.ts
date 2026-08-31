@@ -66,9 +66,14 @@ export async function POST(req: Request) {
   // Idempotency: if this exact request was already submitted (e.g. a
   // duplicate click or a retried network request), return the original
   // result instead of creating a second payout account.
+  // idempotencyKey is globally unique (not compound with churchId, see
+  // schema), and the request body is where it comes from — a client-chosen
+  // key colliding with another org's own idempotency key must never leak
+  // that org's proposed account details, so the churchId match is
+  // re-verified explicitly rather than trusting the findUnique alone.
   const existingRequest = await prisma.payoutAccountChangeRequest.findUnique({ where: { idempotencyKey } });
-  if (existingRequest?.proposedAccountId) {
-    const existingAccount = await prisma.organizationBankAccount.findUnique({ where: { id: existingRequest.proposedAccountId } });
+  if (existingRequest?.churchId === auth.churchId && existingRequest.proposedAccountId) {
+    const existingAccount = await prisma.organizationBankAccount.findFirst({ where: { id: existingRequest.proposedAccountId, churchId: auth.churchId } });
     if (existingAccount) {
       return NextResponse.json(
         { account: { id: existingAccount.id, last4: existingAccount.last4, accountType: existingAccount.accountType, status: existingAccount.status }, idempotent: true },

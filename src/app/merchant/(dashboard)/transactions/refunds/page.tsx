@@ -1,4 +1,6 @@
-import { getSession } from "@/lib/auth/session";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildRefundScope } from "@/lib/auth/scopes";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -39,8 +41,17 @@ export default async function RefundsPage({
     id?: string;
   }>;
 }) {
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  const auth = await requireMerchantSession();
+  const churchId = auth.churchId;
+  const viewScope = await resolveViewScope(auth);
+  // Team-access: FinixRefundOrReversal has no attribution column of its
+  // own — buildRefundScope bridges through Payment.attributedUserId via
+  // the original transfer (same pattern as buildFinixTransferScope on the
+  // payments page). Previously this page read straight off churchId with
+  // no scoping at all, so a viewer/fundraiser without canViewAllTransactions
+  // could see every refund (and the donor PII/card data attached to it)
+  // for the whole organization, not just their own.
+  const refundScope = await buildRefundScope(auth, viewScope);
   const { state, range, from, to, donor: donorFilter, last4, org, cols, id } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -48,7 +59,7 @@ export default async function RefundsPage({
 
   const refunds = await prisma.finixRefundOrReversal.findMany({
     where: {
-      churchId,
+      ...refundScope,
       ...(state ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
     },

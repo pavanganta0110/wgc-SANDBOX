@@ -218,8 +218,20 @@ export default async function AdminSettlementDetailPage({
               {depositBankName && <Row label="Bank Name" value={depositBankName} />}
               {depositAccountType && <Row label="Account Type" value={titleCase(depositAccountType)} />}
               <Row label="Bank Account" value={depositBankLast4 ? `•••• ${depositBankLast4}` : "—"} />
-              <Row label="Sent" value={formatDateTime(deposit.sentAt)} />
-              <Row label="Arrived" value={formatDateTime(deposit.arrivedAt)} />
+              <Row
+                label="Sent"
+                value={formatDateTime(
+                  deposit.sentAt ??
+                    (["SENT", "COMPLETED", "SUCCEEDED"].includes((deposit.state || "").toUpperCase()) ? deposit.createdAtFinix : null)
+                )}
+              />
+              <Row
+                label="Arrived"
+                value={formatDateTime(
+                  deposit.arrivedAt ??
+                    (["COMPLETED", "SUCCEEDED"].includes((deposit.state || "").toUpperCase()) ? deposit.createdAtFinix : null)
+                )}
+              />
             </div>
           )}
         </div>

@@ -58,6 +58,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
   }
 
   if (action === "update_role") {
+    // Self-targeting was blocked for disable/remove below but not here —
+    // without this, an admin holding canManageTeam could PATCH their own
+    // userId with permissionOverrides and grant themselves any overridable
+    // key (bank account, billing, subscription, refunds, settlements)
+    // their role doesn't carry by default, with no owner involved at all.
+    if (target.id === auth.userId) {
+      return NextResponse.json({ error: "You can't change your own role or permissions" }, { status: 400 });
+    }
     const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { primaryOwnerUserId: true } });
     if (church?.primaryOwnerUserId === target.id) {
       return NextResponse.json({ error: "The primary owner's role can't be changed here." }, { status: 400 });

@@ -24,10 +24,15 @@ export async function GET() {
   });
 
   const [deposits] = await Promise.all([
+    // "COMPLETED" never actually appears in real data — Finix's real
+    // funding-transfer state is "SUCCEEDED" (same mismatch already fixed
+    // in bankAccountResolver.ts and elsewhere). arrivedAt is null on every
+    // real row seen so far, so createdAtFinix is the only reliable
+    // ordering/display timestamp.
     prisma.finixFundingTransferAttempt.findMany({
-      where: { churchId: auth.churchId, state: "COMPLETED" },
-      orderBy: { arrivedAt: "desc" },
-      select: { bankAccountLast4: true, arrivedAt: true },
+      where: { churchId: auth.churchId, state: { in: ["COMPLETED", "SUCCEEDED"] } },
+      orderBy: { createdAtFinix: "desc" },
+      select: { bankAccountLast4: true, arrivedAt: true, createdAtFinix: true },
     }),
   ]);
 
@@ -44,7 +49,7 @@ export async function GET() {
       activatedAt: row.activatedAt,
       replacedAt: row.replacedAt,
       depositsReceived: depositsForAccount.length,
-      lastDepositAt: depositsForAccount[0]?.arrivedAt ?? null,
+      lastDepositAt: depositsForAccount[0]?.arrivedAt ?? depositsForAccount[0]?.createdAtFinix ?? null,
       createdByUserId: row.createdByUserId,
       changeReason: row.changeReason,
     };
