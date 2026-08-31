@@ -44,6 +44,7 @@ export async function syncPaymentInstrument(
       instrumentType: instrument.instrument_type ?? null,
       paymentMethodType: instrument.type ?? null,
       cardBrand: instrument.brand ?? null,
+      cardType: instrument.card_type ?? null,
       cardLast4: instrument.last_four ?? null,
       cardExpirationMonth: instrument.expiration_month ?? null,
       cardExpirationYear: instrument.expiration_year ?? null,
@@ -64,6 +65,7 @@ export async function syncPaymentInstrument(
       lastSyncedAt: new Date(),
     },
     update: {
+      cardType: instrument.card_type ?? null,
       state: deriveInstrumentState(instrument),
       enabled: Boolean(instrument.enabled),
       disabledCode: instrument.disabled_code ?? null,

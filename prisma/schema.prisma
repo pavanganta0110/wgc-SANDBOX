@@ -1918,6 +1918,10 @@ model FinixPaymentInstrumentSnapshot {
   instrumentType           String?
   paymentMethodType        String?
   cardBrand                String?
+  // DEBIT | CREDIT | PREPAID | UNKNOWN — Finix's own `card_type` field.
+  // Confirmed present on every real captured payment-instrument payload
+  // (was previously never mapped from the raw JSON we already store).
+  cardType                 String?
   cardLast4                String?
   cardExpirationMonth      Int?
   cardExpirationYear       Int?

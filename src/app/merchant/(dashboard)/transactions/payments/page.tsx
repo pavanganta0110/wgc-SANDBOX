@@ -15,6 +15,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation";
 import { resolveFundFilteredTransferIds } from "@/lib/giving/fundAssignment";
+import { PaymentInstrumentCell, InstrumentTypeCell } from "@/components/merchant/PaymentInstrumentDisplay";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -201,7 +202,6 @@ export default async function PaymentsListPage({
             <tbody>
               {rows.map(({ transfer: t, instrument, donor, refund, displayStatus, payment }) => {
                 const last4Value = instrument?.cardLast4 || instrument?.bankLast4;
-                const instrumentLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account" : null);
                 const isFailed = (t.state || "").toUpperCase() === "FAILED";
 
                 return (
@@ -235,10 +235,17 @@ export default async function PaymentsListPage({
                         <p className="text-xs text-slate-400 mt-0.5">{t.failureCode}</p>
                       )}
                     </td>
-                    <td className="px-6 py-3 text-slate-600">
-                      {last4Value ? `••••${last4Value}` : "—"}
+                    <td className="px-6 py-3">
+                      <PaymentInstrumentCell
+                        cardBrand={instrument?.cardBrand}
+                        paymentMethodType={instrument?.paymentMethodType}
+                        last4={last4Value}
+                        holderName={instrument?.accountHolderName}
+                      />
                     </td>
-                    <td className="px-6 py-3 text-slate-500 text-xs">{instrumentLabel || "Unknown"}</td>
+                    <td className="px-6 py-3">
+                      <InstrumentTypeCell paymentMethodType={instrument?.paymentMethodType} cardType={instrument?.cardType} />
+                    </td>
                     <td className="px-6 py-3 text-slate-600">
                       {payment?.fundName ||
                         ((t.tagsJson as Record<string, string> | null)?.source === "wgc_invoice_payment"

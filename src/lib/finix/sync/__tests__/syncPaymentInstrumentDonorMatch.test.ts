@@ -51,4 +51,18 @@ describe("syncPaymentInstrument — donor matching", () => {
       expect.objectContaining({ create: expect.objectContaining({ donorId: "explicit-donor" }) })
     );
   });
+
+  it("maps Finix's real card_type field (DEBIT/CREDIT/PREPAID) into cardType on both create and update", async () => {
+    mockFinixClient.getPaymentInstrument.mockResolvedValue({
+      identity: "ID123", enabled: true, brand: "VISA", last_four: "1111", card_type: "DEBIT",
+    });
+    const { syncPaymentInstrument } = await load();
+    await syncPaymentInstrument("PI123", { churchId: "church-a", donorId: "donor-1" });
+    expect(mockPrisma.finixPaymentInstrumentSnapshot.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ cardType: "DEBIT" }),
+        update: expect.objectContaining({ cardType: "DEBIT" }),
+      })
+    );
+  });
 });
