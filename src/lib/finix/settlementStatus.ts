@@ -67,3 +67,17 @@ export function getSettlementStatusLabel(status: string): string {
   if (!status) return "Unknown";
   return status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, " ");
 }
+
+/**
+ * Whether a raw processor status means this settlement has actually
+ * settled/funded — i.e. reached its real terminal state. Confirmed
+ * against every settlement this org has ever had: Finix never actually
+ * sends a literal "SETTLED" status for this resource; "APPROVED" is the
+ * real terminal value in practice. Checking both keeps this correct if
+ * Finix ever does send "SETTLED" for some other flow, without depending
+ * on it.
+ */
+export function isSettlementTerminalStatus(status: string | null | undefined): boolean {
+  const s = (status || "").toUpperCase();
+  return s === "APPROVED" || s === "SETTLED";
+}

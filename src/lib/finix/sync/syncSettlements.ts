@@ -1,6 +1,7 @@
 import { finixClient } from "@/lib/finix/client";
 import { prisma } from "@/lib/prisma";
 import { redactFinixPayload } from "@/lib/finix/redact";
+import { isSettlementTerminalStatus } from "@/lib/finix/settlementStatus";
 
 /**
  * Links every transfer (payment or refund/reversal) accrued into a
@@ -105,7 +106,7 @@ export function toSettlementFieldsForCreate(settlement: any) {
     traceId: settlement.trace_id ?? null,
     currency: settlement.currency ?? null,
     accruedAt: settlement.window_start_time ? new Date(settlement.window_start_time) : null,
-    settledAt: settlement.status === "SETTLED" && settlement.updated_at ? new Date(settlement.updated_at) : null,
+    settledAt: isSettlementTerminalStatus(settlement.status) && settlement.updated_at ? new Date(settlement.updated_at) : null,
   };
 }
 
@@ -123,7 +124,7 @@ export function toSettlementFieldsForUpdate(settlement: any) {
     traceId: settlement.trace_id ?? undefined,
     currency: settlement.currency ?? undefined,
     accruedAt: settlement.window_start_time ? new Date(settlement.window_start_time) : undefined,
-    settledAt: settlement.status === "SETTLED" && settlement.updated_at ? new Date(settlement.updated_at) : undefined,
+    settledAt: isSettlementTerminalStatus(settlement.status) && settlement.updated_at ? new Date(settlement.updated_at) : undefined,
   };
 }
 

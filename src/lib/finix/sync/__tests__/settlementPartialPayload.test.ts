@@ -62,8 +62,13 @@ describe("toSettlementFieldsForUpdate — partial-payload null preservation", ()
     expect(fields.feeAmountCents).toBe(450);
   });
 
-  it("does not mark settledAt when status isn't SETTLED, even if updated_at is present", () => {
+  it("does not mark settledAt for a non-terminal status (PENDING/AWAITING_APPROVAL), even if updated_at is present", () => {
     const fields = toSettlementFieldsForUpdate({ status: "PENDING", updated_at: "2026-01-02T00:00:00Z" });
     expect(fields.settledAt).toBeUndefined();
+  });
+
+  it("marks settledAt for status APPROVED — Finix's real terminal settlement status (confirmed against every real settlement this org has had: SETTLED never actually appears)", () => {
+    const fields = toSettlementFieldsForUpdate({ status: "APPROVED", updated_at: "2026-01-02T00:00:00Z" });
+    expect(fields.settledAt).toEqual(new Date("2026-01-02T00:00:00Z"));
   });
 });

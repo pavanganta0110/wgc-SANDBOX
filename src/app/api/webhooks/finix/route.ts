@@ -17,6 +17,7 @@ import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
 import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
+import { isSettlementTerminalStatus } from "@/lib/finix/settlementStatus";
 import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 
 // Credentials pasted into a dashboard env editor routinely pick up a trailing
@@ -837,7 +838,13 @@ export async function syncFinixDataFromWebhookEvent(
         traceId: data.trace_id ?? null,
         currency: data.currency ?? null,
         accruedAt: data.window_start_time ? new Date(data.window_start_time) : null,
-        settledAt: data.status === "SETTLED" && data.updated_at ? new Date(data.updated_at) : null,
+        // Confirmed against every real settlement this org has ever had
+        // (19 rows: PENDING/AWAITING_APPROVAL/APPROVED only) — Finix never
+        // actually sends a literal "SETTLED" status for this resource;
+        // "APPROVED" is the real terminal state. Same class of mismatch
+        // already fixed for FinixFundingTransferAttempt.state
+        // (COMPLETED vs SUCCEEDED).
+        settledAt: isSettlementTerminalStatus(data.status) && data.updated_at ? new Date(data.updated_at) : null,
         rawJsonRedacted: redactFinixPayload(data),
         createdAtFinix: data.created_at ? new Date(data.created_at) : occurredAt,
         updatedAtFinix: data.updated_at ? new Date(data.updated_at) : occurredAt,
@@ -856,7 +863,7 @@ export async function syncFinixDataFromWebhookEvent(
         traceId: data.trace_id ?? undefined,
         currency: data.currency ?? undefined,
         accruedAt: data.window_start_time ? new Date(data.window_start_time) : undefined,
-        settledAt: data.status === "SETTLED" && data.updated_at ? new Date(data.updated_at) : undefined,
+        settledAt: isSettlementTerminalStatus(data.status) && data.updated_at ? new Date(data.updated_at) : undefined,
         rawJsonRedacted: redactFinixPayload(data),
         updatedAtFinix: data.updated_at ? new Date(data.updated_at) : occurredAt,
         lastSyncedAt: new Date(),
@@ -870,7 +877,7 @@ export async function syncFinixDataFromWebhookEvent(
       console.error("Failed to link transfers to settlement:", err);
     }
 
-    if (churchId && data.status === "SETTLED" && priorSettlement?.state !== "SETTLED") {
+    if (churchId && isSettlementTerminalStatus(data.status) && !isSettlementTerminalStatus(priorSettlement?.state)) {
       const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
       await notifyEvent({
         churchId,

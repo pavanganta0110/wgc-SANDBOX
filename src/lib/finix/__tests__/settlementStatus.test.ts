@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeSettlementStatus, resolveSettlementDisplayStatus, getSettlementStatusLabel, SETTLEMENT_UNKNOWN_STATUS } from "@/lib/finix/settlementStatus";
+import { normalizeSettlementStatus, resolveSettlementDisplayStatus, getSettlementStatusLabel, isSettlementTerminalStatus, SETTLEMENT_UNKNOWN_STATUS } from "@/lib/finix/settlementStatus";
 
 describe("normalizeSettlementStatus", () => {
   it("trusts a real Finix status even if it wasn't previously known — the actual bug being fixed", () => {
@@ -54,5 +54,23 @@ describe("getSettlementStatusLabel", () => {
 
   it("labels UNKNOWN distinctly", () => {
     expect(getSettlementStatusLabel("UNKNOWN")).toBe("Unknown");
+  });
+});
+
+describe("isSettlementTerminalStatus", () => {
+  it("treats APPROVED as terminal — Finix's real terminal settlement status, confirmed against every settlement this org has ever had (SETTLED never actually appears)", () => {
+    expect(isSettlementTerminalStatus("APPROVED")).toBe(true);
+    expect(isSettlementTerminalStatus("approved")).toBe(true);
+  });
+
+  it("also treats a literal SETTLED as terminal, in case Finix ever sends it for some other flow", () => {
+    expect(isSettlementTerminalStatus("SETTLED")).toBe(true);
+  });
+
+  it("is false for every non-terminal status", () => {
+    expect(isSettlementTerminalStatus("PENDING")).toBe(false);
+    expect(isSettlementTerminalStatus("AWAITING_APPROVAL")).toBe(false);
+    expect(isSettlementTerminalStatus(null)).toBe(false);
+    expect(isSettlementTerminalStatus(undefined)).toBe(false);
   });
 });
