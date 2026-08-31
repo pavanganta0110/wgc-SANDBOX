@@ -98,6 +98,13 @@ export default async function PaymentDetailPanel({
     ? await prisma.donor.findUnique({ where: { id: instrument.donorId } })
     : null;
 
+  const donationReceipts = payment
+    ? await prisma.donationReceipt.findMany({
+        where: { paymentId: payment.id, churchId },
+        orderBy: { version: "desc" },
+      })
+    : [];
+
   const invoice = invoicePayment ? await prisma.invoice.findUnique({ where: { id: invoicePayment.invoiceId } }) : null;
   const invoiceClient = invoice ? await prisma.client.findUnique({ where: { id: invoice.clientId } }) : null;
 
@@ -555,8 +562,30 @@ export default async function PaymentDetailPanel({
         title="Receipt"
         action={<CreateReceiptButton transferId={transfer.finixTransferId} />}
       >
-        {payment?.receiptSentAt ? (
-          <Row label="Sent" value={formatDateTime(payment.receiptSentAt)} />
+        {donationReceipts.length > 0 ? (
+          <div className="space-y-2">
+            {donationReceipts.map((r) => (
+              <div key={r.id} className="flex items-center justify-between text-sm">
+                <div>
+                  <p className="font-semibold text-slate-700">
+                    Receipt {r.receiptNumber}
+                    {r.version > 1 && <span className="text-slate-400 font-normal"> · v{r.version}</span>}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {r.sentAt ? `Sent ${formatDateTime(r.sentAt)}` : r.failureReason ? `Failed: ${r.failureReason}` : "Not sent"}
+                  </p>
+                </div>
+                <a
+                  href={`/api/merchant/transactions/payments/${transfer.finixTransferId}/receipts/${r.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-blue-600 hover:underline shrink-0"
+                >
+                  View
+                </a>
+              </div>
+            ))}
+          </div>
         ) : (
           <p className="text-sm text-slate-500">No past receipt created or sent at this time.</p>
         )}

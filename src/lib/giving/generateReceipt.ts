@@ -26,10 +26,32 @@ import { DonationReceiptPdf, type DonationReceiptPdfProps } from "@/lib/giving/p
  * previously issued receipt is ever mutated in place, so a donor who
  * already received version 1 can be shown exactly what changed.
  */
-export async function sendDonationReceipt(paymentId: string, churchId: string, actorUserId: string | null = null) {
-  const payment = await prisma.payment.findFirst({ where: { id: paymentId, churchId } });
-  if (!payment) throw new Error("Payment not found");
+type ReceiptFinancialSnapshot = {
+  receiptNumber: string;
+  paymentAmountCents: number;
+  goodsServicesProvided: boolean;
+  goodsServicesDescription: string | null;
+  goodsServicesFairMarketValueCents: number | null;
+  recordedContributionAmountCents: number;
+  acknowledgmentText: string;
+};
 
+/**
+ * Everything needed to render a DonationReceiptPdf except the
+ * receipt-specific financial/legal fields (amount, goods/services,
+ * acknowledgment text, receipt number) — those are supplied separately so
+ * a historical DonationReceipt version can be re-rendered later using its
+ * own stored snapshot instead of the payment's current (possibly since
+ * corrected) values. Organization/donor display details are always
+ * current-state (name spelling, org branding) rather than snapshotted —
+ * only the financial/legal content that must never silently drift is
+ * pinned per version.
+ */
+export async function buildDonationReceiptPdfProps(
+  payment: NonNullable<Awaited<ReturnType<typeof prisma.payment.findFirst>>>,
+  churchId: string,
+  snapshot: ReceiptFinancialSnapshot
+): Promise<{ props: DonationReceiptPdfProps; donorEmail: string | null; donorName: string; church: NonNullable<Awaited<ReturnType<typeof prisma.church.findUnique>>> }> {
   const [church, donor, instrument] = await Promise.all([
     prisma.church.findUnique({ where: { id: churchId } }),
     payment.donorId ? prisma.donor.findUnique({ where: { id: payment.donorId } }) : null,
@@ -39,13 +61,8 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
   ]);
   if (!church) throw new Error("Organization not found");
 
-  const donorEmail = donor?.email;
-  if (!donorEmail) throw new Error("Donor is missing an email address — receipt not sent");
-
   const settings = resolveReceiptSettings(church);
   const orgName = church.statementSenderName || church.name;
-
-  const receiptNumber = payment.receiptNumber || generateReceiptNumber(church.receiptNumberPrefix, payment.id, payment.createdAt);
 
   const isAnonymousDisplay = donor?.anonymousPreference || payment.isAnonymous;
   const donorName = isAnonymousDisplay ? "Anonymous Donor" : formatPersonName(donor?.name || "Donor");
@@ -61,17 +78,7 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     ? [church.addressLine1, church.addressLine2, [church.city, church.state, church.postalCode].filter(Boolean).join(", ")].filter(Boolean).join(", ")
     : null;
 
-  const paymentAmountCents = payment.donationAmountCents ?? payment.amountCents;
-  const goodsServicesProvided = payment.goodsServicesProvided;
-  const goodsServicesDescription = goodsServicesProvided ? payment.goodsServicesDescription : null;
-  const goodsServicesFairMarketValueCents = goodsServicesProvided ? payment.goodsServicesFairMarketValueCents ?? 0 : null;
-  const recordedContributionAmountCents =
-    payment.recordedContributionAmountCents ??
-    (goodsServicesProvided ? computeRecordedContributionAmountCents(paymentAmountCents, goodsServicesFairMarketValueCents ?? 0) : paymentAmountCents);
-
-  const acknowledgmentText = resolveAcknowledgmentText(church, goodsServicesDescription, goodsServicesFairMarketValueCents);
-
-  const pdfProps: DonationReceiptPdfProps = {
+  const props: DonationReceiptPdfProps = {
     organizationName: orgName,
     organizationLogoUrl: church.logoUrl || null,
     organizationAddress: settings.showAddress ? organizationAddress : null,
@@ -80,23 +87,59 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     organizationWebsite: settings.showWebsite ? church.website || null : null,
     organizationTaxId: settings.showTaxId ? church.taxId || null : null,
     donorName,
-    donorEmail: isAnonymousDisplay ? null : donorEmail,
+    donorEmail: isAnonymousDisplay ? null : donor?.email || null,
     donorAddress,
-    receiptNumber,
+    receiptNumber: snapshot.receiptNumber,
     transactionReference: settings.showDonationReference ? payment.finixTransferId || payment.id : payment.id,
     donationDate: payment.createdAt,
-    amountCents: paymentAmountCents,
+    amountCents: snapshot.paymentAmountCents,
     fundName: settings.showFund ? payment.fundName : null,
     paymentMethodLabel: settings.showPaymentMethodLastFour ? paymentMethodLabel : describeInstrumentType(payment.paymentMethodType),
     isRecurring: false,
     recurringInterval: null,
-    goodsServicesProvided,
-    goodsServicesFairMarketValueCents,
-    recordedContributionAmountCents,
-    acknowledgmentText,
+    goodsServicesProvided: snapshot.goodsServicesProvided,
+    goodsServicesFairMarketValueCents: snapshot.goodsServicesFairMarketValueCents,
+    recordedContributionAmountCents: snapshot.recordedContributionAmountCents,
+    acknowledgmentText: snapshot.acknowledgmentText,
     disclaimer: settings.disclaimer,
     footer: settings.footer,
   };
+
+  return { props, donorEmail: donor?.email || null, donorName, church };
+}
+
+export async function sendDonationReceipt(paymentId: string, churchId: string, actorUserId: string | null = null) {
+  const payment = await prisma.payment.findFirst({ where: { id: paymentId, churchId } });
+  if (!payment) throw new Error("Payment not found");
+
+  const church = await prisma.church.findUnique({ where: { id: churchId } });
+  if (!church) throw new Error("Organization not found");
+
+  const receiptNumber = payment.receiptNumber || generateReceiptNumber(church.receiptNumberPrefix, payment.id, payment.createdAt);
+
+  const paymentAmountCents = payment.donationAmountCents ?? payment.amountCents;
+  const goodsServicesProvided = payment.goodsServicesProvided;
+  const goodsServicesDescription = goodsServicesProvided ? payment.goodsServicesDescription : null;
+  const goodsServicesFairMarketValueCents = goodsServicesProvided ? payment.goodsServicesFairMarketValueCents ?? 0 : null;
+  const recordedContributionAmountCents =
+    payment.recordedContributionAmountCents ??
+    (goodsServicesProvided ? computeRecordedContributionAmountCents(paymentAmountCents, goodsServicesFairMarketValueCents ?? 0) : paymentAmountCents);
+  const acknowledgmentText = resolveAcknowledgmentText(church, goodsServicesDescription, goodsServicesFairMarketValueCents);
+
+  const { props: pdfProps, donorEmail, donorName } = await buildDonationReceiptPdfProps(payment, churchId, {
+    receiptNumber,
+    paymentAmountCents,
+    goodsServicesProvided,
+    goodsServicesDescription,
+    goodsServicesFairMarketValueCents,
+    recordedContributionAmountCents,
+    acknowledgmentText,
+  });
+
+  if (!donorEmail) throw new Error("Donor is missing an email address — receipt not sent");
+
+  const settings = resolveReceiptSettings(church);
+  const orgName = church.statementSenderName || church.name;
 
   const pdf = await renderToBuffer(DonationReceiptPdf(pdfProps));
 
@@ -134,7 +177,7 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
     attachments: [{ filename: `receipt-${receiptNumber}${nextVersion > 1 ? `-v${nextVersion}` : ""}.pdf`, content: pdf as unknown as Buffer }],
     log: {
       churchId,
-      donorId: donor?.id ?? null,
+      donorId: payment.donorId ?? null,
       recipientName: donorName,
       category: "DONATION_RECEIPT",
       relatedEntityType: "Payment",
