@@ -498,7 +498,10 @@ export async function getDepositsInsights(churchId: string, dateFilter: { gte: D
     where: { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
   });
 
-  const completed = deposits.filter((d) => (d.state || "").toUpperCase() === "COMPLETED");
+  // Finix's real funding-transfer state is "SUCCEEDED", not "COMPLETED" —
+  // same mismatch already fixed in bankAccountResolver.ts and the deposit
+  // detail pages' Transaction Flow steps.
+  const completed = deposits.filter((d) => ["COMPLETED", "SUCCEEDED"].includes((d.state || "").toUpperCase()));
   const pending = deposits.filter((d) => ["PENDING", "PROCESSING", "SENT"].includes((d.state || "").toUpperCase()));
   const failed = deposits.filter((d) => ["FAILED", "RETURNED", "CANCELED"].includes((d.state || "").toUpperCase()));
 

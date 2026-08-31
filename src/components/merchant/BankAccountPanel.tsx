@@ -6,6 +6,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import ChangeBankAccountFlow from "@/components/merchant/ChangeBankAccountFlow";
 import PayoutAccountDocumentsUpload from "@/components/merchant/PayoutAccountDocumentsUpload";
 import { formatCents } from "@/lib/format";
+import { formatFundingSpeed } from "@/lib/depositColumns";
 
 interface Account {
   source: string;
@@ -188,14 +189,13 @@ export default function BankAccountPanel({
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <Row label="Bank Name" value={account.bankName || "—"} />
-              <Row label="Account Holder Name" value={account.accountHolderName || "—"} />
               <Row label="Account Type" value={account.accountType || "—"} />
               <Row label="Masked Account Number" value={account.last4 ? `••••${account.last4}` : "—"} />
               <Row label="Payout Destination State" value={account.displayStatus.replace(/_/g, " ")} />
               <Row label="Is Active Payout Destination" value={account.isActivePayoutDestination ? "Yes" : "No"} />
               <Row label="Payment Instrument State" value={account.paymentInstrumentState || "—"} />
               <Row label="Verification State" value={account.verificationState || "—"} />
-              <Row label="Funding Speed" value={latestDeposit?.fundingSpeed || "—"} />
+              <Row label="Funding Speed" value={formatFundingSpeed(latestDeposit?.fundingSpeed)} />
               <Row label="Added Date" value={account.addedAt ? new Date(account.addedAt).toLocaleDateString() : "—"} />
               <Row
                 label="Latest Deposit"

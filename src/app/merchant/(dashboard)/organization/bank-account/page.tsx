@@ -28,9 +28,15 @@ export default async function OrganizationBankAccountPage() {
     resolveActiveBankAccount(auth.churchId),
     checkPendingFunding(auth.churchId),
     prisma.finixFundingTransferAttempt.findFirst({
-      where: { churchId: auth.churchId, state: "COMPLETED" },
-      orderBy: { arrivedAt: "desc" },
-      select: { arrivedAt: true, state: true, amountCents: true, fundingSpeed: true },
+      // "COMPLETED" never actually appears in real data — Finix's real
+      // funding-transfer state is "SUCCEEDED" (matches the same fix already
+      // applied in bankAccountResolver.ts's tier-4 filter). arrivedAt is
+      // null on every real row seen so far, so createdAtFinix is the only
+      // reliable ordering/display timestamp (same reasoning as
+      // bankAccountResolver.ts's tiebreaker).
+      where: { churchId: auth.churchId, state: { in: ["COMPLETED", "SUCCEEDED"] } },
+      orderBy: { createdAtFinix: "desc" },
+      select: { arrivedAt: true, createdAtFinix: true, state: true, amountCents: true, fundingSpeed: true },
     }),
     prisma.finixFundingTransferAttempt.findMany({
       where: { churchId: auth.churchId, state: { in: ["FAILED", "RETURNED"] } },
@@ -64,7 +70,9 @@ export default async function OrganizationBankAccountPage() {
       latestDeposit={
         latestDeposit
           ? {
-              arrivedAt: latestDeposit.arrivedAt ? latestDeposit.arrivedAt.toISOString() : null,
+              arrivedAt: (latestDeposit.arrivedAt ?? latestDeposit.createdAtFinix)
+                ? (latestDeposit.arrivedAt ?? latestDeposit.createdAtFinix)!.toISOString()
+                : null,
               amountCents: latestDeposit.amountCents,
               fundingSpeed: latestDeposit.fundingSpeed,
             }
