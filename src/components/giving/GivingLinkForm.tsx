@@ -132,7 +132,7 @@ export default function GivingLinkForm({
 }) {
   const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
   const [customAmount, setCustomAmount] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(0);
   const [extraAmount, setExtraAmount] = useState("");
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<FrequencyKey>(allowedFrequencies[0] ?? "MONTHLY");
@@ -1041,7 +1041,7 @@ export default function GivingLinkForm({
               </div>
             </div>
             <label className="block text-xs mb-1" style={{ color: light.bodyTextColor }}>
-              Additional Donation Amount
+              Custom Amount
             </label>
             <input
               type="number"

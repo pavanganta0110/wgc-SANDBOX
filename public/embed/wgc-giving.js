@@ -325,7 +325,7 @@
       fraudSessionId: null,
       selectedAmountCents: 0,
       customAmountCents: null,
-      quantity: 1,
+      quantity: 0,
       additionalAmountCents: 0,
       selectedFundId: null,
       isRecurring: false,
@@ -408,7 +408,7 @@
       html += '<span class="wgc-inline-qty-value" data-role="qty-value">' + state.quantity + "</span>";
       html += '<button type="button" class="wgc-inline-qty-btn" data-role="qty-increase" aria-label="Increase quantity">+</button>';
       html += "</div></div>";
-      html += '<label style="margin-top:10px;">Additional Donation Amount</label>';
+      html += '<label style="margin-top:10px;">Custom Amount</label>';
       html += '<input class="wgc-inline-input" data-role="additional-amount" type="text" inputmode="decimal" placeholder="$0.00" />';
       html += '<div class="wgc-inline-qty-total" data-role="qty-total">' + formatCents(state.quantity * (cfg.amount.fixedAmountCents || 0)) + "</div>";
       html += "</div>";
