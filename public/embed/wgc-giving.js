@@ -510,7 +510,7 @@
       html += '<p class="wgc-inline-powered">Powered by WGC Payments</p>';
     }
     html += "</form>";
-    html += '<div class="wgc-inline-success" data-role="success" hidden><h3>Thank you!</h3><p data-role="success-message"></p></div>';
+    html += '<div class="wgc-inline-success" data-role="success" hidden><h3>Thank you!</h3><p data-role="success-message"></p><div data-role="success-video"></div></div>';
     html += "</div>";
 
     state.container.innerHTML = html;
@@ -855,6 +855,33 @@
       });
   }
 
+  // Mirrors parseYouTubeVideoId() in src/lib/givingLinks/types.ts — only a
+  // real youtube.com/youtu.be URL can ever produce a video ID here, so a
+  // merchant-configured thankYouVideoUrl can never be used to embed an
+  // arbitrary/untrusted origin.
+  function parseYouTubeVideoId(url) {
+    if (!url) return null;
+    try {
+      var u = new URL(url);
+      var host = u.hostname.replace(/^www\./, "");
+      if (host === "youtu.be") {
+        var id = u.pathname.slice(1).split("/")[0];
+        return /^[\w-]{11}$/.test(id) ? id : null;
+      }
+      if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+        if (u.pathname === "/watch") {
+          var vId = u.searchParams.get("v");
+          return vId && /^[\w-]{11}$/.test(vId) ? vId : null;
+        }
+        var m = u.pathname.match(/^\/(?:shorts|embed)\/([\w-]{11})/);
+        if (m) return m[1];
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   function renderSuccess(state) {
     var form = q(state, '[data-role="form"]');
     var success = q(state, '[data-role="success"]');
@@ -862,6 +889,18 @@
     if (success) {
       var msg = q(state, '[data-role="success-message"]');
       if (msg) msg.textContent = state.config.branding.thankYouMessage || "Your gift has been received. A confirmation email is on its way.";
+      var videoHost = q(state, '[data-role="success-video"]');
+      if (videoHost) {
+        var videoId = parseYouTubeVideoId(state.config.branding.thankYouVideoUrl || "");
+        if (videoId) {
+          videoHost.innerHTML =
+            '<div style="aspect-ratio:16/9;max-width:360px;margin:12px auto 0;border-radius:12px;overflow:hidden;"><iframe src="https://www.youtube-nocookie.com/embed/' +
+            videoId +
+            '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
+        } else {
+          videoHost.innerHTML = "";
+        }
+      }
       success.hidden = false;
     }
   }

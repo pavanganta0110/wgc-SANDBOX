@@ -97,6 +97,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         campaignImageUrl: branding.campaignImageUrl,
         showPoweredByWgc: !branding.hideFooter,
         thankYouMessage: branding.thankYouMessage,
+        thankYouVideoUrl: branding.thankYouVideoUrl,
         // Full light-mode branding object, in the exact shape
         // GivingLinkPreviewPanel/GivingLinkForm already expect — lets the
         // Website Embed settings page reuse that existing preview

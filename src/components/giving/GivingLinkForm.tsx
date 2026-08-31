@@ -9,6 +9,7 @@ import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { formatCents } from "@/lib/format";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
+import { parseYouTubeVideoId } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
@@ -81,6 +82,7 @@ export default function GivingLinkForm({
   collectMailingAddress = true,
   pricing,
   thankYouMessage,
+  thankYouVideoUrl,
   googlePayGatewayMerchantId,
   googlePayMerchantId,
   googlePayEnvironment,
@@ -113,6 +115,8 @@ export default function GivingLinkForm({
   collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
+  /** Optional YouTube URL (watch/shorts/youtu.be) shown on the success screen after a donation completes. Non-YouTube URLs are silently ignored by parseYouTubeVideoId. */
+  thankYouVideoUrl?: string;
   /** Finix Application Owner Identity ID ("ID..."), used as Google Pay's gatewayMerchantId. Null when not configured. */
   googlePayGatewayMerchantId: string | null;
   googlePayMerchantId: string | null;
@@ -895,6 +899,22 @@ export default function GivingLinkForm({
           </div>
         )}
         {thankYouMessage && <p className="text-sm" style={{ color: light.bodyTextColor }}>{thankYouMessage}</p>}
+        {(() => {
+          const videoId = parseYouTubeVideoId(thankYouVideoUrl || "");
+          if (!videoId) return null;
+          return (
+            <div className="rounded-xl overflow-hidden" style={{ aspectRatio: "16 / 9", maxWidth: 360, margin: "0 auto" }}>
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                title="Thank you"
+                className="w-full h-full"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          );
+        })()}
         {result.transferId && <p className="text-xs text-slate-300 font-mono">{result.transferId}</p>}
         <button
           onClick={() => setResult({ step: "form" })}

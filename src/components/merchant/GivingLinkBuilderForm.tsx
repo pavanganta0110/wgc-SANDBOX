@@ -1144,6 +1144,18 @@ export default function GivingLinkBuilderForm({
               />
             </div>
             <div>
+              <FieldLabel>Thank-You Video URL (optional)</FieldLabel>
+              <input
+                value={state.branding.thankYouVideoUrl}
+                onChange={(e) => update("branding", { ...state.branding, thankYouVideoUrl: e.target.value })}
+                placeholder="https://www.youtube.com/watch?v=... or a Shorts link"
+                className={inputClass}
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                A YouTube video shown on the donation success screen, right after the confirmation. Paste any youtube.com or youtu.be link — a non-YouTube URL is simply ignored.
+              </p>
+            </div>
+            <div>
               <FieldLabel>Support Email</FieldLabel>
               <input
                 type="email"
@@ -1187,6 +1199,7 @@ export default function GivingLinkBuilderForm({
             collectMailingAddress={state.collectMailingAddress}
             pricing={pricing}
             thankYouMessage={state.receiptSettings.customMessage || "Thank you for your gift!"}
+            thankYouVideoUrl={state.branding.thankYouVideoUrl}
             campaignImageUrl={state.branding.campaignImageUrl || undefined}
             publicTitle={state.publicTitle}
             description={state.description}

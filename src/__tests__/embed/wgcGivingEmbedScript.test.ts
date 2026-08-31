@@ -54,9 +54,11 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     expect(SOURCE).toContain('id="wgc-finix-form-\' + state.id');
   });
 
-  it("never builds a nested WGC iframe for inline mode — <iframe> only ever appears in popup-window comments/docs, never as constructed markup", () => {
+  it("never builds a nested WGC iframe for inline mode (createElement('iframe') is never used) — the only <iframe> markup constructed at all is the merchant-configured, youtube-nocookie.com-only thank-you video, which parseYouTubeVideoId's allowlist keeps to that one trusted origin", () => {
     expect(SOURCE).not.toMatch(/createElement\(\s*["']iframe["']\s*\)/);
-    expect(SOURCE).not.toMatch(/<iframe/);
+    const iframeOccurrences = SOURCE.match(/<iframe/g) || [];
+    expect(iframeOccurrences).toHaveLength(1);
+    expect(SOURCE).toContain('<iframe src="https://www.youtube-nocookie.com/embed/');
   });
 
   it("submits donations to the shared /api/g/[slug]/donate endpoint rather than a separate embed-only payment route", () => {
@@ -116,5 +118,14 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     expect(mountBody).toMatch(/if \(isNestedFrame\(\)\) \{\s*renderPaymentFallback\(state, mountEl\);\s*return;\s*\}/);
     expect(SOURCE).toContain("function renderPaymentFallback(state, mountEl)");
     expect(SOURCE).toContain('openWgcPopup(state.config.hostedGivingUrl, "wgc_giving_" + state.slug)');
+  });
+
+  it("shows the merchant-configured thank-you YouTube video on the success screen, mirroring parseYouTubeVideoId's allowlist so only a real youtube.com/youtu.be URL can ever be embedded", () => {
+    expect(SOURCE).toContain("function parseYouTubeVideoId(url)");
+    expect(SOURCE).toContain('data-role="success-video"');
+    expect(SOURCE).toContain("youtube-nocookie.com/embed/");
+    const renderSuccessMatch = SOURCE.match(/function renderSuccess\([\s\S]*?\n  \}\n/);
+    expect(renderSuccessMatch).not.toBeNull();
+    expect(renderSuccessMatch![0]).toContain("parseYouTubeVideoId(state.config.branding.thankYouVideoUrl");
   });
 });

@@ -27,6 +27,7 @@ export default function GivingLinkPreviewPanel({
   collectMailingAddress = true,
   pricing,
   thankYouMessage,
+  thankYouVideoUrl,
   campaignImageUrl,
   publicTitle,
   description,
@@ -54,6 +55,7 @@ export default function GivingLinkPreviewPanel({
   collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
+  thankYouVideoUrl?: string;
   campaignImageUrl?: string;
   publicTitle: string;
   description: string;
@@ -186,6 +188,7 @@ export default function GivingLinkPreviewPanel({
                 collectMailingAddress={collectMailingAddress}
                 pricing={pricing}
                 thankYouMessage={thankYouMessage}
+                thankYouVideoUrl={thankYouVideoUrl}
                 googlePayGatewayMerchantId={null}
                 googlePayMerchantId={null}
                 googlePayEnvironment="TEST"

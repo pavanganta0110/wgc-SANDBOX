@@ -37,6 +37,7 @@ interface EmbedConfig {
     campaignImageUrl: string;
     showPoweredByWgc: boolean;
     thankYouMessage: string;
+    thankYouVideoUrl: string;
     light: {
       logoUrl: string;
       headerBackground: string;
@@ -376,6 +377,7 @@ export default function WebsiteEmbedForm({
                     donorFieldSettings={config.donorFields as never}
                     pricing={config.pricing}
                     thankYouMessage={config.branding.thankYouMessage}
+                    thankYouVideoUrl={config.branding.thankYouVideoUrl}
                     campaignImageUrl={config.branding.campaignImageUrl}
                     publicTitle={config.givingPage.title}
                     description={config.givingPage.description}

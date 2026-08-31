@@ -102,6 +102,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           collectMailingAddress={link.collectMailingAddress}
           pricing={pricing}
           thankYouMessage={branding.thankYouMessage}
+          thankYouVideoUrl={branding.thankYouVideoUrl}
           googlePayGatewayMerchantId={googlePayGatewayMerchantId}
           googlePayMerchantId={googlePayMerchantId}
           googlePayEnvironment={googlePayEnvironment}

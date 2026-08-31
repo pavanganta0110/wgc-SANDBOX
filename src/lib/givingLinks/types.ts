@@ -106,6 +106,12 @@ export interface BrandingSettings {
   hideChurchAddress: boolean;
   hideContactInfo: boolean;
   thankYouMessage: string;
+  // Optional YouTube video shown on the success screen after a donation
+  // completes. Stored as the full URL a merchant pastes in (watch, share,
+  // or shorts link) — parseYouTubeVideoId() below normalizes it to a video
+  // ID before ever building an iframe src, so only a real youtube.com/
+  // youtu.be URL can ever end up embedded (never an arbitrary domain).
+  thankYouVideoUrl: string;
   supportEmail: string;
   showPoweredByWgc?: boolean;
 }
@@ -142,9 +148,38 @@ export const DEFAULT_BRANDING_SETTINGS: BrandingSettings = {
   hideChurchAddress: false,
   hideContactInfo: false,
   thankYouMessage: "",
+  thankYouVideoUrl: "",
   supportEmail: "",
   showPoweredByWgc: true,
 };
+
+// Accepts youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, and
+// youtube.com/embed/ URLs; returns the bare 11-char video ID, or null for
+// anything else (including a non-YouTube URL) — the only value ever
+// allowed into an iframe src, so a merchant pasting an arbitrary URL can
+// never result in embedding an untrusted origin.
+export function parseYouTubeVideoId(url: string): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url.trim());
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0];
+      return /^[\w-]{11}$/.test(id) ? id : null;
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      if (u.pathname === "/watch") {
+        const id = u.searchParams.get("v");
+        return id && /^[\w-]{11}$/.test(id) ? id : null;
+      }
+      const shortsMatch = u.pathname.match(/^\/(?:shorts|embed)\/([\w-]{11})/);
+      if (shortsMatch) return shortsMatch[1];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 export function parseBrandingSettings(json: unknown): BrandingSettings {
   if (!json || typeof json !== "object") return DEFAULT_BRANDING_SETTINGS;

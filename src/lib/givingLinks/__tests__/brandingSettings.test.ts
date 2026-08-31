@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { parseBrandingSettings, DEFAULT_BRANDING_SETTINGS } from '../types';
+import { parseBrandingSettings, DEFAULT_BRANDING_SETTINGS, parseYouTubeVideoId } from '../types';
 import { PATCH } from '@/app/api/merchant/giving-links/[id]/route';
 import { prisma } from '@/lib/prisma';
 import { UnauthorizedError } from '@/lib/auth/errors';
@@ -130,5 +130,41 @@ describe('Branding Settings for Giving Links', () => {
         }),
       })
     );
+  });
+});
+
+describe('parseYouTubeVideoId — thank-you video on the donation success screen', () => {
+  it('extracts the video ID from a standard watch URL', () => {
+    expect(parseYouTubeVideoId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts the video ID from a youtu.be short link', () => {
+    expect(parseYouTubeVideoId('https://youtu.be/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts the video ID from a Shorts URL', () => {
+    expect(parseYouTubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('extracts the video ID from an already-embed URL', () => {
+    expect(parseYouTubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+  });
+
+  it('returns null for an empty or missing URL, so no iframe renders at all', () => {
+    expect(parseYouTubeVideoId('')).toBeNull();
+  });
+
+  it('returns null for a non-YouTube URL — never lets an arbitrary domain be embedded', () => {
+    expect(parseYouTubeVideoId('https://evil.example.com/watch?v=dQw4w9WgXcQ')).toBeNull();
+  });
+
+  it('returns null for a malformed URL instead of throwing', () => {
+    expect(parseYouTubeVideoId('not a url')).toBeNull();
+  });
+
+  it('DEFAULT_BRANDING_SETTINGS.thankYouVideoUrl defaults to empty, and parseBrandingSettings preserves a saved one', () => {
+    expect(DEFAULT_BRANDING_SETTINGS.thankYouVideoUrl).toBe('');
+    const parsed = parseBrandingSettings({ thankYouVideoUrl: 'https://youtu.be/abc12345678' });
+    expect(parsed.thankYouVideoUrl).toBe('https://youtu.be/abc12345678');
   });
 });
