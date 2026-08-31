@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { refreshSettlementAndDepositFromFinix, isStaleEnoughToRefresh } from "@/lib/finix/sync/settlementFundingSync";
+import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
 
 /**
  * Shared data loader for a single settlement's full detail view — used by
@@ -100,11 +101,19 @@ export async function loadSettlementDetail(finixSettlementId: string, churchId: 
   // account (Organization Profile's own source of truth) whenever the
   // funding-transfer row itself is missing bank name/type — matched via
   // the destination payment-instrument id, never by guessing.
-  let depositBankAccount: Awaited<ReturnType<typeof prisma.organizationBankAccount.findFirst>> | null = null;
+  let depositBankAccount: Awaited<ReturnType<typeof prisma.organizationBankAccount.findFirst>> | Awaited<ReturnType<typeof resolveActiveBankAccount>> | null = null;
   if (deposit?.destinationPaymentInstrumentId && (!deposit.bankName || !deposit.bankAccountType)) {
     depositBankAccount = await prisma.organizationBankAccount.findFirst({
       where: { churchId, finixPaymentInstrumentId: deposit.destinationPaymentInstrumentId },
     });
+  }
+  // The exact-instrument match above only succeeds when the deposit's own
+  // destination payment-instrument id is known and already mapped — same
+  // gap already fixed on the deposit detail page and deposits list via the
+  // same fallback resolver (tries the org's explicit bank account, then
+  // the instrument snapshot, then onboarding, then deposit history).
+  if (!depositBankAccount && (!deposit?.bankName || !deposit.bankAccountType)) {
+    depositBankAccount = await resolveActiveBankAccount(churchId);
   }
 
   return { settlement, church, transfers, paymentRows, refunds, bankReturns, disputes, fees, deposit, depositBankAccount, hasFundingTransferData };

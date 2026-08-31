@@ -89,12 +89,12 @@ export default async function DepositDetailPanel({
           />
           <FlowStep
             label="Deposit Sent"
-            detail={formatDateTimeCDT(deposit.sentAt)}
+            detail={formatDateTimeCDT(deposit.sentAt ?? (["SENT", "COMPLETED", "SUCCEEDED"].includes(state) ? deposit.createdAtFinix : null))}
             status={["SENT", "COMPLETED", "SUCCEEDED"].includes(state) || deposit.sentAt ? "done" : "upcoming"}
           />
           <FlowStep
             label={state === "FAILED" ? "Deposit Failed" : state === "RETURNED" ? "Deposit Returned" : state === "CANCELED" ? "Deposit Canceled" : "Deposit Completed"}
-            detail={formatDateTimeCDT(deposit.arrivedAt)}
+            detail={formatDateTimeCDT(deposit.arrivedAt ?? (["COMPLETED", "SUCCEEDED"].includes(state) ? deposit.createdAtFinix : null))}
             status={
               state === "FAILED" || state === "RETURNED" ? "failed" :
               state === "COMPLETED" || state === "SUCCEEDED" || deposit.arrivedAt ? "done" :
