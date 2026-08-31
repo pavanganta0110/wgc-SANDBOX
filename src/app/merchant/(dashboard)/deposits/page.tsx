@@ -76,6 +76,22 @@ export default async function DepositsPage({
   // organization's account regardless of which specific row is missing the field.
   const orgBankAccount = await resolveActiveBankAccount(churchId);
 
+  // Same gap: Finix's real FUNDING_TRANSFER_ATTEMPT webhook payload never
+  // carries a payment/transfer count field, so paymentCount is always
+  // null — confirmed via repo-wide search, nothing ever writes to it. A
+  // deposit links to exactly one settlement (finixSettlementId), and that
+  // settlement's own transactionCount is already correctly populated
+  // (syncSettlements.ts), so it's a real, already-known substitute rather
+  // than a guess.
+  const settlementIds = deposits.map((d) => d.finixSettlementId).filter((id): id is string => Boolean(id));
+  const settlementsForDeposits = settlementIds.length
+    ? await prisma.finixSettlement.findMany({
+        where: { finixSettlementId: { in: settlementIds }, churchId },
+        select: { finixSettlementId: true, transactionCount: true },
+      })
+    : [];
+  const transactionCountBySettlementId = new Map(settlementsForDeposits.map((s) => [s.finixSettlementId, s.transactionCount]));
+
   const rows = deposits.filter((d) => {
     if (amount) {
       const cents = Math.round(parseFloat(amount) * 100);
@@ -181,7 +197,9 @@ export default async function DepositsPage({
                         </td>
                       )}
                       {visibleCols.has("paymentCount") && (
-                        <td className="px-6 py-3 text-right text-slate-700">{d.paymentCount ?? "—"}</td>
+                        <td className="px-6 py-3 text-right text-slate-700">
+                          {d.paymentCount ?? (d.finixSettlementId ? transactionCountBySettlementId.get(d.finixSettlementId) ?? "—" : "—")}
+                        </td>
                       )}
                       {visibleCols.has("netAmount") && (
                         <td className="px-6 py-3 text-right">
