@@ -53,6 +53,24 @@ describe("handleWgcSubscriptionWebhookEvent — resolution", () => {
 });
 
 describe("handleWgcSubscriptionWebhookEvent — successful charge", () => {
+  it("resolves the subscription id from tags.subscription_id, matching Finix's real transfer.updated payload shape", async () => {
+    const prismaMock = makePrismaMock();
+    const mod = await loadModule(prismaMock);
+
+    const handled = await mod.handleWgcSubscriptionWebhookEvent("transfer.updated", {
+      id: "TR_real_shape_1",
+      tags: { subscription_id: "fx_sub_123" },
+      amount: 1000,
+      state: "SUCCEEDED",
+    });
+
+    expect(handled).toBe(true);
+    expect(prismaMock.wgcSubscription.findUnique).toHaveBeenCalledWith({ where: { finixSubscriptionId: "fx_sub_123" } });
+    expect(prismaMock.billingCharge.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "SUCCEEDED", amountCents: 1000 }) }),
+    );
+  });
+
   it("records a SUCCEEDED BillingCharge, marks the subscription ACTIVE, completes the promotion entitlement, and sends a receipt", async () => {
     const prismaMock = makePrismaMock();
     const mod = await loadModule(prismaMock);

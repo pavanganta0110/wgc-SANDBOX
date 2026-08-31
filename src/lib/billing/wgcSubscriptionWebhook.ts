@@ -15,15 +15,14 @@ import { sendPaymentReceiptEmail, sendFailedPaymentEmail } from "@/lib/billing/b
  * match any WgcSubscription row), so this never interferes with the
  * existing per-eventType onboarding/sync logic.
  *
- * NOTE: the exact Finix event/field names used to detect a subscription
- * charge attempt and its success/failure state are this implementation's
- * best-effort guess (subscription id on the event payload, a
- * SUCCEEDED/FAILED-style state) and MUST be confirmed against WGC's real
- * Finix webhook event catalog before production use (spec section 31).
+ * Confirmed against a real captured `transfer.updated` webhook for a
+ * subscription-driven charge: the subscription id is nested at
+ * `tags.subscription_id` on the transfer object, not top-level
+ * `subscription`/`subscription_id` fields.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped Finix webhook payload, matches finix/client.ts convention
 export async function handleWgcSubscriptionWebhookEvent(eventType: string, data: any): Promise<boolean> {
-  const finixSubscriptionId: string | undefined = data?.subscription || data?.subscription_id;
+  const finixSubscriptionId: string | undefined = data?.tags?.subscription_id || data?.subscription || data?.subscription_id;
   if (!finixSubscriptionId) return false;
 
   const subscription = await prisma.wgcSubscription.findUnique({ where: { finixSubscriptionId } });
