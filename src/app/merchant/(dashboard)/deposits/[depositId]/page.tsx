@@ -6,7 +6,7 @@ import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
-import { formatDateTimeCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
+import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadDepositDetail } from "@/lib/finix/depositDetail";
 import { formatFundingSpeed } from "@/lib/depositColumns";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
@@ -132,8 +132,10 @@ export default async function DepositFullDetailPage({
             <Row label="Payment Count" value={String(deposit.paymentCount ?? payments.length)} />
             <Row label="Created" value={formatDateTimeCDT(deposit.createdAtFinix)} />
             <Row label="Updated" value={formatDateTimeCDT(deposit.updatedAtFinix)} />
-            <Row label="Expected Deposit Date" value={formatCalendarDateUTC(deposit.estimatedArrivalDate)} />
-            <Row label="Actual Deposit Date" value={formatDateTimeCDT(deposit.arrivedAt)} />
+            <Row
+              label="Actual Deposit Date"
+              value={formatDateTimeCDT(deposit.arrivedAt ?? (["COMPLETED", "SUCCEEDED"].includes(state) ? deposit.createdAtFinix : null))}
+            />
             {deposit.traceId && <Row label="Trace / Reference" value={deposit.traceId} />}
           </div>
 

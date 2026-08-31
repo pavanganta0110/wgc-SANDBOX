@@ -235,8 +235,7 @@ export default async function SettlementFullDetailPage({
                       <th className="py-2 pr-4">Linked To</th>
                       <th className="py-2 pr-4">Fee Type</th>
                       <th className="py-2 pr-4 text-right">Amount</th>
-                      <th className="py-2 pr-4">Created</th>
-                      <th className="py-2">Description</th>
+                      <th className="py-2">Created</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -246,8 +245,7 @@ export default async function SettlementFullDetailPage({
                         <td className="py-2 pr-4">{fee.linkedToId ? <CopyableIdBadge id={fee.linkedToId} label={fee.linkedToId} variant="link" /> : "—"}</td>
                         <td className="py-2 pr-4 text-slate-700">{mapFeeType(fee.feeType).label}</td>
                         <td className="py-2 pr-4 text-right text-slate-900 font-semibold">{formatCents(fee.amountCents ?? 0)}</td>
-                        <td className="py-2 pr-4 text-slate-600 whitespace-nowrap">{formatDateTime(fee.createdAtFinix)}</td>
-                        <td className="py-2 text-slate-600">{fee.description || "—"}</td>
+                        <td className="py-2 text-slate-600 whitespace-nowrap">{formatDateTime(fee.createdAtFinix)}</td>
                       </tr>
                     ))}
                   </tbody>
