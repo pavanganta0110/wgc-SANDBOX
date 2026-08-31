@@ -583,7 +583,7 @@ async function DepositsTab({
   trend: string;
   scopedUserId?: string;
 }) {
-  const { summary, trendData, hasData } = await getDepositsInsights(churchId, dateFilter, trend);
+  const { summary, trendData, countTrendData, hasData } = await getDepositsInsights(churchId, dateFilter, trend);
 
   return (
     <>
@@ -611,7 +611,15 @@ async function DepositsTab({
           )}
         </ChartCard>
         <ChartCard title="Deposit Count Trend">
-          <EmptyChart />
+          {hasData ? (
+            <StackedBarChart
+              data={countTrendData}
+              seriesKeys={["Deposit Count"]}
+              formatValue={(n) => n.toFixed(0)}
+            />
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
       </div>
     </>

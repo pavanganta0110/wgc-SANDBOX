@@ -16,6 +16,25 @@ const TREND_CONFIG: Record<string, { buckets: number; stepDays: number; format: 
   monthly: { buckets: 6, stepDays: 30, format: { month: "short" } },
 };
 
+// Central-time calendar-month boundaries — a fixed 30-day step drifts
+// against real months (a 31-day month pushes every later bucket a day
+// earlier), which visibly duplicated "Jul" as two different buckets with
+// different data. Months have no fixed length, so they can't be stepped
+// like days/weeks can.
+function startOfMonthCentral(date: Date): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CENTRAL_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(date);
+  const year = Number(parts.find((p) => p.type === "year")!.value);
+  const month = Number(parts.find((p) => p.type === "month")!.value);
+  // Noon UTC keeps this safely within the 1st in Central time regardless of
+  // CST/CDT offset (at most UTC-6) — startOfDayCentral then re-derives the
+  // true Central midnight from it.
+  return startOfDayCentral(new Date(Date.UTC(year, month - 1, 1, 12)));
+}
+
 function groupTrend<T extends { createdAtFinix: Date | null; amountCents: number | null; series: string }>(
   records: T[],
   trend: string,
@@ -27,11 +46,21 @@ function groupTrend<T extends { createdAtFinix: Date | null; amountCents: number
   const buckets: TrendPoint[] = [];
 
   for (let i = config.buckets - 1; i >= 0; i--) {
-    const dayOffset = new Date(now);
-    dayOffset.setDate(now.getDate() - i * config.stepDays);
-    const periodStart = startOfDayCentral(dayOffset);
-    const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodEnd.getDate() + config.stepDays);
+    let periodStart: Date;
+    let periodEnd: Date;
+    if (trend === "monthly") {
+      const anchor = startOfMonthCentral(now);
+      periodStart = new Date(anchor);
+      periodStart.setMonth(periodStart.getMonth() - i);
+      periodEnd = new Date(periodStart);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+    } else {
+      const dayOffset = new Date(now);
+      dayOffset.setDate(now.getDate() - i * config.stepDays);
+      periodStart = startOfDayCentral(dayOffset);
+      periodEnd = new Date(periodStart);
+      periodEnd.setDate(periodEnd.getDate() + config.stepDays);
+    }
 
     const values: Record<string, number> = {};
     for (const key of seriesKeys) values[key] = 0;
@@ -527,7 +556,14 @@ export async function getDepositsInsights(churchId: string, dateFilter: { gte: D
     ["Deposit Volume"]
   );
 
-  return { summary, trendData, hasData: deposits.length > 0 };
+  const countTrendData = groupTrend(
+    deposits.map((d) => ({ createdAtFinix: d.createdAtFinix, amountCents: d.amountCents, series: "Deposit Count" })),
+    trend,
+    ["Deposit Count"],
+    "count"
+  );
+
+  return { summary, trendData, countTrendData, hasData: deposits.length > 0 };
 }
 
 /**
