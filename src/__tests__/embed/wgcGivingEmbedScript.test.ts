@@ -95,4 +95,15 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     expect(SOURCE).toContain("escapeHtml(cfg.organization.name)");
     expect(SOURCE).toContain("escapeHtml(cfg.givingPage.title)");
   });
+
+  it("disables the submit button while Finix.js is still loading, instead of only catching the click after the fact — a real donor could click Give Now the instant the page rendered, before the async js.finix.com load resolved, and always hit \"not ready yet\" with no way to know why", () => {
+    expect(SOURCE).toContain("function setSubmitDisabledWhileFormLoads(state, loading)");
+    const mountMatch = SOURCE.match(/function mountFinixForCurrentMethod\([\s\S]*?\n  \}\n/);
+    expect(mountMatch).not.toBeNull();
+    const mountBody = mountMatch![0];
+    // Disabled before the async load starts...
+    expect(mountBody).toMatch(/setSubmitDisabledWhileFormLoads\(state, true\)[\s\S]*loadFinixScript\(\)/);
+    // ...and re-enabled only after state.finixForm is actually assigned.
+    expect(mountBody).toMatch(/state\.finixForm = window\.Finix\.PaymentForm\([\s\S]*?setSubmitDisabledWhileFormLoads\(state, false\)/);
+  });
 });

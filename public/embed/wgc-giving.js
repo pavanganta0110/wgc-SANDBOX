@@ -633,6 +633,19 @@
     });
   }
 
+  function setSubmitDisabledWhileFormLoads(state, loading) {
+    // The submit button was never disabled while Finix.js was still loading
+    // asynchronously (a network round trip to js.finix.com), so a donor
+    // could click "Give Now" immediately on page load — well before
+    // state.finixForm existed — and hit "The secure payment form is not
+    // ready yet" for no reason a real donor could understand or fix by
+    // waiting the split second the message suggests.
+    var btn = q(state, '[data-role="submit"]');
+    if (!btn) return;
+    btn.disabled = loading;
+    if (!state.submitting) btn.textContent = loading ? "Loading…" : "Give Now";
+  }
+
   function mountFinixForCurrentMethod(state) {
     var mountEl = q(state, '[data-role="finix-mount"]');
     if (!mountEl) return;
@@ -642,6 +655,7 @@
     }
     mountEl.innerHTML = "";
     state.finixForm = null;
+    setSubmitDisabledWhileFormLoads(state, true);
 
     loadFinixScript()
       .then(function () {
@@ -650,6 +664,7 @@
           paymentMethods: [state.selectedMethod],
           showAddress: false,
         });
+        setSubmitDisabledWhileFormLoads(state, false);
         if (state.config.finix.merchantId && !state.fraudSessionId) {
           try {
             window.Finix.Auth(state.config.finix.environment, state.config.finix.merchantId, function (sessionKey) {
