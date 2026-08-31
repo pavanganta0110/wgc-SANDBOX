@@ -20,7 +20,7 @@ import { prisma } from "@/lib/prisma";
  */
 
 export const IMPERSONATION_COOKIE_NAME = "wgc_impersonation";
-const IMPERSONATION_MAX_AGE_SECONDS = 60 * 10; // 10 minutes
+const IMPERSONATION_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
 
 interface ImpersonationCookiePayload {
   impersonationSessionId: string;
