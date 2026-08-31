@@ -16,6 +16,10 @@ export default function StackedBarChart({
   const height = 200;
   const barGap = 8;
   const barWidth = data.length > 0 ? width / data.length - barGap : 0;
+  // A bucket with a genuine $0/zero total (while other buckets in the same
+  // chart have real data) should still read as "confirmed zero," not vanish
+  // into blank space indistinguishable from a rendering gap.
+  const minBarHeight = 3;
 
   if (!hasData) {
     return (
@@ -25,29 +29,50 @@ export default function StackedBarChart({
     );
   }
 
+  const gridLines = [0.25, 0.5, 0.75, 1];
+
   return (
     <div>
       <svg viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-auto">
+        {gridLines.map((g) => (
+          <line
+            key={g}
+            x1={0}
+            x2={width}
+            y1={height - height * g}
+            y2={height - height * g}
+            stroke="#f1f5f9"
+            strokeWidth={1}
+          />
+        ))}
+        <line x1={0} x2={width} y1={height} y2={height} stroke="#e2e8f0" strokeWidth={1} />
+
         {data.map((d, i) => {
           const x = i * (barWidth + barGap);
+          const total = totals[i];
           let yOffset = height;
           return (
             <g key={d.label}>
-              {seriesKeys.map((key, si) => {
-                const value = d.values[key] ?? 0;
-                const barHeight = (value / max) * height;
-                yOffset -= barHeight;
-                return (
-                  <rect
-                    key={key}
-                    x={x}
-                    y={yOffset}
-                    width={barWidth}
-                    height={barHeight}
-                    fill={SERIES_COLORS[si % SERIES_COLORS.length]}
-                  />
-                );
-              })}
+              <title>{`${d.label}: ${formatValue(total)}`}</title>
+              {total > 0 ? (
+                seriesKeys.map((key, si) => {
+                  const value = d.values[key] ?? 0;
+                  const barHeight = (value / max) * height;
+                  yOffset -= barHeight;
+                  return (
+                    <rect
+                      key={key}
+                      x={x}
+                      y={yOffset}
+                      width={barWidth}
+                      height={barHeight}
+                      fill={SERIES_COLORS[si % SERIES_COLORS.length]}
+                    />
+                  );
+                })
+              ) : (
+                <rect x={x} y={height - minBarHeight} width={barWidth} height={minBarHeight} fill="#e2e8f0" rx="2" />
+              )}
               <text x={x + barWidth / 2} y={height + 18} textAnchor="middle" fontSize="11" fill="#64748b">
                 {d.label}
               </text>

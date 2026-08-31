@@ -14,9 +14,6 @@ import {
   getTransferVolumeTrend,
   getSettlementTrend,
   getDepositTrend,
-  type DisputeAggregate,
-  type AuthorizationAggregate,
-  type DepositAggregate,
   type TrendBucket,
 } from "@/lib/reports/dashboardAggregates";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -24,7 +21,7 @@ import QuickLinksPanel from "@/components/merchant/QuickLinksPanel";
 import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildFinixTransferScope, buildRefundScope, resolveScopedUserId } from "@/lib/auth/scopes";
+import { buildFinixTransferScope, buildRefundScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
 const CENTRAL_TIME_ZONE = "America/Chicago";
@@ -94,16 +91,6 @@ function computeTrendBuckets(trend: string): TrendBucket[] {
   return buckets;
 }
 
-const ZERO_DISPUTES: DisputeAggregate = { totalCount: 0, activeCount: 0, totalVolumeCents: 0 };
-const ZERO_AUTHORIZATIONS: AuthorizationAggregate = {
-  totalCount: 0,
-  succeededCount: 0,
-  requestedVolumeCents: 0,
-  voidedCount: 0,
-  voidedVolumeCents: 0,
-};
-const ZERO_DEPOSITS: DepositAggregate = { totalVolumeCents: 0 };
-
 export default async function MerchantDashboardPage({
   searchParams,
 }: {
@@ -138,7 +125,6 @@ export default async function MerchantDashboardPage({
   // settlements/deposits have no reliable per-user attribution (per the
   // established CP4C policy) and stay organization-wide regardless of scope.
   const viewScope = await resolveViewScope(auth);
-  const scopedUserId = resolveScopedUserId(auth, viewScope);
   const [transferScope, refundScope] = await Promise.all([
     buildFinixTransferScope(auth, viewScope),
     buildRefundScope(auth, viewScope),
@@ -148,10 +134,10 @@ export default async function MerchantDashboardPage({
 
   const [transfers, disputes, refunds, authorizations, deposits] = await Promise.all([
     aggregateTransfers({ ...transferScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) }),
-    scopedUserId ? Promise.resolve(ZERO_DISPUTES) : aggregateDisputes(orgScopeWithDate),
+    aggregateDisputes(orgScopeWithDate),
     aggregateRefunds({ ...refundScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) }),
-    scopedUserId ? Promise.resolve(ZERO_AUTHORIZATIONS) : aggregateAuthorizations(orgScopeWithDate),
-    scopedUserId ? Promise.resolve(ZERO_DEPOSITS) : aggregateDeposits(orgScopeWithDate),
+    aggregateAuthorizations(orgScopeWithDate),
+    aggregateDeposits(orgScopeWithDate),
   ]);
 
   const metricValues = computeSummaryMetrics({ transfers, disputes, refunds, authorizations, deposits });
@@ -162,12 +148,8 @@ export default async function MerchantDashboardPage({
   
   const [volumeSums, settlementSums, depositSums] = await Promise.all([
     getTransferVolumeTrend(transferScope, trendBuckets),
-    scopedUserId
-      ? Promise.resolve(trendBuckets.map(() => 0))
-      : getSettlementTrend({ churchId }, trendBuckets),
-    scopedUserId
-      ? Promise.resolve(trendBuckets.map(() => 0))
-      : getDepositTrend({ churchId }, trendBuckets),
+    getSettlementTrend({ churchId }, trendBuckets),
+    getDepositTrend({ churchId }, trendBuckets),
   ]);
   const volumeTrend = trendBuckets.map((b, i) => ({ label: b.label, value: volumeSums[i] }));
   const settlementTrend = trendBuckets.map((b, i) => ({ label: b.label, value: settlementSums[i] }));

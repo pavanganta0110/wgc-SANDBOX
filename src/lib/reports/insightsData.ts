@@ -206,6 +206,17 @@ export async function getPaymentsInsights(
     successRatio: v.count + v.failedCount > 0 ? `${((v.count / (v.count + v.failedCount)) * 100).toFixed(2)}%` : "—",
   }));
 
+  const byFailureCode = Array.from(
+    failed.reduce((map, t) => {
+      const code = t.failureCode || "UNKNOWN";
+      const entry = map.get(code) ?? { count: 0, volumeCents: 0 };
+      entry.count += 1;
+      entry.volumeCents += t.amountCents ?? 0;
+      map.set(code, entry);
+      return map;
+    }, new Map<string, { count: number; volumeCents: number }>())
+  ).map(([code, v]) => ({ code, count: v.count, volumeCents: v.volumeCents }));
+
   return {
     summary,
     byMethod,
@@ -213,6 +224,7 @@ export async function getPaymentsInsights(
     byBrand,
     byBrandCount,
     byBrandTable,
+    byFailureCode,
     hasData: transfers.length > 0,
   };
 }
@@ -298,7 +310,19 @@ export async function getAuthorizationsInsights(
     rateValue: v.received > 0 ? v.authorized / v.received : 0,
   }));
 
-  return { summary, byBrand, byBrandTable, hasData: authorizations.length > 0 };
+  const failedAuthorizations = authorizations.filter((a) => (a.state || "").toUpperCase() === "FAILED");
+  const byFailureCode = Array.from(
+    failedAuthorizations.reduce((map, a) => {
+      const code = a.failureCode || "UNKNOWN";
+      const entry = map.get(code) ?? { count: 0, volumeCents: 0 };
+      entry.count += 1;
+      entry.volumeCents += a.amountRequestedCents ?? 0;
+      map.set(code, entry);
+      return map;
+    }, new Map<string, { count: number; volumeCents: number }>())
+  ).map(([code, v]) => ({ code, count: v.count, volumeCents: v.volumeCents }));
+
+  return { summary, byBrand, byBrandTable, byFailureCode, hasData: authorizations.length > 0 };
 }
 
 export async function getRefundsInsights(
@@ -377,7 +401,19 @@ export async function getRefundsInsights(
     successRatio: v.count + v.failedCount > 0 ? `${((v.count / (v.count + v.failedCount)) * 100).toFixed(2)}%` : "—",
   }));
 
-  return { summary, byStatus, byBrandTable, hasData: refunds.length > 0 };
+  const volumeTrend = groupTrend(
+    refunds.map((r) => ({ createdAtFinix: r.createdAtFinix, amountCents: r.amountCents, series: "Refund Volume" })),
+    trend,
+    ["Refund Volume"]
+  );
+  const countTrend = groupTrend(
+    refunds.map((r) => ({ createdAtFinix: r.createdAtFinix, amountCents: r.amountCents, series: "Refund Count" })),
+    trend,
+    ["Refund Count"],
+    "count"
+  );
+
+  return { summary, byStatus, byBrandTable, volumeTrend, countTrend, hasData: refunds.length > 0 };
 }
 
 export async function getDisputesInsights(
@@ -453,7 +489,34 @@ export async function getDisputesInsights(
     volumeCents: v.volume,
   }));
 
-  return { summary, byReason, byBrandTable, hasData: disputes.length > 0 };
+  const disputeCountByBrand = new Map<string, number>();
+  for (const d of disputes) {
+    const transfer = d.finixTransferId ? transferMap.get(d.finixTransferId) : undefined;
+    const brand = dimensionValue(instrumentMap.get(transfer?.finixPaymentInstrumentId ?? ""), "cardBrand");
+    disputeCountByBrand.set(brand, (disputeCountByBrand.get(brand) ?? 0) + 1);
+  }
+  const transferCountByBrand = new Map<string, number>();
+  for (const t of transfers) {
+    const brand = dimensionValue(instrumentMap.get(t.finixPaymentInstrumentId ?? ""), "cardBrand");
+    transferCountByBrand.set(brand, (transferCountByBrand.get(brand) ?? 0) + 1);
+  }
+  const disputeRateByBrand = Array.from(transferCountByBrand.entries()).map(([brand, transferCount]) => ({
+    brand,
+    ratePercent: transferCount > 0 ? ((disputeCountByBrand.get(brand) ?? 0) / transferCount) * 100 : 0,
+  }));
+
+  const disputeReasonTotals = Array.from(
+    disputes.reduce((map, d) => {
+      const reason = d.reason || "UNKNOWN";
+      const entry = map.get(reason) ?? { count: 0, volumeCents: 0 };
+      entry.count += 1;
+      entry.volumeCents += d.amountCents ?? 0;
+      map.set(reason, entry);
+      return map;
+    }, new Map<string, { count: number; volumeCents: number }>())
+  ).map(([reason, v]) => ({ reason, count: v.count, volumeCents: v.volumeCents }));
+
+  return { summary, byReason, byBrandTable, disputeRateByBrand, disputeReasonTotals, hasData: disputes.length > 0 };
 }
 
 export async function getBankReturnsInsights(
@@ -519,7 +582,25 @@ export async function getBankReturnsInsights(
     pctOfReturns: returns.length > 0 ? `${((v.count / returns.length) * 100).toFixed(2)}%` : "—",
   }));
 
-  return { summary, trendData, byReasonTable, hasData: returns.length > 0 };
+  const achTransferCountTrend = groupTrend(
+    achTransfers.map((t) => ({ createdAtFinix: t.createdAtFinix, amountCents: t.amountCents, series: "count" })),
+    trend,
+    ["count"],
+    "count"
+  );
+  const returnCountTrend = groupTrend(
+    returns.map((r) => ({ createdAtFinix: r.createdAtFinix, amountCents: r.amountCents, series: "count" })),
+    trend,
+    ["count"],
+    "count"
+  );
+  const returnRateTrend = achTransferCountTrend.map((bucket, i) => {
+    const achCount = bucket.values.count ?? 0;
+    const returnCount = returnCountTrend[i]?.values.count ?? 0;
+    return { label: bucket.label, values: { "Return Rate": achCount > 0 ? (returnCount / achCount) * 100 : 0 } };
+  });
+
+  return { summary, trendData, byReasonTable, returnRateTrend, hasData: returns.length > 0 };
 }
 
 export async function getDepositsInsights(churchId: string, dateFilter: { gte: Date; lte?: Date } | undefined, trend: string) {

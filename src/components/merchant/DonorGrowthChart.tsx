@@ -11,6 +11,10 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthPoint[] })
   const max = Math.max(...data.map((d) => d.newDonors + d.returningDonors), 1);
   const hasData = data.length > 0 && data.some((d) => d.newDonors + d.returningDonors > 0);
   const barWidth = data.length ? (width - padding * 2) / data.length - barGap : 0;
+  // A period with genuinely zero donors (while other periods in the same
+  // chart have real data) should still read as "confirmed zero," not vanish
+  // into blank space indistinguishable from a rendering gap.
+  const minBarHeight = 3;
 
   return (
     <div>
@@ -32,21 +36,30 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthPoint[] })
         </div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">
+          <line x1={padding} x2={width - padding} y1={height - padding} y2={height - padding} stroke="#e2e8f0" strokeWidth={1} />
           {data.map((d, i) => {
             const x = padding + i * (barWidth + barGap);
+            const total = d.newDonors + d.returningDonors;
             const newHeight = (d.newDonors / max) * (height - padding * 2);
             const returningHeight = (d.returningDonors / max) * (height - padding * 2);
             const baseY = height - padding;
             return (
               <g key={i}>
-                <rect x={x} y={baseY - returningHeight} width={barWidth} height={returningHeight} fill="#cbd5e1" />
-                <rect
-                  x={x}
-                  y={baseY - returningHeight - newHeight}
-                  width={barWidth}
-                  height={newHeight}
-                  fill="#10b981"
-                />
+                <title>{`${d.period}: ${d.newDonors} new, ${d.returningDonors} returning`}</title>
+                {total > 0 ? (
+                  <>
+                    <rect x={x} y={baseY - returningHeight} width={barWidth} height={returningHeight} fill="#cbd5e1" />
+                    <rect
+                      x={x}
+                      y={baseY - returningHeight - newHeight}
+                      width={barWidth}
+                      height={newHeight}
+                      fill="#10b981"
+                    />
+                  </>
+                ) : (
+                  <rect x={x} y={baseY - minBarHeight} width={barWidth} height={minBarHeight} fill="#e2e8f0" rx="2" />
+                )}
                 {i % Math.max(Math.ceil(data.length / 8), 1) === 0 && (
                   <text x={x + barWidth / 2} y={height - 8} textAnchor="middle" fontSize="10" fill="#64748b">
                     {d.period}

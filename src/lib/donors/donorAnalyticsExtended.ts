@@ -8,6 +8,23 @@ import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
 
 const CENTRAL_TIME_ZONE = "America/Chicago";
 
+// Central-time calendar-month boundaries — a fixed 30-day step drifts
+// against real months (a 31-day month pushes every later bucket a day
+// earlier), which visibly duplicates a month label across two buckets
+// with different data. Mirrors the same fix in
+// src/lib/reports/insightsData.ts, the dashboard page, and
+// donorAnalytics.ts's loadDonationTrend().
+function startOfMonthCentral(date: Date): Date {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CENTRAL_TIME_ZONE,
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(date);
+  const year = Number(parts.find((p) => p.type === "year")!.value);
+  const month = Number(parts.find((p) => p.type === "month")!.value);
+  return startOfDayCentral(new Date(Date.UTC(year, month - 1, 1, 12)));
+}
+
 export interface NewVsReturning {
   newCount: number;
   returningCount: number;
@@ -302,11 +319,21 @@ export async function loadDonorGrowth(
   const points: DonorGrowthPoint[] = [];
 
   for (let i = bucketCount - 1; i >= 0; i--) {
-    const dayOffset = new Date(now);
-    dayOffset.setDate(now.getDate() - i * stepDays);
-    const periodStart = startOfDayCentral(dayOffset);
-    const periodEnd = new Date(periodStart);
-    periodEnd.setDate(periodEnd.getDate() + stepDays);
+    let periodStart: Date;
+    let periodEnd: Date;
+    if (granularity === "monthly") {
+      const anchor = startOfMonthCentral(now);
+      periodStart = new Date(anchor);
+      periodStart.setMonth(periodStart.getMonth() - i);
+      periodEnd = new Date(periodStart);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+    } else {
+      const dayOffset = new Date(now);
+      dayOffset.setDate(now.getDate() - i * stepDays);
+      periodStart = startOfDayCentral(dayOffset);
+      periodEnd = new Date(periodStart);
+      periodEnd.setDate(periodEnd.getDate() + stepDays);
+    }
 
     if (dateFilter?.gte && periodEnd < dateFilter.gte) continue;
 

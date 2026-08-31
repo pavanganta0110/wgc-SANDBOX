@@ -3,6 +3,7 @@ import InsightsTabs from "@/components/merchant/InsightsTabs";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import TrendFilter from "@/components/merchant/TrendFilter";
 import StackedBarChart from "@/components/merchant/StackedBarChart";
+import BarChart from "@/components/merchant/BarChart";
 import DimensionFilter from "@/components/merchant/DimensionFilter";
 import ExternalDonationsInsightsFilterBar from "@/components/merchant/ExternalDonationsInsightsFilterBar";
 import CardPaymentDataTable from "@/components/merchant/CardPaymentDataTable";
@@ -233,7 +234,7 @@ async function PaymentsTab({
   dimension: PaymentDimensionKey;
   scopedUserId?: string;
 }) {
-  const { summary, byMethod, byMethodCount, byBrand, byBrandCount, byBrandTable, hasData } =
+  const { summary, byMethod, byMethodCount, byBrand, byBrandCount, byBrandTable, byFailureCode, hasData } =
     await getPaymentsInsights(churchId, dateFilter, trend, dimension, scopedUserId);
   const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
 
@@ -301,7 +302,14 @@ async function PaymentsTab({
       </div>
 
       <ChartCard title="Failed Transactions by Failure Code">
-        <EmptyChart />
+        {byFailureCode.length > 0 ? (
+          <BarChart
+            data={byFailureCode.map((f) => ({ label: f.code, value: f.volumeCents / 100 }))}
+            formatValue={(n) => `$${n.toFixed(0)}`}
+          />
+        ) : (
+          <EmptyChart />
+        )}
       </ChartCard>
     </>
   );
@@ -320,7 +328,7 @@ async function AuthorizationsTab({
   dimension: PaymentDimensionKey;
   scopedUserId?: string;
 }) {
-  const { summary, byBrand, byBrandTable, hasData } = await getAuthorizationsInsights(
+  const { summary, byBrand, byBrandTable, byFailureCode, hasData } = await getAuthorizationsInsights(
     churchId,
     dateFilter,
     trend,
@@ -371,7 +379,14 @@ async function AuthorizationsTab({
       </div>
 
       <ChartCard title="Failed Authorizations by Failure Code">
-        <EmptyChart />
+        {byFailureCode.length > 0 ? (
+          <BarChart
+            data={byFailureCode.map((f) => ({ label: f.code, value: f.volumeCents / 100 }))}
+            formatValue={(n) => `$${n.toFixed(0)}`}
+          />
+        ) : (
+          <EmptyChart />
+        )}
       </ChartCard>
     </>
   );
@@ -390,7 +405,7 @@ async function RefundsTab({
   dimension: PaymentDimensionKey;
   scopedUserId?: string;
 }) {
-  const { summary, byStatus, byBrandTable, hasData } = await getRefundsInsights(
+  const { summary, byStatus, byBrandTable, volumeTrend, countTrend, hasData } = await getRefundsInsights(
     churchId,
     dateFilter,
     trend,
@@ -431,10 +446,18 @@ async function RefundsTab({
           )}
         </ChartCard>
         <ChartCard title="Refund Volume Trend">
-          <EmptyChart />
+          {hasData ? (
+            <StackedBarChart data={volumeTrend} seriesKeys={["Refund Volume"]} formatValue={(n) => `$${n.toFixed(0)}`} />
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
         <ChartCard title="Refund Count Trend">
-          <EmptyChart />
+          {hasData ? (
+            <StackedBarChart data={countTrend} seriesKeys={["Refund Count"]} formatValue={(n) => n.toFixed(0)} />
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
       </div>
 
@@ -462,7 +485,7 @@ async function DisputesTab({
   dimension: PaymentDimensionKey;
   scopedUserId?: string;
 }) {
-  const { summary, byReason, byBrandTable, hasData } = await getDisputesInsights(
+  const { summary, byReason, byBrandTable, disputeRateByBrand, disputeReasonTotals, hasData } = await getDisputesInsights(
     churchId,
     dateFilter,
     trend,
@@ -492,13 +515,16 @@ async function DisputesTab({
           )}
         </ChartCard>
         <ChartCard title="Dispute Rate by Card Brand">
-          <EmptyChart />
+          {disputeRateByBrand.length > 0 ? (
+            <BarChart
+              data={disputeRateByBrand.map((b) => ({ label: b.brand, value: b.ratePercent }))}
+              formatValue={(n) => `${n.toFixed(2)}%`}
+            />
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
       </div>
-
-      <ChartCard title="Disputes per Merchant">
-        <EmptyChart />
-      </ChartCard>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -509,7 +535,14 @@ async function DisputesTab({
       </div>
 
       <ChartCard title="Dispute Reasons">
-        <EmptyChart />
+        {disputeReasonTotals.length > 0 ? (
+          <BarChart
+            data={disputeReasonTotals.map((r) => ({ label: r.reason, value: r.count }))}
+            formatValue={(n) => n.toFixed(0)}
+          />
+        ) : (
+          <EmptyChart />
+        )}
       </ChartCard>
     </>
   );
@@ -526,7 +559,7 @@ async function BankReturnsTab({
   trend: string;
   scopedUserId?: string;
 }) {
-  const { summary, trendData, byReasonTable, hasData } = await getBankReturnsInsights(
+  const { summary, trendData, byReasonTable, returnRateTrend, hasData } = await getBankReturnsInsights(
     churchId,
     dateFilter,
     trend,
@@ -554,13 +587,13 @@ async function BankReturnsTab({
           )}
         </ChartCard>
         <ChartCard title="ACH Return Rate">
-          <EmptyChart />
+          {hasData ? (
+            <StackedBarChart data={returnRateTrend} seriesKeys={["Return Rate"]} formatValue={(n) => `${n.toFixed(2)}%`} />
+          ) : (
+            <EmptyChart />
+          )}
         </ChartCard>
       </div>
-
-      <ChartCard title="ACH Returns per Merchant">
-        <EmptyChart />
-      </ChartCard>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
