@@ -18,6 +18,16 @@
  * host page — that is in fact its documented, supported usage, and is
  * exactly what this file does for data-wgc-mode="inline" below.
  *
+ * One caveat confirmed live on a real merchant site: some site builders
+ * (Wix's "Custom HTML" embed, at least) always wrap whatever you embed in
+ * their OWN iframe before this script ever runs — invisibly, from the
+ * merchant's point of view, since they only pasted a plain <script>/<div>
+ * snippet. From this script's own vantage point that's still "a div on the
+ * host page" (no iframe of ours anywhere), but Finix still detects that
+ * its own frame sits two levels deep (window.top !== window.self) and
+ * silently declines to render — see isNestedFrame()/renderPaymentFallback()
+ * below for the fallback this triggers.
+ *
  * Include via:
  *   <script src="https://www.wgcpayments.com/embed/wgc-giving.js" data-wgc-slug="..." data-wgc-mode="button" ...></script>
  * or:
@@ -186,6 +196,23 @@
 
   function buildEmbedUrl(slug) {
     return WGC_ORIGIN + "/embed/" + encodeURIComponent(slug);
+  }
+
+  function isNestedFrame() {
+    // Some site builders (Wix's "Custom HTML" embed, for one) always wrap
+    // whatever markup/script you give them in their own iframe before this
+    // script ever runs — so the inline widget ends up two iframes deep
+    // (builder's iframe, then Finix's card-capture iframe inside it) rather
+    // than one. Finix's PaymentForm silently declines to render any card
+    // fields in that double-nested context (an anti-clickjacking measure on
+    // their end, not something we can or should bypass) — the mount call
+    // returns normally but no UI ever appears, leaving a donor stuck with a
+    // clickable button that can never actually submit.
+    try {
+      return window.self !== window.top;
+    } catch (e) {
+      return true;
+    }
   }
 
   function applyButtonStyle(el, opts) {
@@ -653,6 +680,12 @@
       showValidation(state, "This giving form is not fully configured yet. Please contact the organization directly.");
       return;
     }
+
+    if (isNestedFrame()) {
+      renderPaymentFallback(state, mountEl);
+      return;
+    }
+
     mountEl.innerHTML = "";
     state.finixForm = null;
     setSubmitDisabledWhileFormLoads(state, true);
@@ -678,6 +711,20 @@
       .catch(function () {
         showValidation(state, "The secure payment form failed to load. Please refresh the page and try again.");
       });
+  }
+
+  function renderPaymentFallback(state, mountEl) {
+    // Card/ACH can't mount inline here (see isNestedFrame) — hide the native
+    // submit button (its state.finixForm check can never pass) and offer the
+    // same "open the secure hosted page" fallback already used for wallets.
+    mountEl.innerHTML = '<button type="button" class="wgc-inline-wallet-fallback" data-role="payment-fallback">Continue securely to donate</button>';
+    var fallbackBtn = mountEl.querySelector('[data-role="payment-fallback"]');
+    fallbackBtn.addEventListener("click", function (e) {
+      e.preventDefault();
+      openWgcPopup(state.config.hostedGivingUrl, "wgc_giving_" + state.slug);
+    });
+    var submitBtn = q(state, '[data-role="submit"]');
+    if (submitBtn) submitBtn.hidden = true;
   }
 
   function showValidation(state, message) {

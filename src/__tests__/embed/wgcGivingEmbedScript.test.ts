@@ -106,4 +106,15 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     // ...and re-enabled only after state.finixForm is actually assigned.
     expect(mountBody).toMatch(/state\.finixForm = window\.Finix\.PaymentForm\([\s\S]*?setSubmitDisabledWhileFormLoads\(state, false\)/);
   });
+
+  it("never attempts the inline Finix mount when double-nested in another site builder's iframe (e.g. Wix Custom HTML) — Finix silently refuses to render card fields there, so it falls back to the working hosted-page popup instead", () => {
+    expect(SOURCE).toContain("function isNestedFrame()");
+    expect(SOURCE).toContain("window.self !== window.top");
+    const mountMatch = SOURCE.match(/function mountFinixForCurrentMethod\([\s\S]*?\n  \}\n/);
+    expect(mountMatch).not.toBeNull();
+    const mountBody = mountMatch![0];
+    expect(mountBody).toMatch(/if \(isNestedFrame\(\)\) \{\s*renderPaymentFallback\(state, mountEl\);\s*return;\s*\}/);
+    expect(SOURCE).toContain("function renderPaymentFallback(state, mountEl)");
+    expect(SOURCE).toContain('openWgcPopup(state.config.hostedGivingUrl, "wgc_giving_" + state.slug)');
+  });
 });
