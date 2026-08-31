@@ -75,9 +75,28 @@ function resolveEmbedScriptOrigin(appUrl: string): string {
   }
 }
 
+// Wix's standard "Embed HTML" element always wraps whatever you paste
+// inside Wix's own iframe. That's harmless for the Donate Button (it just
+// opens a popup) but breaks the Inline Form: Finix's PaymentForm() refuses
+// to render Card/ACH fields inside ANY iframe at all — a hardcoded
+// restriction in Finix's own SDK (a small allowlist of Finix's own partner
+// domains, nothing a merchant's site could ever be on), not something WGC
+// or the merchant can configure around. The inline form still works when
+// iframed (it falls back to a "Continue securely to donate" button that
+// opens the same secure hosted page), but real inline card fields need the
+// widget to run outside Wix's iframe entirely — see WIX_INLINE_STEPS below.
+const WIX_BUTTON_STEPS = ["Open the Wix Editor for your site.", "Click Add Elements, then choose Embed Code.", "Select Embed HTML and paste the code.", "Publish your site."];
+const WIX_INLINE_STEPS = [
+  "In the Wix Editor, add a blank Container or Box element on the page, right where you want the donation form to appear.",
+  "Right-click that element and choose Inspect (or open it in your browser's dev tools) to find its ID — it looks like comp-xxxxxxx. Paste that ID into the field above the code below.",
+  "In your Wix site's Dashboard, go to Settings, scroll to Custom Code, and click + Add Custom Code.",
+  "Paste the generated code, set it to load on Specific Pages (choose the page with your container) and place it at Body - end.",
+  "Apply, then publish your site.",
+];
+
 const PLATFORMS = [
   { key: "wordpress", label: "WordPress", steps: ["Edit the page or post where you want the button/form.", "Add a Custom HTML block.", "Paste the code into the block.", "Publish or update the page."] },
-  { key: "wix", label: "Wix", steps: ["Open the Wix Editor for your site.", "Click Add Elements, then choose Embed Code.", "Select Embed HTML and paste the code.", "Publish your site."] },
+  { key: "wix", label: "Wix", steps: WIX_BUTTON_STEPS },
   { key: "squarespace", label: "Squarespace", steps: ["Edit the page where you want the button/form.", "Add a Code Block.", "Paste the code into the block.", "Save and publish."] },
   { key: "webflow", label: "Webflow", steps: ["Open the Designer for your page.", "Drag in an Embed component.", "Paste the code into the Embed component.", "Publish your site."] },
   { key: "ghl", label: "GoHighLevel", steps: ["Edit the funnel or website page.", "Add a Custom JS/HTML element.", "Paste the code into the element.", "Save and publish."] },
@@ -103,6 +122,7 @@ export default function WebsiteEmbedForm({
   const [color, setColor] = useState<"gold" | "navy" | "black" | "white">("gold");
   const [layout, setLayout] = useState<"standard" | "compact">("standard");
   const [openPlatform, setOpenPlatform] = useState<string | null>("wordpress");
+  const [wixContainerId, setWixContainerId] = useState("");
 
   const [domainRestrictionEnabled, setDomainRestrictionEnabled] = useState(initialEmbedDomainRestrictionEnabled);
   const [domainsText, setDomainsText] = useState(initialAllowedDomains.join("\n"));
@@ -117,13 +137,26 @@ export default function WebsiteEmbedForm({
   const embedUrl = slug ? `${appUrl}/embed/${slug}` : "";
   const hostedGivingLink = slug ? `${appUrl}/g/${slug}` : "";
 
+  const isWixInline = openPlatform === "wix" && mode === "inline";
+
   const code = useMemo(() => {
     if (mode === "button") {
       return `<script\n  src="${scriptSrc}"\n  data-wgc-slug="${slug}"\n  data-wgc-mode="button"\n  data-wgc-button-text="${buttonText}"\n  data-wgc-button-size="${size}"\n  data-wgc-button-color="${color}"\n  data-wgc-button-radius="${radius}">\n</script>`;
     }
-    const layoutAttr = layout === "compact" ? '\n  data-wgc-layout="compact"' : "";
-    return `<div\n  data-wgc-giving\n  data-wgc-slug="${slug}"\n  data-wgc-mode="inline"${layoutAttr}>\n</div>\n\n<script async src="${scriptSrc}"></script>`;
-  }, [mode, slug, buttonText, size, color, radius, layout, scriptSrc]);
+    const layoutAttr = layout === "compact" ? '\n  el.setAttribute("data-wgc-layout", "compact");' : "";
+    if (isWixInline) {
+      // Wix's "Embed HTML" element always wraps its content in an iframe,
+      // which breaks the real Card/ACH fields (see the note above
+      // WIX_BUTTON_STEPS). This variant is meant for Wix's separate Custom
+      // Code feature (Settings -> Custom Code), which runs directly on the
+      // page — no iframe — so it builds and inserts the widget's DOM itself
+      // into a container the merchant places and identifies by ID, instead
+      // of relying on <div data-wgc-giving> being present in iframed markup.
+      const containerId = wixContainerId.trim() || "REPLACE_WITH_YOUR_CONTAINER_ID";
+      return `<script>\n(function () {\n  var container = document.getElementById("${containerId}");\n  if (!container) { console.error("WGC Giving: container element not found — check the ID you pasted from Wix."); return; }\n  var el = document.createElement("div");\n  el.setAttribute("data-wgc-giving", "");\n  el.setAttribute("data-wgc-slug", "${slug}");\n  el.setAttribute("data-wgc-mode", "inline");${layoutAttr}\n  container.appendChild(el);\n  var s = document.createElement("script");\n  s.src = "${scriptSrc}";\n  s.async = true;\n  document.body.appendChild(s);\n})();\n</script>`;
+    }
+    return `<div\n  data-wgc-giving\n  data-wgc-slug="${slug}"\n  data-wgc-mode="inline"${layout === "compact" ? '\n  data-wgc-layout="compact"' : ""}>\n</div>\n\n<script async src="${scriptSrc}"></script>`;
+  }, [mode, slug, buttonText, size, color, radius, layout, scriptSrc, isWixInline, wixContainerId]);
 
   // Live preview data — the same public config the real inline embed script
   // loads (GET /api/embed/giving-pages/[slug]), reused here rather than
@@ -364,6 +397,23 @@ export default function WebsiteEmbedForm({
         </div>
       </div>
 
+      {isWixInline && (
+        <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3">
+          <p className="text-sm text-amber-900">
+            <strong>On Wix, use Custom Code for the real inline card form.</strong> Wix&rsquo;s standard Embed HTML element always wraps content in an iframe, and our payment processor won&rsquo;t render Card/ACH fields inside any iframe — a restriction on their end, not something we or you can turn off. The code below is built for Wix&rsquo;s separate Custom Code feature instead, which avoids the iframe entirely. (If you&rsquo;d rather not deal with this, the plain Embed HTML method under &ldquo;Wix&rdquo; below still works — it just shows a &ldquo;Continue securely to donate&rdquo; button that opens the hosted form instead of inline card fields.)
+          </p>
+          <div>
+            <label className="block text-xs font-semibold text-amber-900 mb-1">Container element ID (from Wix Inspect)</label>
+            <input
+              value={wixContainerId}
+              onChange={(e) => setWixContainerId(e.target.value)}
+              placeholder="comp-xxxxxxx"
+              className="w-full px-3 py-2 rounded-lg border border-amber-300 text-sm outline-none font-mono"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Code + copy */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -396,7 +446,7 @@ export default function WebsiteEmbedForm({
               </button>
               {openPlatform === p.key && (
                 <ol className="list-decimal pl-8 py-3 space-y-1 text-sm text-slate-600">
-                  {p.steps.map((s, i) => <li key={i}>{s}</li>)}
+                  {(p.key === "wix" && mode === "inline" ? WIX_INLINE_STEPS : p.steps).map((s, i) => <li key={i}>{s}</li>)}
                 </ol>
               )}
             </div>

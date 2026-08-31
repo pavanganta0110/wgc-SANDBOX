@@ -23,3 +23,21 @@ describe("WebsiteEmbedForm — generated embed code domain", () => {
     expect(SOURCE).toContain("const scriptSrc = `${resolveEmbedScriptOrigin(appUrl)}/embed/wgc-giving.js`");
   });
 });
+
+describe("WebsiteEmbedForm — Wix inline form uses the no-iframe Custom Code path", () => {
+  it("generates a Custom Code snippet (not <div data-wgc-giving>) when the Wix platform panel is open in inline mode, since Wix's Embed HTML element always iframes its content and Finix refuses to render card fields inside any iframe", () => {
+    expect(SOURCE).toContain('const isWixInline = openPlatform === "wix" && mode === "inline"');
+    expect(SOURCE).toContain('document.getElementById("${containerId}")');
+    expect(SOURCE).toContain('container.appendChild(el)');
+  });
+
+  it("falls back to the container ID placeholder until the merchant pastes their Wix element's real ID", () => {
+    expect(SOURCE).toContain('const containerId = wixContainerId.trim() || "REPLACE_WITH_YOUR_CONTAINER_ID"');
+  });
+
+  it("shows Wix-specific setup steps (Custom Code, not Embed HTML) only for the inline form", () => {
+    expect(SOURCE).toContain("WIX_INLINE_STEPS");
+    expect(SOURCE).toContain("Settings, scroll to Custom Code");
+    expect(SOURCE).toContain('(p.key === "wix" && mode === "inline" ? WIX_INLINE_STEPS : p.steps)');
+  });
+});
