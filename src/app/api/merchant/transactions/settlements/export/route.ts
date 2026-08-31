@@ -34,7 +34,6 @@ function baseColumns(): CsvColumn<SettlementExportRow>[] {
     { header: "Dispute Count", value: (r) => String(r.settlement.disputeCount ?? 0) },
     { header: "Deposit ID", value: (r) => r.deposit?.finixFundingTransferAttemptId || "" },
     { header: "Deposit Status", value: (r) => r.deposit?.state || "" },
-    { header: "Trace ID", value: (r) => r.settlement.traceId || "" },
     { header: "Reconciliation Status", value: (r) => r.settlement.reconciliationStatus },
   ];
 }
@@ -68,7 +67,6 @@ export async function GET(req: Request) {
   const status = searchParams.get("status") || undefined;
   const depositStatusParam = searchParams.get("depositStatus") || undefined;
   const reconciliationStatus = searchParams.get("reconciliationStatus") || undefined;
-  const traceId = searchParams.get("traceId") || undefined;
   const range = searchParams.get("range") || undefined;
   const from = searchParams.get("from") || undefined;
   const to = searchParams.get("to") || undefined;
@@ -90,7 +88,6 @@ export async function GET(req: Request) {
       churchId: auth.churchId,
       ...(status ? { processorState: status } : {}),
       ...(reconciliationStatus ? { reconciliationStatus } : {}),
-      ...(traceId ? { traceId } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
       ...(depositStatusParam === "linked" ? { finixSettlementId: { in: linkedSettlementIds ?? [] } } : {}),
       ...(depositStatusParam === "unlinked" ? { finixSettlementId: { notIn: linkedSettlementIds ?? [] } } : {}),

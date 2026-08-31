@@ -38,7 +38,6 @@ export default async function SettlementsPage({
     reconciliationStatus?: string;
     minGross?: string;
     maxGross?: string;
-    traceId?: string;
     range?: string;
     from?: string;
     to?: string;
@@ -80,7 +79,6 @@ export default async function SettlementsPage({
       reconciliationStatus: sp.reconciliationStatus || undefined,
       minGrossCents: Number.isNaN(minGrossCents) ? undefined : minGrossCents,
       maxGrossCents: Number.isNaN(maxGrossCents) ? undefined : maxGrossCents,
-      traceId: sp.traceId || undefined,
     },
     { key: sortKey, dir: sortDir },
     page,
@@ -167,7 +165,6 @@ export default async function SettlementsPage({
                   {visibleCols.has("depositStatus") && <th className="px-6 py-3">Deposit Status</th>}
                   {visibleCols.has("depositId") && <th className="px-6 py-3">Deposit ID</th>}
                   {visibleCols.has("reconciliationStatus") && <th className="px-6 py-3">Reconciliation</th>}
-                  {visibleCols.has("traceId") && <th className="px-6 py-3">Trace ID</th>}
                   <th className="px-6 py-3 w-10" />
                 </tr>
               </thead>
@@ -248,9 +245,6 @@ export default async function SettlementsPage({
                         <td className="px-6 py-3">
                           <StateBadge state={settlement.reconciliationStatus} />
                         </td>
-                      )}
-                      {visibleCols.has("traceId") && (
-                        <td className="px-6 py-3 text-slate-500">{settlement.traceId || "—"}</td>
                       )}
                       <td className="px-6 py-3" />
                     </ClickableTableRow>

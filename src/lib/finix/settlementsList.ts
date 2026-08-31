@@ -9,7 +9,6 @@ export interface SettlementsListFilters {
   reconciliationStatus?: string;
   minGrossCents?: number;
   maxGrossCents?: number;
-  traceId?: string;
 }
 
 export interface SettlementsListSort {
@@ -48,7 +47,6 @@ export async function loadSettlementsList(
     ...(filters.dateFilter ? { createdAtFinix: filters.dateFilter } : {}),
     ...(filters.status ? { processorState: filters.status } : {}),
     ...(filters.reconciliationStatus ? { reconciliationStatus: filters.reconciliationStatus } : {}),
-    ...(filters.traceId ? { traceId: filters.traceId } : {}),
     ...(filters.minGrossCents != null || filters.maxGrossCents != null
       ? {
           totalAmountCents: {

@@ -13,7 +13,6 @@ export const SETTLEMENT_COLUMNS = [
   { key: "depositStatus", label: "Deposit Status" },
   { key: "depositId", label: "Deposit ID" },
   { key: "reconciliationStatus", label: "Reconciliation" },
-  { key: "traceId", label: "Trace ID" },
 ] as const;
 
 export type SettlementColumnKey = (typeof SETTLEMENT_COLUMNS)[number]["key"];

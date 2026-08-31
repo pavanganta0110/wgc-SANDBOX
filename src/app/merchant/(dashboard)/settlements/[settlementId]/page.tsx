@@ -154,7 +154,6 @@ export default async function SettlementFullDetailPage({
               <Row label="Transaction Count" value={String(settlement.transactionCount ?? 0)} />
               <Row label="Accrued" value={formatDateTime(settlement.accruedAt)} />
               <Row label="Settled" value={formatDateTime(settlement.settledAt)} />
-              <Row label="Trace ID" value={settlement.traceId || "—"} />
             </div>
           </div>
 

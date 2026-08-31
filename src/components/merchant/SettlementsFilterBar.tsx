@@ -30,14 +30,13 @@ export default function SettlementsFilterBar({ exportHref }: { exportHref?: stri
   const reconciliationStatus = searchParams.get("reconciliationStatus") || "";
   const minGross = searchParams.get("minGross") || "";
   const maxGross = searchParams.get("maxGross") || "";
-  const traceId = searchParams.get("traceId") || "";
   const visibleCols = parseVisibleSettlementColumns(searchParams.get("cols") || undefined);
 
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isColsOpen, setIsColsOpen] = useState(false);
 
-  const activeFilterCount = [status, depositStatus, reconciliationStatus, minGross, maxGross, traceId].filter(Boolean).length;
+  const activeFilterCount = [status, depositStatus, reconciliationStatus, minGross, maxGross].filter(Boolean).length;
 
   const setParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -157,15 +156,6 @@ export default function SettlementsFilterBar({ exportHref }: { exportHref?: stri
                     className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none"
                   />
                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Trace ID</label>
-                <input
-                  type="text"
-                  value={traceId}
-                  onChange={(e) => setParam("traceId", e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none"
-                />
               </div>
             </div>
           </>
