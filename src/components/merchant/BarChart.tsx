@@ -48,7 +48,7 @@ export default function BarChart({
       <line x1={0} x2={width} y1={height} y2={height} stroke="#e2e8f0" strokeWidth={1} />
 
       {data.map((d, i) => {
-        const barHeight = d.value > 0 ? Math.max((d.value / max) * height, minBarHeight) : 0;
+        const barHeight = d.value > 0 ? Math.max((d.value / max) * height, minBarHeight) : minBarHeight;
         const x = i * (barWidth + barGap);
         const y = height - barHeight;
         return (
@@ -59,7 +59,7 @@ export default function BarChart({
               y={y}
               width={barWidth}
               height={barHeight}
-              fill="url(#wgcBarFill)"
+              fill={d.value > 0 ? "url(#wgcBarFill)" : "#e2e8f0"}
               rx="4"
             />
             <text
