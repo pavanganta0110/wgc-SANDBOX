@@ -2,18 +2,25 @@ import { notFound } from "next/navigation";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import OrganizationLogo from "@/components/merchant/OrganizationLogo";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
+import { recordGivingLinkShareOpened } from "@/lib/givingLinks/recordShareOpened";
 
 export default async function GivingLinkPublicPage({
   params,
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ pledgeId?: string }>;
+  searchParams: Promise<{ pledgeId?: string; share?: string }>;
 }) {
   const { slug } = await params;
-  const { pledgeId } = await searchParams;
+  const { pledgeId, share } = await searchParams;
 
   const data = await loadPublicGivingPageData(slug);
+
+  if (data.ok && share) {
+    // Best-effort, never blocks the page render — a failed/slow tracking
+    // write must never keep a real donor from seeing the giving form.
+    void recordGivingLinkShareOpened(share, data.link.id);
+  }
 
   if (!data.ok) {
     if (data.notFound) notFound();

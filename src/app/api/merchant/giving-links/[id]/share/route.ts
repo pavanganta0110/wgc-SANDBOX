@@ -51,10 +51,27 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
     }
 
+    // Created before sending (state: PENDING) so the share's own id can be
+    // embedded in the link the recipient actually clicks — that's what
+    // lets the public giving page record a real "Opened" event back onto
+    // this exact share row (see /g/[slug]/page.tsx).
+    const share = await prisma.givingLinkShare.create({
+      data: {
+        givingLinkId: id,
+        churchId: auth.churchId,
+        sharedByUserId: auth.userId,
+        channel: "EMAIL",
+        recipient,
+        message: message?.trim() || null,
+        state: "PENDING",
+      },
+    });
+    const trackedUrl = `${publicUrl}?share=${share.id}`;
+
     const emailSubject = subject?.trim() || `${church?.name || "We"}'d love your support`;
     const bodyHtml = `
       <p>${message?.trim() ? message.trim().replace(/\n/g, "<br/>") : `${church?.name || "Our organization"} invites you to give online.`}</p>
-      <p><a href="${publicUrl}">${link.publicTitle}</a></p>
+      <p><a href="${trackedUrl}">${link.publicTitle}</a></p>
     `;
 
     const result = await sendWgcEmail({
@@ -66,22 +83,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       bodyHtml,
     });
 
-    const share = await prisma.givingLinkShare.create({
-      data: {
-        givingLinkId: id,
-        churchId: auth.churchId,
-        sharedByUserId: auth.userId,
-        channel: "EMAIL",
-        recipient,
-        message: message?.trim() || null,
-        state: result.success ? "SENT" : "FAILED",
-      },
+    const updatedShare = await prisma.givingLinkShare.update({
+      where: { id: share.id },
+      data: { state: result.success ? "SENT" : "FAILED" },
     });
 
     if (!result.success) {
-      return NextResponse.json({ error: "Failed to send email", share }, { status: 502 });
+      return NextResponse.json({ error: "Failed to send email", share: updatedShare }, { status: 502 });
     }
-    return NextResponse.json({ share, publicUrl });
+    return NextResponse.json({ share: updatedShare, publicUrl });
   }
 
   if (channel === "TEXT") {
@@ -93,9 +103,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Please enter a valid U.S. phone number" }, { status: 400 });
     }
 
-    const smsBody = message?.trim() ? `${message.trim()} ${publicUrl}` : `${link.publicTitle}: ${publicUrl}`;
-    const result = await sendText(normalized, smsBody);
-
+    // Same reasoning as EMAIL above — the share row must exist before
+    // sending so its id can be embedded in the link for click-through
+    // open tracking.
     const share = await prisma.givingLinkShare.create({
       data: {
         givingLinkId: id,
@@ -104,14 +114,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         channel: "TEXT",
         recipient: normalized,
         message: message?.trim() || null,
-        state: result.success ? "SENT" : "FAILED",
+        state: "PENDING",
       },
+    });
+    const trackedUrl = `${publicUrl}?share=${share.id}`;
+
+    const smsBody = message?.trim() ? `${message.trim()} ${trackedUrl}` : `${link.publicTitle}: ${trackedUrl}`;
+    const result = await sendText(normalized, smsBody);
+
+    const updatedShare = await prisma.givingLinkShare.update({
+      where: { id: share.id },
+      data: { state: result.success ? "SENT" : "FAILED" },
     });
 
     if (!result.success) {
-      return NextResponse.json({ error: result.error || "Failed to send text", share }, { status: 502 });
+      return NextResponse.json({ error: result.error || "Failed to send text", share: updatedShare }, { status: 502 });
     }
-    return NextResponse.json({ share, publicUrl });
+    return NextResponse.json({ share: updatedShare, publicUrl });
   }
 
   return NextResponse.json({ error: "Unhandled channel" }, { status: 400 });
