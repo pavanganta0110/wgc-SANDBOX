@@ -9,7 +9,7 @@ import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { formatCents } from "@/lib/format";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
-import { parseYouTubeVideoId } from "@/lib/givingLinks/types";
+import { resolveThankYouVideoEmbed } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
@@ -115,7 +115,7 @@ export default function GivingLinkForm({
   collectMailingAddress?: boolean;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   thankYouMessage: string;
-  /** Optional YouTube URL (watch/shorts/youtu.be) shown on the success screen after a donation completes. Non-YouTube URLs are silently ignored by parseYouTubeVideoId. */
+  /** Optional video (YouTube, Vimeo, TikTok, Instagram, Facebook, or a direct .mp4/.webm/.ogg file) shown on the success screen after a donation completes. Unrecognized URLs are silently ignored by resolveThankYouVideoEmbed. */
   thankYouVideoUrl?: string;
   /** Finix Application Owner Identity ID ("ID..."), used as Google Pay's gatewayMerchantId. Null when not configured. */
   googlePayGatewayMerchantId: string | null;
@@ -900,12 +900,21 @@ export default function GivingLinkForm({
         )}
         {thankYouMessage && <p className="text-sm" style={{ color: light.bodyTextColor }}>{thankYouMessage}</p>}
         {(() => {
-          const videoId = parseYouTubeVideoId(thankYouVideoUrl || "");
-          if (!videoId) return null;
+          const embed = resolveThankYouVideoEmbed(thankYouVideoUrl || "");
+          if (!embed) return null;
+          const maxWidth = embed.aspect === "9/16" ? 260 : 360;
+          const style: React.CSSProperties = { aspectRatio: embed.aspect.replace("/", " / "), maxWidth, margin: "0 auto" };
+          if (embed.kind === "video") {
+            return (
+              <div className="rounded-xl overflow-hidden" style={style}>
+                <video src={embed.src} controls className="w-full h-full" />
+              </div>
+            );
+          }
           return (
-            <div className="rounded-xl overflow-hidden" style={{ aspectRatio: "16 / 9", maxWidth: 360, margin: "0 auto" }}>
+            <div className="rounded-xl overflow-hidden" style={style}>
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+                src={embed.src}
                 title="Thank you"
                 className="w-full h-full"
                 frameBorder="0"

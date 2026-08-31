@@ -855,10 +855,11 @@
       });
   }
 
-  // Mirrors parseYouTubeVideoId() in src/lib/givingLinks/types.ts — only a
-  // real youtube.com/youtu.be URL can ever produce a video ID here, so a
-  // merchant-configured thankYouVideoUrl can never be used to embed an
-  // arbitrary/untrusted origin.
+  // Mirrors parseYouTubeVideoId()/resolveThankYouVideoEmbed() in
+  // src/lib/givingLinks/types.ts — only a URL matching one of these
+  // specific known platforms' real video-URL shapes ever produces an
+  // embed, so a merchant-configured thankYouVideoUrl can never be used to
+  // embed an arbitrary/untrusted origin.
   function parseYouTubeVideoId(url) {
     if (!url) return null;
     try {
@@ -882,6 +883,55 @@
     }
   }
 
+  function resolveThankYouVideoEmbed(rawUrl) {
+    if (!rawUrl) return null;
+    var u;
+    try {
+      u = new URL(rawUrl.trim());
+    } catch (e) {
+      return null;
+    }
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    var host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+
+    if (/\.(mp4|webm|ogg)$/i.test(u.pathname)) {
+      return { kind: "video", src: u.toString(), aspect: "16/9" };
+    }
+
+    var youtubeId = parseYouTubeVideoId(rawUrl);
+    if (youtubeId) {
+      return { kind: "iframe", src: "https://www.youtube-nocookie.com/embed/" + youtubeId, aspect: "16/9" };
+    }
+
+    if (host === "vimeo.com" || host === "player.vimeo.com") {
+      var vimeoMatch = u.pathname.match(/(\d{6,})/);
+      if (vimeoMatch) return { kind: "iframe", src: "https://player.vimeo.com/video/" + vimeoMatch[1], aspect: "16/9" };
+      return null;
+    }
+
+    if (host === "tiktok.com") {
+      var tiktokMatch = u.pathname.match(/\/video\/(\d+)/);
+      if (tiktokMatch) return { kind: "iframe", src: "https://www.tiktok.com/embed/v2/" + tiktokMatch[1], aspect: "9/16" };
+      return null;
+    }
+
+    if (host === "instagram.com") {
+      var igMatch = u.pathname.match(/^\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+      if (igMatch) return { kind: "iframe", src: "https://www.instagram.com/" + igMatch[1] + "/" + igMatch[2] + "/embed", aspect: "9/16" };
+      return null;
+    }
+
+    if (host === "facebook.com" || host === "fb.watch") {
+      return {
+        kind: "iframe",
+        src: "https://www.facebook.com/plugins/video.php?href=" + encodeURIComponent(u.toString()) + "&show_text=false",
+        aspect: "16/9",
+      };
+    }
+
+    return null;
+  }
+
   function renderSuccess(state) {
     var form = q(state, '[data-role="form"]');
     var success = q(state, '[data-role="success"]');
@@ -891,12 +941,22 @@
       if (msg) msg.textContent = state.config.branding.thankYouMessage || "Your gift has been received. A confirmation email is on its way.";
       var videoHost = q(state, '[data-role="success-video"]');
       if (videoHost) {
-        var videoId = parseYouTubeVideoId(state.config.branding.thankYouVideoUrl || "");
-        if (videoId) {
-          videoHost.innerHTML =
-            '<div style="aspect-ratio:16/9;max-width:360px;margin:12px auto 0;border-radius:12px;overflow:hidden;"><iframe src="https://www.youtube-nocookie.com/embed/' +
-            videoId +
-            '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
+        var embed = resolveThankYouVideoEmbed(state.config.branding.thankYouVideoUrl || "");
+        if (embed) {
+          var maxWidth = embed.aspect === "9/16" ? 260 : 360;
+          var boxStyle = "aspect-ratio:" + embed.aspect + ";max-width:" + maxWidth + "px;margin:12px auto 0;border-radius:12px;overflow:hidden;";
+          if (embed.kind === "video") {
+            // embed.src here is the merchant's own pasted URL (only
+            // constrained to end in .mp4/.webm/.ogg and be http/https) —
+            // unlike the iframe branches below, which only ever build a
+            // src from a regex-matched numeric/ID fragment or an
+            // encodeURIComponent'd param, this one needs HTML-escaping
+            // before going into markup via innerHTML.
+            videoHost.innerHTML = '<div style="' + boxStyle + '"><video src="' + escapeHtml(embed.src) + '" controls style="width:100%;height:100%;"></video></div>';
+          } else {
+            videoHost.innerHTML =
+              '<div style="' + boxStyle + '"><iframe src="' + embed.src + '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
+          }
         } else {
           videoHost.innerHTML = "";
         }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { parseBrandingSettings, DEFAULT_BRANDING_SETTINGS, parseYouTubeVideoId } from '../types';
+import { parseBrandingSettings, DEFAULT_BRANDING_SETTINGS, parseYouTubeVideoId, resolveThankYouVideoEmbed } from '../types';
 import { PATCH } from '@/app/api/merchant/giving-links/[id]/route';
 import { prisma } from '@/lib/prisma';
 import { UnauthorizedError } from '@/lib/auth/errors';
@@ -166,5 +166,64 @@ describe('parseYouTubeVideoId — thank-you video on the donation success screen
     expect(DEFAULT_BRANDING_SETTINGS.thankYouVideoUrl).toBe('');
     const parsed = parseBrandingSettings({ thankYouVideoUrl: 'https://youtu.be/abc12345678' });
     expect(parsed.thankYouVideoUrl).toBe('https://youtu.be/abc12345678');
+  });
+});
+
+describe('resolveThankYouVideoEmbed — multi-platform thank-you video on the donation success screen', () => {
+  it('resolves a YouTube URL to the youtube-nocookie.com embed, 16:9', () => {
+    const embed = resolveThankYouVideoEmbed('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', aspect: '16/9' });
+  });
+
+  it('resolves a Vimeo URL to the player.vimeo.com embed, 16:9', () => {
+    const embed = resolveThankYouVideoEmbed('https://vimeo.com/76979871');
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://player.vimeo.com/video/76979871', aspect: '16/9' });
+  });
+
+  it('resolves a TikTok video URL to the tiktok.com/embed/v2 embed, 9:16', () => {
+    const embed = resolveThankYouVideoEmbed('https://www.tiktok.com/@wgc/video/7123456789012345678');
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://www.tiktok.com/embed/v2/7123456789012345678', aspect: '9/16' });
+  });
+
+  it('resolves an Instagram reel URL to the instagram.com/reel/.../embed embed, 9:16', () => {
+    const embed = resolveThankYouVideoEmbed('https://www.instagram.com/reel/Cabc123XYZ/');
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://www.instagram.com/reel/Cabc123XYZ/embed', aspect: '9/16' });
+  });
+
+  it('resolves a Facebook video URL to the facebook.com video plugin, 16:9', () => {
+    const embed = resolveThankYouVideoEmbed('https://www.facebook.com/WGC/videos/123456789/');
+    expect(embed).toEqual({
+      kind: 'iframe',
+      src: 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent('https://www.facebook.com/WGC/videos/123456789/') + '&show_text=false',
+      aspect: '16/9',
+    });
+  });
+
+  it('resolves a direct .mp4 file to a native <video>, not an iframe', () => {
+    const embed = resolveThankYouVideoEmbed('https://cdn.example.org/thank-you.mp4');
+    expect(embed).toEqual({ kind: 'video', src: 'https://cdn.example.org/thank-you.mp4', aspect: '16/9' });
+  });
+
+  it('resolves a direct .webm file to a native <video> too', () => {
+    const embed = resolveThankYouVideoEmbed('https://cdn.example.org/thank-you.webm');
+    expect(embed?.kind).toBe('video');
+  });
+
+  it('returns null for an unrecognized platform — never falls back to a generic "embed anything" iframe', () => {
+    expect(resolveThankYouVideoEmbed('https://evil.example.com/watch?v=dQw4w9WgXcQ')).toBeNull();
+  });
+
+  it('returns null for a non-http(s) protocol (e.g. javascript:) even if the rest of the URL looks like a known platform', () => {
+    expect(resolveThankYouVideoEmbed('javascript:alert(1)')).toBeNull();
+  });
+
+  it('returns null for a Vimeo/TikTok/Instagram URL missing the actual video id/shortcode', () => {
+    expect(resolveThankYouVideoEmbed('https://vimeo.com/')).toBeNull();
+    expect(resolveThankYouVideoEmbed('https://www.tiktok.com/@wgc')).toBeNull();
+    expect(resolveThankYouVideoEmbed('https://www.instagram.com/wgc/')).toBeNull();
+  });
+
+  it('returns null for an empty URL', () => {
+    expect(resolveThankYouVideoEmbed('')).toBeNull();
   });
 });

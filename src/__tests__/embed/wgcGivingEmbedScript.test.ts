@@ -54,11 +54,11 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     expect(SOURCE).toContain('id="wgc-finix-form-\' + state.id');
   });
 
-  it("never builds a nested WGC iframe for inline mode (createElement('iframe') is never used) — the only <iframe> markup constructed at all is the merchant-configured, youtube-nocookie.com-only thank-you video, which parseYouTubeVideoId's allowlist keeps to that one trusted origin", () => {
+  it("never builds a nested WGC iframe for inline mode (createElement('iframe') is never used) — the only <iframe> markup constructed at all is the merchant-configured thank-you video, whose src always comes from resolveThankYouVideoEmbed's fixed platform allowlist, never a raw pasted URL", () => {
     expect(SOURCE).not.toMatch(/createElement\(\s*["']iframe["']\s*\)/);
     const iframeOccurrences = SOURCE.match(/<iframe/g) || [];
     expect(iframeOccurrences).toHaveLength(1);
-    expect(SOURCE).toContain('<iframe src="https://www.youtube-nocookie.com/embed/');
+    expect(SOURCE).toContain('<iframe src="\' + embed.src + \'"');
   });
 
   it("submits donations to the shared /api/g/[slug]/donate endpoint rather than a separate embed-only payment route", () => {
@@ -120,12 +120,20 @@ describe("public/embed/wgc-giving.js — source integrity", () => {
     expect(SOURCE).toContain('openWgcPopup(state.config.hostedGivingUrl, "wgc_giving_" + state.slug)');
   });
 
-  it("shows the merchant-configured thank-you YouTube video on the success screen, mirroring parseYouTubeVideoId's allowlist so only a real youtube.com/youtu.be URL can ever be embedded", () => {
-    expect(SOURCE).toContain("function parseYouTubeVideoId(url)");
+  it("shows the merchant-configured thank-you video on the success screen, mirroring resolveThankYouVideoEmbed's platform allowlist (YouTube, Vimeo, TikTok, Instagram, Facebook, direct video files) so an unrecognized URL never results in an arbitrary embedded origin", () => {
+    expect(SOURCE).toContain("function resolveThankYouVideoEmbed(rawUrl)");
     expect(SOURCE).toContain('data-role="success-video"');
     expect(SOURCE).toContain("youtube-nocookie.com/embed/");
+    expect(SOURCE).toContain("player.vimeo.com/video/");
+    expect(SOURCE).toContain("tiktok.com/embed/v2/");
+    expect(SOURCE).toContain("instagram.com/");
+    expect(SOURCE).toContain("facebook.com/plugins/video.php");
     const renderSuccessMatch = SOURCE.match(/function renderSuccess\([\s\S]*?\n  \}\n/);
     expect(renderSuccessMatch).not.toBeNull();
-    expect(renderSuccessMatch![0]).toContain("parseYouTubeVideoId(state.config.branding.thankYouVideoUrl");
+    expect(renderSuccessMatch![0]).toContain("resolveThankYouVideoEmbed(state.config.branding.thankYouVideoUrl");
+    // The direct-video-file branch is the only one that inserts a
+    // merchant-controllable raw URL rather than a regex-matched ID/param —
+    // it must be escaped before going into innerHTML.
+    expect(renderSuccessMatch![0]).toMatch(/embed\.kind === "video"[\s\S]*?escapeHtml\(embed\.src\)/);
   });
 });

@@ -106,11 +106,14 @@ export interface BrandingSettings {
   hideChurchAddress: boolean;
   hideContactInfo: boolean;
   thankYouMessage: string;
-  // Optional YouTube video shown on the success screen after a donation
-  // completes. Stored as the full URL a merchant pastes in (watch, share,
-  // or shorts link) — parseYouTubeVideoId() below normalizes it to a video
-  // ID before ever building an iframe src, so only a real youtube.com/
-  // youtu.be URL can ever end up embedded (never an arbitrary domain).
+  // Optional video shown on the success screen after a donation completes.
+  // Stored as the full URL a merchant pastes in (YouTube, Vimeo, TikTok,
+  // Instagram, Facebook, or a direct .mp4/.webm/.ogg file) —
+  // resolveThankYouVideoEmbed() below is the only thing that ever turns
+  // this into an iframe/video src, and it only recognizes those specific
+  // platforms' own real video-URL shapes, so a merchant pasting an
+  // unrelated or malicious URL simply results in no video rendering,
+  // never an arbitrary embedded origin.
   thankYouVideoUrl: string;
   supportEmail: string;
   showPoweredByWgc?: boolean;
@@ -155,9 +158,7 @@ export const DEFAULT_BRANDING_SETTINGS: BrandingSettings = {
 
 // Accepts youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, and
 // youtube.com/embed/ URLs; returns the bare 11-char video ID, or null for
-// anything else (including a non-YouTube URL) — the only value ever
-// allowed into an iframe src, so a merchant pasting an arbitrary URL can
-// never result in embedding an untrusted origin.
+// anything else (including a non-YouTube URL).
 export function parseYouTubeVideoId(url: string): string | null {
   if (!url) return null;
   try {
@@ -179,6 +180,71 @@ export function parseYouTubeVideoId(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+export type ThankYouVideoEmbed =
+  | { kind: "iframe"; src: string; aspect: "16/9" | "9/16" }
+  | { kind: "video"; src: string; aspect: "16/9" };
+
+// Recognizes a real video URL from one of a fixed set of platforms
+// (YouTube, Vimeo, TikTok, Instagram, Facebook) or a direct video file,
+// and turns it into the exact iframe/video src to render — never the raw
+// merchant-pasted URL. Anything that doesn't match one of these known
+// shapes returns null, so a merchant pasting an unrelated or malicious
+// link simply results in no video appearing, never an arbitrary embedded
+// origin on the donation success page.
+export function resolveThankYouVideoEmbed(rawUrl: string): ThankYouVideoEmbed | null {
+  if (!rawUrl) return null;
+  let u: URL;
+  try {
+    u = new URL(rawUrl.trim());
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const host = u.hostname.replace(/^www\./, "").replace(/^m\./, "");
+
+  // Direct video file — native <video>, not an iframe, so there's no
+  // embedded-page surface at all regardless of the host.
+  if (/\.(mp4|webm|ogg)$/i.test(u.pathname)) {
+    return { kind: "video", src: u.toString(), aspect: "16/9" };
+  }
+
+  const youtubeId = parseYouTubeVideoId(rawUrl);
+  if (youtubeId) {
+    return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${youtubeId}`, aspect: "16/9" };
+  }
+
+  if (host === "vimeo.com" || host === "player.vimeo.com") {
+    const match = u.pathname.match(/(\d{6,})/);
+    if (match) return { kind: "iframe", src: `https://player.vimeo.com/video/${match[1]}`, aspect: "16/9" };
+    return null;
+  }
+
+  if (host === "tiktok.com") {
+    const match = u.pathname.match(/\/video\/(\d+)/);
+    if (match) return { kind: "iframe", src: `https://www.tiktok.com/embed/v2/${match[1]}`, aspect: "9/16" };
+    return null;
+  }
+
+  if (host === "instagram.com") {
+    const match = u.pathname.match(/^\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
+    if (match) return { kind: "iframe", src: `https://www.instagram.com/${match[1]}/${match[2]}/embed`, aspect: "9/16" };
+    return null;
+  }
+
+  if (host === "facebook.com" || host === "fb.watch") {
+    // Facebook's own video plugin — it validates href server-side against
+    // a real Facebook-hosted video, so this never becomes a generic
+    // "embed any URL" primitive despite taking a URL as a parameter.
+    return {
+      kind: "iframe",
+      src: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(u.toString())}&show_text=false`,
+      aspect: "16/9",
+    };
+  }
+
+  return null;
 }
 
 export function parseBrandingSettings(json: unknown): BrandingSettings {
