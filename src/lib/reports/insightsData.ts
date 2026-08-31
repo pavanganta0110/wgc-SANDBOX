@@ -86,12 +86,16 @@ export const PAYMENT_DIMENSIONS = [
 
 export type PaymentDimensionKey = (typeof PAYMENT_DIMENSIONS)[number]["key"];
 
-function dimensionValue(
+export function dimensionValue(
   instrument: { cardBrand: string | null; paymentMethodType: string | null } | undefined,
   dimension: PaymentDimensionKey
 ): string {
   switch (dimension) {
     case "cardBrand":
+      // A bank-account instrument legitimately has no cardBrand — it isn't
+      // a card at all, so it shouldn't fall into the same UNKNOWN bucket as
+      // a card whose brand genuinely wasn't captured.
+      if (instrument?.paymentMethodType === "BANK_ACCOUNT") return "ACH";
       return instrument?.cardBrand ?? "UNKNOWN";
     case "paymentChannel":
       return instrument?.paymentMethodType ?? "UNKNOWN";
@@ -145,7 +149,7 @@ export async function getPaymentsInsights(
   const brandSeries = transfers.map((t) => ({
     createdAtFinix: t.createdAtFinix,
     amountCents: t.amountCents,
-    series: instrumentMap.get(t.finixPaymentInstrumentId ?? "")?.cardBrand ?? "UNKNOWN",
+    series: dimensionValue(instrumentMap.get(t.finixPaymentInstrumentId ?? ""), "cardBrand"),
   }));
   const brandKeys = Array.from(new Set(brandSeries.map((s) => s.series)));
   const byBrand = groupTrend(brandSeries, trend, brandKeys, "sum");
@@ -211,7 +215,7 @@ export async function getAuthorizationsInsights(
 
   const brandOf = (a: (typeof authorizations)[number]) => {
     const transfer = a.finixTransferId ? transferMap.get(a.finixTransferId) : undefined;
-    return instrumentMap.get(transfer?.finixPaymentInstrumentId ?? "")?.cardBrand ?? "UNKNOWN";
+    return dimensionValue(instrumentMap.get(transfer?.finixPaymentInstrumentId ?? ""), "cardBrand");
   };
 
   const dimensionOf = (a: (typeof authorizations)[number]) => {

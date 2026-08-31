@@ -10,6 +10,7 @@ import DepositDetailPanel from "@/components/merchant/DepositDetailPanel";
 import DepositFilterBar from "@/components/merchant/DepositFilterBar";
 import DepositRowActions from "@/components/merchant/DepositRowActions";
 import { parseVisibleDepositColumns, formatFundingSpeed } from "@/lib/depositColumns";
+import { resolveActiveBankAccount } from "@/lib/organization/bankAccountResolver";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
 import { Landmark } from "lucide-react";
 
@@ -55,6 +56,14 @@ export default async function DepositsPage({
   });
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
+
+  // Same gap already fixed on the deposit detail page: FinixFundingTransferAttempt
+  // rows frequently have bankName/bankAccountLast4 null (Finix's funding-transfer
+  // payload doesn't always carry it, and older onboarding-sourced accounts were
+  // never backfilled into OrganizationBankAccount either). Resolved once for the
+  // whole org rather than per row — every deposit here pays out to the same
+  // organization's account regardless of which specific row is missing the field.
+  const orgBankAccount = await resolveActiveBankAccount(churchId);
 
   const rows = deposits.filter((d) => {
     if (amount) {
@@ -140,11 +149,8 @@ export default async function DepositsPage({
                             <Landmark className="w-4 h-4 text-slate-400 shrink-0" />
                             <div>
                               <p className="text-slate-700">
-                                {d.bankName ? `${d.bankName} ` : ""}••••{d.bankAccountLast4 || "----"}
+                                {d.bankName || orgBankAccount?.bankName ? `${d.bankName || orgBankAccount?.bankName} ` : ""}••••{d.bankAccountLast4 || orgBankAccount?.last4 || "----"}
                               </p>
-                              {d.accountHolderName && (
-                                <p className="text-xs text-slate-400">{d.accountHolderName}</p>
-                              )}
                             </div>
                           </div>
                         </td>
