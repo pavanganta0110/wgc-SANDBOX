@@ -124,7 +124,7 @@ export default async function SettlementFullDetailPage({
                 <span className="text-3xl font-bold text-slate-900">{formatCents(settlement.totalAmountCents ?? 0)}</span>
                 <span className="text-sm font-semibold text-slate-400">{settlement.currency || "USD"}</span>
               </div>
-              <StateBadge state={displayStatus} />
+              <StateBadge state={displayStatus} label={getSettlementStatusLabel(displayStatus)} />
             </div>
             <p className="text-sm text-slate-600">
               Organization: <span className="font-semibold text-slate-900">{church?.name || "—"}</span>

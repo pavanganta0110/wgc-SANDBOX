@@ -44,6 +44,10 @@ describe("getSettlementStatusLabel", () => {
     expect(getSettlementStatusLabel("APPROVED")).toBe("Approved");
   });
 
+  it("labels PENDING as Accruing — Finix's own processor status for a settlement still in its accrual window, confirmed via a real captured settlement.accruing_started webhook", () => {
+    expect(getSettlementStatusLabel("PENDING")).toBe("Accruing");
+  });
+
   it("title-cases an unrecognized status instead of showing it raw or blank", () => {
     expect(getSettlementStatusLabel("SOME_NEW_STATUS")).toBe("Some new status");
   });

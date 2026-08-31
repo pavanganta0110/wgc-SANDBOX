@@ -5,7 +5,7 @@ import { formatCents, formatSignedCents } from "@/lib/format";
 import { loadSettlementsList } from "@/lib/finix/settlementsList";
 import StateBadge from "@/components/merchant/StateBadge";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
-import { resolveSettlementDisplayStatus } from "@/lib/finix/settlementStatus";
+import { resolveSettlementDisplayStatus, getSettlementStatusLabel } from "@/lib/finix/settlementStatus";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 
 const PAGE_SIZE = 25;
@@ -81,7 +81,7 @@ export default async function AdminSettlementsPage({
                           {formatDateTime(settlement.createdAtFinix)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-sm">
-                          <StateBadge state={displayStatus} />
+                          <StateBadge state={displayStatus} label={getSettlementStatusLabel(displayStatus)} />
                         </td>
                         <td className="whitespace-nowrap px-3 py-4 text-right text-sm text-gray-900 font-semibold">
                           {formatCents(settlement.totalAmountCents ?? 0)}

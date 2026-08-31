@@ -24,7 +24,11 @@ const SETTLEMENT_STATUS_LABELS: Record<string, string> = {
   ACCRUING: "Accruing",
   AWAITING_APPROVAL: "Awaiting Approval",
   APPROVED: "Approved",
-  PENDING: "Pending",
+  // Confirmed against a real settlement.accruing_started webhook: Finix's
+  // own processor status for a settlement still in its accrual window is
+  // literally "PENDING" (their dashboard's "Accruing" label is a display
+  // choice on top of that same raw value, not a distinct status string).
+  PENDING: "Accruing",
   PROCESSING: "Processing",
   READY: "Ready",
   FUNDED: "Funded",

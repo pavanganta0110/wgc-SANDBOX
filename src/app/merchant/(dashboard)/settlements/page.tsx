@@ -14,7 +14,7 @@ import Pagination from "@/components/merchant/Pagination";
 import { formatDateCDT, formatTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadSettlementsList, type SettlementsListSort } from "@/lib/finix/settlementsList";
 import { parseVisibleSettlementColumns } from "@/lib/settlementColumns";
-import { resolveSettlementDisplayStatus } from "@/lib/finix/settlementStatus";
+import { resolveSettlementDisplayStatus, getSettlementStatusLabel } from "@/lib/finix/settlementStatus";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
 
 const PAGE_SIZE = 25;
@@ -191,7 +191,7 @@ export default async function SettlementsPage({
                       )}
                       {visibleCols.has("status") && (
                         <td className="px-6 py-3">
-                          <StateBadge state={displayStatus} />
+                          <StateBadge state={displayStatus} label={getSettlementStatusLabel(displayStatus)} />
                         </td>
                       )}
                       {visibleCols.has("grossAmount") && (
