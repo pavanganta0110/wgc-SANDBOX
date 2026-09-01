@@ -919,7 +919,7 @@ export default function GivingLinkForm({
             <div className="mt-6 pt-6" style={{ borderTop: `1px solid ${light.borderColor}` }}>
               <div className="rounded-xl overflow-hidden" style={boxStyle}>
                 {embed.kind === "video" ? (
-                  <video src={embed.src} controls className="w-full h-full" />
+                  <video src={embed.src} controls autoPlay muted playsInline className="w-full h-full" />
                 ) : (
                   <iframe
                     src={embed.src}

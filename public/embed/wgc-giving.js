@@ -900,12 +900,14 @@
 
     var youtubeId = parseYouTubeVideoId(rawUrl);
     if (youtubeId) {
-      return { kind: "iframe", src: "https://www.youtube-nocookie.com/embed/" + youtubeId, aspect: "16/9" };
+      // autoplay=1 only actually autoplays if mute=1 is also set — every
+      // major browser blocks audible autoplay without a prior user gesture.
+      return { kind: "iframe", src: "https://www.youtube-nocookie.com/embed/" + youtubeId + "?autoplay=1&mute=1", aspect: "16/9" };
     }
 
     if (host === "vimeo.com" || host === "player.vimeo.com") {
       var vimeoMatch = u.pathname.match(/(\d{6,})/);
-      if (vimeoMatch) return { kind: "iframe", src: "https://player.vimeo.com/video/" + vimeoMatch[1], aspect: "16/9" };
+      if (vimeoMatch) return { kind: "iframe", src: "https://player.vimeo.com/video/" + vimeoMatch[1] + "?autoplay=1&muted=1", aspect: "16/9" };
       return null;
     }
 
@@ -924,7 +926,7 @@
     if (host === "facebook.com" || host === "fb.watch") {
       return {
         kind: "iframe",
-        src: "https://www.facebook.com/plugins/video.php?href=" + encodeURIComponent(u.toString()) + "&show_text=false",
+        src: "https://www.facebook.com/plugins/video.php?href=" + encodeURIComponent(u.toString()) + "&show_text=false&autoplay=true&mute=1",
         aspect: "16/9",
       };
     }
@@ -953,7 +955,7 @@
             // src from a regex-matched numeric/ID fragment or an
             // encodeURIComponent'd param, this one needs HTML-escaping
             // before going into markup via innerHTML.
-            videoHost.innerHTML = '<div style="' + wrapStyle + '"><div style="' + boxStyle + '"><video src="' + escapeHtml(embed.src) + '" controls style="width:100%;height:100%;"></video></div></div>';
+            videoHost.innerHTML = '<div style="' + wrapStyle + '"><div style="' + boxStyle + '"><video src="' + escapeHtml(embed.src) + '" controls autoplay muted playsinline style="width:100%;height:100%;"></video></div></div>';
           } else {
             videoHost.innerHTML =
               '<div style="' + wrapStyle + '"><div style="' + boxStyle + '"><iframe src="' + embed.src + '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></div>';

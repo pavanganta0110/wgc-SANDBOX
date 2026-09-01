@@ -212,22 +212,29 @@ export function resolveThankYouVideoEmbed(rawUrl: string): ThankYouVideoEmbed | 
 
   const youtubeId = parseYouTubeVideoId(rawUrl);
   if (youtubeId) {
-    return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${youtubeId}`, aspect: "16/9" };
+    // autoplay=1 only actually autoplays if mute=1 is also set — every
+    // major browser blocks audible autoplay without a prior user gesture.
+    // The donor can unmute via the player's own volume control.
+    return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${youtubeId}?autoplay=1&mute=1`, aspect: "16/9" };
   }
 
   if (host === "vimeo.com" || host === "player.vimeo.com") {
     const match = u.pathname.match(/(\d{6,})/);
-    if (match) return { kind: "iframe", src: `https://player.vimeo.com/video/${match[1]}`, aspect: "16/9" };
+    if (match) return { kind: "iframe", src: `https://player.vimeo.com/video/${match[1]}?autoplay=1&muted=1`, aspect: "16/9" };
     return null;
   }
 
   if (host === "tiktok.com") {
+    // TikTok's embed iframe has no documented/reliable autoplay param —
+    // stays click-to-play.
     const match = u.pathname.match(/\/video\/(\d+)/);
     if (match) return { kind: "iframe", src: `https://www.tiktok.com/embed/v2/${match[1]}`, aspect: "9/16" };
     return null;
   }
 
   if (host === "instagram.com") {
+    // Instagram's basic embed iframe has no autoplay support at all —
+    // stays click-to-play.
     const match = u.pathname.match(/^\/(p|reel|tv)\/([A-Za-z0-9_-]+)/);
     if (match) return { kind: "iframe", src: `https://www.instagram.com/${match[1]}/${match[2]}/embed`, aspect: "9/16" };
     return null;
@@ -239,7 +246,7 @@ export function resolveThankYouVideoEmbed(rawUrl: string): ThankYouVideoEmbed | 
     // "embed any URL" primitive despite taking a URL as a parameter.
     return {
       kind: "iframe",
-      src: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(u.toString())}&show_text=false`,
+      src: `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(u.toString())}&show_text=false&autoplay=true&mute=1`,
       aspect: "16/9",
     };
   }

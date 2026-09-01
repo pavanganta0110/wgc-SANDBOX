@@ -172,12 +172,12 @@ describe('parseYouTubeVideoId — thank-you video on the donation success screen
 describe('resolveThankYouVideoEmbed — multi-platform thank-you video on the donation success screen', () => {
   it('resolves a YouTube URL to the youtube-nocookie.com embed, 16:9', () => {
     const embed = resolveThankYouVideoEmbed('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-    expect(embed).toEqual({ kind: 'iframe', src: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', aspect: '16/9' });
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&mute=1', aspect: '16/9' });
   });
 
   it('resolves a Vimeo URL to the player.vimeo.com embed, 16:9', () => {
     const embed = resolveThankYouVideoEmbed('https://vimeo.com/76979871');
-    expect(embed).toEqual({ kind: 'iframe', src: 'https://player.vimeo.com/video/76979871', aspect: '16/9' });
+    expect(embed).toEqual({ kind: 'iframe', src: 'https://player.vimeo.com/video/76979871?autoplay=1&muted=1', aspect: '16/9' });
   });
 
   it('resolves a TikTok video URL to the tiktok.com/embed/v2 embed, 9:16', () => {
@@ -194,7 +194,7 @@ describe('resolveThankYouVideoEmbed — multi-platform thank-you video on the do
     const embed = resolveThankYouVideoEmbed('https://www.facebook.com/WGC/videos/123456789/');
     expect(embed).toEqual({
       kind: 'iframe',
-      src: 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent('https://www.facebook.com/WGC/videos/123456789/') + '&show_text=false',
+      src: 'https://www.facebook.com/plugins/video.php?href=' + encodeURIComponent('https://www.facebook.com/WGC/videos/123456789/') + '&show_text=false&autoplay=true&mute=1',
       aspect: '16/9',
     });
   });
