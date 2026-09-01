@@ -1,5 +1,20 @@
 import { QuickBooksConfigError } from "./errors";
 
+// Credentials pasted into a dashboard env editor routinely pick up a
+// trailing newline or a wrapping pair of quotes (same class of bug already
+// hit in the Finix webhook route's normalizeSecret) — a corrupted
+// client_id doesn't error loudly, it just makes Intuit's own authorize
+// screen show a generic "undefined didn't connect" failure with no other
+// symptom, since Intuit can't find an app matching the mangled value.
+function normalizeEnvValue(value: string | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  let v = value.trim();
+  if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+    v = v.slice(1, -1);
+  }
+  return v === "" ? undefined : v;
+}
+
 /**
  * All QuickBooks env vars are read lazily, fail-closed only at the point of
  * real use — same pattern as src/lib/integrations/aplos/config.ts and
@@ -35,7 +50,7 @@ export function isQuickBooksIntegrationEnabled(): boolean {
  * uses this to distinguish "not configured yet" from "configured but not
  * connected for this org" without ever throwing. */
 export function isQuickBooksIntegrationConfigured(): boolean {
-  return Boolean(process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET);
+  return Boolean(normalizeEnvValue(process.env.QUICKBOOKS_CLIENT_ID) && normalizeEnvValue(process.env.QUICKBOOKS_CLIENT_SECRET));
 }
 
 export interface QuickBooksOAuthConfig {
@@ -51,9 +66,9 @@ export interface QuickBooksOAuthConfig {
  * the real authorize/token-exchange path, never from module load or a
  * status/read-only route. */
 export function getQuickBooksOAuthConfig(): QuickBooksOAuthConfig {
-  const clientId = process.env.QUICKBOOKS_CLIENT_ID;
-  const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET;
-  const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI;
+  const clientId = normalizeEnvValue(process.env.QUICKBOOKS_CLIENT_ID);
+  const clientSecret = normalizeEnvValue(process.env.QUICKBOOKS_CLIENT_SECRET);
+  const redirectUri = normalizeEnvValue(process.env.QUICKBOOKS_REDIRECT_URI);
   if (!clientId || !clientSecret || !redirectUri) {
     throw new QuickBooksConfigError(
       "QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET / QUICKBOOKS_REDIRECT_URI are not configured. Register an app at developer.intuit.com and set these as server-only environment variables."
