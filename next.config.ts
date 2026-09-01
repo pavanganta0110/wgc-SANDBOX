@@ -58,7 +58,11 @@ const securityHeaders = [
       // own entry here).
       // www.google.com: the reCAPTCHA challenge widget itself renders in an
       // iframe from here (same reasoning as js.finix.com above).
-      "frame-src 'self' https://pay.google.com https://js.finix.com https://www.google.com",
+      // youtube-nocookie.com / player.vimeo.com / tiktok.com / instagram.com /
+      // facebook.com: the optional thank-you video on the donation success
+      // screen (resolveThankYouVideoEmbed) renders as an iframe from
+      // whichever of these platforms the merchant's video URL is from.
+      "frame-src 'self' https://pay.google.com https://js.finix.com https://www.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://www.facebook.com",
       // Prevent this page from being embedded externally, but allow same-origin iframing for walkthroughs
       "frame-ancestors 'self'",
     ].join("; "),
@@ -118,7 +122,7 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:",
               "media-src 'self' https: http:",
               "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://finix.qa-payments-api.com https://pay.google.com https://cdn.sift.com",
-              "frame-src 'self' https://pay.google.com https://js.finix.com",
+              "frame-src 'self' https://pay.google.com https://js.finix.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://www.facebook.com",
               "frame-ancestors *",
             ].join("; "),
           },
