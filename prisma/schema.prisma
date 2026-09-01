@@ -4478,3 +4478,29 @@ model MerchandiseSettings {
   @@index([churchId])
 }
 
+
+// Self-service backfill for donations that succeeded before a church
+// connected QuickBooks (or before automatic sync existed at all) — same
+// chunked create-then-repeatedly-process shape as BulkReceiptJob, driven
+// by the merchant clicking "Sync Past Transactions" and the frontend
+// calling .../process repeatedly until COMPLETED.
+model QuickBooksBackfillJob {
+  id       String @id @default(cuid())
+  churchId String
+
+  targetIds  Json // Payment ids
+  totalCount Int
+
+  status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+
+  processedCount Int @default(0)
+  succeededCount Int @default(0)
+  failedCount    Int @default(0)
+  skippedCount   Int @default(0)
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([churchId, status])
+}

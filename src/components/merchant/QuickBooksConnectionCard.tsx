@@ -31,9 +31,20 @@ const STATUS_LABEL: Record<string, string> = {
   DISCONNECTED: "Disconnected",
 };
 
+interface BackfillJob {
+  id: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  totalCount: number;
+  processedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  skippedCount: number;
+}
+
 export default function QuickBooksConnectionCard() {
   const [data, setData] = useState<StatusResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [backfillJob, setBackfillJob] = useState<BackfillJob | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/merchant/settings/integrations/quickbooks")
@@ -67,6 +78,40 @@ export default function QuickBooksConnectionCard() {
       toast.error(err.message || "Something went wrong.");
     } finally {
       setBusy(null);
+    }
+  };
+
+  const runBackfill = async () => {
+    setBusy("backfill");
+    try {
+      const createRes = await fetch("/api/merchant/settings/integrations/quickbooks/backfill", { method: "POST" });
+      const createData = await createRes.json();
+      if (!createRes.ok) throw new Error(createData.error || "Failed to start syncing past transactions.");
+      let current: BackfillJob = createData.job;
+      setBackfillJob(current);
+
+      while (current.status === "PENDING" || current.status === "RUNNING") {
+        const stepRes = await fetch(`/api/merchant/settings/integrations/quickbooks/backfill/${current.id}/process`, { method: "POST" });
+        const stepData = await stepRes.json();
+        if (!stepRes.ok) throw new Error(stepData.error || "Syncing past transactions failed.");
+        current = stepData.job;
+        setBackfillJob(current);
+      }
+
+      if (current.totalCount === 0) {
+        toast.success("Everything is already synced — nothing to backfill.");
+      } else {
+        const parts = [`${current.succeededCount} synced`];
+        if (current.failedCount > 0) parts.push(`${current.failedCount} failed`);
+        if (current.skippedCount > 0) parts.push(`${current.skippedCount} skipped`);
+        toast.success(`Past transactions: ${parts.join(", ")}`);
+      }
+      load();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to sync past transactions.");
+    } finally {
+      setBusy(null);
+      setBackfillJob(null);
     }
   };
 
@@ -132,6 +177,10 @@ export default function QuickBooksConnectionCard() {
             <>
               <button onClick={() => call("test")} disabled={busy !== null} className="px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2 text-sm">
                 {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Test Connection
+              </button>
+              <button onClick={runBackfill} disabled={busy !== null} className="px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2 text-sm">
+                {busy === "backfill" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {busy === "backfill" && backfillJob ? `Syncing ${backfillJob.processedCount}/${backfillJob.totalCount}…` : busy === "backfill" ? "Starting…" : "Sync Past Transactions"}
               </button>
               <button onClick={() => call("disconnect")} disabled={busy !== null} className="px-5 py-2.5 rounded-xl font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-sm">
                 {busy === "disconnect" ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Disconnect

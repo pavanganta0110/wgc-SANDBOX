@@ -57,6 +57,11 @@ export interface QuickBooksPayment {
   TotalAmt: number;
   TxnDate?: string;
   Line?: Array<{ Amount: number; LinkedTxn: Array<{ TxnId: string; TxnType: "Invoice" }> }>;
+  // Internal memo, never shown to the customer — used to record whether a
+  // synced Payment came from a one-time gift or a recurring subscription
+  // charge, since QuickBooks' Payment object has no first-class field for
+  // that distinction.
+  PrivateNote?: string;
 }
 
 interface IntuitQueryResponse<T> {

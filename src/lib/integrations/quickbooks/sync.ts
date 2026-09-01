@@ -86,6 +86,9 @@ export async function syncPaymentToQuickBooks(paymentId: string): Promise<void> 
       const qbPayment = await client.createPayment({
         CustomerRef: { value: customer.Id! },
         TotalAmt: (payment.donationAmountCents ?? payment.amountCents) / 100,
+        PrivateNote: payment.finixSubscriptionId
+          ? `Recurring donation (WGC subscription ${payment.finixSubscriptionId})`
+          : "One-time donation (WGC Payments)",
       });
 
       await prisma.quickBooksSyncRecord.update({
