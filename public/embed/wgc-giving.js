@@ -944,7 +944,8 @@
         var embed = resolveThankYouVideoEmbed(state.config.branding.thankYouVideoUrl || "");
         if (embed) {
           var maxWidth = embed.aspect === "9/16" ? 260 : 360;
-          var boxStyle = "aspect-ratio:" + embed.aspect + ";max-width:" + maxWidth + "px;margin:12px auto 0;border-radius:12px;overflow:hidden;";
+          var wrapStyle = "margin-top:20px;padding-top:20px;border-top:1px solid #e2e8f0;";
+          var boxStyle = "aspect-ratio:" + embed.aspect + ";max-width:" + maxWidth + "px;margin:0 auto;border-radius:12px;overflow:hidden;";
           if (embed.kind === "video") {
             // embed.src here is the merchant's own pasted URL (only
             // constrained to end in .mp4/.webm/.ogg and be http/https) —
@@ -952,10 +953,10 @@
             // src from a regex-matched numeric/ID fragment or an
             // encodeURIComponent'd param, this one needs HTML-escaping
             // before going into markup via innerHTML.
-            videoHost.innerHTML = '<div style="' + boxStyle + '"><video src="' + escapeHtml(embed.src) + '" controls style="width:100%;height:100%;"></video></div>';
+            videoHost.innerHTML = '<div style="' + wrapStyle + '"><div style="' + boxStyle + '"><video src="' + escapeHtml(embed.src) + '" controls style="width:100%;height:100%;"></video></div></div>';
           } else {
             videoHost.innerHTML =
-              '<div style="' + boxStyle + '"><iframe src="' + embed.src + '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>';
+              '<div style="' + wrapStyle + '"><div style="' + boxStyle + '"><iframe src="' + embed.src + '" title="Thank you" style="width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div></div>';
           }
         } else {
           videoHost.innerHTML = "";

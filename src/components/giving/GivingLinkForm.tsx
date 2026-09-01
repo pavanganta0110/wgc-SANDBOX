@@ -899,31 +899,6 @@ export default function GivingLinkForm({
           </div>
         )}
         {thankYouMessage && <p className="text-sm" style={{ color: light.bodyTextColor }}>{thankYouMessage}</p>}
-        {(() => {
-          const embed = resolveThankYouVideoEmbed(thankYouVideoUrl || "");
-          if (!embed) return null;
-          const maxWidth = embed.aspect === "9/16" ? 260 : 360;
-          const style: React.CSSProperties = { aspectRatio: embed.aspect.replace("/", " / "), maxWidth, margin: "0 auto" };
-          if (embed.kind === "video") {
-            return (
-              <div className="rounded-xl overflow-hidden" style={style}>
-                <video src={embed.src} controls className="w-full h-full" />
-              </div>
-            );
-          }
-          return (
-            <div className="rounded-xl overflow-hidden" style={style}>
-              <iframe
-                src={embed.src}
-                title="Thank you"
-                className="w-full h-full"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          );
-        })()}
         {result.transferId && <p className="text-xs text-slate-300 font-mono">{result.transferId}</p>}
         <button
           onClick={() => setResult({ step: "form" })}
@@ -932,6 +907,30 @@ export default function GivingLinkForm({
         >
           Make Another Donation
         </button>
+        {(() => {
+          const embed = resolveThankYouVideoEmbed(thankYouVideoUrl || "");
+          if (!embed) return null;
+          const maxWidth = embed.aspect === "9/16" ? 260 : 360;
+          const boxStyle: React.CSSProperties = { aspectRatio: embed.aspect.replace("/", " / "), maxWidth, margin: "0 auto" };
+          return (
+            <div className="mt-6 pt-6" style={{ borderTop: `1px solid ${light.borderColor}` }}>
+              <div className="rounded-xl overflow-hidden" style={boxStyle}>
+                {embed.kind === "video" ? (
+                  <video src={embed.src} controls className="w-full h-full" />
+                ) : (
+                  <iframe
+                    src={embed.src}
+                    title="Thank you"
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   }
