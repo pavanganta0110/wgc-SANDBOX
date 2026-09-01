@@ -23,6 +23,7 @@ export type MerchantChargeType =
   | "MERCHANT_DONATION"
   | "MERCHANT_RECURRING_DONATION"
   | "MERCHANT_INVOICE_PAYMENT"
+  | "MERCHANT_MERCHANDISE_ORDER"
   | "MERCHANT_OTHER_PAYMENT";
 
 export type ChargeType = WgcChargeType | MerchantChargeType;

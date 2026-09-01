@@ -19,6 +19,7 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   { key: "PAYOUT_ACCOUNT_REJECTED", label: "Payout Bank Account Rejected", description: "A payout bank account could not be approved." },
   { key: "PAYOUT_ACCOUNT_REPLACED", label: "Payout Bank Account Replaced", description: "A previous payout bank account was replaced and moved to history." },
   { key: "PAYOUT_DEPOSIT_DELAYED", label: "Payout Deposit Delayed", description: "A scheduled deposit was delayed or failed." },
+  { key: "NEW_MERCHANDISE_ORDER", label: "New Merchandise Order", description: "A donor purchased merchandise on one of your giving pages." },
 ];
 
 export const DEFAULT_NOTIFICATION_PREFERENCE = { inAppEnabled: true, emailEnabled: true, frequency: "IMMEDIATE" as const };

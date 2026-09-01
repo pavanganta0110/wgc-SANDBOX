@@ -174,12 +174,17 @@ export async function requestGooglePayment(config: GooglePayConfig, amountCents:
 
 export async function createGooglePayButton(
   config: GooglePayConfig,
-  onClick: () => void
+  onClick: () => void,
+  // Defaults to "donate" — the original and only caller before the WGC
+  // subscription activation form, which passes "subscribe" so the
+  // button's own label ("Donate with G Pay" vs "Subscribe with G Pay")
+  // actually matches what's being paid for.
+  buttonType: "donate" | "subscribe" | "pay" | "plain" | "buy" | "checkout" | "book" | "order" = "donate"
 ): Promise<HTMLElement> {
   const client = await getGooglePaymentsClient(config.environment);
   return client.createButton({
     onClick,
-    buttonType: "donate",
+    buttonType,
     buttonSizeMode: "fill",
   });
 }

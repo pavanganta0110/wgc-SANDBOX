@@ -10,6 +10,7 @@ import GivingLinkDetailHeader from "@/components/merchant/GivingLinkDetailHeader
 import GivingLinkOverviewTab from "@/components/merchant/GivingLinkOverviewTab";
 import GivingLinkSharingHistoryTable from "@/components/merchant/GivingLinkSharingHistoryTable";
 import DonationAttemptsTable from "@/components/merchant/DonationAttemptsTable";
+import GivingLinkMerchandiseTab from "@/components/merchant/GivingLinkMerchandiseTab";
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -31,7 +32,7 @@ export default async function GivingLinkDetailPage({
   const churchId = session!.churchId!;
   const { id } = await params;
   const sp = await searchParams;
-  const tab = sp.tab === "attempts" || sp.tab === "sharing" ? sp.tab : "overview";
+  const tab = sp.tab === "attempts" || sp.tab === "sharing" || sp.tab === "merchandise" ? sp.tab : "overview";
 
   const link = await prisma.givingLink.findFirst({ where: { id, churchId } });
   if (!link) notFound();
@@ -71,6 +72,7 @@ export default async function GivingLinkDetailPage({
           { key: "overview", label: "Overview" },
           { key: "attempts", label: "Donation Attempts" },
           { key: "sharing", label: "Sharing History" },
+          { key: "merchandise", label: "Merchandise" },
         ] as const).map((t) => (
           <Link
             key={t.key}
@@ -91,6 +93,8 @@ export default async function GivingLinkDetailPage({
       )}
 
       {tab === "sharing" && <GivingLinkSharingHistoryTable givingLinkId={id} churchId={churchId} />}
+
+      {tab === "merchandise" && <GivingLinkMerchandiseTab givingLinkId={id} publicSlug={link.publicSlug} />}
     </div>
   );
 }

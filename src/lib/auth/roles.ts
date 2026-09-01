@@ -120,9 +120,22 @@ export type PermissionKey =
   | "canCancelSubscription"
   | "canDownloadBillingReceipts"
   | "canViewInvoiceBilling"
+  // Printful/merchandise: connecting/disconnecting the store and running a
+  // product sync is gated by the existing canManageIntegrations (same as
+  // Aplos). These two are specific to the merchandise catalog/order
+  // surfaces layered on top — enabling/disabling products, changing WGC
+  // selling prices, managing MerchandiseSettings, and manually retrying or
+  // cancelling a merchandise order (canManageMerchandise); viewing the
+  // merchandise orders list/detail (canViewMerchandiseOrders), which is
+  // read-only and deliberately separate so a fundraiser/viewer override
+  // could grant order visibility without also granting pricing/catalog
+  // control.
+  | "canManageMerchandise"
+  | "canViewMerchandiseOrders"
   // Reporting read access itself piggybacks on canViewDonors (report pages
   // show nothing canViewDonors already wouldn't) — this one key is only
-  // for creating/renaming/deleting a Saved Report.
+  // for saving/renaming/deleting a Saved Report, since that's a write
+  // action with no existing equivalent gate.
   | "canManageSavedReports"
   // Pledges — canCreatePledgeCampaign/canEditPledgeCampaign/
   // canArchivePledgeCampaign gate the campaign itself (goal, dates, fund);
@@ -143,12 +156,8 @@ export type PermissionKey =
   // Email Logs — canViewEmailLogs gates seeing the per-organization log of
   // every donor/org-facing email sent (receipts, statements, invoices,
   // etc.). canResendEmails is a single, uniform gate for resending any
-  // logged email regardless of its underlying type — the categories map to
-  // wildly different existing permissions (canSendExternalDonationReceipt,
-  // canSendInvoices, ...), so this page intentionally does not reuse them:
-  // a merchant looking at one unified list expects one consistent
-  // resend-or-not answer per row, not silently-disabled buttons for
-  // reasons unrelated to email itself.
+  // email type from that page, rather than each category's own existing,
+  // inconsistent permission.
   | "canViewEmailLogs"
   | "canResendEmails";
 
@@ -203,6 +212,8 @@ const ALL_FALSE: PermissionMatrix = {
   canCancelSubscription: false,
   canDownloadBillingReceipts: false,
   canViewInvoiceBilling: false,
+  canManageMerchandise: false,
+  canViewMerchandiseOrders: false,
   canManageSavedReports: false,
   canCreatePledgeCampaign: false,
   canEditPledgeCampaign: false,
@@ -270,6 +281,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canCancelSubscription: true,
     canDownloadBillingReceipts: true,
     canViewInvoiceBilling: true,
+    canManageMerchandise: true,
+    canViewMerchandiseOrders: true,
     canManageSavedReports: true,
     canCreatePledgeCampaign: true,
     canEditPledgeCampaign: true,
@@ -322,6 +335,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewBillingHistory: true,
     canViewInvoiceBilling: true,
     canDownloadBillingReceipts: true,
+    canManageMerchandise: true,
+    canViewMerchandiseOrders: true,
     canManageSavedReports: true,
     canCreatePledgeCampaign: true,
     canEditPledgeCampaign: true,
@@ -332,8 +347,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportPledges: true,
     canViewEmailLogs: true,
     // canResendEmails: false by default, override-able — an outbound
-    // donor-facing action, same trust tier as canVoidExternalDonation/
-    // canRefundInvoicePayments above.
+    // donor-facing action, same trust tier as canVoidExternalDonation /
+    // canRefundInvoicePayments.
     // canArchivePledgeCampaign, canCancelPledge: false by default,
     // override-able — archiving a campaign and canceling a pledge are
     // treated like canVoidExternalDonation/canVoidInvoices, not a
@@ -383,8 +398,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canEditInvoices: true,
     canSendInvoices: true,
     canManageClients: true,
-    // No refunds, no voiding, no offline-payment recording, no invoice
-    // settings, no export by default — override-able per the approved spec.
+    // Fundraisers can see merchandise orders tied to their own attributed
+    // activity (read-only) but never connect/disconnect Printful, sync
+    // products, or change prices by default — override-able.
+    canViewMerchandiseOrders: true,
     canViewPledges: true,
     canCreatePledge: true, // same rationale as canCreateExternalDonation — front-line entry for pledge cards/phone calls
     canRecordPledgeFulfillment: true,
@@ -394,6 +411,8 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     // no existing "owns donor communications" precedent for this role
     // (unlike invoices, which fundraisers create themselves, these emails
     // are system-triggered).
+    // No refunds, no voiding, no offline-payment recording, no invoice
+    // settings, no export by default — override-able per the approved spec.
   },
   // Checkpoint 2 correction: VIEWER defaults to the narrowest possible
   // read scope (their own transactions only) — org-wide transaction view,

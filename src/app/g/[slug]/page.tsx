@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
+import MerchandiseGivingExperience from "@/components/giving/MerchandiseGivingExperience";
 import OrganizationLogo from "@/components/merchant/OrganizationLogo";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
 import { recordGivingLinkShareOpened } from "@/lib/givingLinks/recordShareOpened";
@@ -63,36 +64,56 @@ export default async function GivingLinkPublicPage({
           </p>
         )}
 
-        <GivingLinkForm
-          slug={slug}
-          finixMerchantId={church.finixMerchantId!}
-          churchName={church.name}
-          light={light}
-          amountType={link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY"}
-          fixedAmountCents={link.fixedAmountCents}
-          minAmountCents={link.minAmountCents}
-          maxAmountCents={link.maxAmountCents}
-          suggestedAmountsCents={suggestedAmountsCents}
-          allowCustomAmount={link.allowCustomAmount}
-          quantityItemLabel={link.quantityItemLabel}
-          recurringEnabled={link.recurringEnabled}
-          allowedFrequencies={allowedFrequencies}
-          allowedPaymentMethods={allowedPaymentMethods}
-          feeCoverEnabled={link.feeCoverEnabled}
-          feeCoverDefaultOn={link.feeCoverDefaultOn}
-          donorFieldSettings={donorFieldSettings}
-          collectMailingAddress={link.collectMailingAddress}
-          pricing={pricing}
-          thankYouMessage={branding.thankYouMessage}
-          thankYouVideoUrl={branding.thankYouVideoUrl}
-          googlePayGatewayMerchantId={googlePayGatewayMerchantId}
-          googlePayMerchantId={googlePayMerchantId}
-          googlePayEnvironment={googlePayEnvironment}
-          serverAvailability={serverAvailability}
-          fundSelectionEnabled={fundSelectionEnabled}
-          assignedFunds={assignedFunds}
-          pledgeId={pledgeId}
-        />
+        {link.merchandiseEnabled ? (
+          // Separate, additive donation+merchandise checkout experience —
+          // see MerchandiseGivingExperience's doc comment. Every giving
+          // link defaults to merchandiseEnabled=false, so this branch is
+          // unreachable for any link that hasn't explicitly opted in, and
+          // the existing GivingLinkForm below is completely untouched.
+          <MerchandiseGivingExperience
+            slug={slug}
+            finixMerchantId={church.finixMerchantId!}
+            churchName={church.name}
+            allowedPaymentMethods={allowedPaymentMethods}
+            googlePayGatewayMerchantId={googlePayGatewayMerchantId}
+            googlePayMerchantId={googlePayMerchantId}
+            googlePayEnvironment={googlePayEnvironment}
+            serverAvailability={serverAvailability}
+            feeCoverEnabled={link.feeCoverEnabled}
+            feeCoverDefaultOn={link.feeCoverDefaultOn}
+          />
+        ) : (
+          <GivingLinkForm
+            slug={slug}
+            finixMerchantId={church.finixMerchantId!}
+            churchName={church.name}
+            light={light}
+            amountType={link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY"}
+            fixedAmountCents={link.fixedAmountCents}
+            minAmountCents={link.minAmountCents}
+            maxAmountCents={link.maxAmountCents}
+            suggestedAmountsCents={suggestedAmountsCents}
+            allowCustomAmount={link.allowCustomAmount}
+            quantityItemLabel={link.quantityItemLabel}
+            recurringEnabled={link.recurringEnabled}
+            allowedFrequencies={allowedFrequencies}
+            allowedPaymentMethods={allowedPaymentMethods}
+            feeCoverEnabled={link.feeCoverEnabled}
+            feeCoverDefaultOn={link.feeCoverDefaultOn}
+            donorFieldSettings={donorFieldSettings}
+            collectMailingAddress={link.collectMailingAddress}
+            pricing={pricing}
+            thankYouMessage={branding.thankYouMessage}
+            thankYouVideoUrl={branding.thankYouVideoUrl}
+            googlePayGatewayMerchantId={googlePayGatewayMerchantId}
+            googlePayMerchantId={googlePayMerchantId}
+            googlePayEnvironment={googlePayEnvironment}
+            serverAvailability={serverAvailability}
+            fundSelectionEnabled={fundSelectionEnabled}
+            assignedFunds={assignedFunds}
+            pledgeId={pledgeId}
+          />
+        )}
 
         {(() => {
           const wgcUrl = (() => {

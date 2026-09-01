@@ -35,6 +35,7 @@ export default function GivingLinkPreviewPanel({
   showPoweredByWgc,
   fundSelectionEnabled = false,
   assignedFunds = [],
+  pageType = "DONATIONS",
 }: {
   churchName: string;
   light: BrandingModeSettings;
@@ -63,6 +64,7 @@ export default function GivingLinkPreviewPanel({
   showPoweredByWgc?: boolean;
   fundSelectionEnabled?: boolean;
   assignedFunds?: AssignedActiveFund[];
+  pageType?: "DONATIONS" | "MERCHANDISE" | "BOTH";
 }) {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
@@ -166,37 +168,62 @@ export default function GivingLinkPreviewPanel({
                 </p>
               )}
 
-              <GivingLinkForm
-                key={formKey}
-                slug="preview"
-                finixMerchantId=""
-                churchName={churchName}
-                light={light}
-                amountType={amountType}
-                fixedAmountCents={fixedAmountCents}
-                minAmountCents={minAmountCents}
-                maxAmountCents={maxAmountCents}
-                suggestedAmountsCents={suggestedAmountsCents}
-                allowCustomAmount={allowCustomAmount}
-                quantityItemLabel={quantityItemLabel}
-                recurringEnabled={recurringEnabled}
-                allowedFrequencies={allowedFrequencies}
-                allowedPaymentMethods={allowedPaymentMethods}
-                feeCoverEnabled={feeCoverEnabled}
-                feeCoverDefaultOn={feeCoverDefaultOn}
-                donorFieldSettings={donorFieldSettings}
-                collectMailingAddress={collectMailingAddress}
-                pricing={pricing}
-                thankYouMessage={thankYouMessage}
-                thankYouVideoUrl={thankYouVideoUrl}
-                googlePayGatewayMerchantId={null}
-                googlePayMerchantId={null}
-                googlePayEnvironment="TEST"
-                previewMode
-                fundSelectionEnabled={fundSelectionEnabled}
-                assignedFunds={assignedFunds}
-                onFormError={() => setFormError(true)}
-              />
+              {pageType === "MERCHANDISE" ? (
+                // MerchandiseGivingExperience is deliberately never rendered
+                // outside the real donor page (it mounts a real Finix
+                // payment form and fetches the real product catalog by
+                // slug — see its own doc comment) — it can't safely appear
+                // in this "no real payment is ever created here" preview.
+                // Showing nothing here (previously: always silently
+                // rendering the donation form, identical for every Page
+                // Type) at least makes it honest that this selection isn't
+                // previewable in the builder.
+                <div className="text-center py-10">
+                  <p className="text-sm font-semibold text-slate-900 mb-1">Merchandise-only page</p>
+                  <p className="text-xs text-slate-500 max-w-[280px] mx-auto">
+                    The product catalog and checkout can't be previewed here. Save this page, then use its Preview link to see the real, live version.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {pageType === "BOTH" && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+                      This preview shows the donation step only — merchandise selection appears below it on the real, live page.
+                    </p>
+                  )}
+                  <GivingLinkForm
+                    key={formKey}
+                    slug="preview"
+                    finixMerchantId=""
+                    churchName={churchName}
+                    light={light}
+                    amountType={amountType}
+                    fixedAmountCents={fixedAmountCents}
+                    minAmountCents={minAmountCents}
+                    maxAmountCents={maxAmountCents}
+                    suggestedAmountsCents={suggestedAmountsCents}
+                    allowCustomAmount={allowCustomAmount}
+                    quantityItemLabel={quantityItemLabel}
+                    recurringEnabled={recurringEnabled}
+                    allowedFrequencies={allowedFrequencies}
+                    allowedPaymentMethods={allowedPaymentMethods}
+                    feeCoverEnabled={feeCoverEnabled}
+                    feeCoverDefaultOn={feeCoverDefaultOn}
+                    donorFieldSettings={donorFieldSettings}
+                    collectMailingAddress={collectMailingAddress}
+                    pricing={pricing}
+                    thankYouMessage={thankYouMessage}
+                    thankYouVideoUrl={thankYouVideoUrl}
+                    googlePayGatewayMerchantId={null}
+                    googlePayMerchantId={null}
+                    googlePayEnvironment="TEST"
+                    previewMode
+                    fundSelectionEnabled={fundSelectionEnabled}
+                    assignedFunds={assignedFunds}
+                    onFormError={() => setFormError(true)}
+                  />
+                </>
+              )}
 
               {showPoweredByWgc !== false && (
                 <div className="text-center mt-6">

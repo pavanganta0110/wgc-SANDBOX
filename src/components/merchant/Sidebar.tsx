@@ -20,6 +20,7 @@ import {
   Building2,
   ShieldCheck,
   FileText,
+  ShoppingBag,
   BarChart3,
   PanelLeftClose,
   PanelLeftOpen,
@@ -31,7 +32,7 @@ import {
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
 
-interface NavItem {
+export interface NavItem {
   name: string;
   href: string;
   icon: typeof LayoutDashboard;
@@ -42,7 +43,7 @@ interface NavItem {
   organizationOnly?: boolean;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const NAV_ITEMS: NavItem[] = [
   { name: "Home", href: "/merchant/dashboard", icon: LayoutDashboard },
   { name: "Insights", href: "/merchant/insights", icon: LineChart },
   {
@@ -83,6 +84,15 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { name: "All Invoices", href: "/merchant/invoices" },
       { name: "Clients", href: "/merchant/clients" },
+    ],
+  },
+  {
+    name: "Merchandise",
+    href: "/merchant/merchandise",
+    icon: ShoppingBag,
+    children: [
+      { name: "Products", href: "/merchant/merchandise" },
+      { name: "Orders", href: "/merchant/merchandise/orders" },
     ],
   },
   { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },

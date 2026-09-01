@@ -34,6 +34,9 @@ export default async function IntegrationsSettingsPage() {
   const aplosStatus = auth
     ? (await prisma.aplosConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
     : "NOT_CONNECTED";
+  const printfulStatus = auth
+    ? (await prisma.printfulConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
+    : "NOT_CONNECTED";
   const quickBooksStatus = auth
     ? (await prisma.quickBooksConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
     : "NOT_CONNECTED";
@@ -67,6 +70,22 @@ export default async function IntegrationsSettingsPage() {
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <StateBadge state={aplosStatus} />
+          <ChevronRight className="w-4 h-4 text-slate-400" />
+        </div>
+      </Link>
+
+      <Link
+        href="/merchant/settings/integrations/printful"
+        className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:border-slate-300 transition"
+      >
+        <div>
+          <div className="text-sm font-bold text-slate-900">Printful (Merchandise)</div>
+          <p className="text-xs text-slate-500 mt-0.5 max-w-lg">
+            Sell merchandise — t-shirts, hoodies, and more — directly on your giving page. Fulfilled and shipped by Printful.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <StateBadge state={printfulStatus} />
           <ChevronRight className="w-4 h-4 text-slate-400" />
         </div>
       </Link>
