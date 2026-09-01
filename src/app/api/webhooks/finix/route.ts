@@ -17,6 +17,7 @@ import { syncAllChurchesPricing, syncChurchPricingForMerchantProfile } from "@/l
 import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
+import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
 import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
 import { isSettlementTerminalStatus } from "@/lib/finix/settlementStatus";
 import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
@@ -385,6 +386,11 @@ export async function syncFinixDataFromWebhookEvent(
           } catch (err) {
             console.error("Failed to send async donation receipt:", err);
           }
+          try {
+            await syncPaymentToQuickBooks(priorPayment.id);
+          } catch (err) {
+            console.error("Failed to sync payment to QuickBooks:", err);
+          }
         }
       }
     }
@@ -483,7 +489,7 @@ export async function syncFinixDataFromWebhookEvent(
               const merchantExpectedNetCents = (donationAmountCents + feeCoveredCents) - feeRes.expectedFeeCents;
 
               const donorId = sub.donorId || instrument?.donorId || null;
-              await prisma.payment.create({
+              const newRecurringPayment = await prisma.payment.create({
                 data: {
                   churchId,
                   donorId,
@@ -512,6 +518,19 @@ export async function syncFinixDataFromWebhookEvent(
                   finixSubscriptionId: sub.finixSubscriptionId,
                 },
               });
+
+              // Covers the case where this recurring charge's Payment is
+              // created already SUCCEEDED (rather than PENDING-then-updated,
+              // which is handled separately above) — syncPaymentToQuickBooks
+              // is idempotent, so this can never double-sync alongside that
+              // other path.
+              if (newRecurringPayment.status === "SUCCEEDED") {
+                try {
+                  await syncPaymentToQuickBooks(newRecurringPayment.id);
+                } catch (err) {
+                  console.error("Failed to sync payment to QuickBooks:", err);
+                }
+              }
             }
           }
         } catch (err) {
