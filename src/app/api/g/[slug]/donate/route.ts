@@ -7,6 +7,7 @@ import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
 import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
+import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
@@ -744,6 +745,14 @@ async function handleDonate(req: Request, slug: string) {
         await sendDonationReceipt(newPayment.id, church.id);
       } catch (err) {
         console.error("Failed to send donation receipt:", err);
+      }
+    }
+
+    if (succeeded) {
+      try {
+        await syncPaymentToQuickBooks(newPayment.id);
+      } catch (err) {
+        console.error("Failed to sync payment to QuickBooks:", err);
       }
     }
 

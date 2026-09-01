@@ -3942,3 +3942,82 @@ model InvoiceSettings {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model QuickBooksConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  provider String @default("QUICKBOOKS")
+  status   String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // Intuit's company/tenant identifier — required on every QBO API call,
+  // returned alongside the authorization code on the OAuth callback.
+  realmId     String?
+  companyName String?
+
+  // Versioned encrypted-envelope JSON strings (see encryption.ts
+  // serializeEnvelope/deserializeEnvelope) — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime? // access token expiry (~1hr for QBO)
+  refreshTokenExpiresAt DateTime? // refresh token expiry (~100 days) — reconnection required once this passes
+  scopesJson            Json?
+
+  connectionType           String  @default("oauth") // oauth — QuickBooks has no other supported mode
+  // SHA-256 fingerprint of the encryption key active when the tokens were
+  // encrypted — detects key-rotation mismatches explicitly at decrypt time
+  // rather than an opaque GCM auth-tag failure, same as Aplos/Printful.
+  encryptionKeyFingerprint String?
+
+  connectedAt          DateTime?
+  lastConnectionTestAt DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String? // SUCCESS | FAILED | PARTIAL
+  lastSyncError        String?
+  lastErrorAt          DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+
+  automaticSyncEnabled Boolean @default(false)
+  syncVersion          Int     @default(1)
+
+  connectedByUserId String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  disconnectedAt DateTime?
+
+  syncRecords QuickBooksSyncRecord[]
+
+  @@index([status])
+  @@index([automaticSyncEnabled])
+}
+
+model QuickBooksSyncRecord {
+  id                     String @id @default(cuid())
+  quickBooksConnectionId String
+  churchId               String
+
+  // CUSTOMER | INVOICE | PAYMENT | ITEM
+  entityType    String
+  // The WGC-side record this sync row represents (Donor.id, Payment.id, etc.)
+  localEntityId String
+
+  quickBooksEntityId String? // Intuit's Id for the created/matched object
+  syncTokenSnapshot  String? // QBO's optimistic-concurrency SyncToken at last write
+
+  // PENDING | SUCCEEDED | FAILED | SKIPPED
+  status       String  @default("PENDING")
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connection QuickBooksConnection @relation(fields: [quickBooksConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([quickBooksConnectionId])
+  @@index([churchId])
+  @@index([entityType, localEntityId])
+}
