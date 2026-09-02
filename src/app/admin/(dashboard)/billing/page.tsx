@@ -52,7 +52,7 @@ function cents(c: number | undefined) {
   return c != null ? `$${(c / 100).toFixed(2)}` : "—";
 }
 
-const TABS = ["Organizations", "Pricing", "Invoice Billing", "Promotions", "Failed Payments", "Settings", "Terms", "Audit Log"] as const;
+const TABS = ["Organizations", "Pricing", "Invoice Billing", "Promotions", "Failed Payments", "Settings", "Terms", "Audit Log", "WGC Profit"] as const;
 type Tab = (typeof TABS)[number];
 
 interface PromotionRow {
@@ -216,6 +216,7 @@ export default function AdminBillingPage() {
       {tab === "Settings" && <SettingsTab />}
       {tab === "Terms" && <TermsTab />}
       {tab === "Audit Log" && <AuditLogTab />}
+      {tab === "WGC Profit" && <WgcProfitTab />}
 
       {tab === "Organizations" && (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -1527,6 +1528,132 @@ function AuditLogTab() {
           <span>Page {page} of {Math.ceil(total / 50)}</span>
           <button disabled={page >= Math.ceil(total / 50)} onClick={() => setPage((p) => p + 1)} className="disabled:opacity-30">Next</button>
         </div>
+      )}
+    </div>
+  );
+}
+interface WgcProfitByOrg {
+  churchId: string;
+  churchName: string;
+  paymentCount: number;
+  wgcChargedCents: number;
+  finixCostCents: number;
+  profitCents: number;
+}
+
+interface WgcProfitSummaryResponse {
+  rangeFrom: string;
+  rangeTo: string;
+  paymentCount: number;
+  wgcChargedCents: number;
+  finixCostCents: number;
+  profitCents: number;
+  paymentsMissingFeeDataCount: number;
+  byOrganization: WgcProfitByOrg[];
+}
+
+function isoDate(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * WGC-staff-only view: (what WGC charged) minus (what Finix actually
+ * charged WGC) — see src/lib/reports/wgcProfit.ts for exactly how this
+ * differs from Payment.actualFinixFeesCents and why. Never reachable from
+ * any merchant-facing route.
+ */
+function WgcProfitTab() {
+  const [summary, setSummary] = useState<WgcProfitSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [from, setFrom] = useState(() => isoDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+  const [to, setTo] = useState(() => isoDate(new Date()));
+
+  const load = () => {
+    setLoading(true);
+    fetch(`/api/admin/billing/wgc-profit?from=${from}&to=${to}`)
+      .then((r) => r.json())
+      .then((d) => setSummary(d.summary || null))
+      .catch(() => toast.error("Failed to load WGC profit report"))
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-4">
+        Internal only — never shown to organizations. Finix cost is only as complete as what&apos;s been synced from Finix&apos;s Fees
+        API; payments with no synced fee data yet count as $0 Finix cost below (see the missing-data count), which overstates profit
+        until that data lands.
+      </div>
+
+      <div className="flex items-end gap-3 mb-6">
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+        </div>
+        <button onClick={load} disabled={loading} className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
+          {loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      {summary && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">WGC Charged</div>
+              <div className="text-xl font-bold text-slate-900">{cents(summary.wgcChargedCents)}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">Finix Cost</div>
+              <div className="text-xl font-bold text-slate-900">{cents(summary.finixCostCents)}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">WGC Profit</div>
+              <div className={`text-xl font-bold ${summary.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(summary.profitCents)}</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">Payments / Missing Fee Data</div>
+              <div className="text-xl font-bold text-slate-900">
+                {summary.paymentCount} <span className="text-sm font-normal text-slate-400">/ {summary.paymentsMissingFeeDataCount}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                <tr>
+                  <th className="text-left px-4 py-3">Organization</th>
+                  <th className="text-right px-4 py-3">Payments</th>
+                  <th className="text-right px-4 py-3">WGC Charged</th>
+                  <th className="text-right px-4 py-3">Finix Cost</th>
+                  <th className="text-right px-4 py-3">Profit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {summary.byOrganization.map((o) => (
+                  <tr key={o.churchId}>
+                    <td className="px-4 py-2 font-medium text-slate-800">{o.churchName}</td>
+                    <td className="px-4 py-2 text-right">{o.paymentCount}</td>
+                    <td className="px-4 py-2 text-right">{cents(o.wgcChargedCents)}</td>
+                    <td className="px-4 py-2 text-right">{cents(o.finixCostCents)}</td>
+                    <td className={`px-4 py-2 text-right font-semibold ${o.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.profitCents)}</td>
+                  </tr>
+                ))}
+                {summary.byOrganization.length === 0 && (
+                  <tr><td colSpan={5} className="py-6 text-center text-slate-400">No successful payments in this range.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

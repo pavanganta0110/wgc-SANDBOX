@@ -1720,6 +1720,21 @@ model FinixFee {
   linkedToId      String?
   linkedToType    String?
   feeType         String?
+  // Finix's own top-level classification (e.g. "INTERCHANGE", "PROCESSOR",
+  // "DUES_AND_ASSESSMENTS") — network-agnostic, unlike feeType which is a
+  // per-card-network string (VISA_*, MASTERCARD_*, etc.). Captured
+  // separately starting 2026-09; older rows synced before this have it
+  // null even though the raw response is preserved in rawJsonRedacted.
+  category        String?
+  // The real signal for "is this WGC's own platform fee" — feeType
+  // containing "APPLICATION" (the old heuristic used to exclude WGC's fee
+  // from Payment.actualFinixFeesCents) misses rows like CARD_BASIS_POINTS
+  // with feeSubtype "PLATFORM_FEE", which are WGC's own revenue, not a
+  // real Finix/processor cost. Not yet used to change
+  // Payment.actualFinixFeesCents itself — see docs/wgc-profit-report.md
+  // for why that field is left alone. New admin-only profit reporting
+  // uses this field directly instead.
+  feeSubtype      String?
   // Float, not Int: confirmed against a real Finix fee response that
   // basis-point-derived fees (e.g. CARD_BASIS_POINTS) come back with
   // fractional cents (e.g. 62.544) — an Int column silently rejected
@@ -1733,6 +1748,9 @@ model FinixFee {
   updatedAtFinix  DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([linkedToId])
+  @@index([feeSubtype])
 }
 
 model FinixSettlement {
