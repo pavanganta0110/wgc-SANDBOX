@@ -19,6 +19,24 @@ import { prisma } from "@/lib/prisma";
  * donor or the organization paid it.
  */
 
+/** The last calendar-month boundary through which Finix's own interchange/
+ * dues-and-assessments data is expected to be fully landed — per Finix's
+ * Consolidated Fees Reports docs, a given month's passthrough fee data
+ * "can be incomplete or blank until Finix receives and processes all data
+ * up to the 15th day of the following month." A payment from month M is
+ * only considered reconciled once "now" is past the 16th of month M+1
+ * (the resync-monthly-transfer-fees cron's own schedule). Exported so the
+ * UI can label any requested range as fully reconciled, partially
+ * reconciled, or entirely preliminary. */
+export function reconciledThroughDate(now: Date = new Date()): Date {
+  const cutoffDay = 16;
+  // If we're on/after the 16th, this month's own prior month has cleared
+  // its reconciliation window; before the 16th, only two months back has.
+  const monthsBack = now.getUTCDate() >= cutoffDay ? 1 : 2;
+  // End of the reconciled month = start of the month after it.
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsBack + 1, 1, 0, 0, 0));
+}
+
 export interface WgcProfitSummary {
   rangeFrom: Date;
   rangeTo: Date;
@@ -31,6 +49,15 @@ export interface WgcProfitSummary {
    * finixCostCents and overstates profitCents. Always show this count
    * alongside the totals so it's never read as more complete than it is. */
   paymentsMissingFeeDataCount: number;
+  /** True only when the entire requested range's Finix passthrough-fee
+   * data is expected to have fully landed (see reconciledThroughDate) —
+   * false means some or all of finixCostCents/profitCents in this
+   * response is preliminary and will change once reconciliation runs. */
+  isFullyReconciled: boolean;
+  /** The actual date used to decide isFullyReconciled — surfaced so the
+   * UI can explain *why* (e.g. "reconciled through July 31; August isn't
+   * final until September 16"). */
+  reconciledThrough: Date;
   byOrganization: Array<{
     churchId: string;
     churchName: string;
@@ -119,6 +146,8 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
     byOrgMap.set(payment.churchId, org);
   }
 
+  const reconciledThrough = reconciledThroughDate();
+
   return {
     rangeFrom: from,
     rangeTo: to,
@@ -127,6 +156,8 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
     finixCostCents: totalFinixCost,
     profitCents: totalWgcCharged - totalFinixCost,
     paymentsMissingFeeDataCount: missingFeeDataCount,
+    isFullyReconciled: to <= reconciledThrough,
+    reconciledThrough,
     byOrganization: [...byOrgMap.values()]
       .map((o) => ({ ...o, profitCents: o.wgcChargedCents - o.finixCostCents }))
       .sort((a, b) => b.profitCents - a.profitCents),

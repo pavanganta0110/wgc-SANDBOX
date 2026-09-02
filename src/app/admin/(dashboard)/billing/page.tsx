@@ -1549,6 +1549,8 @@ interface WgcProfitSummaryResponse {
   finixCostCents: number;
   profitCents: number;
   paymentsMissingFeeDataCount: number;
+  isFullyReconciled: boolean;
+  reconciledThrough: string;
   byOrganization: WgcProfitByOrg[];
 }
 
@@ -1605,6 +1607,21 @@ function WgcProfitTab() {
 
       {summary && (
         <>
+          <div className={`rounded-xl p-3 text-xs mb-4 border ${summary.isFullyReconciled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-orange-50 border-orange-200 text-orange-800"}`}>
+            {summary.isFullyReconciled ? (
+              <>
+                <strong>Reconciled.</strong> Every payment in this range is from a month whose Finix fee data has fully landed
+                (reconciled through {new Date(summary.reconciledThrough).toLocaleDateString()}) — these numbers are final.
+              </>
+            ) : (
+              <>
+                <strong>Preliminary — not yet reconciled.</strong> This range includes payments from a month whose Finix
+                interchange/dues data isn&apos;t final yet (only reconciled through {new Date(summary.reconciledThrough).toLocaleDateString()}
+                ; the rest finalizes on the 16th of next month). Finix Cost and Profit below will change once that data lands.
+              </>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
               <div className="text-xs text-slate-500 mb-1">WGC Charged</div>
