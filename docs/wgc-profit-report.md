@@ -116,7 +116,46 @@ actually been captured, not a bug, but it means the report currently
 understates Finix's real cost (and therefore overstates profit) for
 anything before this fix shipped.
 
+## `fee_category` vs `category` (2026-09-02 update)
+
+Finix's own docs describe a `fee_category` field on the Fee object with
+three documented values: `PLATFORM_FEE` (WGC's own revenue),
+`PASSTHROUGH_FEE` (interchange + card network dues and assessments — the
+real cost this report wants), and `PROGRAM_FEE` (Finix's own cut). This
+is a **different field** from the wire `category` field already captured
+(`FinixFee.category`) — every real response synced so far has
+`"category": "PROCESSOR"` and has never included a `fee_category` key at
+all. `FinixFee.feeCategory` was added to capture it the moment it does
+start appearing. `getWgcProfitSummary()` excludes a fee row from cost if
+*either* `feeSubtype` or `feeCategory` equals `"PLATFORM_FEE"`, so real
+`PASSTHROUGH_FEE` data is correctly counted the moment it lands, however
+Finix ends up populating it.
+
+Finix's own docs (Consolidated Fees Reports) also explain the real
+timing: "Due to the time it takes for our processor to deliver data,
+this column can be incomplete or blank until Finix receives and
+processes all data up to the 15th day of the following month." This is
+why the original daily resync (1-5 days back) found nothing even when
+manually triggered and confirmed to run cleanly — passthrough/interchange
+data isn't available on anywhere near that timescale.
+
+## Monthly resync (built)
+
+`src/app/api/cron/resync-monthly-transfer-fees/route.ts`, scheduled on
+the 16th of each month (`vercel.json`) — a full day after Finix's own
+"by the 15th" cutoff. Re-syncs every `SUCCEEDED` payment from the entire
+previous calendar month (not just a short recent window, unlike the
+daily job). Same idempotent guarantee as the daily resync — safe to
+re-run, can never create duplicate fee rows.
+
 ## Not built yet
 
 - Per-transaction drill-down in the UI (currently: overall totals +
   per-organization rollup only, no row-per-payment table).
+- Confirmation from Finix that `GET /fees?linked_to={id}` is even the
+  correct endpoint for `PASSTHROUGH_FEE` data — as of this writing, no
+  real `PASSTHROUGH_FEE`/interchange data has ever been observed from
+  this endpoint (via API or the matching `fee.created` webhook), only
+  `PLATFORM_FEE`. The monthly cron is built and ready to capture it the
+  moment it appears, but whether it appears via this exact endpoint is
+  still unconfirmed.

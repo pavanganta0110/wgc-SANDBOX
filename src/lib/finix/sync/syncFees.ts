@@ -6,7 +6,14 @@ import { redactFinixPayload } from "@/lib/finix/redact";
  * Syncs fees for a given transfer into FinixFee. Confirmed shape via
  * docs.finix.com/api: GET /fees?linked_to={id} returns fee objects with
  * id, fee_type, category, fee_subtype, amount, currency, display_name,
- * linked_id, linked_to, merchant. Paginates via HAL _links.next, same
+ * linked_id, linked_to, merchant. Finix's docs additionally describe a
+ * fee_category field (PLATFORM_FEE / PASSTHROUGH_FEE / PROGRAM_FEE) —
+ * distinct from the wire "category" field, which so far has only ever
+ * come back as "PROCESSOR" — captured into its own column (feeCategory)
+ * in case it starts appearing once real interchange/dues-and-assessments
+ * data lands (per Finix's own docs, that data isn't finalized until the
+ * 15th of the month after the transaction — see
+ * /api/cron/resync-monthly-transfer-fees). Paginates via HAL _links.next, same
  * pattern as syncAuthorizations.ts — a transaction with many fee line
  * items (interchange, processor markup, dues and assessments, etc.,
  * confirmed via Finix's own dashboard to be 5-8+ lines per card
@@ -50,6 +57,7 @@ export async function syncFeesForTransfer(finixTransferId: string, churchId?: st
           feeType: fee.fee_type ?? fee.category ?? null,
           category: fee.category ?? null,
           feeSubtype: fee.fee_subtype ?? null,
+          feeCategory: fee.fee_category ?? null,
           amountCents: fee.amount ?? null,
           currency: fee.currency ?? null,
           description: fee.display_name ?? fee.label ?? null,
@@ -61,6 +69,7 @@ export async function syncFeesForTransfer(finixTransferId: string, churchId?: st
           feeType: fee.fee_type ?? fee.category ?? null,
           category: fee.category ?? null,
           feeSubtype: fee.fee_subtype ?? null,
+          feeCategory: fee.fee_category ?? null,
           amountCents: fee.amount ?? null,
           rawJsonRedacted: redactFinixPayload(fee),
           updatedAtFinix: fee.updated_at ? new Date(fee.updated_at) : null,

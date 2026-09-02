@@ -1735,6 +1735,16 @@ model FinixFee {
   // for why that field is left alone. New admin-only profit reporting
   // uses this field directly instead.
   feeSubtype      String?
+  // Finix's documented classification field (docs.finix.com), distinct
+  // from the wire "category" field above — its own values are
+  // "PLATFORM_FEE" (WGC's own revenue), "PASSTHROUGH_FEE" (interchange +
+  // card network dues/assessments — the real Finix/network cost), and
+  // "PROGRAM_FEE" (Finix's own cut). Every real response captured so far
+  // has "category": "PROCESSOR" and no fee_category field at all — this
+  // column exists so it's captured the moment it does appear (e.g. once
+  // real PASSTHROUGH_FEE data lands, per Finix's own docs: interchange/
+  // dues data isn't finalized until the 15th of the following month).
+  feeCategory     String?
   // Float, not Int: confirmed against a real Finix fee response that
   // basis-point-derived fees (e.g. CARD_BASIS_POINTS) come back with
   // fractional cents (e.g. 62.544) — an Int column silently rejected

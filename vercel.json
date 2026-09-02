@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/resync-transfer-fees",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/resync-monthly-transfer-fees",
+      "schedule": "0 18 16 * *"
     }
   ]
 }

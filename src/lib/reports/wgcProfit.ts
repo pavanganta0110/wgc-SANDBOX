@@ -62,15 +62,20 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
 
   const transferIds = payments.map((p) => p.finixTransferId).filter((id): id is string => !!id);
 
-  // WGC's own fee (feeSubtype "PLATFORM_FEE") is excluded here — it's
-  // WGC's revenue, already counted via wgcChargedCents below, not a real
-  // Finix/processor cost. Everything else (interchange, processor markup,
-  // dues and assessments, settlement funding, etc.) counts as real cost.
+  // WGC's own fee is excluded here — it's WGC's revenue, already counted
+  // via wgcChargedCents below, not a real Finix/processor cost. Checks
+  // both feeSubtype and feeCategory for "PLATFORM_FEE": every real row
+  // captured so far only ever populates feeSubtype, but Finix's own docs
+  // describe feeCategory (PLATFORM_FEE / PASSTHROUGH_FEE / PROGRAM_FEE) as
+  // the documented field for this — checking both means real
+  // PASSTHROUGH_FEE data (interchange, dues and assessments) is correctly
+  // counted as cost the moment it starts appearing, however Finix
+  // populates it. Everything else counts as real cost.
   const feeRows = transferIds.length
     ? await prisma.finixFee.findMany({
         where: {
           linkedToId: { in: transferIds },
-          feeSubtype: { not: "PLATFORM_FEE" },
+          NOT: [{ feeSubtype: "PLATFORM_FEE" }, { feeCategory: "PLATFORM_FEE" }],
         },
         select: { linkedToId: true, amountCents: true },
       })
