@@ -1627,13 +1627,17 @@ function WgcProfitTab() {
               <div className="text-xs text-slate-500 mb-1">WGC Charged</div>
               <div className="text-xl font-bold text-slate-900">{cents(summary.wgcChargedCents)}</div>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-              <div className="text-xs text-slate-500 mb-1">Finix Cost</div>
-              <div className="text-xl font-bold text-slate-900">{cents(summary.finixCostCents)}</div>
+            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-slate-100" : "border-orange-200"}`}>
+              <div className="text-xs text-slate-500 mb-1">Finix Cost{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}</div>
+              <div className={`text-xl font-bold ${summary.isFullyReconciled ? "text-slate-900" : "text-orange-700"}`}>
+                {!summary.isFullyReconciled && "~"}{cents(summary.finixCostCents)}
+              </div>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-              <div className="text-xs text-slate-500 mb-1">WGC Profit</div>
-              <div className={`text-xl font-bold ${summary.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(summary.profitCents)}</div>
+            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-slate-100" : "border-orange-200"}`}>
+              <div className="text-xs text-slate-500 mb-1">WGC Profit{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}</div>
+              <div className={`text-xl font-bold ${summary.isFullyReconciled ? (summary.profitCents >= 0 ? "text-emerald-700" : "text-red-600") : "text-orange-700"}`}>
+                {!summary.isFullyReconciled && "~"}{cents(summary.profitCents)}
+              </div>
             </div>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
               <div className="text-xs text-slate-500 mb-1">Payments / Missing Fee Data</div>
@@ -1650,8 +1654,8 @@ function WgcProfitTab() {
                   <th className="text-left px-4 py-3">Organization</th>
                   <th className="text-right px-4 py-3">Payments</th>
                   <th className="text-right px-4 py-3">WGC Charged</th>
-                  <th className="text-right px-4 py-3">Finix Cost</th>
-                  <th className="text-right px-4 py-3">Profit</th>
+                  <th className="text-right px-4 py-3">Finix Cost{!summary.isFullyReconciled && " (prelim.)"}</th>
+                  <th className="text-right px-4 py-3">Profit{!summary.isFullyReconciled && " (prelim.)"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
