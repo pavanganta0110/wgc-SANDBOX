@@ -182,7 +182,7 @@ export async function POST(req: Request) {
       console.log("ONBOARDING_STEP", "APPLICATION_CREATED", application.id);
 
       // Server-trusted promotion attribution — only ever consumes a lead
-      // created by the /six-months-free landing page's own server route
+      // created by the /90-days-free landing page's own server route
       // (see promotionAttribution.ts doc comment). A normal /start signup
       // simply has no cookie here, and this silently does nothing — no
       // query parameter, form field, or client value is ever consulted.

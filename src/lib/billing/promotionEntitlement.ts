@@ -5,7 +5,7 @@ import { findPromotionLeadByOnboardingApplication } from "@/lib/billing/promotio
  * Called once, at Finix-approval time (provisionChurchAccount has just
  * created the organization's Church row), to attach a PromotionEntitlement
  * if — and only if — this organization's signup was attributed to a
- * PromotionLead via the trusted /six-months-free flow. A normal signup has
+ * PromotionLead via the trusted /90-days-free flow. A normal signup has
  * no lead and this is a silent no-op.
  *
  * Snapshots the Promotion template's terms onto the entitlement at grant

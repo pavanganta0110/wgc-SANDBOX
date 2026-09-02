@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Server-trusted attribution for the Six Months Free promotion. The public
- * /six-months-free landing page is the ONLY automatic source of this
+ * /90-days-free landing page is the ONLY automatic source of this
  * promotion — a normal /start signup, a query parameter, a hidden form
  * field, localStorage, or a manually-typed promo code must never grant it.
  *
@@ -38,7 +38,7 @@ function hashToken(rawToken: string): string {
 
 /**
  * Idempotently ensures the promotion template row exists — safe to call on
- * every /six-months-free page render. Does not overwrite an admin's later
+ * every /90-days-free page render. Does not overwrite an admin's later
  * edits to the row (only creates if entirely missing) — the promo changed
  * from 6 months to 90 days by directly updating the existing production
  * row (durationDays=90) rather than through this function, precisely so
@@ -119,7 +119,7 @@ export async function setPromotionLeadCookie(rawToken: string): Promise<void> {
  * Reads and hashes the promo cookie (if present) and links the matching,
  * still-valid PromotionLead to the just-created OnboardingApplication.
  * Returns null (silently — this is the expected, common case) for every
- * normal signup that never visited /six-months-free, has no cookie, or
+ * normal signup that never visited /90-days-free, has no cookie, or
  * whose lead already expired/was consumed. Never trusts any other signal
  * (query params, form fields, headers) to attribute a promotion.
  */

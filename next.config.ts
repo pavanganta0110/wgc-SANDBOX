@@ -76,6 +76,11 @@ const nextConfig: NextConfig = {
       { source: "/for-software-partners", destination: "/software-partners", permanent: true },
       { source: "/churches", destination: "/for/churches", permanent: true },
       { source: "/register", destination: "/start", permanent: true },
+      // Renamed 2026-09: the promo itself changed from 6 months free to
+      // 90 days free. Permanent redirect so existing bookmarked/advertised
+      // links to the old URL keep working.
+      { source: "/six-months-free", destination: "/90-days-free", permanent: true },
+      { source: "/six-months-free/signup", destination: "/90-days-free/signup", permanent: true },
     ];
   },
   experimental: {
