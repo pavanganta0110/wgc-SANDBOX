@@ -17,6 +17,16 @@ import { prisma } from "@/lib/prisma";
  * — this is the same formula feeCalculator.ts applied when the fee was
  * decided, so it's exact, not an estimate, regardless of whether the
  * donor or the organization paid it.
+ *
+ * Also includes WGC's $10/month platform subscription revenue
+ * (BillingCharge where chargeType = "WGC_PLATFORM_SUBSCRIPTION" and status
+ * = "SUCCEEDED") — a completely separate revenue stream from per-donation
+ * transaction fees, tracked in its own table with no relationship to
+ * Payment/FinixFee. Unlike the transaction-fee margin, this has no
+ * offsetting "real cost" tracked anywhere in the codebase (no Finix fee
+ * data is captured for these subscription charges), so
+ * subscriptionRevenueCents is treated as pure profit — combinedProfitCents
+ * = profitCents + subscriptionRevenueCents.
  */
 
 /** The last calendar-month boundary through which Finix's own interchange/
@@ -44,6 +54,13 @@ export interface WgcProfitSummary {
   wgcChargedCents: number;
   finixCostCents: number;
   profitCents: number;
+  /** WGC's $10/month platform subscription revenue collected in range
+   * (BillingCharge, chargeType WGC_PLATFORM_SUBSCRIPTION, SUCCEEDED). No
+   * offsetting cost is tracked for this anywhere, so it's pure profit. */
+  subscriptionRevenueCents: number;
+  /** profitCents + subscriptionRevenueCents — the combined total across
+   * both revenue streams. */
+  combinedProfitCents: number;
   /** Payments in range with no synced Finix fee data at all yet — their
    * Finix cost is treated as 0 in the totals above, which understates
    * finixCostCents and overstates profitCents. Always show this count
@@ -65,6 +82,8 @@ export interface WgcProfitSummary {
     wgcChargedCents: number;
     finixCostCents: number;
     profitCents: number;
+    subscriptionRevenueCents: number;
+    combinedProfitCents: number;
   }>;
 }
 
@@ -114,11 +133,40 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
     finixCostByTransfer.set(row.linkedToId, (finixCostByTransfer.get(row.linkedToId) ?? 0) + row.amountCents);
   }
 
-  const churchIds = [...new Set(payments.map((p) => p.churchId))];
+  const subscriptionCharges = await prisma.billingCharge.findMany({
+    where: {
+      chargeType: "WGC_PLATFORM_SUBSCRIPTION",
+      status: "SUCCEEDED",
+      succeededAt: { gte: from, lte: to },
+      ...(churchId ? { organizationId: churchId } : {}),
+    },
+    select: { organizationId: true, amountCents: true },
+  });
+
+  const subscriptionRevenueByOrg = new Map<string, number>();
+  let totalSubscriptionRevenue = 0;
+  for (const charge of subscriptionCharges) {
+    subscriptionRevenueByOrg.set(charge.organizationId, (subscriptionRevenueByOrg.get(charge.organizationId) ?? 0) + charge.amountCents);
+    totalSubscriptionRevenue += charge.amountCents;
+  }
+
+  const churchIds = [...new Set([...payments.map((p) => p.churchId), ...subscriptionCharges.map((c) => c.organizationId)])];
   const churches = churchIds.length ? await prisma.church.findMany({ where: { id: { in: churchIds } }, select: { id: true, name: true } }) : [];
   const churchNameById = new Map(churches.map((c) => [c.id, c.name]));
 
-  const byOrgMap = new Map<string, { churchId: string; churchName: string; paymentCount: number; wgcChargedCents: number; finixCostCents: number }>();
+  const byOrgMap = new Map<
+    string,
+    { churchId: string; churchName: string; paymentCount: number; wgcChargedCents: number; finixCostCents: number }
+  >();
+
+  // Seed every organization that had subscription revenue but zero
+  // donation payments in range, so their subscription income still shows
+  // up in the per-org breakdown rather than being silently dropped.
+  for (const orgId of subscriptionRevenueByOrg.keys()) {
+    if (!byOrgMap.has(orgId)) {
+      byOrgMap.set(orgId, { churchId: orgId, churchName: churchNameById.get(orgId) ?? "Unknown Organization", paymentCount: 0, wgcChargedCents: 0, finixCostCents: 0 });
+    }
+  }
 
   let totalWgcCharged = 0;
   let totalFinixCost = 0;
@@ -147,6 +195,7 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
   }
 
   const reconciledThrough = reconciledThroughDate();
+  const totalProfit = totalWgcCharged - totalFinixCost;
 
   return {
     rangeFrom: from,
@@ -154,12 +203,18 @@ export async function getWgcProfitSummary(params: { from: Date; to: Date; church
     paymentCount: payments.length,
     wgcChargedCents: totalWgcCharged,
     finixCostCents: totalFinixCost,
-    profitCents: totalWgcCharged - totalFinixCost,
+    profitCents: totalProfit,
+    subscriptionRevenueCents: totalSubscriptionRevenue,
+    combinedProfitCents: totalProfit + totalSubscriptionRevenue,
     paymentsMissingFeeDataCount: missingFeeDataCount,
     isFullyReconciled: to <= reconciledThrough,
     reconciledThrough,
     byOrganization: [...byOrgMap.values()]
-      .map((o) => ({ ...o, profitCents: o.wgcChargedCents - o.finixCostCents }))
-      .sort((a, b) => b.profitCents - a.profitCents),
+      .map((o) => {
+        const subscriptionRevenueCents = subscriptionRevenueByOrg.get(o.churchId) ?? 0;
+        const profitCents = o.wgcChargedCents - o.finixCostCents;
+        return { ...o, profitCents, subscriptionRevenueCents, combinedProfitCents: profitCents + subscriptionRevenueCents };
+      })
+      .sort((a, b) => b.combinedProfitCents - a.combinedProfitCents),
   };
 }

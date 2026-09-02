@@ -1539,6 +1539,8 @@ interface WgcProfitByOrg {
   wgcChargedCents: number;
   finixCostCents: number;
   profitCents: number;
+  subscriptionRevenueCents: number;
+  combinedProfitCents: number;
 }
 
 interface WgcProfitSummaryResponse {
@@ -1548,6 +1550,8 @@ interface WgcProfitSummaryResponse {
   wgcChargedCents: number;
   finixCostCents: number;
   profitCents: number;
+  subscriptionRevenueCents: number;
+  combinedProfitCents: number;
   paymentsMissingFeeDataCount: number;
   isFullyReconciled: boolean;
   reconciledThrough: string;
@@ -1645,6 +1649,20 @@ function WgcProfitTab() {
                 {summary.paymentCount} <span className="text-sm font-normal text-slate-400">/ {summary.paymentsMissingFeeDataCount}</span>
               </div>
             </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">Subscription Revenue</div>
+              <div className="text-xl font-bold text-slate-900">{cents(summary.subscriptionRevenueCents)}</div>
+              <div className="text-xs text-slate-400 mt-0.5">$10/mo platform fees — no offsetting cost tracked</div>
+            </div>
+            <div className={`bg-emerald-50 rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-emerald-200" : "border-orange-200"}`}>
+              <div className="text-xs text-slate-600 mb-1">
+                Total WGC Revenue{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}
+              </div>
+              <div className={`text-xl font-bold ${summary.isFullyReconciled ? (summary.combinedProfitCents >= 0 ? "text-emerald-700" : "text-red-600") : "text-orange-700"}`}>
+                {!summary.isFullyReconciled && "~"}{cents(summary.combinedProfitCents)}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">Transaction-fee margin + subscription revenue</div>
+            </div>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -1655,7 +1673,9 @@ function WgcProfitTab() {
                   <th className="text-right px-4 py-3">Payments</th>
                   <th className="text-right px-4 py-3">WGC Charged</th>
                   <th className="text-right px-4 py-3">Finix Cost{!summary.isFullyReconciled && " (prelim.)"}</th>
-                  <th className="text-right px-4 py-3">Profit{!summary.isFullyReconciled && " (prelim.)"}</th>
+                  <th className="text-right px-4 py-3">Txn Profit{!summary.isFullyReconciled && " (prelim.)"}</th>
+                  <th className="text-right px-4 py-3">Subscription Rev.</th>
+                  <th className="text-right px-4 py-3">Total Revenue{!summary.isFullyReconciled && " (prelim.)"}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -1665,11 +1685,13 @@ function WgcProfitTab() {
                     <td className="px-4 py-2 text-right">{o.paymentCount}</td>
                     <td className="px-4 py-2 text-right">{cents(o.wgcChargedCents)}</td>
                     <td className="px-4 py-2 text-right">{cents(o.finixCostCents)}</td>
-                    <td className={`px-4 py-2 text-right font-semibold ${o.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.profitCents)}</td>
+                    <td className={`px-4 py-2 text-right ${o.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.profitCents)}</td>
+                    <td className="px-4 py-2 text-right">{cents(o.subscriptionRevenueCents)}</td>
+                    <td className={`px-4 py-2 text-right font-semibold ${o.combinedProfitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.combinedProfitCents)}</td>
                   </tr>
                 ))}
                 {summary.byOrganization.length === 0 && (
-                  <tr><td colSpan={5} className="py-6 text-center text-slate-400">No successful payments in this range.</td></tr>
+                  <tr><td colSpan={7} className="py-6 text-center text-slate-400">No successful payments or subscription charges in this range.</td></tr>
                 )}
               </tbody>
             </table>
