@@ -21,7 +21,14 @@ export async function GET(req: Request) {
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
 
-  const to = toParam ? new Date(toParam) : new Date();
+  // A date-only "to" param (e.g. "2026-09-02" from a <input type="date">)
+  // parses as midnight UTC that day — extended to the end of that day so a
+  // payment that happened later the same day (the common case) isn't
+  // silently excluded from a range whose end date is "today." Only
+  // extended when the param is genuinely date-only (no time component
+  // already present), so a future caller passing a full ISO timestamp
+  // isn't silently overridden.
+  const to = toParam ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(toParam) ? `${toParam}T23:59:59.999Z` : toParam) : new Date();
   const from = fromParam ? new Date(fromParam) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
