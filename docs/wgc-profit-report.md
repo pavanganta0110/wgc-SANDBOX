@@ -85,13 +85,38 @@ causes, not yet fully diagnosed:
   these columns `null` even though the original API response is still
   available in `rawJsonRedacted`.
 
+## Delayed re-sync (built)
+
+`src/app/api/cron/resync-transfer-fees/route.ts`, scheduled daily
+(`vercel.json`). Re-runs `syncFeesForTransfer` for every `SUCCEEDED`
+payment 1-5 days old — bounded window, not the whole history, to stay
+fast. Safe to re-run indefinitely: `syncFeesForTransfer` upserts on
+`finixFeeId`, so this can never create duplicate fee rows, only fill in
+lines that weren't available at the original sync time.
+
+## Historical backfill (run once, 2026-09-02)
+
+`scripts/backfill-finix-fee-classification.mjs` re-derives
+`category`/`feeSubtype` for existing `FinixFee` rows from their preserved
+`rawJsonRedacted` payload — no Finix API call, pure DB read/write, safe
+to re-run (only touches rows still missing either field). Already applied
+directly to both production and sandbox databases.
+
+**Real finding from running it**: every single historical `FinixFee` row
+in both databases (40 in production, 88 in sandbox) turned out to have
+`feeSubtype: "PLATFORM_FEE"` — meaning **no genuine Finix/processor cost
+line item (interchange, dues and assessments, etc.) has ever actually
+been synced**, historically, in either environment. Every dollar
+previously counted toward `actualFinixFeesCents` (and now correctly
+excluded from this report's `finixCostCents`) was WGC's own fee, not a
+real cost. Until the new resync cron has had time to run and catch real
+cost lines going forward, `finixCostCents` in this report will show
+close to $0 for historical date ranges — that's accurate to what's
+actually been captured, not a bug, but it means the report currently
+understates Finix's real cost (and therefore overstates profit) for
+anything before this fix shipped.
+
 ## Not built yet
 
-- A delayed re-sync/backfill cron to catch interchange/dues-and-assessments
-  fee lines that settle on Finix's side after the initial webhook-triggered
-  sync (see "Known data-completeness gap" above).
-- A backfill script to re-derive `category`/`feeSubtype` for historical
-  `FinixFee` rows from their preserved `rawJsonRedacted` payload, without
-  a live re-fetch from Finix.
 - Per-transaction drill-down in the UI (currently: overall totals +
   per-organization rollup only, no row-per-payment table).
