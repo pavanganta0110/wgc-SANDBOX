@@ -1574,9 +1574,11 @@ function WgcProfitTab() {
   const [from, setFrom] = useState(() => isoDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => isoDate(new Date()));
 
-  const load = () => {
+  const load = (overrideFrom?: string, overrideTo?: string) => {
+    const f = overrideFrom ?? from;
+    const t = overrideTo ?? to;
     setLoading(true);
-    fetch(`/api/admin/billing/wgc-profit?from=${from}&to=${to}`)
+    fetch(`/api/admin/billing/wgc-profit?from=${f}&to=${t}`)
       .then((r) => r.json())
       .then((d) => setSummary(d.summary || null))
       .catch(() => toast.error("Failed to load WGC profit report"))
@@ -1587,12 +1589,55 @@ function WgcProfitTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Presets set both the visible date inputs and fetch immediately with
+  // the exact same values — avoids relying on React state having already
+  // flushed before load() reads `from`/`to` from closure.
+  const RANGE_PRESETS: Array<{ label: string; months: number } | { label: string; days: number }> = [
+    { label: "Last 30 days", days: 30 },
+    { label: "Last 90 days", days: 90 },
+    { label: "Last 6 months", months: 6 },
+    { label: "Last 12 months", months: 12 },
+    { label: "Year to date", months: -1 },
+    { label: "All time", months: -2 },
+  ];
+  const applyPreset = (preset: (typeof RANGE_PRESETS)[number]) => {
+    const now = new Date();
+    let start: Date;
+    if ("days" in preset) {
+      start = new Date(now.getTime() - preset.days * 24 * 60 * 60 * 1000);
+    } else if (preset.months === -1) {
+      start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+    } else if (preset.months === -2) {
+      start = new Date(Date.UTC(2020, 0, 1)); // effectively "no lower bound" for this app's actual data
+    } else {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - preset.months, now.getUTCDate()));
+    }
+    const f = isoDate(start);
+    const t = isoDate(now);
+    setFrom(f);
+    setTo(t);
+    load(f, t);
+  };
+
   return (
     <div>
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-4">
         Internal only — never shown to organizations. Finix cost is only as complete as what&apos;s been synced from Finix&apos;s Fees
         API; payments with no synced fee data yet count as $0 Finix cost below (see the missing-data count), which overstates profit
         until that data lands.
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-3">
+        {RANGE_PRESETS.map((preset) => (
+          <button
+            key={preset.label}
+            onClick={() => applyPreset(preset)}
+            disabled={loading}
+            className="px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {preset.label}
+          </button>
+        ))}
       </div>
 
       <div className="flex items-end gap-3 mb-6">
@@ -1604,7 +1649,7 @@ function WgcProfitTab() {
           <label className="block text-xs font-semibold text-slate-500 mb-1">To</label>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm" />
         </div>
-        <button onClick={load} disabled={loading} className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
+        <button onClick={() => load()} disabled={loading} className="px-4 py-2 rounded-full bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
           {loading ? "Loading…" : "Refresh"}
         </button>
       </div>
