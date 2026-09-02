@@ -45,7 +45,7 @@ export default function SixMonthsFreeStartButton({
       disabled={loading}
       className={className || "inline-flex items-center gap-2 px-8 py-4 rounded-full bg-slate-900 text-white font-semibold text-lg hover:bg-slate-800 disabled:opacity-60"}
     >
-      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : children || <>Start Six Months Free <ArrowRight className="w-5 h-5" /></>}
+      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : children || <>Start 90 Days Free <ArrowRight className="w-5 h-5" /></>}
     </button>
   );
 }

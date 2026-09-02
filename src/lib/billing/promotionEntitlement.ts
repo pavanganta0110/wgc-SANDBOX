@@ -58,6 +58,7 @@ export async function attachPromotionEntitlementIfLeadExists(
         source: "LANDING_PAGE_AUTOMATIC",
         status: "AWAITING_BILLING_SETUP",
         durationMonths: promotion.durationMonths,
+        durationDays: promotion.durationDays,
         normalMonthlyAmountCents: promotion.normalMonthlyAmountCents,
         waivesPlatformFee: promotion.promotionWaivesPlatformFee,
         waivesInvoiceMonthlyFee: promotion.promotionWaivesInvoiceMonthlyFee,

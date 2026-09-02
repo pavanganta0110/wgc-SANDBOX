@@ -16,7 +16,7 @@ export default function SixMonthsFreeSignupPage() {
             promotion="SIX_MONTHS_FREE"
             redirectTo="/start"
             heading="WGC Payments Promotion"
-            subheading="Get six months of free credit card processing. Sign up with Google, Apple, or email below."
+            subheading="Get 90 days of free credit card processing. Sign up with Google, Apple, or email below."
             emailSignupVisible={true}
             emailLoginVisible={false}
           />

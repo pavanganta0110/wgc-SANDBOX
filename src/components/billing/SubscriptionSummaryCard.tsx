@@ -63,7 +63,7 @@ export default async function SubscriptionSummaryCard({ auth }: { auth: Merchant
           <p>Plan: WGC Platform</p>
           <p>Current price: $0/month</p>
           <p>Regular price: {formatCents(regularPriceCents)}/month</p>
-          <p>Promotion: Six Months Free</p>
+          <p>Promotion: {entitlement?.durationDays != null ? `${entitlement.durationDays} Days Free` : `${entitlement?.durationMonths ?? 6} Months Free`}</p>
           <p>Promotion ends: {subscription.trialEndsAt ? formatDateCDT(subscription.trialEndsAt) : "—"}</p>
           <p>First charge: {subscription.firstChargeAt ? formatDateCDT(subscription.firstChargeAt) : "—"}</p>
           <p className="text-slate-500">Status: Promotional period active</p>

@@ -133,21 +133,26 @@ export async function sendActivationConfirmationEmail(params: {
   trialEndsAt: Date | null;
   firstChargeAt: Date | null;
   amountCents: number;
+  // When set, drives day-precise copy ("90 Days Free"); when null, falls
+  // back to the legacy "Six Months Free" wording — covers organizations
+  // grandfathered on the older month-based promotion.
+  promotionDurationDays?: number | null;
 }) {
+  const promoLabel = params.promotionDurationDays != null ? `${params.promotionDurationDays} Days Free` : "Six Months Free";
   return sendIdempotentBillingEmail({
     organizationId: params.organizationId,
     recipientEmail: params.recipientEmail,
     emailType: params.isPromotional ? "SUBSCRIPTION_ACTIVATION" : "SUBSCRIPTION_ACTIVATION",
     idempotencyKey: `${params.organizationId}:SUBSCRIPTION_ACTIVATION_CONFIRMED`,
-    subject: params.isPromotional ? "Your Six Months Free trial is now active" : "Your WGC Payments subscription is active",
-    title: params.isPromotional ? "Your six-month free trial has started" : "Your subscription is active",
+    subject: params.isPromotional ? `Your ${promoLabel} trial is now active` : "Your WGC Payments subscription is active",
+    title: params.isPromotional ? "Your free trial has started" : "Your subscription is active",
     badgeText: "Active",
     badgeColor: "#10B981",
     bodyHtml: `
       <p>Hi ${params.organizationName},</p>
       ${
         params.isPromotional
-          ? `<p>Your WGC Platform subscription is now active with your Six Months Free promotion. Your platform fee is $0/month until ${params.trialEndsAt?.toLocaleDateString() ?? "your trial ends"}, when it automatically renews at ${formatCents(params.amountCents)}/month.</p>`
+          ? `<p>Your WGC Platform subscription is now active with your ${promoLabel} promotion. Your platform fee is $0/month until ${params.trialEndsAt?.toLocaleDateString() ?? "your trial ends"}, when it automatically renews at ${formatCents(params.amountCents)}/month.</p>`
           : `<p>Your WGC Platform subscription is now active at ${formatCents(params.amountCents)}/month.</p>`
       }
       <p><strong>First charge date:</strong> ${params.firstChargeAt?.toLocaleDateString() ?? "—"}</p>
@@ -176,7 +181,7 @@ export async function sendTrialEndingReminderEmail(params: {
     badgeText: "Reminder",
     bodyHtml: `
       <p>Hi ${params.organizationName},</p>
-      <p>Your Six Months Free promotional period ends soon. Your first $10 monthly WGC Platform charge is scheduled for <strong>${params.firstChargeAt.toLocaleDateString()}</strong>.</p>
+      <p>Your free promotional period ends soon. Your first $10 monthly WGC Platform charge is scheduled for <strong>${params.firstChargeAt.toLocaleDateString()}</strong>.</p>
       <p>Billing method on file: ${params.maskedBillingMethod}</p>
       <p><a href="${params.updatePaymentMethodUrl}">Update billing method</a></p>
       ${SUPPORT_LINK}

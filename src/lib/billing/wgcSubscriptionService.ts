@@ -84,6 +84,7 @@ export interface ActivateSubscriptionResult {
     currency: string;
   };
   isPromotional: boolean;
+  promotionDurationDays: number | null;
   alreadyExisted: boolean;
 }
 
@@ -123,6 +124,11 @@ export async function activateWgcSubscription(input: ActivateSubscriptionInput):
         currency: row.currency,
       },
       isPromotional: row.status === "TRIALING",
+      // Not available yet on this early-return (idempotency-guard) path —
+      // the entitlement lookup below hasn't run. Rare case (a duplicate
+      // activation call), so the confirmation email falls back to generic
+      // month-based wording rather than restructuring lookup order for it.
+      promotionDurationDays: null,
       alreadyExisted: true,
     };
   }
@@ -150,7 +156,9 @@ export async function activateWgcSubscription(input: ActivateSubscriptionInput):
       subscription_details: {
         collection_method: "BILL_AUTOMATICALLY",
         ...(isPromotional && entitlement
-          ? { trial_details: { interval_type: "MONTH" as const, interval_count: entitlement.durationMonths } }
+          ? entitlement.durationDays != null
+            ? { trial_details: { interval_type: "DAY" as const, interval_count: entitlement.durationDays } }
+            : { trial_details: { interval_type: "MONTH" as const, interval_count: entitlement.durationMonths } }
           : {}),
       },
       tags,
@@ -267,6 +275,7 @@ export async function activateWgcSubscription(input: ActivateSubscriptionInput):
       currency: updated.currency,
     },
     isPromotional,
+    promotionDurationDays: entitlement?.durationDays ?? null,
     alreadyExisted: false,
   };
 }

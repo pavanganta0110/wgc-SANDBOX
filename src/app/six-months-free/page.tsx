@@ -131,9 +131,9 @@ export default function SixMonthsFreePage() {
           <div className="veil"></div>
 
           <div className="hero-content">
-            <span className="eyebrow">6 months free</span>
-            <h1>Six Months Free on WGC Payments</h1>
-            <p className="lede">Start accepting donations, recurring gifts, and make a bigger mission impact today. Your WGC Platform subscription is completely free for your first six months.</p>
+            <span className="eyebrow">90 days free</span>
+            <h1>90 Days Free on WGC Payments</h1>
+            <p className="lede">Start accepting donations, recurring gifts, and make a bigger mission impact today. Your WGC Platform subscription is completely free for your first 90 days.</p>
             <div className="cta-row">
               <SixMonthsFreeStartButton className="btn-primary btn-wide">
                 Set up your giving page <span aria-hidden="true">→</span>
@@ -164,7 +164,7 @@ export default function SixMonthsFreePage() {
           <div className="stats-grid">
             <div className="stat">
               <div className="num">$0</div>
-              <div className="lbl">per month for your first six months</div>
+              <div className="lbl">per month for your first 90 days</div>
             </div>
             <div className="stat mid">
               <div className="num">$0</div>
@@ -183,7 +183,7 @@ export default function SixMonthsFreePage() {
           <div className="wrap tp-inner">
             <div>
               <div className="kick">Full transparency</div>
-              <p>After your first six months, your WGC Platform subscription is just <strong>$10/month</strong>. No surprises, cancel anytime.</p>
+              <p>After your first 90 days, your WGC Platform subscription is just <strong>$10/month</strong>. No surprises, cancel anytime.</p>
             </div>
             <Link className="btn-outline" href="/pricing">View full pricing →</Link>
           </div>
@@ -229,8 +229,8 @@ export default function SixMonthsFreePage() {
                 <p>Gifts and payments settle to the bank account you connect and are deposited on a regular schedule, so funds land directly in your account with no separate transfers to chase.</p>
               </details>
               <details>
-                <summary>What does it cost after the six months?</summary>
-                <p>Your first six months of the WGC Platform subscription are free. After that it's $10/month and you can cancel anytime. Standard card, ACH, and related processing fees apply throughout. See full pricing for details.</p>
+                <summary>What does it cost after the 90 days?</summary>
+                <p>Your first 90 days of the WGC Platform subscription are free. After that it's $10/month and you can cancel anytime. Standard card, ACH, and related processing fees apply throughout. See full pricing for details.</p>
               </details>
               <details>
                 <summary>Is it secure?</summary>
@@ -250,7 +250,7 @@ export default function SixMonthsFreePage() {
 
         <section className="closer">
           <div className="glow"></div>
-          <h2>Start your six months free</h2>
+          <h2>Start your 90 days free</h2>
           <p>No setup fees, no long-term commitment. Get your giving page live today and only pay standard processing along the way.</p>
           <SixMonthsFreeStartButton className="btn-primary">
             Set up your giving page <span aria-hidden="true">→</span>

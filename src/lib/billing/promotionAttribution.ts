@@ -37,9 +37,15 @@ function hashToken(rawToken: string): string {
 }
 
 /**
- * Idempotently ensures the Six Months Free Promotion template row exists —
- * safe to call on every /six-months-free page render. Does not overwrite
- * an admin's later edits to the row (only creates if entirely missing).
+ * Idempotently ensures the promotion template row exists — safe to call on
+ * every /six-months-free page render. Does not overwrite an admin's later
+ * edits to the row (only creates if entirely missing) — the promo changed
+ * from 6 months to 90 days by directly updating the existing production
+ * row (durationDays=90) rather than through this function, precisely so
+ * organizations already granted the old 6-month entitlement (which
+ * snapshots its own duration independently at grant time) are unaffected.
+ * This function's defaults below only matter for a fresh environment
+ * where the row doesn't exist yet (e.g. a new sandbox).
  */
 export async function ensureSixMonthsFreePromotion() {
   const existing = await prisma.promotion.findUnique({ where: { code: SIX_MONTHS_FREE_PROMOTION_CODE } });
@@ -47,9 +53,10 @@ export async function ensureSixMonthsFreePromotion() {
   return prisma.promotion.create({
     data: {
       code: SIX_MONTHS_FREE_PROMOTION_CODE,
-      name: "Six Months Free",
-      customerDescription: "Your first six months of the WGC Platform subscription are free — $10/month afterward, automatically, until canceled.",
-      durationMonths: 6,
+      name: "90 Days Free",
+      customerDescription: "Your first 90 days of the WGC Platform subscription are free — $10/month afterward, automatically, until canceled.",
+      durationMonths: 3,
+      durationDays: 90,
       normalMonthlyAmountCents: 1000,
       active: true,
       automaticEligibilitySource: SIX_MONTHS_FREE_AUTOMATIC_SOURCE,

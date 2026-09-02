@@ -108,7 +108,7 @@ export default async function SubscriptionPage() {
             <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-4 mb-4 text-sm space-y-1">
               <p><span className="font-semibold">Current platform price:</span> $0/month</p>
               <p><span className="font-semibold">Regular platform price:</span> {formatCents(entitlement?.normalMonthlyAmountCents ?? 1000)}/month</p>
-              <p><span className="font-semibold">Promotion:</span> Six Months Free</p>
+              <p><span className="font-semibold">Promotion:</span> {entitlement?.durationDays != null ? `${entitlement.durationDays} Days Free` : `${entitlement?.durationMonths ?? 6} Months Free`}</p>
               <p><span className="font-semibold">Promotion started:</span> {formatDate(subscription.trialStartsAt)}</p>
               <p><span className="font-semibold">Promotion ends:</span> {formatDate(subscription.trialEndsAt)}</p>
               <p><span className="font-semibold">First scheduled charge:</span> {formatDate(subscription.firstChargeAt)}</p>

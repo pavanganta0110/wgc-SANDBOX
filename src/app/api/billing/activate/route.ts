@@ -158,6 +158,7 @@ export async function POST(req: Request) {
       trialEndsAt: result.subscription.trialEndsAt,
       firstChargeAt: result.subscription.firstChargeAt,
       amountCents: result.subscription.amountCents,
+      promotionDurationDays: result.promotionDurationDays,
     }).catch(() => {}); // best-effort; activation itself already succeeded
 
     return NextResponse.json({

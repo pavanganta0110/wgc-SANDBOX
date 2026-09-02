@@ -1191,7 +1191,16 @@ model Promotion {
   code                             String    @unique
   name                             String
   customerDescription              String?
+  // durationMonths stays the canonical, always-set value (kept NOT NULL so
+  // every existing read site continues to work unmodified) — set to the
+  // nearest whole-month approximation for display/legacy purposes only
+  // when durationDays is also set. durationDays, when present, is what
+  // actually drives the Finix trial (interval_type DAY) and day-precise
+  // copy — see wgcSubscriptionService.ts. Null durationDays means "use
+  // durationMonths exactly," preserving every promotion created before
+  // this field existed.
   durationMonths                   Int
+  durationDays                     Int?
   normalMonthlyAmountCents         Int
   active                           Boolean   @default(true)
   validFrom                        DateTime  @default(now())
@@ -1229,6 +1238,9 @@ model PromotionEntitlement {
   // Snapshotted from Promotion at grant time so a later template edit never
   // silently changes an already-granted entitlement.
   durationMonths            Int
+  // Mirrors Promotion.durationDays — when set, this is what actually
+  // drives the Finix trial (interval_type DAY) and day-precise copy.
+  durationDays              Int?
   normalMonthlyAmountCents  Int
   waivesPlatformFee         Boolean   @default(true)
   waivesInvoiceMonthlyFee   Boolean   @default(false)

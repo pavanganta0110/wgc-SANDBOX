@@ -61,6 +61,7 @@ interface PromotionRow {
   name: string;
   customerDescription: string | null;
   durationMonths: number;
+  durationDays: number | null;
   normalMonthlyAmountCents: number;
   active: boolean;
   automaticEligibilitySource: string | null;
@@ -80,6 +81,7 @@ interface PromotionEntitlementRow {
   source: string;
   status: string;
   durationMonths: number;
+  durationDays: number | null;
   normalMonthlyAmountCents: number;
   grantedAt: string;
   startsAt: string | null;
@@ -619,7 +621,9 @@ function PromotionsTab() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [customerDescription, setCustomerDescription] = useState("");
+  const [durationUnit, setDurationUnit] = useState<"months" | "days">("months");
   const [durationMonths, setDurationMonths] = useState("6");
+  const [durationDays, setDurationDays] = useState("90");
   const [normalAmount, setNormalAmount] = useState("10.00");
   const [waivesPlatformFee, setWaivesPlatformFee] = useState(true);
   const [reason, setReason] = useState("");
@@ -660,7 +664,12 @@ function PromotionsTab() {
           code,
           name,
           customerDescription: customerDescription || null,
-          durationMonths: parseInt(durationMonths, 10),
+          // durationMonths always sent (schema keeps it NOT NULL for
+          // backward compat) — when creating a day-precise promotion it's
+          // just the nearest whole-month approximation for legacy display
+          // sites; durationDays is what actually drives the Finix trial.
+          durationMonths: durationUnit === "days" ? Math.max(1, Math.round(parseInt(durationDays, 10) / 30)) : parseInt(durationMonths, 10),
+          durationDays: durationUnit === "days" ? parseInt(durationDays, 10) : null,
           normalMonthlyAmountCents: Math.round(parseFloat(normalAmount) * 100),
           promotionWaivesPlatformFee: waivesPlatformFee,
           confirmed: true,
@@ -746,8 +755,18 @@ function PromotionsTab() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Duration (months)</label>
-              <input value={durationMonths} onChange={(e) => setDurationMonths(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Duration</label>
+              <div className="flex gap-2">
+                <input
+                  value={durationUnit === "days" ? durationDays : durationMonths}
+                  onChange={(e) => (durationUnit === "days" ? setDurationDays(e.target.value) : setDurationMonths(e.target.value))}
+                  className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm"
+                />
+                <select value={durationUnit} onChange={(e) => setDurationUnit(e.target.value as "months" | "days")} className="px-2 py-2 rounded-lg border border-slate-200 text-sm">
+                  <option value="months">months</option>
+                  <option value="days">days</option>
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Normal monthly amount ($)</label>
@@ -763,7 +782,7 @@ function PromotionsTab() {
             <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
           </div>
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
-            <strong>Impact preview:</strong> creates a new promotion template “{name || code}” — {durationMonths} month(s) at $
+            <strong>Impact preview:</strong> creates a new promotion template “{name || code}” — {durationUnit === "days" ? `${durationDays} day(s)` : `${durationMonths} month(s)`} at $
             {normalAmount} normal price. No organization is affected until this template is explicitly granted to one.
           </div>
           <label className="flex items-start gap-2 text-xs text-slate-600">
@@ -792,7 +811,7 @@ function PromotionsTab() {
             <tr key={p.id}>
               <td className="py-2 font-medium text-slate-800">{p.code}</td>
               <td className="py-2">{p.name}</td>
-              <td className="py-2">{p.durationMonths} mo</td>
+              <td className="py-2">{p.durationDays != null ? `${p.durationDays} days` : `${p.durationMonths} mo`}</td>
               <td className="py-2">{cents(p.normalMonthlyAmountCents)}</td>
               <td className="py-2">{p.active ? "Yes" : "No"}</td>
               <td className="py-2 text-right space-x-3">
@@ -897,7 +916,7 @@ function GrantPromotionModal({ promotion, onClose, onDone }: { promotion: Promot
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
       <div className="bg-white rounded-2xl max-w-md w-full p-6">
         <h3 className="text-lg font-bold text-slate-900 mb-1">Grant “{promotion.name}”</h3>
-        <p className="text-sm text-slate-500 mb-4">{promotion.durationMonths} month(s) at {cents(promotion.normalMonthlyAmountCents)} normal price.</p>
+        <p className="text-sm text-slate-500 mb-4">{promotion.durationDays != null ? `${promotion.durationDays} day(s)` : `${promotion.durationMonths} month(s)`} at {cents(promotion.normalMonthlyAmountCents)} normal price.</p>
 
         <label className="block text-xs font-semibold text-slate-500 mb-1">Organization ID</label>
         <input value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3" />

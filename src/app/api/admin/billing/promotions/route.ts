@@ -35,6 +35,7 @@ export async function POST(req: Request) {
     name,
     customerDescription,
     durationMonths,
+    durationDays,
     normalMonthlyAmountCents,
     automaticEligibilitySource,
     maxOrganizations,
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
   if (!Number.isFinite(durationMonths) || durationMonths <= 0) {
     return NextResponse.json({ error: "Duration (months) must be a positive number." }, { status: 400 });
   }
+  if (durationDays != null && (!Number.isFinite(durationDays) || durationDays <= 0)) {
+    return NextResponse.json({ error: "Duration (days) must be a positive number." }, { status: 400 });
+  }
   if (!Number.isFinite(normalMonthlyAmountCents) || normalMonthlyAmountCents < 0) {
     return NextResponse.json({ error: "Normal monthly amount is required." }, { status: 400 });
   }
@@ -68,6 +72,7 @@ export async function POST(req: Request) {
       name,
       customerDescription: customerDescription || null,
       durationMonths,
+      durationDays: durationDays != null ? durationDays : null,
       normalMonthlyAmountCents,
       automaticEligibilitySource: automaticEligibilitySource || null,
       maxOrganizations: maxOrganizations != null && Number.isFinite(maxOrganizations) ? maxOrganizations : null,

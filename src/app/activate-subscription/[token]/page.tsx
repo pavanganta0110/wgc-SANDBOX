@@ -47,6 +47,7 @@ export default async function ActivateSubscriptionPage({ params }: { params: Pro
       organizationName={church?.name || "your organization"}
       isPromotional={Boolean(entitlement)}
       durationMonths={entitlement?.durationMonths ?? null}
+      durationDays={entitlement?.durationDays ?? null}
       regularMonthlyAmountCents={entitlement?.normalMonthlyAmountCents ?? 1000}
     />
   );

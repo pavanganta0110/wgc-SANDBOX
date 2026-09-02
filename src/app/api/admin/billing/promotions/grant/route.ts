@@ -44,7 +44,11 @@ export async function POST(req: Request) {
 
   const startsAt = new Date();
   const endsAt = new Date(startsAt);
-  endsAt.setMonth(endsAt.getMonth() + promotion.durationMonths);
+  if (promotion.durationDays != null) {
+    endsAt.setDate(endsAt.getDate() + promotion.durationDays);
+  } else {
+    endsAt.setMonth(endsAt.getMonth() + promotion.durationMonths);
+  }
 
   const created = await prisma.promotionEntitlement.create({
     data: {
@@ -53,6 +57,7 @@ export async function POST(req: Request) {
       source: "ADMIN_APPROVED_CURRENT_CLIENT",
       status: "ACTIVE",
       durationMonths: promotion.durationMonths,
+      durationDays: promotion.durationDays,
       normalMonthlyAmountCents: promotion.normalMonthlyAmountCents,
       waivesPlatformFee: promotion.promotionWaivesPlatformFee,
       waivesInvoiceMonthlyFee: promotion.promotionWaivesInvoiceMonthlyFee,
