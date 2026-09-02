@@ -4,6 +4,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import MetaPixel from "@/components/common/MetaPixel";
+import SimplifiPixel from "@/components/common/SimplifiPixel";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -89,6 +90,7 @@ export default function RootLayout({
           }}
         />
         <MetaPixel />
+        <SimplifiPixel />
       </body>
     </html>
   );

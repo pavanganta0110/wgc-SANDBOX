@@ -38,7 +38,9 @@ const securityHeaders = [
       // is served from google.com, its rendered widget assets from gstatic.com.
       // connect.facebook.net: loads the Meta Pixel's fbevents.js on public
       // marketing pages (see src/components/common/MetaPixel.tsx).
-      `script-src 'self' 'unsafe-inline'${scriptSrcEval} https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://www.google.com https://www.gstatic.com https://connect.facebook.net`,
+      // tag.simpli.fi: Simpli.fi's site-retargeting pixel (see
+      // src/components/common/SimplifiPixel.tsx).
+      `script-src 'self' 'unsafe-inline'${scriptSrcEval} https://js.finix.com https://pay.google.com https://applepay.cdn-apple.com https://cdn.sift.com https://www.google.com https://www.gstatic.com https://connect.facebook.net https://tag.simpli.fi`,
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https:",
@@ -47,7 +49,8 @@ const securityHeaders = [
       // origin during isReadyToPay/loadPaymentData.
       // connect.facebook.net / www.facebook.com: the Meta Pixel's own beacon
       // calls (fbq track/trackCustom) and its noscript <img> fallback.
-      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://finix.qa-payments-api.com https://pay.google.com https://cdn.sift.com https://connect.facebook.net https://www.facebook.com",
+      // tag.simpli.fi: Simpli.fi's own tracking beacon calls.
+      "connect-src 'self' https://finix.live-payments-api.com https://finix.sandbox-payments-api.com https://finix.qa-payments-api.com https://pay.google.com https://cdn.sift.com https://connect.facebook.net https://www.facebook.com https://tag.simpli.fi",
       // Google Pay's payment sheet renders inside an iframe from pay.google.com.
       // js.finix.com: the Finix card-tokenization form itself is mounted as
       // an iframe (application/index.html) — adding an explicit frame-src
