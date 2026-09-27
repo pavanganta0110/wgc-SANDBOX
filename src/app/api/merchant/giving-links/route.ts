@@ -8,6 +8,7 @@ import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { validateFundAssignments, FundAssignmentError, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
+import { validateDefaultDonationSettings } from "@/lib/givingLinks/defaultDonationSettings";
 
 export async function GET(req: Request) {
   // Team-access Checkpoint 4: now scoped via buildGivingLinkScope +
@@ -74,6 +75,8 @@ export async function POST(req: Request) {
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
+    defaultDonationType,
+    defaultRecurringAmountCents,
     allowedPaymentMethods,
     donorFieldSettings,
     collectMailingAddress,
@@ -110,6 +113,21 @@ export async function POST(req: Request) {
     if (minAmountCents != null && maxAmountCents != null && minAmountCents > maxAmountCents) {
       return NextResponse.json({ error: "Minimum amount cannot exceed maximum amount" }, { status: 400 });
     }
+  }
+
+  const resolvedSuggestedAmountsCents: number[] = Array.isArray(suggestedAmountsCents) ? suggestedAmountsCents : [2500, 5000, 10000, 25000];
+  const defaultsResult = validateDefaultDonationSettings({
+    defaultDonationType,
+    defaultRecurringAmountCents,
+    recurringEnabled: recurringEnabled ?? false,
+    amountType: resolvedAmountType,
+    minAmountCents: resolvedAmountType === "VARIABLE" ? minAmountCents ?? null : null,
+    maxAmountCents: resolvedAmountType === "VARIABLE" ? maxAmountCents ?? null : null,
+    suggestedAmountsCents: resolvedSuggestedAmountsCents,
+    allowCustomAmount: allowCustomAmount ?? true,
+  });
+  if (!defaultsResult.ok) {
+    return NextResponse.json({ error: defaultsResult.error }, { status: 400 });
   }
 
   const methods = Array.isArray(allowedPaymentMethods) ? allowedPaymentMethods.filter(Boolean) : [];
@@ -178,7 +196,7 @@ export async function POST(req: Request) {
       fixedAmountCents: resolvedAmountType === "FIXED" || resolvedAmountType === "FIXED_QUANTITY" ? fixedAmountCents : null,
       minAmountCents: resolvedAmountType === "VARIABLE" ? minAmountCents ?? null : null,
       maxAmountCents: resolvedAmountType === "VARIABLE" ? maxAmountCents ?? null : null,
-      suggestedAmountsJson: Array.isArray(suggestedAmountsCents) ? suggestedAmountsCents : [2500, 5000, 10000, 25000],
+      suggestedAmountsJson: resolvedSuggestedAmountsCents,
       allowCustomAmount: allowCustomAmount ?? true,
       quantityItemLabel: resolvedAmountType === "FIXED_QUANTITY" ? (quantityItemLabel?.trim() || null) : null,
       linkType: linkType === "ONE_TIME" ? "ONE_TIME" : "MULTI_USE",
@@ -189,6 +207,8 @@ export async function POST(req: Request) {
       fundSelectionEnabled: resolvedFundSelectionEnabled,
       recurringEnabled: recurringEnabled ?? false,
       allowedFrequenciesJson: Array.isArray(allowedFrequencies) ? allowedFrequencies : ["MONTHLY"],
+      defaultDonationType: defaultsResult.value.defaultDonationType,
+      defaultRecurringAmountCents: defaultsResult.value.defaultRecurringAmountCents,
       allowedPaymentMethodsJson: methods,
       donorFieldSettingsJson: donorFieldSettings || DEFAULT_DONOR_FIELD_SETTINGS,
       collectMailingAddress: resolvedCollectMailingAddress,

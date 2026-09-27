@@ -80,6 +80,9 @@ interface BuilderState {
   feeCoverDefaultOn: boolean;
   recurringEnabled: boolean;
   allowedFrequencies: FrequencyKey[];
+  defaultDonationType: "ONE_TIME" | "RECURRING";
+  /** Dollars, as typed. Only used when defaultDonationType is RECURRING on a VARIABLE-amount form. */
+  defaultRecurringAmount: string;
   receiptSettings: ReceiptSettings;
   statementDescriptor: string;
   internalNote: string;
@@ -116,6 +119,8 @@ function defaultState(): BuilderState {
     feeCoverDefaultOn: true,
     recurringEnabled: false,
     allowedFrequencies: ["MONTHLY"],
+    defaultDonationType: "ONE_TIME",
+    defaultRecurringAmount: "",
     receiptSettings: DEFAULT_RECEIPT_SETTINGS,
     statementDescriptor: "",
     internalNote: "",
@@ -460,6 +465,16 @@ export default function GivingLinkBuilderForm({
     });
   };
 
+  // Recurring can only be the default while recurring giving is on, and a
+  // default amount only applies to a VARIABLE-amount form (a fixed price
+  // can't be pre-empted). Anything else is saved as "no default" so the
+  // form keeps opening exactly as it does today.
+  const effectiveDefaultDonationType: "ONE_TIME" | "RECURRING" = state.recurringEnabled ? state.defaultDonationType : "ONE_TIME";
+  const defaultAmountCents: number | null =
+    effectiveDefaultDonationType === "RECURRING" && state.amountType === "VARIABLE" && state.defaultRecurringAmount.trim()
+      ? Math.round(parseFloat(state.defaultRecurringAmount) * 100)
+      : null;
+
   const computeExpiresAt = (): string | null => {
     if (state.validityKey === "none") return null;
     if (state.validityKey === "custom") return state.customExpiresAt ? new Date(state.customExpiresAt).toISOString() : null;
@@ -484,6 +499,26 @@ export default function GivingLinkBuilderForm({
     if (state.fundSelectionEnabled && funds.length === 0) {
       toast.error("Add at least one fund or turn off fund selection");
       return;
+    }
+    if (defaultAmountCents != null) {
+      // Mirrors validateDefaultDonationSettings on the server (which is the
+      // real gate) so the merchant gets the message before a round trip.
+      if (Number.isNaN(defaultAmountCents) || defaultAmountCents < 100) {
+        toast.error("Default recurring amount must be at least $1.00");
+        return;
+      }
+      if (state.minAmount && defaultAmountCents < Math.round(parseFloat(state.minAmount) * 100)) {
+        toast.error("Default recurring amount is below the minimum amount");
+        return;
+      }
+      if (state.maxAmount && defaultAmountCents > Math.round(parseFloat(state.maxAmount) * 100)) {
+        toast.error("Default recurring amount is above the maximum amount");
+        return;
+      }
+      if (!state.allowCustomAmount && !amountsToCents(state.suggestedAmounts).includes(defaultAmountCents)) {
+        toast.error("With custom amounts turned off, the default recurring amount must be one of the suggested amounts");
+        return;
+      }
     }
 
     setSaving(true);
@@ -512,6 +547,8 @@ export default function GivingLinkBuilderForm({
         : [],
       recurringEnabled: state.recurringEnabled,
       allowedFrequencies: state.allowedFrequencies,
+      defaultDonationType: effectiveDefaultDonationType,
+      defaultRecurringAmountCents: defaultAmountCents,
       allowedPaymentMethods: state.allowedPaymentMethods,
       donorFieldSettings: state.donorFieldSettings,
       collectMailingAddress: state.collectMailingAddress,
@@ -1029,6 +1066,54 @@ export default function GivingLinkBuilderForm({
                 ))}
               </div>
             )}
+            {state.recurringEnabled && (
+              <div className="ml-6 space-y-3 border-t border-slate-100 pt-3">
+                <div>
+                  <FieldLabel>Default Donation Type</FieldLabel>
+                  <div className="flex rounded-xl border border-slate-200 p-1 max-w-xs">
+                    <button
+                      type="button"
+                      onClick={() => update("defaultDonationType", "ONE_TIME")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold ${state.defaultDonationType === "ONE_TIME" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+                    >
+                      One-Time
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => update("defaultDonationType", "RECURRING")}
+                      className={`flex-1 py-2 rounded-lg text-sm font-semibold ${state.defaultDonationType === "RECURRING" ? "bg-slate-900 text-white" : "text-slate-600"}`}
+                    >
+                      Recurring
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Which option donors see selected when they open this form. They can always switch between One-Time and Recurring.
+                  </p>
+                </div>
+                {state.defaultDonationType === "RECURRING" &&
+                  (state.amountType === "VARIABLE" ? (
+                    <div>
+                      <FieldLabel>Default Recurring Amount ($)</FieldLabel>
+                      <input
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        placeholder="e.g. 50"
+                        value={state.defaultRecurringAmount}
+                        onChange={(e) => update("defaultRecurringAmount", e.target.value)}
+                        className={inputClass}
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        Pre-selected when the form opens as Recurring. Donors can still choose another amount or enter their own. Leave blank for no pre-selected amount.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400">
+                      This form uses a set amount, so donors can&rsquo;t change it — a default recurring amount only applies to forms where donors choose their amount.
+                    </p>
+                  ))}
+              </div>
+            )}
           </Section>
 
           <Section title="Advanced Settings" defaultOpen={false}>
@@ -1269,6 +1354,8 @@ export default function GivingLinkBuilderForm({
             quantityItemLabel={state.quantityItemLabel}
             recurringEnabled={state.recurringEnabled}
             allowedFrequencies={state.allowedFrequencies}
+            defaultDonationType={effectiveDefaultDonationType}
+            defaultRecurringAmountCents={defaultAmountCents != null && !Number.isNaN(defaultAmountCents) ? defaultAmountCents : null}
             allowedPaymentMethods={state.allowedPaymentMethods}
             feeCoverEnabled={state.feeCoverEnabled}
             feeCoverDefaultOn={state.feeCoverDefaultOn}

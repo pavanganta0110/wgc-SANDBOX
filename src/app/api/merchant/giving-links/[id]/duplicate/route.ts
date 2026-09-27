@@ -48,6 +48,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       fundName: source.fundName,
       recurringEnabled: source.recurringEnabled,
       allowedFrequenciesJson: source.allowedFrequenciesJson ?? undefined,
+      defaultDonationType: source.defaultDonationType,
+      defaultRecurringAmountCents: source.defaultRecurringAmountCents,
       allowedPaymentMethodsJson: source.allowedPaymentMethodsJson ?? undefined,
       donorFieldSettingsJson: source.donorFieldSettingsJson ?? undefined,
       feeCoverEnabled: source.feeCoverEnabled,

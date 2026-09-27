@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { checkEmbedRateLimit } from "@/lib/giving/embedRateLimit";
+import { resolveInitialDonationState } from "@/lib/givingLinks/defaultDonationSettings";
 
 /**
  * Public configuration for the wgc-giving.js inline embed. Returns ONLY
@@ -63,6 +64,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     assignedFunds,
   } = data;
 
+  const initialDonation = resolveInitialDonationState({
+    recurringEnabled: link.recurringEnabled,
+    allowedFrequencies,
+    defaultDonationType: link.defaultDonationType,
+    defaultRecurringAmountCents: link.defaultRecurringAmountCents,
+    amountType: link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY",
+    fixedAmountCents: link.fixedAmountCents,
+    minAmountCents: link.minAmountCents,
+    maxAmountCents: link.maxAmountCents,
+    suggestedAmountsCents,
+    allowCustomAmount: link.allowCustomAmount,
+  });
+
   return NextResponse.json(
     {
       ok: true,
@@ -78,7 +92,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
         allowCustomAmount: link.allowCustomAmount,
         quantityItemLabel: link.quantityItemLabel,
       },
-      recurring: { enabled: link.recurringEnabled, allowedFrequencies },
+      recurring: {
+        enabled: link.recurringEnabled,
+        allowedFrequencies,
+        // Resolved with the same rules as the hosted giving page, so the
+        // inline widget can never open on something the hosted page
+        // wouldn't: "ONE_TIME" for every existing page, and an amount only
+        // when the donor could genuinely have selected it.
+        defaultDonationType: initialDonation.isRecurring ? "RECURRING" : "ONE_TIME",
+        defaultAmountCents: initialDonation.appliedDefaultAmountCents,
+      },
       funds: {
         selectionEnabled: fundSelectionEnabled,
         options: assignedFunds.map((f) => ({ id: f.fundId, name: f.name, isDefault: f.isDefault })),

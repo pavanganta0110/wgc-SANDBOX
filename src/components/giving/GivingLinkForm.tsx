@@ -14,6 +14,7 @@ import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, ty
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 import { trackMetaEvent } from "@/components/common/MetaPixel";
+import { resolveInitialDonationState } from "@/lib/givingLinks/defaultDonationSettings";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 
@@ -75,6 +76,8 @@ export default function GivingLinkForm({
   quantityItemLabel,
   recurringEnabled,
   allowedFrequencies,
+  defaultDonationType,
+  defaultRecurringAmountCents,
   allowedPaymentMethods,
   feeCoverEnabled,
   feeCoverDefaultOn,
@@ -107,6 +110,10 @@ export default function GivingLinkForm({
   quantityItemLabel?: string | null;
   recurringEnabled: boolean;
   allowedFrequencies: FrequencyKey[];
+  /** Which option the form opens on. Omitted/unrecognized = ONE_TIME (every existing giving page). Only honored while recurringEnabled — the donor can always switch. */
+  defaultDonationType?: string | null;
+  /** Amount pre-selected when the form opens as Recurring (VARIABLE-amount pages only). The donor can always change it. */
+  defaultRecurringAmountCents?: number | null;
   allowedPaymentMethods: PaymentMethodKey[];
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
@@ -134,8 +141,24 @@ export default function GivingLinkForm({
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
   onResult?: (result: ResultState) => void;
 }) {
-  const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
-  const [customAmount, setCustomAmount] = useState("");
+  // What the form opens on — computed once at mount (like every other
+  // initial value here), so it never fights the donor's own later choices.
+  const [initialDonation] = useState(() =>
+    resolveInitialDonationState({
+      recurringEnabled,
+      allowedFrequencies,
+      defaultDonationType,
+      defaultRecurringAmountCents,
+      amountType,
+      fixedAmountCents,
+      minAmountCents,
+      maxAmountCents,
+      suggestedAmountsCents,
+      allowCustomAmount,
+    })
+  );
+  const [amountCents, setAmountCents] = useState<number>(initialDonation.amountCents);
+  const [customAmount, setCustomAmount] = useState(initialDonation.customAmount);
   const [quantity, setQuantity] = useState(0);
   const [extraAmount, setExtraAmount] = useState("");
   // Live BIN-detected card brand — see mountFinixPaymentForm's onUpdate.
@@ -143,7 +166,7 @@ export default function GivingLinkForm({
   // always uses the real brand Finix reports at tokenization time
   // server-side, regardless of whether this detection fires.
   const [detectedCardBrand, setDetectedCardBrand] = useState<string | null>(null);
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [isRecurring, setIsRecurring] = useState(initialDonation.isRecurring);
   const [frequency, setFrequency] = useState<FrequencyKey>(allowedFrequencies[0] ?? "MONTHLY");
   const [coverFees, setCoverFees] = useState(feeCoverDefaultOn);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank">(

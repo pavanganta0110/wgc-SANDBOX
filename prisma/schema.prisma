@@ -2552,6 +2552,14 @@ model GivingLink {
   fundSelectionEnabled      Boolean   @default(false)
   recurringEnabled          Boolean   @default(false)
   allowedFrequenciesJson    Json?
+  // Which option the public form opens on: ONE_TIME (today's behavior, and
+  // the default for every existing link) or RECURRING. RECURRING only takes
+  // effect while recurringEnabled is true; the donor can always switch.
+  defaultDonationType       String    @default("ONE_TIME") // ONE_TIME | RECURRING
+  // Amount pre-selected when the form opens as RECURRING. VARIABLE-amount
+  // links only (a FIXED price can't be pre-empted); the donor can always
+  // pick another amount or type a custom one. Null = no pre-selection.
+  defaultRecurringAmountCents Int?
   allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
   donorFieldSettingsJson    Json?
   // Shows the collapsed "Add mailing address (optional)" accordion on this

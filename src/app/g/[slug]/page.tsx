@@ -97,6 +97,8 @@ export default async function GivingLinkPublicPage({
             quantityItemLabel={link.quantityItemLabel}
             recurringEnabled={link.recurringEnabled}
             allowedFrequencies={allowedFrequencies}
+            defaultDonationType={link.defaultDonationType}
+            defaultRecurringAmountCents={link.defaultRecurringAmountCents}
             allowedPaymentMethods={allowedPaymentMethods}
             feeCoverEnabled={link.feeCoverEnabled}
             feeCoverDefaultOn={link.feeCoverDefaultOn}

@@ -122,6 +122,30 @@ describe("GET /api/embed/giving-pages/[slug] — public config", () => {
     expect(body.bankAccount).toBeUndefined();
   });
 
+  it("an existing giving page (no default-donation settings) opens One-Time with no default amount, exactly as before", async () => {
+    mockPrisma.givingLink.findUnique.mockResolvedValue(baseLink());
+    mockPrisma.church.findUnique.mockResolvedValue(baseChurch());
+    const { GET } = await loadModule();
+    const body = await (await GET(req(), { params: Promise.resolve({ slug: "give-here" }) })).json();
+    expect(body.recurring).toEqual({ enabled: true, allowedFrequencies: ["MONTHLY"], defaultDonationType: "ONE_TIME", defaultAmountCents: null });
+  });
+
+  it("exposes Recurring + the default amount when the organization configured them", async () => {
+    mockPrisma.givingLink.findUnique.mockResolvedValue(baseLink({ defaultDonationType: "RECURRING", defaultRecurringAmountCents: 5000 }));
+    mockPrisma.church.findUnique.mockResolvedValue(baseChurch());
+    const { GET } = await loadModule();
+    const body = await (await GET(req(), { params: Promise.resolve({ slug: "give-here" }) })).json();
+    expect(body.recurring).toMatchObject({ enabled: true, defaultDonationType: "RECURRING", defaultAmountCents: 5000 });
+  });
+
+  it("never reports Recurring as the default when recurring giving is off", async () => {
+    mockPrisma.givingLink.findUnique.mockResolvedValue(baseLink({ recurringEnabled: false, defaultDonationType: "RECURRING", defaultRecurringAmountCents: 5000 }));
+    mockPrisma.church.findUnique.mockResolvedValue(baseChurch());
+    const { GET } = await loadModule();
+    const body = await (await GET(req(), { params: Promise.resolve({ slug: "give-here" }) })).json();
+    expect(body.recurring).toMatchObject({ enabled: false, defaultDonationType: "ONE_TIME", defaultAmountCents: null });
+  });
+
   it("allows a cross-origin request from any origin when the church has not restricted embed domains", async () => {
     mockPrisma.givingLink.findUnique.mockResolvedValue(baseLink());
     mockPrisma.church.findUnique.mockResolvedValue(baseChurch());
