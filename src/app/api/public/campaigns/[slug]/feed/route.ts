@@ -18,7 +18,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   }
 
   const result = await loadPublicCampaignBySlug(slug);
-  if (!result.ok || result.view.kind !== "campaign") {
+  if (!result.ok) {
+    if (result.notFound) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    return NextResponse.json({ error: result.message }, { status: 410 });
+  }
+  if (result.view.kind !== "campaign") {
     return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
   }
 

@@ -34,7 +34,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function PublicFundraiserPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const result = await loadPublicFundraiserBySlug(slug);
-  if (!result.ok || result.view.kind !== "fundraiser") notFound();
+  if (!result.ok) {
+    if (result.notFound) notFound();
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
+        <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
+          <h1 className="text-xl font-bold text-slate-900 mb-2">{result.message}</h1>
+          <p className="text-sm text-slate-500">Please contact {result.church.name} for more information.</p>
+        </div>
+      </div>
+    );
+  }
+  if (result.view.kind !== "fundraiser") notFound();
 
   const { fundraiser, campaign, church, giveHref, raisedCents, donorCount, recentGifts } = result.view;
 

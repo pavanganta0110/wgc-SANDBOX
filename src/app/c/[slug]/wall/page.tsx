@@ -17,7 +17,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function CampaignWallPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const result = await loadPublicCampaignBySlug(slug);
-  if (!result.ok || result.view.kind !== "campaign") notFound();
+  if (!result.ok) {
+    if (result.notFound) notFound();
+    return (
+      <div className="min-h-screen bg-wgc-navy-950 text-white flex items-center justify-center px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold mb-2">{result.message}</h1>
+          <p className="text-white/50 text-sm">Please contact {result.church.name} for more information.</p>
+        </div>
+      </div>
+    );
+  }
+  if (result.view.kind !== "campaign") notFound();
 
   const { campaign, church, raisedCents, donorCount, recentGifts } = result.view;
 
