@@ -936,7 +936,7 @@ export default function GivingLinkForm({
           <div className="text-sm space-y-1" style={{ color: light.bodyTextColor }}>
             <p>Donation Amount: <span className="font-semibold">{formatCents(result.donationAmountCents)}</span></p>
             {result.feeCoveredCents > 0 && (
-              <p>Processing Fee Covered: <span className="font-semibold">{formatCents(result.feeCoveredCents)}</span></p>
+              <p>Transaction Cost Covered: <span className="font-semibold">{formatCents(result.feeCoveredCents)}</span></p>
             )}
             <p>Total Charged: <span className="font-semibold">{formatCents(result.totalCents)}</span></p>
           </div>
@@ -1395,7 +1395,7 @@ export default function GivingLinkForm({
         <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
-            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
+            I&apos;ll cover the {formatCents(feeCoveredCents)} transaction cost so my full{" "}
             {formatCents(effectiveAmountCents)} gift goes to {churchName}.
           </span>
         </label>

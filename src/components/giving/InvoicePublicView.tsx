@@ -376,7 +376,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
           <div className="bg-slate-50 rounded-xl p-4 text-sm text-left space-y-2">
             <div className="flex justify-between"><span className="text-slate-500">Amount Paid</span><span className="font-semibold text-slate-900">{formatCents(r.amountCents)}</span></div>
             {r.customerCoveredFee && r.feeContributionCents > 0 && (
-              <div className="flex justify-between"><span className="text-slate-500">Processing Fee Contribution</span><span className="font-semibold text-slate-900">{formatCents(r.feeContributionCents)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">Transaction Cost Contribution</span><span className="font-semibold text-slate-900">{formatCents(r.feeContributionCents)}</span></div>
             )}
             <div className="flex justify-between"><span className="text-slate-500">Invoice Number</span><span className="font-semibold text-slate-900">{paidData.invoiceNumber}</span></div>
             {r.paidAt && <div className="flex justify-between"><span className="text-slate-500">Payment Date</span><span className="font-semibold text-slate-900">{new Date(r.paidAt).toLocaleString("en-US")}</span></div>}
@@ -735,12 +735,12 @@ export default function InvoicePublicView({ token }: { token: string }) {
                 <label className="flex items-center justify-between gap-3 py-2 cursor-pointer print:hidden">
                   <span className="flex items-center gap-2 text-slate-700">
                     <input type="checkbox" checked={coverFee} onChange={(e) => setCoverFee(e.target.checked)} className="rounded" />
-                    Add {formatCents(estimatedFeeContributionCents)} to help cover the processing fee
+                    Add {formatCents(estimatedFeeContributionCents)} to help cover the transaction cost
                   </span>
                 </label>
               )}
               <div className="flex justify-between text-slate-600 mb-1">
-                <span>Processing fee contribution</span>
+                <span>Transaction cost contribution</span>
                 <span>{formatCents(estimatedFeeContributionCents)}</span>
               </div>
               <div className="flex justify-between font-bold text-slate-900 pt-2 mt-1 border-t border-slate-200">
@@ -816,7 +816,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
                   <th className="pb-2 font-medium">Date</th>
                   <th className="pb-2 font-medium">Method</th>
                   <th className="pb-2 font-medium text-right">Invoice Amount</th>
-                  <th className="pb-2 font-medium text-right">Processing Fee</th>
+                  <th className="pb-2 font-medium text-right">Transaction Cost</th>
                   <th className="pb-2 font-medium text-right">Total Paid</th>
                 </tr>
               </thead>

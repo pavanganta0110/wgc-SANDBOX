@@ -176,7 +176,7 @@ export function InvoicePdf(props: InvoicePdfProps) {
               <Text style={[styles.colDate, styles.label]}>Date</Text>
               <Text style={[styles.colMethod, styles.label]}>Method</Text>
               <Text style={[styles.colInvoiceAmt, styles.label]}>Invoice Amount</Text>
-              <Text style={[styles.colFee, styles.label]}>Processing Fee</Text>
+              <Text style={[styles.colFee, styles.label]}>Transaction Cost</Text>
               <Text style={[styles.colTotalPaid, styles.label]}>Total Paid</Text>
             </View>
             {props.payments.map((p, i) => {

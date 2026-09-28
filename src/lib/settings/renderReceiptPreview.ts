@@ -51,7 +51,7 @@ export function renderReceiptPreviewHtml(
   if (settings.header) lines.push(`<p>${settings.header}</p>`);
   lines.push(`<p>Thank you for your ${data.isRecurring ? `recurring (${data.recurringInterval}) ` : ""}gift of <strong>${formatCents(data.amountCents)}</strong> to <strong>${orgName}</strong>.</p>`);
   if (settings.showFund && data.fundName) lines.push(`<p>Fund/Campaign: ${data.fundName}</p>`);
-  if (settings.showDonorCoveredFee && data.donorCoveredFeeCents > 0) lines.push(`<p>You generously covered ${formatCents(data.donorCoveredFeeCents)} in processing fees.</p>`);
+  if (settings.showDonorCoveredFee && data.donorCoveredFeeCents > 0) lines.push(`<p>You generously covered ${formatCents(data.donorCoveredFeeCents)} in transaction costs.</p>`);
   if (settings.showPaymentMethodLastFour) lines.push(`<p>Payment Method: •••• ${data.paymentMethodLastFour}</p>`);
   if (settings.showDonationReference) lines.push(`<p>Reference: ${data.donationReference}</p>`);
   if (settings.showTaxId && church.taxId) lines.push(`<p>Tax ID: ${church.taxId}</p>`);

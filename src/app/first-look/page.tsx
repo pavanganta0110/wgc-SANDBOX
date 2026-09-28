@@ -146,7 +146,7 @@ export default function FirstLookPage() {
               
               <div className="border-l-2 border-[#C9992E] pl-6 py-2 mb-8">
                 <p className="font-serif text-xl md:text-2xl text-[#14213D] italic leading-relaxed">
-                  “I'll cover the $0.75 processing fee so my full $25.00 gift goes to First Community Church.”
+                  “I'll cover the $0.75 transaction cost so my full $25.00 gift goes to First Community Church.”
                 </p>
               </div>
               
