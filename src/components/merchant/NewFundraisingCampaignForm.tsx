@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
+
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export default function NewFundraisingCampaignForm({
   churchName,
@@ -13,12 +17,52 @@ export default function NewFundraisingCampaignForm({
   churchLogoUrl?: string | null;
 }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleImageFileSelected = async (file: File | undefined) => {
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Only PNG, JPG, JPEG, and WEBP files are supported.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("File too large. Maximum size is 5MB.");
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/merchant/campaigns/image-upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Failed to upload image");
+      }
+      setImageUrl(data.imageUrl);
+      toast.success("Image uploaded");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    setImageUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +78,7 @@ export default function NewFundraisingCampaignForm({
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || undefined,
+          imageUrl: imageUrl || undefined,
           goalAmountCents: goalAmount ? Math.round(parseFloat(goalAmount) * 100) : undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
@@ -77,6 +122,31 @@ export default function NewFundraisingCampaignForm({
             className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
             rows={3}
           />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Image</label>
+          {imageUrl && (
+            <div className="mb-2 flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
+              <button type="button" onClick={removeImage} className="text-xs font-semibold text-red-600 hover:underline">
+                Remove
+              </button>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ALLOWED_IMAGE_TYPES.join(",")}
+            onChange={(e) => handleImageFileSelected(e.target.files?.[0])}
+            disabled={uploadingImage}
+            className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+          />
+          {uploadingImage && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+              <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+            </p>
+          )}
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
@@ -132,6 +202,7 @@ export default function NewFundraisingCampaignForm({
           churchLogoUrl={churchLogoUrl}
           name={name}
           description={description.trim() || undefined}
+          imageUrl={imageUrl}
           goalAmountCents={goalAmountCents}
           endDate={endDate || undefined}
         />

@@ -16,6 +16,7 @@ export default function CampaignPagePreview({
   churchLogoUrl,
   name,
   description,
+  imageUrl,
   goalAmountCents,
   endDate,
 }: {
@@ -23,6 +24,7 @@ export default function CampaignPagePreview({
   churchLogoUrl?: string | null;
   name: string;
   description?: string;
+  imageUrl?: string | null;
   goalAmountCents: number | null;
   endDate?: string;
 }) {
@@ -32,6 +34,10 @@ export default function CampaignPagePreview({
         <div className="max-w-md mx-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
             <OrganizationLogo logoUrl={churchLogoUrl ?? null} churchName={churchName} mode="main" />
+            {imageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imageUrl} alt={name || "Campaign image"} className="w-full h-48 object-cover rounded-xl mb-6" />
+            )}
             <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{name || "Your Campaign Name"}</h1>
             <p className="text-sm text-center text-slate-500 mb-6">{churchName}</p>
             {description && <p className="text-sm text-center text-slate-600 mb-6">{description}</p>}
