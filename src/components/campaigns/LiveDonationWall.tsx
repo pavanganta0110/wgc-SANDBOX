@@ -25,7 +25,16 @@ interface WallFeed {
 
 const POLL_INTERVAL_MS = 6000;
 
-export default function LiveDonationWall({ slug, initial }: { slug: string; initial: WallFeed }) {
+export default function LiveDonationWall({
+  slug,
+  initial,
+  previewMessage,
+}: {
+  slug: string;
+  initial: WallFeed;
+  /** Shown only to the owning church's own logged-in staff, previewing the wall before the campaign is published — see loadPublicCampaignData.ts's isPreview. */
+  previewMessage?: string;
+}) {
   const [feed, setFeed] = useState<WallFeed>(initial);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [flashGiftId, setFlashGiftId] = useState<string | null>(null);
@@ -70,6 +79,11 @@ export default function LiveDonationWall({ slug, initial }: { slug: string; init
 
   return (
     <div className="min-h-screen bg-wgc-navy-950 text-white flex flex-col p-6 sm:p-10 lg:p-14">
+      {previewMessage && (
+        <div className="mb-6 rounded-xl bg-wgc-gold-500/10 border border-wgc-gold-500/30 text-wgc-gold-500 text-sm text-center py-2 px-4">
+          <strong>Preview only.</strong> {previewMessage} Only your team can see this wall.
+        </div>
+      )}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
           {feed.logoUrl && (

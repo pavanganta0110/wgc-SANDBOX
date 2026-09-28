@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadPublicCampaignBySlug } from "@/lib/campaigns/loadPublicCampaignData";
+import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
 import { getFundraiserLeaderboard, getTeamLeaderboard } from "@/lib/campaigns/campaignTotals";
 import { checkCampaignFeedRateLimit } from "@/lib/campaigns/campaignFeedRateLimit";
 
@@ -17,7 +18,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const result = await loadPublicCampaignBySlug(slug);
+  // A preview request (the campaign's own logged-in staff, checking the
+  // wall before publishing) skips the rate limiter's key entirely below by
+  // going through the same IP bucket as anyone else — that's intentional,
+  // no special-casing needed there. This only affects whether the campaign
+  // lookup itself honors a non-ACTIVE status for this specific requester.
+  const previewChurchId = await getPreviewChurchId();
+  const result = await loadPublicCampaignBySlug(slug, previewChurchId);
   if (!result.ok) {
     if (result.notFound) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     return NextResponse.json({ error: result.message }, { status: 410 });

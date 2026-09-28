@@ -9,6 +9,8 @@ interface CampaignPublicView {
   raisedCents: number;
   donorCount: number;
   recentGifts: Awaited<ReturnType<typeof getRecentGifts>>;
+  /** True only when the campaign isn't ACTIVE and the viewer is an authenticated staff member of the owning church — see previewChurchId below. Never true for a real public visitor. */
+  isPreview: boolean;
 }
 
 interface TeamPublicView {
@@ -20,6 +22,7 @@ interface TeamPublicView {
   raisedCents: number;
   donorCount: number;
   recentGifts: Awaited<ReturnType<typeof getRecentGifts>>;
+  isPreview: boolean;
 }
 
 interface FundraiserPublicView {
@@ -31,6 +34,7 @@ interface FundraiserPublicView {
   raisedCents: number;
   donorCount: number;
   recentGifts: Awaited<ReturnType<typeof getRecentGifts>>;
+  isPreview: boolean;
 }
 
 type PublicView = CampaignPublicView | TeamPublicView | FundraiserPublicView;
@@ -47,7 +51,7 @@ export type PublicCampaignResult =
   | { ok: false; notFound: false; message: string; church: { name: string; logoUrl: string | null } }
   | { ok: true; view: PublicView };
 
-function describeUnavailableCampaign(campaign: { status: string; archivedAt: Date | null }): string {
+export function describeUnavailableCampaign(campaign: { status: string; archivedAt: Date | null }): string {
   if (campaign.archivedAt) return "This campaign is no longer available.";
   switch (campaign.status) {
     case "DRAFT":
@@ -67,14 +71,22 @@ async function loadGiveHref(givingLinkId: string | null): Promise<string | null>
   return link ? `/g/${link.publicSlug}` : null;
 }
 
-export async function loadPublicCampaignBySlug(slug: string): Promise<PublicCampaignResult> {
+/**
+ * previewChurchId: pass an authenticated merchant session's churchId (never
+ * trust a value the client could supply) to let that org's own staff see a
+ * Draft/Paused/Completed campaign exactly as it will look once published —
+ * a real public visitor (previewChurchId undefined, or belonging to a
+ * different church) still gets the unavailable-message branch.
+ */
+export async function loadPublicCampaignBySlug(slug: string, previewChurchId?: string): Promise<PublicCampaignResult> {
   const campaign = await prisma.fundraisingCampaign.findUnique({ where: { slug } });
   if (!campaign) return { ok: false, notFound: true };
 
   const church = await prisma.church.findUnique({ where: { id: campaign.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  if (campaign.status !== "ACTIVE" || campaign.archivedAt) {
+  const isPreview = previewChurchId === campaign.churchId;
+  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
@@ -85,10 +97,10 @@ export async function loadPublicCampaignBySlug(slug: string): Promise<PublicCamp
     loadGiveHref(campaign.givingLinkId),
   ]);
 
-  return { ok: true, view: { kind: "campaign", campaign, church, giveHref, raisedCents, donorCount, recentGifts } };
+  return { ok: true, view: { kind: "campaign", campaign, church, giveHref, raisedCents, donorCount, recentGifts, isPreview } };
 }
 
-export async function loadPublicTeamBySlug(slug: string): Promise<PublicCampaignResult> {
+export async function loadPublicTeamBySlug(slug: string, previewChurchId?: string): Promise<PublicCampaignResult> {
   const team = await prisma.campaignTeam.findUnique({ where: { slug } });
   if (!team) return { ok: false, notFound: true };
 
@@ -98,7 +110,8 @@ export async function loadPublicTeamBySlug(slug: string): Promise<PublicCampaign
   const church = await prisma.church.findUnique({ where: { id: team.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  if (campaign.status !== "ACTIVE" || campaign.archivedAt) {
+  const isPreview = previewChurchId === campaign.churchId;
+  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
@@ -109,10 +122,10 @@ export async function loadPublicTeamBySlug(slug: string): Promise<PublicCampaign
     loadGiveHref(team.givingLinkId),
   ]);
 
-  return { ok: true, view: { kind: "team", team, campaign, church, giveHref, raisedCents, donorCount, recentGifts } };
+  return { ok: true, view: { kind: "team", team, campaign, church, giveHref, raisedCents, donorCount, recentGifts, isPreview } };
 }
 
-export async function loadPublicFundraiserBySlug(slug: string): Promise<PublicCampaignResult> {
+export async function loadPublicFundraiserBySlug(slug: string, previewChurchId?: string): Promise<PublicCampaignResult> {
   const fundraiser = await prisma.campaignFundraiser.findUnique({ where: { slug } });
   if (!fundraiser) return { ok: false, notFound: true };
 
@@ -122,7 +135,8 @@ export async function loadPublicFundraiserBySlug(slug: string): Promise<PublicCa
   const church = await prisma.church.findUnique({ where: { id: fundraiser.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  if (campaign.status !== "ACTIVE" || campaign.archivedAt) {
+  const isPreview = previewChurchId === campaign.churchId;
+  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
@@ -133,5 +147,5 @@ export async function loadPublicFundraiserBySlug(slug: string): Promise<PublicCa
     loadGiveHref(fundraiser.givingLinkId),
   ]);
 
-  return { ok: true, view: { kind: "fundraiser", fundraiser, campaign, church, giveHref, raisedCents, donorCount, recentGifts } };
+  return { ok: true, view: { kind: "fundraiser", fundraiser, campaign, church, giveHref, raisedCents, donorCount, recentGifts, isPreview } };
 }

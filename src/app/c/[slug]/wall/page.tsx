@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { loadPublicCampaignBySlug } from "@/lib/campaigns/loadPublicCampaignData";
+import { loadPublicCampaignBySlug, describeUnavailableCampaign } from "@/lib/campaigns/loadPublicCampaignData";
+import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
 import LiveDonationWall from "@/components/campaigns/LiveDonationWall";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -16,7 +17,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function CampaignWallPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const result = await loadPublicCampaignBySlug(slug);
+  const previewChurchId = await getPreviewChurchId();
+  const result = await loadPublicCampaignBySlug(slug, previewChurchId);
   if (!result.ok) {
     if (result.notFound) notFound();
     return (
@@ -30,11 +32,12 @@ export default async function CampaignWallPage({ params }: { params: Promise<{ s
   }
   if (result.view.kind !== "campaign") notFound();
 
-  const { campaign, church, raisedCents, donorCount, recentGifts } = result.view;
+  const { campaign, church, raisedCents, donorCount, recentGifts, isPreview } = result.view;
 
   return (
     <LiveDonationWall
       slug={slug}
+      previewMessage={isPreview ? describeUnavailableCampaign(campaign) : undefined}
       initial={{
         name: campaign.name,
         organizationName: church.name,

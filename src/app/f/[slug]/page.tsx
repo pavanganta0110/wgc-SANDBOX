@@ -2,10 +2,12 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { loadPublicFundraiserBySlug } from "@/lib/campaigns/loadPublicCampaignData";
+import { loadPublicFundraiserBySlug, describeUnavailableCampaign } from "@/lib/campaigns/loadPublicCampaignData";
+import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
 import OrganizationLogo from "@/components/merchant/OrganizationLogo";
 import ProgressBar from "@/components/campaigns/ProgressBar";
 import RecentGiftsList from "@/components/campaigns/RecentGiftsList";
+import CampaignPreviewBanner from "@/components/campaigns/CampaignPreviewBanner";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -33,7 +35,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function PublicFundraiserPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const result = await loadPublicFundraiserBySlug(slug);
+  const previewChurchId = await getPreviewChurchId();
+  const result = await loadPublicFundraiserBySlug(slug, previewChurchId);
   if (!result.ok) {
     if (result.notFound) notFound();
     return (
@@ -47,10 +50,12 @@ export default async function PublicFundraiserPage({ params }: { params: Promise
   }
   if (result.view.kind !== "fundraiser") notFound();
 
-  const { fundraiser, campaign, church, giveHref, raisedCents, donorCount, recentGifts } = result.view;
+  const { fundraiser, campaign, church, giveHref, raisedCents, donorCount, recentGifts, isPreview } = result.view;
 
   return (
-    <div className="min-h-screen py-12 px-4 bg-slate-50">
+    <>
+      {isPreview && <CampaignPreviewBanner campaignId={campaign.id} message={describeUnavailableCampaign(campaign)} />}
+      <div className="min-h-screen py-12 px-4 bg-slate-50">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 mb-6">
           <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode="main" />
@@ -92,6 +97,7 @@ export default async function PublicFundraiserPage({ params }: { params: Promise
           <span className="text-xs text-slate-400">Powered by WGC</span>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
