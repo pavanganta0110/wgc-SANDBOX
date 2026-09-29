@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
+import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -26,6 +27,7 @@ export default function NewFundraisingCampaignForm({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [previewView, setPreviewView] = useState<"page" | "wall">("page");
 
   const handleImageFileSelected = async (file: File | undefined) => {
     if (!file) return;
@@ -193,19 +195,48 @@ export default function NewFundraisingCampaignForm({
       </form>
 
       <div className="lg:sticky lg:top-6">
-        <h4 className="text-sm font-bold text-slate-900 mb-1">Live Preview</h4>
+        <div className="flex items-center justify-between mb-1">
+          <h4 className="text-sm font-bold text-slate-900">Live Preview</h4>
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setPreviewView("page")}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                previewView === "page" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Campaign Page
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewView("wall")}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                previewView === "wall" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              Live Wall
+            </button>
+          </div>
+        </div>
         <p className="text-xs text-slate-400 mb-3">
-          This shows what your campaign&apos;s public page will look like. Nothing here is saved or public until you click Create Campaign.
+          {previewView === "page"
+            ? "This shows what your campaign's public page will look like."
+            : "This shows what the live donation wall will look like at your event."}{" "}
+          Nothing here is saved or public until you click Create Campaign.
         </p>
-        <CampaignPagePreview
-          churchName={churchName}
-          churchLogoUrl={churchLogoUrl}
-          name={name}
-          description={description.trim() || undefined}
-          imageUrl={imageUrl}
-          goalAmountCents={goalAmountCents}
-          endDate={endDate || undefined}
-        />
+        {previewView === "page" ? (
+          <CampaignPagePreview
+            churchName={churchName}
+            churchLogoUrl={churchLogoUrl}
+            name={name}
+            description={description.trim() || undefined}
+            imageUrl={imageUrl}
+            goalAmountCents={goalAmountCents}
+            endDate={endDate || undefined}
+          />
+        ) : (
+          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} goalAmountCents={goalAmountCents} />
+        )}
       </div>
     </div>
   );
