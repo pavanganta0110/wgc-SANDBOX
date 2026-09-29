@@ -26,6 +26,7 @@ export function withApiAuth<Context = EmptyRouteContext>(
 ) {
   return async (req: Request, context: Context): Promise<NextResponse> => {
     const requestId = generateRequestId();
+    const startedAt = Date.now();
     let auth: ApiAuthContext | null = null;
     try {
       auth = await authenticateApiRequest(req);
@@ -39,13 +40,14 @@ export function withApiAuth<Context = EmptyRouteContext>(
         statusCode: res.status,
         requestId,
         idempotencyKey: req.headers.get("idempotency-key"),
+        durationMs: Date.now() - startedAt,
       });
       res.headers.set("X-Request-Id", requestId);
       return res;
     } catch (err) {
       if (err instanceof ApiAuthError) {
         if (auth) {
-          logApiRequest({ apiKeyId: auth.apiKeyId, churchId: auth.churchId, method: req.method, path: new URL(req.url).pathname, statusCode: 403, requestId });
+          logApiRequest({ apiKeyId: auth.apiKeyId, churchId: auth.churchId, method: req.method, path: new URL(req.url).pathname, statusCode: 403, requestId, durationMs: Date.now() - startedAt });
         }
         return apiError(err.type, err.message, requestId);
       }

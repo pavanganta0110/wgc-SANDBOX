@@ -44,24 +44,33 @@ export interface RecordHealthEventParams {
   requestId?: string;
   /** An external system's own id for this operation (a Finix transfer id, an Aplos sync record id) — never a payment instrument/card/bank account identifier. */
   externalId?: string;
+  /** A provider-issued error/failure code (a Finix error code, a Twilio error code, an Aplos exception code), when available — a precise grouping signal, preferred over fuzzy message-matching when present. Stored in metadata, not a dedicated column, since its shape varies per provider. */
+  errorCode?: string;
   message: string;
   metadata?: Record<string, unknown>;
 }
 
 /**
- * Stable hash grouping "the same underlying problem" together — same
- * service + integration + route + a normalized (digit-stripped) message
- * shape, so "timeout after 12000ms" and "timeout after 8000ms" group into
- * one SystemErrorGroup instead of two.
+ * Stable hash grouping "the same underlying problem" together. Prefers a
+ * provider error code when one is available (precise — two different
+ * messages with the same Finix/Twilio code are genuinely the same failure
+ * type) and falls back to a normalized, digit-stripped message shape
+ * otherwise ("timeout after 12000ms" and "timeout after 8000ms" group
+ * together). Always includes service + integration + operation + route so
+ * unrelated errors that merely LOOK similar in text never collide — e.g. a
+ * Finix timeout on /transfers and a Finix timeout on /subscriptions stay in
+ * separate groups because their operation differs.
  */
-function buildErrorFingerprint(params: Pick<RecordHealthEventParams, "service" | "integration" | "route" | "message">): string {
-  const normalizedMessage = params.message
-    .toLowerCase()
-    .replace(/[0-9]+/g, "#")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
-  const key = [params.service, params.integration ?? "", params.route ?? "", normalizedMessage].join("|");
+function buildErrorFingerprint(params: Pick<RecordHealthEventParams, "service" | "integration" | "operation" | "route" | "message" | "errorCode">): string {
+  const messageOrCode =
+    params.errorCode ??
+    params.message
+      .toLowerCase()
+      .replace(/[0-9]+/g, "#")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200);
+  const key = [params.service, params.integration ?? "", params.operation ?? "", params.route ?? "", messageOrCode].join("|");
   return crypto.createHash("sha256").update(key).digest("hex").slice(0, 32);
 }
 
@@ -85,7 +94,14 @@ export async function recordHealthEvent(params: RecordHealthEventParams): Promis
 
     let errorGroupId: string | undefined;
     if (params.severity === "ERROR" || params.severity === "CRITICAL") {
-      const fingerprint = buildErrorFingerprint({ service: params.service, integration: params.integration, route: params.route, message: safeMessage });
+      const fingerprint = buildErrorFingerprint({
+        service: params.service,
+        integration: params.integration,
+        operation: params.operation,
+        route: params.route,
+        message: safeMessage,
+        errorCode: params.errorCode,
+      });
       const group = await prisma.systemErrorGroup.upsert({
         where: { fingerprint },
         create: {
@@ -110,6 +126,10 @@ export async function recordHealthEvent(params: RecordHealthEventParams): Promis
     }
 
     const wgcReference = generateSupportReference();
+    const metadataWithErrorCode =
+      params.errorCode != null
+        ? ({ ...(safeMetadata as Record<string, unknown> | undefined), errorCode: params.errorCode } as unknown as Prisma.InputJsonValue)
+        : safeMetadata;
     const event = await prisma.systemHealthEvent.create({
       data: {
         service: params.service,
@@ -123,7 +143,7 @@ export async function recordHealthEvent(params: RecordHealthEventParams): Promis
         requestId: params.requestId,
         externalId: params.externalId,
         message: safeMessage,
-        metadata: safeMetadata,
+        metadata: metadataWithErrorCode,
         errorGroupId,
         wgcReference,
         release: process.env.VERCEL_GIT_COMMIT_SHA ?? null,

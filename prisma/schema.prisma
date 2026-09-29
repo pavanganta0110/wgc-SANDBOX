@@ -5217,6 +5217,12 @@ model ApiRequestLog {
   // stored so a retried request with the same key can be detected and
   // short-circuited to the original response rather than double-processed.
   idempotencyKey String?
+  // Wall-clock time the handler took to produce a response, measured in
+  // withApiAuth.ts — added for System Health's Average API Response Time
+  // card (src/lib/monitoring/overviewStats.ts). Nullable/additive: rows
+  // written before this field existed simply have no duration, and are
+  // excluded from the average rather than treated as zero.
+  durationMs Int?
 
   createdAt DateTime @default(now())
 

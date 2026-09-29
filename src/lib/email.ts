@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
+import { recordResendTechnicalFailure } from '@/lib/monitoring/resendHealth';
 
 // Lazy — constructing Resend eagerly at module load time throws whenever
 // RESEND_API_KEY is unset/empty (confirmed: this crashes locally today),
@@ -194,6 +195,7 @@ export async function sendWgcEmail(options: WgcEmailOptions) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY is not set. Email not sent.");
     const result: { success: boolean; data?: any; error?: any } = { success: false, error: "Missing API Key" };
+    recordResendTechnicalFailure({ error: { name: "missing_api_key", message: "RESEND_API_KEY is not configured" }, wasException: false, category: options.log?.category, churchId: options.log?.churchId });
     await writeOrgEmailLog(options, result);
     return result;
   }
@@ -237,6 +239,13 @@ support@wgcpayments.com
     if (response.error) {
       console.error("Resend API returned error:", response.error);
       result = { success: false, error: response.error };
+      recordResendTechnicalFailure({
+        error: response.error,
+        wasException: false,
+        category: options.log?.category,
+        churchId: options.log?.churchId,
+        recipientDomain: options.to.split("@")[1],
+      });
     } else {
       console.log("WGC Email sent successfully:", response.data);
       result = { success: true, data: response.data };
@@ -244,6 +253,7 @@ support@wgcpayments.com
   } catch (error) {
     console.error("Failed to send WGC email:", error);
     result = { success: false, error };
+    recordResendTechnicalFailure({ error, wasException: true, category: options.log?.category, churchId: options.log?.churchId, recipientDomain: options.to.split("@")[1] });
   }
 
   await writeOrgEmailLog(options, result);

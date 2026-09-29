@@ -19,6 +19,8 @@
  * ============================================================================
  */
 
+import { recordTwilioTechnicalFailure, recordTwilioConfigMissing } from "@/lib/monitoring/twilioHealth";
+
 export interface AuthSmsSendResult {
   success: boolean;
   providerMessageId?: string;
@@ -40,6 +42,7 @@ export async function sendAuthSms(to: string, body: string): Promise<AuthSmsSend
   const fromNumber = process.env.TWILIO_2FA_FROM_NUMBER;
 
   if (!accountSid || !authToken || !fromNumber) {
+    recordTwilioConfigMissing("auth_sms");
     return { success: false, error: "Two-factor authentication SMS is not configured for this environment." };
   }
 
@@ -59,11 +62,25 @@ export async function sendAuthSms(to: string, body: string): Promise<AuthSmsSend
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      const twilioErrorCode = data?.code != null ? String(data.code) : undefined;
+      recordTwilioTechnicalFailure({
+        httpStatus: res.status,
+        twilioErrorCode,
+        wasException: false,
+        message: data?.message || `Twilio error (${res.status})`,
+        context: "auth_sms",
+      });
       return { success: false, error: data?.message || `Twilio error (${res.status})` };
     }
 
     return { success: true, providerMessageId: data?.sid };
   } catch (err) {
+    recordTwilioTechnicalFailure({
+      httpStatus: null,
+      wasException: true,
+      message: err instanceof Error ? err.message : "Failed to send verification code",
+      context: "auth_sms",
+    });
     return { success: false, error: err instanceof Error ? err.message : "Failed to send verification code" };
   }
 }

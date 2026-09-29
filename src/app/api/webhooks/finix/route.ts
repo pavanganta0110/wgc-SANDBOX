@@ -27,6 +27,7 @@ import { emitEvent } from "@/lib/events/emitEvent";
 import { emitRecurringPaymentOutcomeEvent } from "@/lib/events/recurringPaymentEvents";
 import { triggerRecoveryOnPaymentFailure } from "@/lib/subscriptions/recoveryAutomation";
 import { handleMerchantTermination } from "@/lib/onboarding/handleMerchantTermination";
+import { recordWebhookProcessingFailure } from "@/lib/monitoring/webhookHealth";
 
 // Credentials pasted into a dashboard env editor routinely pick up a trailing
 // newline or a wrapping pair of quotes (this repo's own .env.local stores these
@@ -1678,6 +1679,17 @@ export async function POST(req: Request) {
           if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
         }
       }
+      // All 3 inline sync attempts exhausted — an actual operational
+      // problem, not a transient single-attempt blip the loop already
+      // recovered from. Fire-and-forget: the webhook always returns 200 to
+      // Finix regardless of this, so this must never add latency or risk.
+      void recordWebhookProcessingFailure({
+        provider: "finix",
+        eventType,
+        finixEventId: eventId,
+        finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+        errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+      });
     }
 
     try {
@@ -1992,6 +2004,13 @@ export async function POST(req: Request) {
         whatHappened: `Failed to process webhook event: ${eventType} (${eventId})`,
         actionNeeded: `Check logs. Error: ${processError.message}`,
         adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
+      });
+      void recordWebhookProcessingFailure({
+        provider: "finix",
+        eventType,
+        finixEventId: eventId,
+        finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+        errorMessage: processError.message,
       });
 
       throw processError;

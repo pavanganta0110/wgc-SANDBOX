@@ -124,10 +124,10 @@ export default function SystemHealthOverviewClient() {
               sublabel="Partner API, last 24h"
             />
             <StatCard
-              label="Avg Response Time"
+              label="Avg Response Time (Partner API)"
               value={data.averageApiResponseTimeMs != null ? `${data.averageApiResponseTimeMs}ms` : "Unknown"}
               unknown={data.averageApiResponseTimeMs == null}
-              sublabel="No duration data recorded yet"
+              sublabel={data.averageApiResponseTimeMs != null ? "Partner API, last 24h" : "No duration data recorded yet"}
             />
             <StatCard label="Last Deployment" value={data.lastDeployment?.commitSha?.slice(0, 7) ?? "Unknown"} unknown={!data.lastDeployment} sublabel={data.lastDeployment?.commitMessage ?? undefined} />
           </div>

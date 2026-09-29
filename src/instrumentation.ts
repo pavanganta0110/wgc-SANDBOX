@@ -9,6 +9,12 @@ import * as Sentry from "@sentry/nextjs";
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
+    // Phase 3: wires Prisma's "error" event into System Health's Supabase
+    // service card — see databaseHealth.ts's own doc comment for why this
+    // is registered here rather than inside prisma.ts itself (circular
+    // import avoidance).
+    const { registerDatabaseHealthListener } = await import("./lib/monitoring/databaseHealth");
+    registerDatabaseHealthListener();
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {

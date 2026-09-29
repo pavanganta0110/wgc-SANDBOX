@@ -11,10 +11,10 @@ export interface SystemHealthOverview {
   /** null = Unknown (no job-run history exists yet — see serviceStatus.ts). */
   failedJobs: number | null;
   failedWebhooks: number | null;
-  /** null = Unknown (no requests in window, or nothing to measure from). Percentage, 0-100. */
+  /** null = Unknown (no requests in window, or nothing to measure from). Percentage, 0-100. Scoped to the /api/v1 partner API only — see ApiRequestLog. */
   apiErrorRatePercent: number | null;
-  /** Always null today — no request-duration data exists anywhere in the app yet. */
-  averageApiResponseTimeMs: null;
+  /** null = Unknown (no requests with a recorded duration in window). Scoped to the /api/v1 partner API only, NOT whole-platform latency — see withApiAuth.ts, which is the only place this is measured. */
+  averageApiResponseTimeMs: number | null;
   lastDeployment: { commitSha: string | null; commitMessage: string | null; commitRef: string | null; environment: string | null } | null;
   services: ServiceStatus[];
 }
@@ -39,17 +39,20 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
       select: { merchantId: true },
     }),
     // Real, existing data — ApiRequestLog is the per-request log for the
-    // authenticated /api/v1 partner API (see src/lib/api/withApiAuth.ts).
-    // No request-duration field exists on it, so this is explicitly scoped
-    // to error rate, not response time.
+    // authenticated /api/v1 partner API (see src/lib/api/withApiAuth.ts),
+    // which as of Phase 3 also measures durationMs per request. _avg over
+    // a nullable column skips rows with no recorded duration (requests
+    // logged before this field existed) rather than treating them as zero.
     prisma.apiRequestLog.aggregate({
       where: { createdAt: { gte: since24h } },
       _count: { _all: true },
+      _avg: { durationMs: true },
     }),
   ]);
 
   const failedApiRequests = await prisma.apiRequestLog.count({ where: { createdAt: { gte: since24h }, statusCode: { gte: 500 } } });
   const totalApiRequests = apiRequestStats._count._all;
+  const averageDuration = apiRequestStats._avg.durationMs;
 
   const webhooksService = services.find((s) => s.service === "Webhooks");
   const failedWebhooks = webhooksService && webhooksService.status !== "UNKNOWN" ? webhooksService.recentFailureCount : null;
@@ -64,7 +67,7 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
     failedJobs: null,
     failedWebhooks,
     apiErrorRatePercent: totalApiRequests > 0 ? Math.round((failedApiRequests / totalApiRequests) * 1000) / 10 : null,
-    averageApiResponseTimeMs: null,
+    averageApiResponseTimeMs: averageDuration != null ? Math.round(averageDuration) : null,
     lastDeployment:
       process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_GIT_COMMIT_REF
         ? {

@@ -6,6 +6,8 @@ import { getReadyConnectionToken, AplosConnectionNotReadyError } from "./resourc
 import { computeNextAttemptAt, MAX_AUTOMATIC_RETRY_ATTEMPTS } from "./retryPolicy";
 import { APLOS_AUDIT_EVENTS } from "./auditEvents";
 import { notifySyncNeedsReview, notifySyncFailed } from "./notifications";
+import { recordAplosSyncOutcome } from "@/lib/monitoring/aplosHealth";
+import type { AplosErrorCategory } from "./errors";
 
 /**
  * AplosSettlementSyncService — orchestrates one settlement's sync attempt,
@@ -364,6 +366,7 @@ async function finalizeNeedsReview(
   if (!ok) return reportLostLock(syncRecordId);
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_NEEDS_REVIEW, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, confirmedCount: confirmed.length } });
   await notifySyncNeedsReview(churchId, finixSettlementId, safeMessage);
+  recordAplosSyncOutcome({ outcome: "NEEDS_REVIEW", churchId, syncRecordId, finixSettlementId, category: "AMBIGUOUS_RESULT", safeMessage });
   return { outcome: "NEEDS_REVIEW", syncRecordId, safeMessage };
 }
 
@@ -409,6 +412,7 @@ async function finalizeFailed(
   if (!ok) return reportLostLock(syncRecordId);
   await logDashboardAction({ churchId, action: APLOS_AUDIT_EVENTS.SYNC_FAILED, entityType: "AplosSyncRecord", entityId: syncRecordId, metadata: { settlementId: finixSettlementId, attemptNumber } });
   await notifySyncFailed(churchId, finixSettlementId, safeMessage);
+  recordAplosSyncOutcome({ outcome: "FAILED", churchId, syncRecordId, finixSettlementId, category: errorCode as AplosErrorCategory, safeMessage });
   return { outcome: "FAILED", syncRecordId, safeMessage };
 }
 
