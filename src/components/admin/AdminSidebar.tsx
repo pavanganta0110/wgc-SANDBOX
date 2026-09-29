@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook } from "lucide-react";
+import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "System Health", href: "/admin/system-health", icon: Activity },
   { name: "Merchants", href: "/admin/merchants", icon: Building },
   { name: "Merchant Applications", href: "/admin/merchant-applications", icon: UserCheck },
   { name: "Billing & Subscriptions", href: "/admin/billing", icon: CreditCard },
@@ -26,7 +27,7 @@ export default function AdminSidebar({ role }: { role: "wgc_super_admin" | "wgc_
   const pathname = usePathname();
   const items =
     role === "wgc_super_admin"
-      ? [...NAV_ITEMS.slice(0, 5), ...SUPER_ADMIN_NAV_ITEMS, ...NAV_ITEMS.slice(5)]
+      ? [...NAV_ITEMS.slice(0, 6), ...SUPER_ADMIN_NAV_ITEMS, ...NAV_ITEMS.slice(6)]
       : NAV_ITEMS;
 
   return (
