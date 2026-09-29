@@ -1,42 +1,41 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 import { isRetrySafe } from "@/lib/monitoring/jobCadence";
-import { GET as runAplosSync } from "@/app/api/cron/aplos-sync/route";
-import { GET as runWebhookRetry } from "@/app/api/cron/webhook-retry/route";
-import { GET as runReconcile } from "@/app/api/cron/reconcile/route";
-import { GET as runReconcileSubscriptions } from "@/app/api/cron/reconcile-subscriptions/route";
-import { GET as runInvoiceReminders } from "@/app/api/cron/invoice-reminders/route";
-import { GET as runPromoShortfallCheck } from "@/app/api/cron/promo-shortfall-check/route";
-import { GET as runSmsAddonOverageCheck } from "@/app/api/cron/sms-addon-overage-check/route";
-import { GET as runResyncTransferFees } from "@/app/api/cron/resync-transfer-fees/route";
-import { GET as runResyncMonthlyTransferFees } from "@/app/api/cron/resync-monthly-transfer-fees/route";
-import { GET as runSystemHealthSweep } from "@/app/api/cron/system-health-sweep/route";
 
 /**
  * Global-admin-only. Manually re-triggers ONE background job on demand by
- * calling that job's own cron route handler in-process — same code path a
- * scheduled run takes (including its own withJobRunTracking instrumentation,
- * so the retry shows up in the job's run history like any other run), never
- * a duplicated copy of the job's logic.
+ * making a real HTTP call to that job's own cron endpoint — same code path
+ * a scheduled run takes (including its own withJobRunTracking
+ * instrumentation, so the retry shows up in the job's run history like any
+ * other run), reusing the same base-URL fallback pattern already used
+ * elsewhere in this codebase (see reconcile/route.ts's adminDashboardLink).
+ *
+ * Deliberately an HTTP call rather than importing the cron route's handler
+ * function directly: importing ten different route.ts modules' GET
+ * exports into this one file would pull each of their full dependency
+ * trees (Prisma, the Finix client, email/SMS senders, ...) into this
+ * route's own serverless function bundle, risking a function-size problem
+ * with no benefit — an HTTP call keeps every cron route independently
+ * bundled exactly as Next.js already builds it.
  *
  * Gated on isRetrySafe() (jobCadence.ts) — the single source of truth for
  * which jobs are safe to re-run on demand. `release-settlement-queue` is
- * the deliberate example that is NEVER in this handler map: it releases
- * real settlement funds, and per the platform's "never a blind retry button
- * for a payment operation" rule, no monitoring UI gets a one-click trigger
- * for it, no matter how idempotent its own internal filtering is.
+ * the deliberate example that is NEVER in this path map: it releases real
+ * settlement funds, and per the platform's "never a blind retry button for
+ * a payment operation" rule, no monitoring UI gets a one-click trigger for
+ * it, no matter how idempotent its own internal filtering is.
  */
-const RETRIGGERABLE_JOBS: Record<string, (req: Request) => Promise<Response>> = {
-  "aplos-sync": runAplosSync,
-  "webhook-retry": runWebhookRetry,
-  reconcile: runReconcile,
-  "reconcile-subscriptions": runReconcileSubscriptions,
-  "invoice-reminders": runInvoiceReminders,
-  "promo-shortfall-check": runPromoShortfallCheck,
-  "sms-addon-overage-check": runSmsAddonOverageCheck,
-  "resync-transfer-fees": runResyncTransferFees,
-  "resync-monthly-transfer-fees": runResyncMonthlyTransferFees,
-  "system-health-sweep": runSystemHealthSweep,
+const RETRIGGERABLE_JOB_PATHS: Record<string, string> = {
+  "aplos-sync": "/api/cron/aplos-sync",
+  "webhook-retry": "/api/cron/webhook-retry",
+  reconcile: "/api/cron/reconcile",
+  "reconcile-subscriptions": "/api/cron/reconcile-subscriptions",
+  "invoice-reminders": "/api/cron/invoice-reminders",
+  "promo-shortfall-check": "/api/cron/promo-shortfall-check",
+  "sms-addon-overage-check": "/api/cron/sms-addon-overage-check",
+  "resync-transfer-fees": "/api/cron/resync-transfer-fees",
+  "resync-monthly-transfer-fees": "/api/cron/resync-monthly-transfer-fees",
+  "system-health-sweep": "/api/cron/system-health-sweep",
 };
 
 export async function POST(_req: Request, { params }: { params: Promise<{ jobName: string }> }) {
@@ -51,24 +50,24 @@ export async function POST(_req: Request, { params }: { params: Promise<{ jobNam
       { status: 400 }
     );
   }
-  const handler = RETRIGGERABLE_JOBS[jobName];
-  if (!handler) {
+  const path = RETRIGGERABLE_JOB_PATHS[jobName];
+  if (!path) {
     // Defensive: a job could theoretically be marked retrySafe in
-    // jobCadence.ts without (yet) having an entry here — fail loudly rather
-    // than silently no-op, so the gap gets noticed and fixed immediately.
-    console.error(`[jobs/retry] "${jobName}" is marked retrySafe but has no handler registered`);
+    // jobCadence.ts without (yet) having a path registered here — fail
+    // loudly rather than silently no-op, so the gap gets noticed and fixed.
+    console.error(`[jobs/retry] "${jobName}" is marked retrySafe but has no path registered`);
     return NextResponse.json({ error: "Retry is not wired up for this job yet." }, { status: 500 });
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
+  const headers = new Headers();
   // Reuses the exact same bearer-secret auth the scheduled cron uses —
   // constructed server-side from the real env var, never exposed to or
   // supplied by the admin UI.
-  const headers = new Headers();
   if (process.env.CRON_SECRET) headers.set("authorization", `Bearer ${process.env.CRON_SECRET}`);
-  const syntheticRequest = new Request(`https://internal.wgcpayments.com/api/cron/${jobName}`, { headers });
 
   try {
-    const res = await handler(syntheticRequest);
+    const res = await fetch(`${baseUrl}${path}`, { headers, cache: "no-store" });
     const body = await res.json().catch(() => null);
     return NextResponse.json({ triggered: true, jobName, result: body }, { status: res.status });
   } catch (err) {
