@@ -5683,8 +5683,13 @@ model SystemErrorGroup {
 /// fingerprint (which would need a partial unique index this project's
 /// `prisma db push` deploy flow can't express safely).
 model SystemIncident {
-  id          String  @id @default(cuid())
-  fingerprint String  @unique
+  id String @id @default(cuid())
+  // @default(cuid()) exists ONLY so `prisma db push` can apply this new
+  // NOT NULL + UNIQUE column non-interactively against a table that already
+  // exists in production (Phase 2) — every row this app ever creates always
+  // sets a real fingerprint explicitly at create time (see incidentEngine.ts),
+  // so the generated default is never actually relied on by application code.
+  fingerprint String  @unique @default(cuid())
   title       String
   description String?
   service     String
