@@ -1,4 +1,27 @@
 import posthog from "posthog-js";
+import * as Sentry from "@sentry/nextjs";
+import { scrubSentryEvent } from "@/lib/monitoring/sentryRedaction";
+
+// Sentry (technical error monitoring — see src/lib/monitoring/captureError.ts
+// for the app's shared capture helpers) and PostHog (product analytics,
+// below) are deliberately two separate tools: PostHog's own
+// capture_exceptions option gives it a rough view of client errors too, but
+// it is not a replacement for Sentry's stack traces/source maps/releases.
+//
+// NEXT_PUBLIC_SENTRY_DSN unset is a documented Sentry.init no-op — this runs
+// identically with or without a configured Sentry project.
+Sentry.init({
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: process.env.NEXT_PUBLIC_VERCEL_ENV || process.env.NODE_ENV,
+  release: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA,
+  tracesSampleRate: 0.1,
+  beforeSend: scrubSentryEvent,
+  debug: false,
+});
+
+// Sentry's recommended App Router navigation instrumentation hook — lets it
+// attach browser errors to the route the user was navigating to/from.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
 
 // PostHog — Session Replay, Web Analytics, and Product Analytics from one
 // install. Next.js auto-loads this file (src/instrumentation-client.ts) on

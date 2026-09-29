@@ -1,9 +1,9 @@
-import crypto from "crypto";
 import { NextResponse } from "next/server";
 
-export function generateRequestId(): string {
-  return `req_${crypto.randomBytes(12).toString("hex")}`;
-}
+// Moved to src/lib/monitoring/requestId.ts so it's available app-wide (admin,
+// merchant, webhooks, cron), not just this partner-API module — re-exported
+// here so every existing /api/v1 caller keeps working unchanged.
+export { generateRequestId } from "@/lib/monitoring/requestId";
 
 export type ApiErrorType =
   | "authentication_error"

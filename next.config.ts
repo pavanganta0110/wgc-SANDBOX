@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+// @sentry/nextjs v11 moved withSentryConfig to this subpath export (the root
+// package export no longer includes it) — confirmed against this repo's
+// installed version's package.json exports map.
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 // Next.js's own dev server (Turbopack HMR, React DevTools call-stack
 // reconstruction) uses eval() internally — production never does. Scoping
@@ -175,4 +179,16 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// withSentryConfig uploads source maps at build time so a production error
+// points at real source files/lines instead of minified bundle output —
+// safe to wrap unconditionally: without SENTRY_AUTH_TOKEN/SENTRY_ORG/
+// SENTRY_PROJECT set, it skips the upload step with a console warning
+// rather than failing the build (confirmed Sentry webpack-plugin behavior),
+// so this is a no-op until those are configured (see .env.example).
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: true,
+});
