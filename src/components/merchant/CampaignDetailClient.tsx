@@ -1,18 +1,28 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
+import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
 
 type Tab = "overview" | "teams" | "fundraisers" | "leaderboard" | "sharing" | "settings";
+
+const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 interface CampaignSummary {
   id: string;
   name: string;
   slug: string;
   status: string;
+  description: string | null;
+  imageUrl: string | null;
   goalAmountCents: number | null;
+  startDate: string | null;
+  endDate: string | null;
   leaderboardEnabled: boolean;
   fundraiserSelfEditEnabled: boolean;
 }
@@ -77,11 +87,15 @@ function StatCard({ label, value, sublabel }: { label: string; value: string; su
 
 export default function CampaignDetailClient({
   campaign: initialCampaign,
+  churchName,
+  churchLogoUrl,
   canEdit,
   canManageRoster,
   canArchive,
 }: {
   campaign: CampaignSummary;
+  churchName: string;
+  churchLogoUrl?: string | null;
   canEdit: boolean;
   canManageRoster: boolean;
   canArchive: boolean;
@@ -140,8 +154,100 @@ export default function CampaignDetailClient({
       toast.error(data.error || "Update failed");
       return;
     }
-    setCampaign((c) => ({ ...c, ...data.campaign }));
+    // The PATCH response's startDate/endDate come back as full ISO
+    // datetime strings (Prisma Date -> JSON), but CampaignSummary and the
+    // <input type="date"> fields that read it both expect a bare
+    // YYYY-MM-DD — normalize here so every caller of updateCampaign gets a
+    // consistently-shaped campaign back, not just the details form.
+    const normalized = {
+      ...data.campaign,
+      startDate: data.campaign.startDate ? String(data.campaign.startDate).slice(0, 10) : null,
+      endDate: data.campaign.endDate ? String(data.campaign.endDate).slice(0, 10) : null,
+    };
+    setCampaign((c) => ({ ...c, ...normalized }));
     toast.success("Saved");
+  };
+
+  // Draft state for the Settings tab's "Campaign Details" editor — kept
+  // separate from `campaign` so typing doesn't PATCH on every keystroke and
+  // the live preview can reflect in-progress, unsaved edits (same idea as
+  // the New Campaign builder's live preview).
+  const [detailsDraft, setDetailsDraft] = useState({
+    name: campaign.name,
+    description: campaign.description ?? "",
+    imageUrl: campaign.imageUrl,
+    goalAmount: campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "",
+    startDate: campaign.startDate ?? "",
+    endDate: campaign.endDate ?? "",
+  });
+  const [uploadingDetailsImage, setUploadingDetailsImage] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [previewView, setPreviewView] = useState<"page" | "wall">("page");
+  const detailsFileInputRef = useRef<HTMLInputElement>(null);
+
+  const detailsDirty =
+    detailsDraft.name !== campaign.name ||
+    detailsDraft.description !== (campaign.description ?? "") ||
+    detailsDraft.imageUrl !== campaign.imageUrl ||
+    detailsDraft.goalAmount !== (campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "") ||
+    detailsDraft.startDate !== (campaign.startDate ?? "") ||
+    detailsDraft.endDate !== (campaign.endDate ?? "");
+
+  const resetDetailsDraft = () => {
+    setDetailsDraft({
+      name: campaign.name,
+      description: campaign.description ?? "",
+      imageUrl: campaign.imageUrl,
+      goalAmount: campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "",
+      startDate: campaign.startDate ?? "",
+      endDate: campaign.endDate ?? "",
+    });
+  };
+
+  const handleDetailsImageSelected = async (file: File | undefined) => {
+    if (!file) return;
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      toast.error("Only PNG, JPG, JPEG, and WEBP files are supported.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("File too large. Maximum size is 5MB.");
+      return;
+    }
+    setUploadingDetailsImage(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/merchant/campaigns/image-upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Failed to upload image");
+      setDetailsDraft((d) => ({ ...d, imageUrl: data.imageUrl }));
+      toast.success("Image uploaded");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to upload image");
+    } finally {
+      setUploadingDetailsImage(false);
+    }
+  };
+
+  const saveDetails = async () => {
+    if (!detailsDraft.name.trim()) {
+      toast.error("Campaign name is required");
+      return;
+    }
+    setSavingDetails(true);
+    try {
+      await updateCampaign({
+        name: detailsDraft.name.trim(),
+        description: detailsDraft.description.trim() || null,
+        imageUrl: detailsDraft.imageUrl || null,
+        goalAmountCents: detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null,
+        startDate: detailsDraft.startDate || null,
+        endDate: detailsDraft.endDate || null,
+      });
+    } finally {
+      setSavingDetails(false);
+    }
   };
 
   const [newTeamName, setNewTeamName] = useState("");
@@ -414,54 +520,220 @@ export default function CampaignDetailClient({
       )}
 
       {tab === "settings" && (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4 max-w-xl">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-            <select
-              value={campaign.status}
-              disabled={!canEdit}
-              onChange={(e) => updateCampaign({ status: e.target.value })}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-            >
-              <option value="DRAFT">Draft</option>
-              <option value="ACTIVE">Active</option>
-              <option value="PAUSED">Paused</option>
-              <option value="COMPLETED">Completed</option>
-            </select>
-            <p className="text-xs text-slate-400 mt-1">Only Active campaigns are reachable on their public page and live wall.</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+              <h3 className="text-sm font-semibold text-slate-900">Campaign Details</h3>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Name</label>
+                <input
+                  type="text"
+                  value={detailsDraft.name}
+                  disabled={!canEdit}
+                  onChange={(e) => setDetailsDraft((d) => ({ ...d, name: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
+                <textarea
+                  value={detailsDraft.description}
+                  disabled={!canEdit}
+                  onChange={(e) => setDetailsDraft((d) => ({ ...d, description: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  rows={3}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Campaign Image</label>
+                {detailsDraft.imageUrl && (
+                  <div className="mb-2 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={detailsDraft.imageUrl} alt="" className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDetailsDraft((d) => ({ ...d, imageUrl: null }));
+                          if (detailsFileInputRef.current) detailsFileInputRef.current.value = "";
+                        }}
+                        className="text-xs font-semibold text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                )}
+                {canEdit && (
+                  <>
+                    <input
+                      ref={detailsFileInputRef}
+                      type="file"
+                      accept={ALLOWED_IMAGE_TYPES.join(",")}
+                      onChange={(e) => handleDetailsImageSelected(e.target.files?.[0])}
+                      disabled={uploadingDetailsImage}
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                    />
+                    {uploadingDetailsImage && (
+                      <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Uploading…
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={detailsDraft.goalAmount}
+                  disabled={!canEdit}
+                  onChange={(e) => setDetailsDraft((d) => ({ ...d, goalAmount: e.target.value }))}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={detailsDraft.startDate}
+                    disabled={!canEdit}
+                    onChange={(e) => setDetailsDraft((d) => ({ ...d, startDate: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={detailsDraft.endDate}
+                    disabled={!canEdit}
+                    onChange={(e) => setDetailsDraft((d) => ({ ...d, endDate: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={saveDetails}
+                    disabled={!detailsDirty || savingDetails}
+                    className="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    {savingDetails ? "Saving..." : "Save Details"}
+                  </button>
+                  {detailsDirty && (
+                    <button onClick={resetDetailsDraft} className="text-sm font-semibold text-slate-500 hover:text-slate-700">
+                      Discard changes
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                <select
+                  value={campaign.status}
+                  disabled={!canEdit}
+                  onChange={(e) => updateCampaign({ status: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <option value="DRAFT">Draft</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="PAUSED">Paused</option>
+                  <option value="COMPLETED">Completed</option>
+                </select>
+                <p className="text-xs text-slate-400 mt-1">Only Active campaigns are reachable on their public page and live wall.</p>
+              </div>
+              <div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={campaign.fundraiserSelfEditEnabled}
+                    disabled={!canEdit}
+                    onChange={(e) => updateCampaign({ fundraiserSelfEditEnabled: e.target.checked })}
+                  />
+                  Allow fundraisers to log in and edit their own story, goal, and photo
+                </label>
+                <p className="text-xs text-slate-400 mt-1 ml-6">
+                  Fundraisers never get access to this dashboard, donor payment details, or payouts — only their own public page.
+                </p>
+              </div>
+              {canArchive && (
+                <button
+                  onClick={async () => {
+                    if (!confirm("Archive this campaign? It will no longer be reachable publicly.")) return;
+                    const res = await fetch(`/api/merchant/campaigns/${campaign.id}`, { method: "DELETE" });
+                    if (res.ok) {
+                      toast.success("Campaign archived");
+                      window.location.href = "/merchant/campaigns";
+                    } else {
+                      const data = await res.json();
+                      toast.error(data.error || "Failed to archive");
+                    }
+                  }}
+                  className="text-sm font-semibold text-red-600 hover:underline"
+                >
+                  Archive Campaign
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={campaign.fundraiserSelfEditEnabled}
-                disabled={!canEdit}
-                onChange={(e) => updateCampaign({ fundraiserSelfEditEnabled: e.target.checked })}
-              />
-              Allow fundraisers to log in and edit their own story, goal, and photo
-            </label>
-            <p className="text-xs text-slate-400 mt-1 ml-6">
-              Fundraisers never get access to this dashboard, donor payment details, or payouts — only their own public page.
+
+          <div className="lg:sticky lg:top-6">
+            <div className="flex items-center justify-between mb-1">
+              <h4 className="text-sm font-bold text-slate-900">Live Preview</h4>
+              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setPreviewView("page")}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    previewView === "page" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Campaign Page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewView("wall")}
+                  className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    previewView === "wall" ? "bg-slate-900 text-white" : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Live Wall
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">
+              {previewView === "page"
+                ? "This shows what your campaign's public page will look like."
+                : "This shows what the live donation wall will look like at your event."}{" "}
+              {detailsDirty && "Unsaved changes below are shown here, but won't be public until you click Save Details."}
             </p>
+            {previewView === "page" ? (
+              <CampaignPagePreview
+                churchName={churchName}
+                churchLogoUrl={churchLogoUrl}
+                name={detailsDraft.name}
+                description={detailsDraft.description.trim() || undefined}
+                imageUrl={detailsDraft.imageUrl}
+                goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
+                endDate={detailsDraft.endDate || undefined}
+              />
+            ) : (
+              <LiveWallPreview
+                churchName={churchName}
+                churchLogoUrl={churchLogoUrl}
+                name={detailsDraft.name}
+                goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
+              />
+            )}
           </div>
-          {canArchive && (
-            <button
-              onClick={async () => {
-                if (!confirm("Archive this campaign? It will no longer be reachable publicly.")) return;
-                const res = await fetch(`/api/merchant/campaigns/${campaign.id}`, { method: "DELETE" });
-                if (res.ok) {
-                  toast.success("Campaign archived");
-                  window.location.href = "/merchant/campaigns";
-                } else {
-                  const data = await res.json();
-                  toast.error(data.error || "Failed to archive");
-                }
-              }}
-              className="text-sm font-semibold text-red-600 hover:underline"
-            >
-              Archive Campaign
-            </button>
-          )}
         </div>
       )}
     </div>

@@ -16,9 +16,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   }
   if (!hasPermission(auth, "canViewFundraisingCampaigns")) redirect("/merchant/dashboard");
 
-  const campaign = await prisma.fundraisingCampaign.findFirst({
-    where: { id: campaignId, churchId: auth.churchId },
-  });
+  const [campaign, church] = await Promise.all([
+    prisma.fundraisingCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId } }),
+    prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true } }),
+  ]);
   if (!campaign) notFound();
 
   return (
@@ -28,10 +29,16 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         name: campaign.name,
         slug: campaign.slug,
         status: campaign.status,
+        description: campaign.description,
+        imageUrl: campaign.imageUrl,
         goalAmountCents: campaign.goalAmountCents,
+        startDate: campaign.startDate ? campaign.startDate.toISOString().slice(0, 10) : null,
+        endDate: campaign.endDate ? campaign.endDate.toISOString().slice(0, 10) : null,
         leaderboardEnabled: campaign.leaderboardEnabled,
         fundraiserSelfEditEnabled: campaign.fundraiserSelfEditEnabled,
       }}
+      churchName={church?.name || "Your Organization"}
+      churchLogoUrl={church?.logoUrl}
       canEdit={hasPermission(auth, "canEditFundraisingCampaign")}
       canManageRoster={hasPermission(auth, "canManageCampaignRoster")}
       canArchive={hasPermission(auth, "canArchiveFundraisingCampaign")}
