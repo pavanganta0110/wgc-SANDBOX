@@ -32,12 +32,13 @@ export default function CampaignPagePreview({
     <div className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden">
       <div className="py-10 px-4">
         <div className="max-w-md mx-auto">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-            <OrganizationLogo logoUrl={churchLogoUrl ?? null} churchName={churchName} mode="main" />
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             {imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={name || "Campaign image"} className="w-full h-48 object-cover rounded-xl mb-6" />
+              <img src={imageUrl} alt={name || "Campaign image"} className="w-full h-48 object-cover" />
             )}
+            <div className="p-8">
+            <OrganizationLogo logoUrl={churchLogoUrl ?? null} churchName={churchName} mode={imageUrl ? "embed" : "main"} />
             <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{name || "Your Campaign Name"}</h1>
             <p className="text-sm text-center text-slate-500 mb-6">{churchName}</p>
             {description && <p className="text-sm text-center text-slate-600 mb-6">{description}</p>}
@@ -55,6 +56,7 @@ export default function CampaignPagePreview({
               <span className="w-full text-center text-sm font-semibold text-slate-400 cursor-default select-none">
                 View Live Donation Wall &rarr;
               </span>
+            </div>
             </div>
           </div>
 

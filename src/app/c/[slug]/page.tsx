@@ -63,12 +63,13 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
       {isPreview && <CampaignPreviewBanner campaignId={campaign.id} message={describeUnavailableCampaign(campaign)} />}
       <div className="min-h-screen py-12 px-4 bg-slate-50">
       <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 mb-6">
-          <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode="main" />
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
           {campaign.imageUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={campaign.imageUrl} alt={campaign.name} className="w-full h-48 object-cover rounded-xl mb-6" />
+            <img src={campaign.imageUrl} alt={campaign.name} className="w-full h-48 object-cover" />
           )}
+          <div className="p-8">
+          <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode={campaign.imageUrl ? "embed" : "main"} />
           <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{campaign.name}</h1>
           <p className="text-sm text-center text-slate-500 mb-6">{church.name}</p>
           {campaign.description && <p className="text-sm text-center text-slate-600 mb-6">{campaign.description}</p>}
@@ -94,6 +95,7 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
             >
               View Live Donation Wall &rarr;
             </Link>
+          </div>
           </div>
         </div>
 
