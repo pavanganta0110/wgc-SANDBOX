@@ -26,6 +26,14 @@ interface ActiveIssue {
   affectedMerchantCount: number;
 }
 
+interface CheckoutThroughput {
+  attemptsLast5Min: number;
+  attemptsLastHour: number;
+  succeededLastHour: number;
+  failedLastHour: number;
+  successRatePercent: number | null;
+}
+
 interface Overview {
   overallStatus: "OPERATIONAL" | "DEGRADED" | "MAJOR_ISSUE";
   activeErrors: number;
@@ -38,6 +46,7 @@ interface Overview {
   lastDeployment: { commitSha: string | null; commitMessage: string | null; commitRef: string | null; environment: string | null } | null;
   services: ServiceStatus[];
   activeIssues: ActiveIssue[];
+  checkoutThroughput: CheckoutThroughput;
 }
 
 const OVERALL_STATUS_STYLE: Record<Overview["overallStatus"], { label: string; className: string }> = {
@@ -217,6 +226,25 @@ export default function SystemHealthOverviewClient() {
                 </tbody>
               </table>
             )}
+          </div>
+
+          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Checkout Throughput</h2>
+          <p className="text-xs text-slate-400 mb-3 -mt-2">
+            Real donation/payment volume — the direct answer to &quot;if a lot of people check out at once, would we know.&quot; Read-only off the
+            same records the checkout flow already writes; never a new load on checkout itself. Sitewide visitor traffic and page performance
+            under load are tracked separately by Vercel Analytics / Speed Insights (see your Vercel dashboard), and database load by
+            Supabase&apos;s own dashboard — neither duplicated here.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+            <StatCard label="Attempts (last 5 min)" value={data.checkoutThroughput.attemptsLast5Min} sublabel="Right now" />
+            <StatCard label="Attempts (last hour)" value={data.checkoutThroughput.attemptsLastHour} />
+            <StatCard label="Failed (last hour)" value={data.checkoutThroughput.failedLastHour} />
+            <StatCard
+              label="Success Rate (last hour)"
+              value={data.checkoutThroughput.successRatePercent != null ? `${data.checkoutThroughput.successRatePercent}%` : "Unknown"}
+              unknown={data.checkoutThroughput.successRatePercent == null}
+              sublabel={data.checkoutThroughput.successRatePercent == null ? "No attempts in the last hour" : undefined}
+            />
           </div>
 
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Services</h2>

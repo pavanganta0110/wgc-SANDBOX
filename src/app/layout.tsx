@@ -4,6 +4,7 @@ import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import MetaPixel from "@/components/common/MetaPixel";
 import SimplifiPixel from "@/components/common/SimplifiPixel";
 import CookieConsentBanner from "@/components/common/CookieConsentBanner";
@@ -95,6 +96,7 @@ export default function RootLayout({
         <SimplifiPixel />
         <CookieConsentBanner />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

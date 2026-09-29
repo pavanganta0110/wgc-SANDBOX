@@ -39,6 +39,24 @@ export interface SystemHealthOverview {
    * showing the same underlying incident twice under two different labels.
    */
   activeIssues: ActiveIssue[];
+  /**
+   * Real donation/payment volume, read-only off the existing PaymentAttempt
+   * table (written by the checkout flow regardless of monitoring) — never a
+   * new write on the payment hot path itself, so this can never be the
+   * thing that makes checkout slower under real load. This is the direct
+   * answer to "if a lot of people check out at once, would we even know" —
+   * attemptsLast5Min is the closest thing to "how busy is checkout right
+   * now"; the last-hour figures show whether volume is coming with a
+   * healthy success rate or not.
+   */
+  checkoutThroughput: {
+    attemptsLast5Min: number;
+    attemptsLastHour: number;
+    succeededLastHour: number;
+    failedLastHour: number;
+    /** null = Unknown (no attempts in the window to compute a rate from). */
+    successRatePercent: number | null;
+  };
 }
 
 const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, ERROR: 1, WARNING: 2, INFO: 3 };
@@ -51,6 +69,8 @@ function computeOverallStatus(services: ServiceStatus[], hasCriticalIncident: bo
 
 export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
   const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const since1h = new Date(Date.now() - 60 * 60 * 1000);
+  const since5min = new Date(Date.now() - 5 * 60 * 1000);
 
   const [services, activeErrors, openIncidents, criticalIncidentCount, affectedMerchantRows, apiRequestStats] = await Promise.all([
     getAllServiceStatuses(),
@@ -76,6 +96,14 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
       _avg: { durationMs: true },
     }),
   ]);
+
+  const [attemptsLast5Min, attemptsLastHour, succeededLastHour, failedLastHour] = await Promise.all([
+    prisma.paymentAttempt.count({ where: { createdAt: { gte: since5min } } }),
+    prisma.paymentAttempt.count({ where: { createdAt: { gte: since1h } } }),
+    prisma.paymentAttempt.count({ where: { createdAt: { gte: since1h }, status: "SUCCEEDED" } }),
+    prisma.paymentAttempt.count({ where: { createdAt: { gte: since1h }, status: "FAILED" } }),
+  ]);
+  const resolvedLastHour = succeededLastHour + failedLastHour;
 
   const failedApiRequests = await prisma.apiRequestLog.count({ where: { createdAt: { gte: since24h }, statusCode: { gte: 500 } } });
   const totalApiRequests = apiRequestStats._count._all;
@@ -125,5 +153,12 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
         : null,
     services,
     activeIssues,
+    checkoutThroughput: {
+      attemptsLast5Min,
+      attemptsLastHour,
+      succeededLastHour,
+      failedLastHour,
+      successRatePercent: resolvedLastHour > 0 ? Math.round((succeededLastHour / resolvedLastHour) * 1000) / 10 : null,
+    },
   };
 }

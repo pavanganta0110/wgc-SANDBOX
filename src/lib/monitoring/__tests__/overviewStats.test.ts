@@ -5,6 +5,7 @@ const mockPrisma = {
   systemIncident: { findMany: vi.fn(), count: vi.fn() },
   systemHealthEvent: { findMany: vi.fn() },
   apiRequestLog: { aggregate: vi.fn(), count: vi.fn() },
+  paymentAttempt: { count: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -31,6 +32,34 @@ beforeEach(() => {
   mockPrisma.systemHealthEvent.findMany.mockResolvedValue([]);
   mockPrisma.apiRequestLog.aggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { durationMs: null } });
   mockPrisma.apiRequestLog.count.mockResolvedValue(0);
+  mockPrisma.paymentAttempt.count.mockResolvedValue(0);
+});
+
+describe("getSystemHealthOverview — checkoutThroughput", () => {
+  it("is Unknown (null success rate) when there have been no attempts in the last hour", async () => {
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.checkoutThroughput.successRatePercent).toBeNull();
+  });
+
+  it("computes a real success rate from succeeded vs. failed PaymentAttempt rows in the last hour", async () => {
+    mockPrisma.paymentAttempt.count.mockImplementation(({ where }: { where: { status?: string } }) => {
+      if (where.status === "SUCCEEDED") return Promise.resolve(18);
+      if (where.status === "FAILED") return Promise.resolve(2);
+      return Promise.resolve(20); // the unfiltered attemptsLastHour/attemptsLast5Min calls
+    });
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.checkoutThroughput.succeededLastHour).toBe(18);
+    expect(overview.checkoutThroughput.failedLastHour).toBe(2);
+    expect(overview.checkoutThroughput.successRatePercent).toBe(90);
+  });
+
+  it("never queries anything but PaymentAttempt for this — no new write path, purely additive read", async () => {
+    const { getSystemHealthOverview } = await loadModule();
+    await getSystemHealthOverview();
+    expect(mockPrisma.paymentAttempt.count).toHaveBeenCalled();
+  });
 });
 
 describe("getSystemHealthOverview", () => {
