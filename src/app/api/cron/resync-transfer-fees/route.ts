@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { syncFeesForTransfer } from "@/lib/finix/sync/syncFees";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /**
  * Re-syncs Finix fees for recently-completed transfers a second time, a
@@ -44,33 +45,37 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = Date.now();
-  const windowStart = new Date(now - WINDOW_MAX_DAYS_OLD * 24 * 60 * 60 * 1000);
-  const windowEnd = new Date(now - WINDOW_MIN_DAYS_OLD * 24 * 60 * 60 * 1000);
+  const result = await withJobRunTracking({ jobName: "resync-transfer-fees", jobType: "finix" }, async () => {
+    const now = Date.now();
+    const windowStart = new Date(now - WINDOW_MAX_DAYS_OLD * 24 * 60 * 60 * 1000);
+    const windowEnd = new Date(now - WINDOW_MIN_DAYS_OLD * 24 * 60 * 60 * 1000);
 
-  const payments = await prisma.payment.findMany({
-    where: {
-      status: "SUCCEEDED",
-      finixTransferId: { not: null },
-      createdAt: { gte: windowStart, lte: windowEnd },
-    },
-    select: { id: true, churchId: true, finixTransferId: true },
-    take: MAX_PAYMENTS_PER_RUN,
-    orderBy: { createdAt: "asc" },
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: "SUCCEEDED",
+        finixTransferId: { not: null },
+        createdAt: { gte: windowStart, lte: windowEnd },
+      },
+      select: { id: true, churchId: true, finixTransferId: true },
+      take: MAX_PAYMENTS_PER_RUN,
+      orderBy: { createdAt: "asc" },
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const payment of payments) {
+      try {
+        await syncFeesForTransfer(payment.finixTransferId as string, payment.churchId);
+        succeeded++;
+      } catch (err) {
+        failed++;
+        console.error("resync-transfer-fees: failed for payment", payment.id, err);
+      }
+    }
+
+    return { processedCount: payments.length, successCount: succeeded, failedCount: failed, metadata: { windowStart, windowEnd } };
   });
 
-  let succeeded = 0;
-  let failed = 0;
-
-  for (const payment of payments) {
-    try {
-      await syncFeesForTransfer(payment.finixTransferId as string, payment.churchId);
-      succeeded++;
-    } catch (err) {
-      failed++;
-      console.error("resync-transfer-fees: failed for payment", payment.id, err);
-    }
-  }
-
-  return NextResponse.json({ windowStart, windowEnd, scanned: payments.length, succeeded, failed });
+  return NextResponse.json({ success: true, ...result });
 }

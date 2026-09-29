@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { reconcileWgcSubscriptions } from "@/lib/billing/subscriptionReconciliation";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /** Same CRON_SECRET auth pattern as /api/cron/reconcile. */
 export async function GET(req: Request) {
@@ -19,7 +20,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = await reconcileWgcSubscriptions();
+    const result = await withJobRunTracking({ jobName: "reconcile-subscriptions", jobType: "billing" }, async () => {
+      const r = await reconcileWgcSubscriptions();
+      return { processedCount: r.scannedCount, successCount: r.updatedCount, failedCount: r.errorCount, metadata: r as unknown as Record<string, unknown> };
+    });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
     console.error("Subscription reconciliation cron failed:", err);

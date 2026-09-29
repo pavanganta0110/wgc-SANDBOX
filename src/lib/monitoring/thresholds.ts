@@ -55,3 +55,27 @@ export const WEBHOOK_BACKLOG_CRITICAL = 50;
 export const WEBHOOK_PENDING_AGE_THRESHOLD_MS = 5 * 60 * 1000; // a webhook still PENDING after 5 minutes counts toward backlog
 export const WEBHOOK_FAILURE_RATE_WARNING = 0.05;
 export const WEBHOOK_FAILURE_RATE_CRITICAL = 0.2;
+
+// ─── Incidents (Phase 4) ─────────────────────────────────────────────────────
+// If the same fingerprint fails again within this long after its incident
+// resolved, treat it as the SAME outage flaring back up (reopen in place,
+// preserving startedAt/occurrenceCount) rather than a fresh occurrence —
+// see incidentEngine.ts's own doc comment for the full reasoning.
+export const INCIDENT_REOPEN_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+// A service must read as healthy for this long before an open incident
+// auto-resolves — one clean request during a real outage must not
+// instantly "fix" it. Applied by the daily system-health-sweep cron, since
+// resolving on the very next healthy sample would defeat the point.
+export const INCIDENT_RECOVERY_STABILITY_MS = 15 * 60 * 1000; // 15 minutes
+
+// ─── Alerting (Phase 4) ──────────────────────────────────────────────────────
+// How long an unresolved CRITICAL/ERROR incident waits before sending a
+// reminder alert at the same severity (an escalation to a HIGHER severity
+// always alerts immediately, regardless of this cooldown — see
+// alertEngine.ts). Reminders are deliberately much rarer than the initial
+// alert, never per-occurrence.
+export const ALERT_REMINDER_INTERVAL_CRITICAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+export const ALERT_REMINDER_INTERVAL_ERROR_MS = 6 * 60 * 60 * 1000; // 6 hours
+// WARNING incidents don't get automatic reminders at all — dashboard/history
+// only after the initial notification, per the design doc's default policy.
+export const ALERT_WARNING_EMAIL_ENABLED = true;

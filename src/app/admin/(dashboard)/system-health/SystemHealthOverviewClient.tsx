@@ -14,6 +14,18 @@ interface ServiceStatus {
   note: string;
 }
 
+interface ActiveIssue {
+  id: string;
+  title: string;
+  service: string;
+  severity: string;
+  status: string;
+  startedAt: string;
+  lastSeenAt: string;
+  occurrenceCount: number;
+  affectedMerchantCount: number;
+}
+
 interface Overview {
   overallStatus: "OPERATIONAL" | "DEGRADED" | "MAJOR_ISSUE";
   activeErrors: number;
@@ -25,6 +37,7 @@ interface Overview {
   averageApiResponseTimeMs: number | null;
   lastDeployment: { commitSha: string | null; commitMessage: string | null; commitRef: string | null; environment: string | null } | null;
   services: ServiceStatus[];
+  activeIssues: ActiveIssue[];
 }
 
 const OVERALL_STATUS_STYLE: Record<Overview["overallStatus"], { label: string; className: string }> = {
@@ -33,14 +46,22 @@ const OVERALL_STATUS_STYLE: Record<Overview["overallStatus"], { label: string; c
   MAJOR_ISSUE: { label: "Major Issue", className: "bg-red-50 text-red-800 border-red-200" },
 };
 
-function StatCard({ label, value, sublabel, unknown }: { label: string; value: string | number; sublabel?: string; unknown?: boolean }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5">
+function StatCard({ label, value, sublabel, unknown, href }: { label: string; value: string | number; sublabel?: string; unknown?: boolean; href?: string }) {
+  const body = (
+    <>
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{label}</p>
       <p className={`text-2xl font-bold ${unknown ? "text-slate-300" : "text-slate-900"}`}>{value}</p>
       {sublabel && <p className="text-xs text-slate-400 mt-0.5">{sublabel}</p>}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className="block bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition-shadow">
+        {body}
+      </Link>
+    );
+  }
+  return <div className="bg-white border border-slate-200 rounded-xl p-5">{body}</div>;
 }
 
 function fmtDate(d: string | null): string {
@@ -85,11 +106,22 @@ export default function SystemHealthOverviewClient() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl">
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-slate-900">System Health</h1>
-        <Link href="/admin/system-health/errors" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-          View Errors
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/admin/system-health/errors" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Errors
+          </Link>
+          <Link href="/admin/system-health/incidents" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Incidents
+          </Link>
+          <Link href="/admin/system-health/jobs" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Background Jobs
+          </Link>
+          <Link href="/admin/system-health/alerts" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Alert History
+          </Link>
+        </div>
       </div>
       <p className="text-sm text-slate-500 mb-6">
         The operational command center for the WGC platform — what&apos;s broken, for which merchants, and since when. Technical exception detail
@@ -112,10 +144,16 @@ export default function SystemHealthOverviewClient() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
-            <StatCard label="Active Incidents" value={data.activeIncidents} />
-            <StatCard label="Active Errors" value={data.activeErrors} />
+            <StatCard label="Active Incidents" value={data.activeIncidents} href="/admin/system-health/incidents" />
+            <StatCard label="Active Errors" value={data.activeErrors} href="/admin/system-health/errors" />
             <StatCard label="Affected Merchants" value={data.affectedMerchants} />
-            <StatCard label="Failed Jobs" value={data.failedJobs ?? "Unknown"} unknown={data.failedJobs == null} sublabel={data.failedJobs == null ? "No job-run history yet" : undefined} />
+            <StatCard
+              label="Failed Jobs"
+              value={data.failedJobs ?? "Unknown"}
+              unknown={data.failedJobs == null}
+              sublabel={data.failedJobs == null ? "No job-run history yet" : "Actively-scheduled jobs currently unhealthy"}
+              href="/admin/system-health/jobs"
+            />
             <StatCard label="Failed Webhooks" value={data.failedWebhooks ?? "Unknown"} unknown={data.failedWebhooks == null} sublabel={data.failedWebhooks == null ? "No webhook data yet" : "Last 24h"} />
             <StatCard
               label="API Error Rate"
@@ -130,6 +168,55 @@ export default function SystemHealthOverviewClient() {
               sublabel={data.averageApiResponseTimeMs != null ? "Partner API, last 24h" : "No duration data recorded yet"}
             />
             <StatCard label="Last Deployment" value={data.lastDeployment?.commitSha?.slice(0, 7) ?? "Unknown"} unknown={!data.lastDeployment} sublabel={data.lastDeployment?.commitMessage ?? undefined} />
+          </div>
+
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Active Issues</h2>
+            {data.activeIssues.length > 0 && (
+              <Link href="/admin/system-health/incidents" className="text-xs font-semibold text-indigo-600 hover:underline">
+                View all incidents &rarr;
+              </Link>
+            )}
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-8">
+            {data.activeIssues.length === 0 ? (
+              <p className="px-4 py-6 text-center text-slate-400 text-sm">No active issues — every service is operating normally.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500 uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-2">Severity</th>
+                    <th className="text-left px-4 py-2">Title</th>
+                    <th className="text-left px-4 py-2">Service</th>
+                    <th className="text-left px-4 py-2">Status</th>
+                    <th className="text-left px-4 py-2">Started</th>
+                    <th className="text-left px-4 py-2">Occurrences</th>
+                    <th className="text-left px-4 py-2">Merchants</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.activeIssues.map((issue) => (
+                    <tr key={issue.id}>
+                      <td className="px-4 py-2">
+                        <StateBadge state={issue.severity} />
+                      </td>
+                      <td className="px-4 py-2 max-w-[260px] truncate font-medium text-slate-800">
+                        <Link href={`/admin/system-health/incidents/${issue.id}`} className="hover:underline">
+                          {issue.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-slate-500">{issue.service}</td>
+                      <td className="px-4 py-2">
+                        <StateBadge state={issue.status} />
+                      </td>
+                      <td className="px-4 py-2 text-slate-500">{fmtDate(issue.startedAt)}</td>
+                      <td className="px-4 py-2 text-slate-500">{issue.occurrenceCount}</td>
+                      <td className="px-4 py-2 text-slate-500">{issue.affectedMerchantCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Services</h2>

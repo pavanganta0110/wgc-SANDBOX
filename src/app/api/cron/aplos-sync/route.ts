@@ -4,6 +4,7 @@ import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration"
 import { isAplosSyncGloballyEnabled } from "@/lib/integrations/aplos/config";
 import { processSettlement, type SyncSettlementOutcome } from "@/lib/integrations/aplos/syncEngine";
 import { getReadyConnectionToken } from "@/lib/integrations/aplos/resourceService";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /**
  * Own schedule, separate from the existing /api/cron/reconcile (per
@@ -46,67 +47,76 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: true, reason: "APLOS_SYNC_ENABLED is not set to true" });
   }
 
-  const connections = await prisma.aplosConnection.findMany({
-    where: { automaticSyncEnabled: true, status: "CONNECTED" },
-    select: { churchId: true, syncVersion: true, connectedAt: true },
-  });
-
-  const outcomeCounts: Partial<Record<SyncSettlementOutcome, number>> = {};
-  let settlementsChecked = 0;
-  let errors = 0;
-
-  for (const connection of connections) {
-    const settledSettlements = await prisma.finixSettlement.findMany({
-      where: {
-        churchId: connection.churchId,
-        state: "SETTLED",
-        ...(connection.connectedAt ? { settledAt: { gte: connection.connectedAt } } : {}),
-      },
-      select: { finixSettlementId: true },
+  const result = await withJobRunTracking({ jobName: "aplos-sync", jobType: "aplos" }, async () => {
+    const connections = await prisma.aplosConnection.findMany({
+      where: { automaticSyncEnabled: true, status: "CONNECTED" },
+      select: { churchId: true, syncVersion: true, connectedAt: true },
     });
-    if (settledSettlements.length === 0) continue;
 
-    const existingRecords = await prisma.aplosSyncRecord.findMany({
-      where: {
-        churchId: connection.churchId,
-        syncVersion: connection.syncVersion,
-        settlementId: { in: settledSettlements.map((s) => s.finixSettlementId) },
-        status: { in: ["SYNCED", "NEEDS_REVIEW", "CANCELLED"] },
-      },
-      select: { settlementId: true },
-    });
-    const finished = new Set(existingRecords.map((r) => r.settlementId));
-    const candidates = settledSettlements.filter((s) => !finished.has(s.finixSettlementId));
-    if (candidates.length === 0) continue;
+    const outcomeCounts: Partial<Record<SyncSettlementOutcome, number>> = {};
+    let settlementsChecked = 0;
+    let errors = 0;
 
-    // Fetched once per church per cron tick, not once per settlement — see
-    // processSettlement()'s `preAuth` parameter for why. If this fails,
-    // `preAuth` stays undefined and each settlement below falls back to
-    // its own per-call token fetch (and reports BLOCKED accurately if the
-    // connection truly isn't ready), so no candidate is silently skipped.
-    let preAuth: { token: string; aplosAccountId: string } | undefined;
-    try {
-      preAuth = await getReadyConnectionToken(connection.churchId);
-    } catch {
-      preAuth = undefined;
-    }
+    for (const connection of connections) {
+      const settledSettlements = await prisma.finixSettlement.findMany({
+        where: {
+          churchId: connection.churchId,
+          state: "SETTLED",
+          ...(connection.connectedAt ? { settledAt: { gte: connection.connectedAt } } : {}),
+        },
+        select: { finixSettlementId: true },
+      });
+      if (settledSettlements.length === 0) continue;
 
-    for (const settlement of candidates) {
-      settlementsChecked++;
+      const existingRecords = await prisma.aplosSyncRecord.findMany({
+        where: {
+          churchId: connection.churchId,
+          syncVersion: connection.syncVersion,
+          settlementId: { in: settledSettlements.map((s) => s.finixSettlementId) },
+          status: { in: ["SYNCED", "NEEDS_REVIEW", "CANCELLED"] },
+        },
+        select: { settlementId: true },
+      });
+      const finished = new Set(existingRecords.map((r) => r.settlementId));
+      const candidates = settledSettlements.filter((s) => !finished.has(s.finixSettlementId));
+      if (candidates.length === 0) continue;
+
+      // Fetched once per church per cron tick, not once per settlement — see
+      // processSettlement()'s `preAuth` parameter for why. If this fails,
+      // `preAuth` stays undefined and each settlement below falls back to
+      // its own per-call token fetch (and reports BLOCKED accurately if the
+      // connection truly isn't ready), so no candidate is silently skipped.
+      let preAuth: { token: string; aplosAccountId: string } | undefined;
       try {
-        const result = await processSettlement(connection.churchId, settlement.finixSettlementId, preAuth);
-        outcomeCounts[result.outcome] = (outcomeCounts[result.outcome] ?? 0) + 1;
-      } catch (err) {
-        errors++;
-        console.error(`Aplos sync: failed to process settlement ${settlement.finixSettlementId} for church ${connection.churchId}:`, err);
+        preAuth = await getReadyConnectionToken(connection.churchId);
+      } catch {
+        preAuth = undefined;
+      }
+
+      for (const settlement of candidates) {
+        settlementsChecked++;
+        try {
+          const result = await processSettlement(connection.churchId, settlement.finixSettlementId, preAuth);
+          outcomeCounts[result.outcome] = (outcomeCounts[result.outcome] ?? 0) + 1;
+        } catch (err) {
+          errors++;
+          console.error(`Aplos sync: failed to process settlement ${settlement.finixSettlementId} for church ${connection.churchId}:`, err);
+        }
       }
     }
-  }
+
+    return {
+      processedCount: settlementsChecked,
+      successCount: settlementsChecked - errors,
+      failedCount: errors,
+      metadata: { churchesChecked: connections.length, outcomeCounts },
+    };
+  });
 
   return NextResponse.json({
-    churchesChecked: connections.length,
-    settlementsChecked,
-    outcomeCounts,
-    errors,
+    churchesChecked: result.metadata?.churchesChecked ?? 0,
+    settlementsChecked: result.processedCount,
+    outcomeCounts: result.metadata?.outcomeCounts ?? {},
+    errors: result.failedCount,
   });
 }

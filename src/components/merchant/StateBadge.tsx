@@ -89,6 +89,19 @@ const STATE_STYLES: Record<string, string> = {
   OPERATIONAL: "bg-green-50 text-green-700",
   DEGRADED: "bg-amber-50 text-amber-700",
   OUTAGE: "bg-red-50 text-red-700",
+  UNKNOWN: "bg-slate-100 text-slate-500",
+  // System health event / error group / incident severity (SystemHealthEvent.severity, SystemIncident.severity)
+  INFO: "bg-slate-100 text-slate-600",
+  WARNING: "bg-amber-50 text-amber-700",
+  CRITICAL: "bg-red-100 text-red-800",
+  // Incidents (SystemIncident.status)
+  INVESTIGATING: "bg-amber-50 text-amber-700",
+  MONITORING: "bg-blue-50 text-blue-700",
+  IGNORED: "bg-slate-100 text-slate-400",
+  // Job runs (JobRun.status)
+  RUNNING: "bg-blue-50 text-blue-700",
+  PARTIALLY_FAILED: "bg-amber-50 text-amber-700",
+  RETRYING: "bg-amber-50 text-amber-700",
   // Payout bank account
   CURRENT: "bg-green-50 text-green-700",
   SUBMITTED: "bg-amber-50 text-amber-700",

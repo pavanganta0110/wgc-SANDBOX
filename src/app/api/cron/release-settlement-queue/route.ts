@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { finixClient } from "@/lib/finix/client";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -40,54 +41,58 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const weekday = todayWeekdayCentral();
+  const result = await withJobRunTracking({ jobName: "release-settlement-queue", jobType: "settlement" }, async () => {
+    const weekday = todayWeekdayCentral();
 
-  const churches = await prisma.church.findMany({
-    where: {
-      settlementAutoReleaseWeekdays: { has: weekday },
-      finixMerchantId: { not: null },
-    },
-    select: { id: true, name: true, finixMerchantId: true },
+    const churches = await prisma.church.findMany({
+      where: {
+        settlementAutoReleaseWeekdays: { has: weekday },
+        finixMerchantId: { not: null },
+      },
+      select: { id: true, name: true, finixMerchantId: true },
+    });
+
+    let merchantsProcessed = 0;
+    let entriesReleased = 0;
+    let failed = 0;
+
+    for (const church of churches) {
+      try {
+        const merchant = await finixClient.getMerchant(church.finixMerchantId as string);
+        if (merchant.settlement_queue_mode !== "MANUAL") continue;
+
+        const listed = await finixClient.listSettlementQueueEntries({ merchantId: church.finixMerchantId as string });
+        const entries = (listed._embedded?.settlement_queue_entries ?? []) as Array<{ id: string; ready_to_settle_at?: string }>;
+        const now = Date.now();
+        const readyIds = entries
+          .filter((e) => !e.ready_to_settle_at || new Date(e.ready_to_settle_at).getTime() <= now)
+          .map((e) => e.id);
+
+        if (readyIds.length === 0) continue;
+
+        await finixClient.releaseSettlementQueueEntries(readyIds);
+        merchantsProcessed++;
+        entriesReleased += readyIds.length;
+
+        await logDashboardAction({
+          churchId: church.id,
+          actorUserId: null,
+          actorEmail: "system@wgcpayments.com",
+          actorRole: "system",
+          action: "settlement_queue.auto_released",
+          entityType: "merchant",
+          entityId: church.finixMerchantId as string,
+          metadata: { ids: readyIds, weekday },
+          req,
+        });
+      } catch (err) {
+        failed++;
+        console.error("release-settlement-queue: failed for church", church.id, err);
+      }
+    }
+
+    return { processedCount: churches.length, successCount: merchantsProcessed, failedCount: failed, metadata: { weekday, entriesReleased } };
   });
 
-  let merchantsProcessed = 0;
-  let entriesReleased = 0;
-  let failed = 0;
-
-  for (const church of churches) {
-    try {
-      const merchant = await finixClient.getMerchant(church.finixMerchantId as string);
-      if (merchant.settlement_queue_mode !== "MANUAL") continue;
-
-      const listed = await finixClient.listSettlementQueueEntries({ merchantId: church.finixMerchantId as string });
-      const entries = (listed._embedded?.settlement_queue_entries ?? []) as Array<{ id: string; ready_to_settle_at?: string }>;
-      const now = Date.now();
-      const readyIds = entries
-        .filter((e) => !e.ready_to_settle_at || new Date(e.ready_to_settle_at).getTime() <= now)
-        .map((e) => e.id);
-
-      if (readyIds.length === 0) continue;
-
-      await finixClient.releaseSettlementQueueEntries(readyIds);
-      merchantsProcessed++;
-      entriesReleased += readyIds.length;
-
-      await logDashboardAction({
-        churchId: church.id,
-        actorUserId: null,
-        actorEmail: "system@wgcpayments.com",
-        actorRole: "system",
-        action: "settlement_queue.auto_released",
-        entityType: "merchant",
-        entityId: church.finixMerchantId as string,
-        metadata: { ids: readyIds, weekday },
-        req,
-      });
-    } catch (err) {
-      failed++;
-      console.error("release-settlement-queue: failed for church", church.id, err);
-    }
-  }
-
-  return NextResponse.json({ weekday, merchantsScanned: churches.length, merchantsProcessed, entriesReleased, failed });
+  return NextResponse.json({ success: true, ...result });
 }

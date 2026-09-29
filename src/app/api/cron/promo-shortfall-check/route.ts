@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { detectPromoShortfalls } from "@/lib/billing/promoShortfallDetection";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /** Same CRON_SECRET auth pattern as /api/cron/reconcile-subscriptions.
  * Runs on the 1st of each month (see vercel.json) — checks the calendar
@@ -22,7 +23,10 @@ export async function GET(req: Request) {
   }
 
   try {
-    const result = await detectPromoShortfalls();
+    const result = await withJobRunTracking({ jobName: "promo-shortfall-check", jobType: "billing" }, async () => {
+      const r = await detectPromoShortfalls();
+      return { processedCount: r.entitlementsChecked, successCount: r.entitlementsChecked, failedCount: 0, metadata: r as unknown as Record<string, unknown> };
+    });
     return NextResponse.json({ success: true, ...result });
   } catch (err) {
     console.error("Promo shortfall detection cron failed:", err);

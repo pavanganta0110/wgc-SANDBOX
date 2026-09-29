@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { attemptWebhookDelivery } from "@/lib/webhooks/deliverWebhook";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /**
  * Runs once daily (see vercel.json) — retries any webhook delivery whose
@@ -32,21 +33,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const due = await prisma.webhookDelivery.findMany({
-    where: { status: "FAILED", nextRetryAt: { lte: new Date() } },
-    select: { id: true },
-    take: 200,
+  const result = await withJobRunTracking({ jobName: "webhook-retry", jobType: "webhook" }, async () => {
+    const due = await prisma.webhookDelivery.findMany({
+      where: { status: "FAILED", nextRetryAt: { lte: new Date() } },
+      select: { id: true },
+      take: 200,
+    });
+
+    let succeeded = 0;
+    let stillFailing = 0;
+    for (const row of due) {
+      const before = await prisma.webhookDelivery.findUnique({ where: { id: row.id }, select: { status: true } });
+      await attemptWebhookDelivery(row.id);
+      const after = await prisma.webhookDelivery.findUnique({ where: { id: row.id }, select: { status: true } });
+      if (before?.status !== "SUCCEEDED" && after?.status === "SUCCEEDED") succeeded++;
+      else if (after?.status !== "SUCCEEDED") stillFailing++;
+    }
+
+    return { processedCount: due.length, successCount: succeeded, failedCount: stillFailing };
   });
 
-  let succeeded = 0;
-  let stillFailing = 0;
-  for (const row of due) {
-    const before = await prisma.webhookDelivery.findUnique({ where: { id: row.id }, select: { status: true } });
-    await attemptWebhookDelivery(row.id);
-    const after = await prisma.webhookDelivery.findUnique({ where: { id: row.id }, select: { status: true } });
-    if (before?.status !== "SUCCEEDED" && after?.status === "SUCCEEDED") succeeded++;
-    else if (after?.status !== "SUCCEEDED") stillFailing++;
-  }
-
-  return NextResponse.json({ success: true, attempted: due.length, succeeded, stillFailing });
+  return NextResponse.json({ success: true, attempted: result.processedCount, succeeded: result.successCount, stillFailing: result.failedCount });
 }

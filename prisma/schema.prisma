@@ -5669,15 +5669,22 @@ model SystemErrorGroup {
   @@index([incidentId])
 }
 
-/// Platform-wide incidents. Phase 2 ships this table and its admin-facing
-/// read surface with zero automatic writers — Phase 5 is what actually
-/// groups SystemErrorGroups into an incident and flips status/severity as
-/// it evolves. Shipping the model now (rather than in Phase 5) is what lets
-/// the Phase 2 UI show a real (correctly empty) "Active Incidents" count
-/// and a "related incident" field on an error group without a later schema
-/// change or UI rewrite.
+/// Platform-wide incidents. Phase 2 shipped this table with zero automatic
+/// writers; Phase 4's incidentEngine.ts is what actually groups
+/// SystemErrorGroups (and service-state conditions like a webhook backlog
+/// or a stale job) into an incident and flips status/severity as they
+/// evolve.
+///
+/// `fingerprint` identifies "this logical incident" (e.g. "Finix:degraded",
+/// "Background Jobs:reconcile") and is genuinely unique for the row's
+/// entire lifetime, including across a resolve-then-reopen cycle — see
+/// incidentEngine.ts's own doc comment for exactly how the reopen-vs-new-
+/// occurrence decision is made without needing a second row per
+/// fingerprint (which would need a partial unique index this project's
+/// `prisma db push` deploy flow can't express safely).
 model SystemIncident {
   id          String  @id @default(cuid())
+  fingerprint String  @unique
   title       String
   description String?
   service     String
@@ -5701,6 +5708,88 @@ model SystemIncident {
   updatedAt DateTime @updatedAt
 
   errorGroups SystemErrorGroup[]
+  alerts      SystemAlert[]
 
   @@index([status, lastSeenAt])
+}
+
+// ─── Phase 4: Background Job Monitoring + Alerting ──────────────────────────
+
+/// One row per scheduled/background job run — the standardized layer every
+/// cron route in src/app/api/cron/** goes through via
+/// src/lib/monitoring/jobRunTracking.ts, instead of each job inventing its
+/// own tracking. "Last successful run" is deliberately NOT a stored field
+/// here (it's derived via a query — findFirst where jobName+status=SUCCEEDED
+/// order by completedAt desc) to avoid a second write path that could drift
+/// from the run history itself.
+model JobRun {
+  id       String  @id @default(cuid())
+  jobName  String
+  jobType  String
+  // Set only when a run is scoped to one merchant — most of these crons are
+  // platform-wide batch jobs with no single merchant, so this is null for
+  // the large majority of rows.
+  merchantId String?
+
+  // QUEUED | RUNNING | SUCCEEDED | PARTIALLY_FAILED | FAILED | RETRYING
+  status String @default("RUNNING")
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  processedCount Int?
+  successCount   Int?
+  failedCount    Int?
+  retryCount     Int @default(0)
+  attempt        Int @default(1)
+
+  lastErrorCode    String?
+  lastErrorMessage String?
+  requestId        String?
+  metadata         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobName, startedAt])
+  @@index([jobName, status])
+  @@index([status, startedAt])
+}
+
+/// Alert delivery history — one row per notification actually sent (or
+/// attempted) for an incident. Deliberately never written by the same
+/// recordHealthEvent()/SystemErrorGroup pipeline the rest of System Health
+/// uses — see incidentEngine.ts / alertEngine.ts's own doc comments for why
+/// an alert-delivery failure must never itself become a new health event
+/// (the recursive-alert-loop concern).
+model SystemAlert {
+  id         String @id @default(cuid())
+  incidentId String
+
+  // INFO | WARNING | ERROR | CRITICAL — the incident's severity AT THE TIME
+  // this alert was sent, not necessarily its current severity.
+  severity String
+  // DASHBOARD | EMAIL | SMS
+  channel String
+  // INITIAL | ESCALATION | REMINDER | RECOVERY
+  notificationType String
+
+  // WGC's own platform-admin contact (SUPPORT_EMAIL, or a configured alert
+  // phone number) — never a donor/merchant contact, so storing it verbatim
+  // is fine; still kept out of any donor-facing surface.
+  recipient String?
+
+  // PENDING | SENT | FAILED
+  deliveryStatus    String  @default("PENDING")
+  providerMessageId String?
+  failureReason     String?
+
+  sentAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  incident SystemIncident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId, sentAt])
+  @@index([channel, sentAt])
 }

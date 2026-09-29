@@ -89,7 +89,7 @@ function classifyByRate(failureCount: number, totalCount: number, warningRate: n
   return "OPERATIONAL";
 }
 
-async function wgcApiStatus(): Promise<ServiceStatus> {
+export async function wgcApiStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - FINIX_STATUS_WINDOW_MS);
   // No "success" event is ever recorded for WGC API — onRequestError only
   // fires on failure — so lastSuccessAt is genuinely unknowable from this
@@ -128,7 +128,7 @@ async function wgcApiStatus(): Promise<ServiceStatus> {
  * queries are failing" — an absolute floor (see thresholds.ts) is the
  * honest way to say "one query hiccup is noise, ten in five minutes is not."
  */
-async function supabaseStatus(): Promise<ServiceStatus> {
+export async function supabaseStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - DATABASE_STATUS_WINDOW_MS);
   const [everRecorded, recentFailures, lastEver] = await Promise.all([
     prisma.systemHealthEvent.findFirst({ where: { service: "Supabase" }, select: { id: true } }),
@@ -168,7 +168,7 @@ async function supabaseStatus(): Promise<ServiceStatus> {
  */
 const FINIX_MIN_SAMPLE_SIZE = 5;
 
-async function finixStatus(): Promise<ServiceStatus> {
+export async function finixStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - FINIX_STATUS_WINDOW_MS);
   const [failureEvents, successCount, lastEverFailure] = await Promise.all([
     prisma.systemHealthEvent.findMany({
@@ -216,7 +216,7 @@ async function finixStatus(): Promise<ServiceStatus> {
   };
 }
 
-async function resendStatus(): Promise<ServiceStatus> {
+export async function resendStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - RESEND_STATUS_WINDOW_MS);
   const [everSent, recent] = await Promise.all([
     prisma.orgEmailLog.findFirst({ select: { id: true } }),
@@ -244,7 +244,7 @@ async function resendStatus(): Promise<ServiceStatus> {
   };
 }
 
-async function twilioStatus(): Promise<ServiceStatus> {
+export async function twilioStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - TWILIO_STATUS_WINDOW_MS);
   const [everSent, recent] = await Promise.all([
     prisma.authSmsSendLog.findFirst({ select: { id: true } }),
@@ -275,7 +275,7 @@ async function twilioStatus(): Promise<ServiceStatus> {
   };
 }
 
-async function aplosStatus(): Promise<ServiceStatus> {
+export async function aplosStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - APLOS_STATUS_WINDOW_MS);
   const [everSynced, recent] = await Promise.all([
     prisma.aplosSyncRecord.findFirst({ select: { id: true } }),
@@ -311,7 +311,7 @@ async function aplosStatus(): Promise<ServiceStatus> {
  * entirely (a webhook stuck retrying forever is neither "failed" nor
  * "succeeded" in the processingStatus column).
  */
-async function webhooksStatus(): Promise<ServiceStatus> {
+export async function webhooksStatus(): Promise<ServiceStatus> {
   const since = new Date(Date.now() - WEBHOOK_STATUS_WINDOW_MS);
   const staleBefore = new Date(Date.now() - WEBHOOK_PENDING_AGE_THRESHOLD_MS);
   const [everReceived, recent, backlogCount] = await Promise.all([
@@ -348,16 +348,79 @@ async function webhooksStatus(): Promise<ServiceStatus> {
   };
 }
 
-async function backgroundJobsStatus(): Promise<ServiceStatus> {
-  // Confirmed in inspection: none of the 10 Vercel cron routes write to a
-  // generic run-history table — they return a JSON summary and rely on
-  // Vercel's own function logs. Nothing here to compute honestly yet;
-  // Phase 4 is what adds a standardized JobRun-style record. Deliberately
-  // left untouched in Phase 3 per the explicit instruction not to rush a
-  // partial job-monitoring system in ahead of that phase.
-  return unknown("Background Jobs", "No standardized job-run history exists yet (Phase 4).");
+/**
+ * Real as of Phase 4 — computed from JobRun (see jobRunTracking.ts) plus
+ * the centralized cadence/criticality config in jobCadence.ts. A job is
+ * unhealthy for one of two independent reasons: its most recent run
+ * actually FAILED/PARTIALLY_FAILED, or it's gone STALE (no successful run
+ * within its configured staleAfterMs — silent non-execution is exactly as
+ * much a production problem as a thrown exception, per the design doc). A
+ * non-critical job's problem caps at DEGRADED; only a critical job (see
+ * jobCadence.ts) can push this to OUTAGE, so one minor administrative job
+ * failing never reads as "the platform is down."
+ */
+export async function backgroundJobsStatus(): Promise<ServiceStatus> {
+  const everRan = await prisma.jobRun.findFirst({ select: { id: true } });
+  if (!everRan) return unknown("Background Jobs", "No job runs have been recorded yet.");
+
+  const { ACTIVELY_SCHEDULED_JOB_NAMES, getJobConfig } = await import("./jobCadence");
+
+  let worstStatus: ServiceStatusValue = "OPERATIONAL";
+  let failureCount = 0;
+  let lastFailureAt: Date | null = null;
+  let lastSuccessAt: Date | null = null;
+  const problems: string[] = [];
+
+  for (const jobName of ACTIVELY_SCHEDULED_JOB_NAMES) {
+    const config = getJobConfig(jobName);
+    if (!config) continue;
+
+    const [lastRun, lastSuccess] = await Promise.all([
+      prisma.jobRun.findFirst({ where: { jobName }, orderBy: { startedAt: "desc" }, select: { status: true, startedAt: true, completedAt: true } }),
+      prisma.jobRun.findFirst({ where: { jobName, status: "SUCCEEDED" }, orderBy: { completedAt: "desc" }, select: { completedAt: true } }),
+    ]);
+    if (!lastRun) continue; // this job has never run even once yet — not this service card's problem to flag beyond overall "no data" handled above
+
+    if (lastSuccess?.completedAt && (!lastSuccessAt || lastSuccess.completedAt > lastSuccessAt)) lastSuccessAt = lastSuccess.completedAt;
+
+    const isStale = !lastSuccess || Date.now() - lastSuccess.completedAt!.getTime() > config.staleAfterMs;
+    const lastRunFailed = lastRun.status === "FAILED" || lastRun.status === "PARTIALLY_FAILED";
+
+    if (isStale || lastRunFailed) {
+      failureCount++;
+      if (lastRun.startedAt && (!lastFailureAt || lastRun.startedAt > lastFailureAt)) lastFailureAt = lastRun.startedAt;
+      const severity: ServiceStatusValue = config.critical ? "OUTAGE" : "DEGRADED";
+      if (severity === "OUTAGE") worstStatus = "OUTAGE";
+      else if (worstStatus !== "OUTAGE") worstStatus = "DEGRADED";
+      problems.push(isStale ? `${config.label} is stale` : `${config.label} last run ${lastRun.status.toLowerCase()}`);
+    }
+  }
+
+  return {
+    service: "Background Jobs",
+    status: worstStatus,
+    recentFailureCount: failureCount,
+    lastFailureAt,
+    lastSuccessAt,
+    recentlyRecovered: false,
+    note: problems.length > 0 ? problems.join("; ") : "All monitored jobs ran successfully on schedule.",
+  };
 }
 
 export async function getAllServiceStatuses(): Promise<ServiceStatus[]> {
   return Promise.all([wgcApiStatus(), supabaseStatus(), finixStatus(), resendStatus(), twilioStatus(), aplosStatus(), webhooksStatus(), backgroundJobsStatus()]);
+}
+
+/** Looks up a single service's status function by its display name — used by the incident engine so it never has to re-derive the DEGRADED/OUTAGE thresholds serviceStatus.ts already computes. */
+export function getServiceStatusFn(service: string): (() => Promise<ServiceStatus>) | undefined {
+  return {
+    "WGC API": wgcApiStatus,
+    Supabase: supabaseStatus,
+    Finix: finixStatus,
+    Resend: resendStatus,
+    Twilio: twilioStatus,
+    Aplos: aplosStatus,
+    Webhooks: webhooksStatus,
+    "Background Jobs": backgroundJobsStatus,
+  }[service];
 }

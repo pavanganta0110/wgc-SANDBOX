@@ -8,6 +8,7 @@ const mockPrisma = {
   authSmsSendLog: { findFirst: vi.fn(), findMany: vi.fn() },
   aplosSyncRecord: { findFirst: vi.fn(), findMany: vi.fn() },
   finixWebhookEvent: { findFirst: vi.fn(), findMany: vi.fn(), count: vi.fn() },
+  jobRun: { findFirst: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -25,13 +26,110 @@ beforeEach(() => {
   mockPrisma.systemHealthEvent.findMany.mockResolvedValue([]);
   mockPrisma.paymentAttempt.count.mockResolvedValue(0);
   mockPrisma.finixWebhookEvent.count.mockResolvedValue(0);
+  // Default: no job has ever run, so Background Jobs reads UNKNOWN and every
+  // other describe block (which doesn't care about Background Jobs) isn't
+  // forced to also stub out the per-job findFirst pair below.
+  mockPrisma.jobRun.findFirst.mockResolvedValue(null);
 });
 
 describe("getAllServiceStatuses — services with no real measurement yet", () => {
-  it("Background Jobs is always UNKNOWN — no job-run history table exists yet", async () => {
+  it("Background Jobs is UNKNOWN when no job has ever run", async () => {
     const { getAllServiceStatuses } = await loadModule();
     const statuses = await getAllServiceStatuses();
     expect(statuses.find((s) => s.service === "Background Jobs")?.status).toBe("UNKNOWN");
+  });
+});
+
+describe("getAllServiceStatuses — Background Jobs", () => {
+  // backgroundJobsStatus() issues two findFirst calls per actively-scheduled
+  // job (last run, last successful run) after the initial "has anything ever
+  // run" check — this helper drives that per-job pair from one table so
+  // tests stay readable instead of counting call order by hand.
+  function mockJobRuns(byJobName: Record<string, { lastRun: { status: string; startedAt: Date; completedAt?: Date | null } | null; lastSuccessCompletedAt: Date | null }>) {
+    mockPrisma.jobRun.findFirst.mockImplementation((args?: { where?: { jobName?: string; status?: string } }) => {
+      const jobName = args?.where?.jobName;
+      if (!jobName) return Promise.resolve({ id: "some_run" }); // the initial "ever ran at all" probe has no where.jobName
+      const entry = byJobName[jobName];
+      if (!entry) return Promise.resolve(null);
+      if (args?.where?.status === "SUCCEEDED") {
+        return Promise.resolve(entry.lastSuccessCompletedAt ? { completedAt: entry.lastSuccessCompletedAt } : null);
+      }
+      return Promise.resolve(entry.lastRun);
+    });
+  }
+
+  it("is OPERATIONAL when every actively-scheduled job's most recent run succeeded within its cadence", async () => {
+    const now = new Date();
+    mockJobRuns({
+      reconcile: { lastRun: { status: "SUCCEEDED", startedAt: now }, lastSuccessCompletedAt: now },
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    const bg = statuses.find((s) => s.service === "Background Jobs");
+    expect(bg?.status).toBe("OPERATIONAL");
+    expect(bg?.recentFailureCount).toBe(0);
+  });
+
+  it("a non-critical job's FAILED last run only reaches DEGRADED, never OUTAGE", async () => {
+    const now = new Date();
+    mockJobRuns({
+      "invoice-reminders": { lastRun: { status: "FAILED", startedAt: now }, lastSuccessCompletedAt: new Date(now.getTime() - 60 * 60 * 1000) },
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    const bg = statuses.find((s) => s.service === "Background Jobs");
+    expect(bg?.status).toBe("DEGRADED");
+    expect(bg?.recentFailureCount).toBe(1);
+  });
+
+  it("a critical job's FAILED last run pushes the whole card to OUTAGE", async () => {
+    const now = new Date();
+    mockJobRuns({
+      reconcile: { lastRun: { status: "FAILED", startedAt: now }, lastSuccessCompletedAt: new Date(now.getTime() - 60 * 60 * 1000) },
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    expect(statuses.find((s) => s.service === "Background Jobs")?.status).toBe("OUTAGE");
+  });
+
+  it("one non-critical job failing does not escalate a simultaneous critical-job problem, and a critical OUTAGE is never downgraded by a healthy non-critical job", async () => {
+    const now = new Date();
+    mockJobRuns({
+      reconcile: { lastRun: { status: "SUCCEEDED", startedAt: now }, lastSuccessCompletedAt: now },
+      "invoice-reminders": { lastRun: { status: "FAILED", startedAt: now }, lastSuccessCompletedAt: null },
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    const bg = statuses.find((s) => s.service === "Background Jobs");
+    // Only the non-critical job is unhealthy here, so this stays DEGRADED —
+    // a minor job failure must never read as a full platform OUTAGE.
+    expect(bg?.status).toBe("DEGRADED");
+    expect(bg?.recentFailureCount).toBe(1);
+  });
+
+  it("a job with no successful run ever, past its stale window, is flagged stale even if its last run's status was SUCCEEDED long enough ago to no longer count", async () => {
+    const now = new Date();
+    mockJobRuns({
+      "webhook-retry": { lastRun: { status: "SUCCEEDED", startedAt: new Date(now.getTime() - 72 * 60 * 60 * 1000) }, lastSuccessCompletedAt: null },
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    const bg = statuses.find((s) => s.service === "Background Jobs");
+    expect(bg?.status).not.toBe("OPERATIONAL");
+    expect(bg?.note).toMatch(/stale/);
+  });
+
+  it("a job that has genuinely never run yet (no row at all) is skipped, not counted as a failure", async () => {
+    const now = new Date();
+    mockJobRuns({
+      reconcile: { lastRun: { status: "SUCCEEDED", startedAt: now }, lastSuccessCompletedAt: now },
+      // every other configured job name is absent from the map -> mockJobRuns resolves null for both its findFirst calls
+    });
+    const { getAllServiceStatuses } = await loadModule();
+    const statuses = await getAllServiceStatuses();
+    const bg = statuses.find((s) => s.service === "Background Jobs");
+    expect(bg?.status).toBe("OPERATIONAL");
+    expect(bg?.recentFailureCount).toBe(0);
   });
 });
 

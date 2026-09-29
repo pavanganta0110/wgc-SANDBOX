@@ -123,6 +123,17 @@ export async function recordHealthEvent(params: RecordHealthEventParams): Promis
         },
       });
       errorGroupId = group.id;
+
+      // Event-driven half of incident detection (the periodic half runs
+      // from the daily system-health-sweep cron — see incidentEngine.ts's
+      // own doc comment for why both exist). Dynamic import avoids a real
+      // circular dependency: incidentEngine.ts -> alertEngine.ts ->
+      // src/lib/email.ts -> resendHealth.ts -> back to this file. Fire-
+      // and-forget and independently try/caught — an incident-engine
+      // failure must never affect the health event this call is recording.
+      import("./incidentEngine")
+        .then((mod) => mod.evaluateErrorGroupIncident(params.service))
+        .catch((err) => console.error("[recordHealthEvent] incident evaluation failed:", err));
     }
 
     const wgcReference = generateSupportReference();
