@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { syncFeesForTransfer } from "@/lib/finix/sync/syncFees";
 import { syncSettlements } from "@/lib/finix/sync/syncSettlements";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Backfills payment instrument + donor identity + fee + settlement linkage
@@ -16,6 +17,9 @@ export async function POST(
   { params }: { params: Promise<{ churchId: string }> }
 ) {
   const { churchId } = await params;
+
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   if (!church) {

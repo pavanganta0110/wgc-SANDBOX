@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Subscriptions sync is intentionally disabled until Finix confirms this
@@ -9,6 +10,9 @@ import { NextResponse } from "next/server";
  * Finix subscription response.
  */
 export async function POST() {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   if (process.env.FINIX_SUBSCRIPTIONS_SYNC_ENABLED !== "true") {
     return NextResponse.json(
       {

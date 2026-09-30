@@ -14,6 +14,9 @@ vi.mock("@/lib/email", async (importOriginal) => {
   return { ...actual, sendWgcEmail: (...a: unknown[]) => mockSendWgcEmail(...a) };
 });
 
+const mockGetAdminSession = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getAdminSession: () => mockGetAdminSession() }));
+
 const mockPrisma = {
   onboardingApplication: {
     findUnique: vi.fn(),
@@ -34,9 +37,18 @@ function postReq(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.onboardingApplication.update.mockResolvedValue({});
+  mockGetAdminSession.mockResolvedValue({ userId: "admin_1", email: "admin@wgc.com", role: "wgc_admin" });
 });
 
 describe("POST /api/admin/regenerate-token", () => {
+  it("rejects an unauthenticated request", async () => {
+    mockGetAdminSession.mockResolvedValue(null);
+    const { POST } = await load();
+    const res = await POST(postReq({ applicationId: "app-1" }));
+    expect(res.status).toBe(401);
+    expect(mockPrisma.onboardingApplication.findUnique).not.toHaveBeenCalled();
+  });
+
   it("sends the real requested items and a secure link, and falls back to legalBusinessName", async () => {
     mockPrisma.onboardingApplication.findUnique.mockResolvedValue({
       id: "app-1",

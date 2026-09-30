@@ -45,6 +45,9 @@ const mockPrisma = {
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
+const mockGetAdminSession = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getAdminSession: () => mockGetAdminSession() }));
+
 async function load() {
   vi.resetModules();
   return import("../route");
@@ -66,9 +69,18 @@ beforeEach(() => {
   mockPrisma.onboardingApplication.findUnique.mockResolvedValue({ ...APP_ROW });
   mockCreateFileResource.mockResolvedValue({ id: "FI123" });
   mockCreateVerification.mockResolvedValue({ id: "VI123" });
+  mockGetAdminSession.mockResolvedValue({ userId: "admin_1", email: "admin@wgc.com", role: "wgc_admin" });
 });
 
 describe("POST /api/admin/upload-evidence", () => {
+  it("rejects an unauthenticated request", async () => {
+    mockGetAdminSession.mockResolvedValue(null);
+    const { POST } = await load();
+    const res = await POST(postReq("app-1", pdfFile()));
+    expect(res.status).toBe(401);
+    expect(mockCreateFileResource).not.toHaveBeenCalled();
+  });
+
   it("tags the file with the real Finix type from the stored Verification, not a hardcoded generic type", async () => {
     mockPrisma.onboardingApplication.findUnique.mockResolvedValue({
       ...APP_ROW,

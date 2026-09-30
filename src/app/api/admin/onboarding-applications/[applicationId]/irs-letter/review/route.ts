@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentIrsLetter, reviewIrsLetter } from "@/lib/onboarding/irsLetterService";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Admin-only: full document metadata for the admin review card, plus
@@ -9,12 +10,18 @@ import { getCurrentIrsLetter, reviewIrsLetter } from "@/lib/onboarding/irsLetter
  * state (per the explicit business rule that automatic cross-linking is
  * out of scope for now).
  *
- * Auth: gated by middleware.ts's HTTP Basic Auth on /api/admin/* — see
- * the access route's comment for why this route doesn't do its own
- * session check (matches every other existing /api/admin/* route).
+ * Auth: requires a real, DB-backed admin session via getAdminSession() —
+ * the previous comment here claiming middleware.ts's HTTP Basic Auth
+ * alone gates this route was stale (this codebase uses signed session
+ * cookies, not Basic Auth, and that cookie check never revokes a
+ * disabled admin's or a just-password-reset admin's existing session).
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ applicationId: string }> }) {
   const { applicationId } = await params;
+
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const [app, document] = await Promise.all([
     prisma.onboardingApplication.findUnique({ where: { id: applicationId }, select: { id: true, organizationName: true } }),
     getCurrentIrsLetter(applicationId),
@@ -50,6 +57,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ applica
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ applicationId: string }> }) {
   const { applicationId } = await params;
+
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json().catch(() => ({}));
   const document = await getCurrentIrsLetter(applicationId);
   if (!document) {
@@ -63,7 +74,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ applic
       status: body.status,
       internalReviewNotes: typeof body.internalReviewNotes === "string" ? body.internalReviewNotes : undefined,
       organizationFacingMessage: typeof body.organizationFacingMessage === "string" ? body.organizationFacingMessage : undefined,
-      reviewedByUserId: "wgc_admin",
+      reviewedByUserId: session.userId,
     });
     return NextResponse.json({ success: true, status: updated.status });
   } catch (err: any) {

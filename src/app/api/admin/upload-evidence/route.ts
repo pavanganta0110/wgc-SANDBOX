@@ -3,8 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { extractRequestedFileType } from "@/lib/finix/parseVerificationOutcomes";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const formData = await req.formData();
     

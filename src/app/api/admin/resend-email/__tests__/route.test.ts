@@ -24,6 +24,9 @@ const mockPrisma = {
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
+const mockGetAdminSession = vi.fn();
+vi.mock("@/lib/auth/session", () => ({ getAdminSession: () => mockGetAdminSession() }));
+
 async function load() {
   vi.resetModules();
   return import("../route");
@@ -36,6 +39,17 @@ function postReq(body: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mockPrisma.onboardingApplication.update.mockResolvedValue({});
+  mockGetAdminSession.mockResolvedValue({ userId: "admin_1", email: "admin@wgc.com", role: "wgc_admin" });
+});
+
+describe("POST /api/admin/resend-email — auth", () => {
+  it("rejects an unauthenticated request", async () => {
+    mockGetAdminSession.mockResolvedValue(null);
+    const { POST } = await load();
+    const res = await POST(postReq({ applicationId: "app-1" }));
+    expect(res.status).toBe(401);
+    expect(mockSendWgcEmail).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/admin/resend-email — MORE_INFORMATION_REQUIRED", () => {

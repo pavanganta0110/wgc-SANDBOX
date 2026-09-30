@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail, buildOnboardingStatusEmailContent } from "@/lib/email";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { applicationId } = await req.json();
 
