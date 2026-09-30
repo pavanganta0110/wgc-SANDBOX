@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
-import { Activity, ShieldCheck, Building2, AlertTriangle, CreditCard, ServerCog, ArrowUpRight } from "lucide-react";
+import { Activity, ShieldCheck, Building2, AlertTriangle, CreditCard, ServerCog, ArrowUpRight, Globe, Smartphone, MapPin, Link2 } from "lucide-react";
 
 interface ServiceStatus {
   service: string;
@@ -33,6 +33,21 @@ interface CheckoutThroughput {
   succeededLastHour: number;
   failedLastHour: number;
   successRatePercent: number | null;
+}
+
+interface Bucket {
+  label: string;
+  count: number;
+}
+
+interface LiveVisitors {
+  configured: boolean;
+  totalLiveVisitors: number;
+  topPages: Bucket[];
+  devices: Bucket[];
+  countries: Bucket[];
+  referrers: Bucket[];
+  error: string | null;
 }
 
 interface ActiveUsersNow {
@@ -87,6 +102,35 @@ function fmtDate(d: string | null): string {
   return d ? new Date(d).toLocaleString() : "—";
 }
 
+function BucketList({ icon: Icon, label, buckets, emptyText }: { icon: React.ElementType; label: string; buckets: Bucket[]; emptyText: string }) {
+  const max = buckets[0]?.count ?? 0;
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon className="h-3.5 w-3.5 text-slate-400" />
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{label}</p>
+      </div>
+      {buckets.length === 0 ? (
+        <p className="text-xs text-slate-400 italic">{emptyText}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {buckets.map((b) => (
+            <li key={b.label} className="text-xs">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="text-slate-700 truncate">{b.label}</span>
+                <span className="text-slate-400 font-medium shrink-0">{b.count}</span>
+              </div>
+              <div className="h-1 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full bg-indigo-400" style={{ width: `${max > 0 ? (b.count / max) * 100 : 0}%` }} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SectionHeader({ icon: Icon, title, action }: { icon: React.ElementType; title: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-3">
@@ -128,6 +172,7 @@ function ServiceCard({ service }: { service: ServiceStatus }) {
 export default function SystemHealthOverviewClient() {
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [liveVisitors, setLiveVisitors] = useState<LiveVisitors | null>(null);
 
   useEffect(() => {
     const load = () =>
@@ -137,11 +182,26 @@ export default function SystemHealthOverviewClient() {
         .catch(() => toast.error("Failed to load System Health overview"))
         .finally(() => setLoading(false));
 
+    // Separate endpoint/fetch from the main overview — this one calls out
+    // to PostHog's API (see liveVisitors.ts) rather than this app's own
+    // database, so it's kept independent: a slow or failing PostHog call
+    // can never delay or break the rest of this page's real-time data.
+    const loadLiveVisitors = () =>
+      fetch("/api/admin/system-health/live-visitors")
+        .then((r) => r.json())
+        .then((d) => setLiveVisitors(d))
+        .catch(() => {});
+
     load();
-    // Refreshes "Active Now" (and everything else on this page) every 30s
-    // without a manual reload — a short enough interval to feel live, long
-    // enough to stay cheap even with this page open in a background tab.
-    const interval = setInterval(load, 30_000);
+    loadLiveVisitors();
+    // Refreshes "Active Now" / live visitors (and everything else on this
+    // page) every 30s without a manual reload — a short enough interval to
+    // feel live, long enough to stay cheap even with this page open in a
+    // background tab.
+    const interval = setInterval(() => {
+      load();
+      loadLiveVisitors();
+    }, 30_000);
     return () => clearInterval(interval);
   }, []);
 
@@ -258,6 +318,38 @@ export default function SystemHealthOverviewClient() {
                 )}
               </div>
             </div>
+          </div>
+
+          <SectionHeader
+            icon={Globe}
+            title="Live Website Visitors"
+            action={
+              liveVisitors?.configured && (
+                <span className="text-2xl font-extrabold text-indigo-600">{liveVisitors.totalLiveVisitors}</span>
+              )
+            }
+          />
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-8">
+            {!liveVisitors || !liveVisitors.configured ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-slate-500 mb-1">Not connected yet.</p>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  PostHog is already tracking your site&apos;s traffic (posthog-js runs on every page) — add{" "}
+                  <code className="px-1 py-0.5 bg-slate-100 rounded font-mono">POSTHOG_PERSONAL_API_KEY</code> and{" "}
+                  <code className="px-1 py-0.5 bg-slate-100 rounded font-mono">POSTHOG_PROJECT_ID</code> as environment variables to show live
+                  visitor breakdowns here.
+                </p>
+              </div>
+            ) : liveVisitors.error ? (
+              <p className="text-sm text-amber-600 text-center py-6">Temporarily unavailable: {liveVisitors.error}</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <BucketList icon={Link2} label="Top Pages" buckets={liveVisitors.topPages} emptyText="No page views in the last 5 minutes." />
+                <BucketList icon={Smartphone} label="Device" buckets={liveVisitors.devices} emptyText="—" />
+                <BucketList icon={MapPin} label="Location" buckets={liveVisitors.countries} emptyText="—" />
+                <BucketList icon={Link2} label="Referrer" buckets={liveVisitors.referrers} emptyText="—" />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
