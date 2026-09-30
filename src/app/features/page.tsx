@@ -126,8 +126,8 @@ const CATEGORIES: FeatureCategory[] = [
     title: "Fundraising Tools",
     description: "Beyond basic giving — tools for campaigns that involve more than one giving page.",
     items: [
-      { icon: QrCode, title: "Peer-to-peer fundraising", description: "Individual and team fundraiser pages under one campaign, each with its own link and progress.", badge: "Coming Soon" },
-      { icon: Trophy, title: "Fundraiser & team leaderboards", description: "Rank individual fundraisers or teams by amount raised.", badge: "Coming Soon" },
+      { icon: QrCode, title: "Peer-to-peer fundraising", description: "Individual and team fundraiser pages under one campaign, each with its own link and progress." },
+      { icon: Trophy, title: "Fundraiser & team leaderboards", description: "Rank individual fundraisers or teams by amount raised." },
       { icon: Heart, title: "Donor walls & social sharing", description: "Publicly recognize supporters and make it easy to share a campaign.", badge: "Coming Soon" },
       { icon: Radio, title: "Text-to-give & SMS donor engagement", description: "Give and receive updates by text message.", badge: "Coming Soon" },
       { icon: Ticket, title: "Event fundraising", description: "Attendees, tickets, capacity, and check-in for fundraising events.", badge: "Coming Soon" },
