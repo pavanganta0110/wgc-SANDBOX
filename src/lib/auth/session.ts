@@ -151,6 +151,11 @@ export async function getSession(): Promise<SessionPayload | null> {
     const impersonation = await resolveActiveImpersonation(payload.userId);
     if (!impersonation) return null;
 
+    // Fire-and-forget, self-throttled — see activity.ts. payload.userId is
+    // the real admin behind this impersonation session (the merchant-side
+    // identity above is swapped, but this is genuinely them, active).
+    void touchUserActivity(payload.userId);
+
     return {
       userId: impersonation.adminUserId,
       email: impersonation.adminEmail,
@@ -179,6 +184,13 @@ export async function getSession(): Promise<SessionPayload | null> {
   });
   if (!user || user.disabledAt) return null;
   if ((payload.authVersion ?? 0) !== user.authVersion) return null;
+
+  // Fire-and-forget, self-throttled at the DB level — see activity.ts.
+  // This is the auth path most of the ~30 merchant pages mentioned above
+  // actually call, so it needs the same touch requireMerchantSession() and
+  // getAdminSession() already get, or "Active Now" silently misses most
+  // real merchant traffic.
+  void touchUserActivity(payload.userId);
 
   return payload;
 }
