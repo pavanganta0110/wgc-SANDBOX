@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
+import { Activity, ShieldCheck, Building2, AlertTriangle, CreditCard, ServerCog, ArrowUpRight } from "lucide-react";
 
 interface ServiceStatus {
   service: string;
@@ -38,6 +39,8 @@ interface ActiveUsersNow {
   admins: number;
   merchantStaff: number;
   total: number;
+  activeAdmins: { id: string; name: string | null; email: string }[];
+  activeMerchants: { id: string; name: string; activeStaffCount: number }[];
 }
 
 interface Overview {
@@ -82,6 +85,20 @@ function StatCard({ label, value, sublabel, unknown, href }: { label: string; va
 
 function fmtDate(d: string | null): string {
   return d ? new Date(d).toLocaleString() : "—";
+}
+
+function SectionHeader({ icon: Icon, title, action }: { icon: React.ElementType; title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center gap-2">
+        <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{title}</h2>
+      </div>
+      {action}
+    </div>
+  );
 }
 
 function ServiceCard({ service }: { service: ServiceStatus }) {
@@ -131,7 +148,12 @@ export default function SystemHealthOverviewClient() {
   return (
     <div className="p-6 md:p-8 max-w-7xl">
       <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold text-slate-900">System Health</h1>
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white">
+            <Activity className="h-4 w-4" />
+          </span>
+          System Health
+        </h1>
         <div className="flex gap-2">
           <Link href="/admin/system-health/errors" className="px-4 py-2 rounded-full border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             Errors
@@ -176,24 +198,66 @@ export default function SystemHealthOverviewClient() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 mb-8 flex items-center gap-8 flex-wrap">
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active Now</p>
-              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.total}</p>
-              <p className="text-xs text-slate-400">Logged-in users active in the last 5 minutes</p>
+          <div className="relative rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/60 via-white to-white p-5 mb-8 overflow-hidden">
+            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-indigo-100/50 blur-2xl" aria-hidden="true" />
+            <div className="relative flex items-center justify-between flex-wrap gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </span>
+                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Active Now</h2>
+                <span className="text-2xl font-extrabold text-indigo-600 ml-1">{data.activeUsersNow.total}</span>
+              </div>
+              <p className="text-xs text-slate-400 max-w-sm">
+                Real logged-in accounts only, active in the last 5 min. Anonymous donor traffic is tracked separately in Vercel Analytics.
+              </p>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">WGC Admins</p>
-              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.admins}</p>
+
+            <div className="relative grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white/80 backdrop-blur rounded-xl border border-slate-100 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShieldCheck className="h-4 w-4 text-indigo-500" />
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">WGC Admins</p>
+                  <span className="ml-auto text-lg font-bold text-slate-900">{data.activeUsersNow.admins}</span>
+                </div>
+                {data.activeUsersNow.activeAdmins.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No admins currently active.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {data.activeUsersNow.activeAdmins.map((a) => (
+                      <li key={a.id} className="text-xs text-slate-600 flex items-center gap-1.5 truncate">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <span className="font-medium text-slate-800 truncate">{a.name || a.email}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="bg-white/80 backdrop-blur rounded-xl border border-slate-100 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Building2 className="h-4 w-4 text-indigo-500" />
+                  <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Merchant Staff</p>
+                  <span className="ml-auto text-lg font-bold text-slate-900">{data.activeUsersNow.merchantStaff}</span>
+                </div>
+                {data.activeUsersNow.activeMerchants.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No merchant staff currently active.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {data.activeUsersNow.activeMerchants.map((m) => (
+                      <li key={m.id} className="text-xs text-slate-600 flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                        <Link href={`/admin/merchants/${m.id}`} className="font-medium text-slate-800 hover:text-indigo-600 hover:underline truncate">
+                          {m.name}
+                        </Link>
+                        <span className="ml-auto text-slate-400 shrink-0">{m.activeStaffCount} online</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Merchant Staff</p>
-              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.merchantStaff}</p>
-            </div>
-            <p className="text-xs text-slate-400 ml-auto max-w-sm">
-              Counts real logged-in accounts only (merchants + WGC admins). Anonymous donor traffic on public giving pages is tracked separately
-              in Vercel Analytics.
-            </p>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
@@ -223,14 +287,17 @@ export default function SystemHealthOverviewClient() {
             <StatCard label="Last Deployment" value={data.lastDeployment?.commitSha?.slice(0, 7) ?? "Unknown"} unknown={!data.lastDeployment} sublabel={data.lastDeployment?.commitMessage ?? undefined} />
           </div>
 
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Active Issues</h2>
-            {data.activeIssues.length > 0 && (
-              <Link href="/admin/system-health/incidents" className="text-xs font-semibold text-indigo-600 hover:underline">
-                View all incidents &rarr;
-              </Link>
-            )}
-          </div>
+          <SectionHeader
+            icon={AlertTriangle}
+            title="Active Issues"
+            action={
+              data.activeIssues.length > 0 && (
+                <Link href="/admin/system-health/incidents" className="text-xs font-semibold text-indigo-600 hover:underline inline-flex items-center gap-0.5">
+                  View all incidents <ArrowUpRight className="h-3 w-3" />
+                </Link>
+              )
+            }
+          />
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-8">
             {data.activeIssues.length === 0 ? (
               <p className="px-4 py-6 text-center text-slate-400 text-sm">No active issues — every service is operating normally.</p>
@@ -272,7 +339,7 @@ export default function SystemHealthOverviewClient() {
             )}
           </div>
 
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Checkout Throughput</h2>
+          <SectionHeader icon={CreditCard} title="Checkout Throughput" />
           <p className="text-xs text-slate-400 mb-3 -mt-2">
             Real donation/payment volume — the direct answer to &quot;if a lot of people check out at once, would we know.&quot; Read-only off the
             same records the checkout flow already writes; never a new load on checkout itself. Sitewide visitor traffic and page performance
@@ -291,7 +358,7 @@ export default function SystemHealthOverviewClient() {
             />
           </div>
 
-          <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Services</h2>
+          <SectionHeader icon={ServerCog} title="Services" />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {data.services.map((s) => (
               <ServiceCard key={s.service} service={s} />

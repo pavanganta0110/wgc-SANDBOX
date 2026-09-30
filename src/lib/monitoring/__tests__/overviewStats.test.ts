@@ -6,7 +6,8 @@ const mockPrisma = {
   systemHealthEvent: { findMany: vi.fn() },
   apiRequestLog: { aggregate: vi.fn(), count: vi.fn() },
   paymentAttempt: { count: vi.fn() },
-  user: { count: vi.fn() },
+  user: { findMany: vi.fn(), groupBy: vi.fn() },
+  church: { findMany: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -34,24 +35,56 @@ beforeEach(() => {
   mockPrisma.apiRequestLog.aggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { durationMs: null } });
   mockPrisma.apiRequestLog.count.mockResolvedValue(0);
   mockPrisma.paymentAttempt.count.mockResolvedValue(0);
-  mockPrisma.user.count.mockResolvedValue(0);
+  mockPrisma.user.findMany.mockResolvedValue([]);
+  mockPrisma.user.groupBy.mockResolvedValue([]);
+  mockPrisma.church.findMany.mockResolvedValue([]);
 });
 
 describe("getSystemHealthOverview — activeUsersNow", () => {
-  it("splits active-now counts between WGC admins and merchant staff, and sums them into total", async () => {
-    mockPrisma.user.count.mockImplementation(({ where }: { where: { role: { in?: string[]; notIn?: string[] } } }) => {
-      if (where.role.in) return Promise.resolve(2); // wgc_admin/wgc_super_admin bucket
-      return Promise.resolve(5); // notIn bucket — everyone else (merchant staff)
-    });
+  it("is all-zero, with empty lists, when nobody has been active recently", async () => {
     const { getSystemHealthOverview } = await loadModule();
     const overview = await getSystemHealthOverview();
-    expect(overview.activeUsersNow).toEqual({ admins: 2, merchantStaff: 5, total: 7 });
+    expect(overview.activeUsersNow).toEqual({ admins: 0, merchantStaff: 0, total: 0, activeAdmins: [], activeMerchants: [] });
   });
 
-  it("is zero, not null/undefined, when nobody has been active recently", async () => {
+  it("lists exactly which WGC admins are active right now", async () => {
+    mockPrisma.user.findMany.mockResolvedValue([
+      { id: "admin_1", name: "Jane Admin", email: "jane@wgcpayments.com" },
+      { id: "admin_2", name: null, email: "support@wgcpayments.com" },
+    ]);
     const { getSystemHealthOverview } = await loadModule();
     const overview = await getSystemHealthOverview();
-    expect(overview.activeUsersNow).toEqual({ admins: 0, merchantStaff: 0, total: 0 });
+    expect(overview.activeUsersNow.admins).toBe(2);
+    expect(overview.activeUsersNow.activeAdmins).toEqual([
+      { id: "admin_1", name: "Jane Admin", email: "jane@wgcpayments.com" },
+      { id: "admin_2", name: null, email: "support@wgcpayments.com" },
+    ]);
+  });
+
+  it("lists exactly which merchants have active staff right now, with a real per-merchant name and count, most-active first", async () => {
+    mockPrisma.user.groupBy.mockResolvedValue([
+      { churchId: "church_a", _count: { _all: 1 } },
+      { churchId: "church_b", _count: { _all: 3 } },
+    ]);
+    mockPrisma.church.findMany.mockResolvedValue([
+      { id: "church_a", name: "First Baptist" },
+      { id: "church_b", name: "Grace Fellowship" },
+    ]);
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.activeUsersNow.merchantStaff).toBe(4);
+    expect(overview.activeUsersNow.activeMerchants).toEqual([
+      { id: "church_b", name: "Grace Fellowship", activeStaffCount: 3 },
+      { id: "church_a", name: "First Baptist", activeStaffCount: 1 },
+    ]);
+  });
+
+  it("falls back to a clear label rather than silently dropping the row when a church can't be resolved (e.g. deleted)", async () => {
+    mockPrisma.user.groupBy.mockResolvedValue([{ churchId: "church_missing", _count: { _all: 1 } }]);
+    mockPrisma.church.findMany.mockResolvedValue([]); // church row not found (e.g. deleted)
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.activeUsersNow.activeMerchants).toEqual([{ id: "church_missing", name: "Unknown Merchant", activeStaffCount: 1 }]);
   });
 });
 

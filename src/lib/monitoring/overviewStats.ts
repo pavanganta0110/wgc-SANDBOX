@@ -68,6 +68,10 @@ export interface SystemHealthOverview {
     admins: number;
     merchantStaff: number;
     total: number;
+    /** Exactly which WGC admins are active right now — see activeUsersNow's own note on why donors are never in this data. */
+    activeAdmins: { id: string; name: string | null; email: string }[];
+    /** Exactly which merchants have staff active right now, most-active first. */
+    activeMerchants: { id: string; name: string; activeStaffCount: number }[];
   };
 }
 
@@ -117,10 +121,28 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
   ]);
   const resolvedLastHour = succeededLastHour + failedLastHour;
 
-  const [activeAdmins, activeMerchantStaff] = await Promise.all([
-    prisma.user.count({ where: { lastActiveAt: { gte: since5min }, role: { in: ["wgc_admin", "wgc_super_admin"] } } }),
-    prisma.user.count({ where: { lastActiveAt: { gte: since5min }, role: { notIn: ["wgc_admin", "wgc_super_admin"] } } }),
+  const [activeAdminRows, activeMerchantUserRows] = await Promise.all([
+    prisma.user.findMany({
+      where: { lastActiveAt: { gte: since5min }, role: { in: ["wgc_admin", "wgc_super_admin"] } },
+      select: { id: true, name: true, email: true },
+    }),
+    prisma.user.groupBy({
+      by: ["churchId"],
+      where: { lastActiveAt: { gte: since5min }, role: { notIn: ["wgc_admin", "wgc_super_admin"] }, churchId: { not: null } },
+      _count: { _all: true },
+    }),
   ]);
+
+  // Names resolved the same way the error-group/incident detail routes do —
+  // never anything beyond a merchant's name.
+  const activeChurchIds = activeMerchantUserRows.map((r) => r.churchId).filter((id): id is string => !!id);
+  const activeChurches = activeChurchIds.length ? await prisma.church.findMany({ where: { id: { in: activeChurchIds } }, select: { id: true, name: true } }) : [];
+  const churchNameById = new Map(activeChurches.map((c) => [c.id, c.name]));
+  const activeMerchants = activeMerchantUserRows
+    .filter((r): r is typeof r & { churchId: string } => !!r.churchId)
+    .map((r) => ({ id: r.churchId, name: churchNameById.get(r.churchId) ?? "Unknown Merchant", activeStaffCount: r._count._all }))
+    .sort((a, b) => b.activeStaffCount - a.activeStaffCount);
+  const activeMerchantStaffTotal = activeMerchants.reduce((sum, m) => sum + m.activeStaffCount, 0);
 
   const failedApiRequests = await prisma.apiRequestLog.count({ where: { createdAt: { gte: since24h }, statusCode: { gte: 500 } } });
   const totalApiRequests = apiRequestStats._count._all;
@@ -178,9 +200,11 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
       successRatePercent: resolvedLastHour > 0 ? Math.round((succeededLastHour / resolvedLastHour) * 1000) / 10 : null,
     },
     activeUsersNow: {
-      admins: activeAdmins,
-      merchantStaff: activeMerchantStaff,
-      total: activeAdmins + activeMerchantStaff,
+      admins: activeAdminRows.length,
+      merchantStaff: activeMerchantStaffTotal,
+      total: activeAdminRows.length + activeMerchantStaffTotal,
+      activeAdmins: activeAdminRows,
+      activeMerchants,
     },
   };
 }
