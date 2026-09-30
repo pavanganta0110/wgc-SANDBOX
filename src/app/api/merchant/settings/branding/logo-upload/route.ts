@@ -6,7 +6,17 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { uploadPublicLogo } from "@/lib/storage/logoStorage";
 import { revalidatePath } from "next/cache";
 
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml", "image/webp"];
+// SVG deliberately excluded — matches every sibling logo/image upload route
+// in this codebase (invoicing logo-upload, giving-links logo-upload,
+// campaigns image-upload), none of which accept it. Confirmed via security
+// review: an uploaded SVG lands in the PUBLIC merchant-logos storage
+// bucket with its content-type preserved, and an SVG can embed a <script>
+// — this app's own <img src> rendering never executes it, but a direct
+// visit to the public storage URL might, depending on how that origin
+// serves the file. This route was the one inconsistent exception; removing
+// SVG here just brings it in line with the rest of the app rather than
+// fixing something uniquely broken about this route.
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const MAX_LOGO_SIZE = 5 * 1024 * 1024;
 
 export async function POST(req: Request) {

@@ -18,6 +18,7 @@ import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionS
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+import { normalizeEmail } from "@/lib/donors/donorContact";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
@@ -303,6 +304,38 @@ async function handleDonate(req: Request, slug: string) {
       if (!instrument?.id) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Payment method not found on Finix", retryable: true }, { status: 404 });
       }
+
+      // Ownership check — confirmed via security review that without this,
+      // a caller who obtains ANY valid Finix paymentInstrumentId (this
+      // church's own or, if ever leaked by any future code path, another
+      // church's) could charge it while supplying an arbitrary donor
+      // name/email. Worse than an unauthorized charge alone:
+      // resolveOrCreateDonor() below matches an existing Donor by this same
+      // finixIdentityId, so an attacker-supplied email/name would silently
+      // overwrite the real owner's donor profile via applyProfileUpdates().
+      // A saved instrument may only be reused by the same church that
+      // already has a Donor record on file for it, and only when the
+      // request's own email matches that donor's email — a legitimate
+      // returning donor giving again always satisfies this; nothing else
+      // does.
+      const instrumentOwner = await prisma.finixPaymentInstrumentSnapshot.findUnique({
+        where: { finixPaymentInstrumentId: instrumentId },
+        select: { churchId: true, donorId: true },
+      });
+      const ownerDonor = instrumentOwner?.donorId
+        ? await prisma.donor.findUnique({ where: { id: instrumentOwner.donorId }, select: { email: true } })
+        : null;
+      const requestEmail = normalizeEmail(donor?.email);
+      const ownerEmail = normalizeEmail(ownerDonor?.email ?? null);
+      const isOwnershipVerified =
+        instrumentOwner?.churchId === church.id && !!ownerEmail && !!requestEmail && ownerEmail === requestEmail;
+      if (!isOwnershipVerified) {
+        return NextResponse.json(
+          { success: false, code: "VALIDATION_ERROR", message: "This saved payment method is not available for this donor.", retryable: false },
+          { status: 403 }
+        );
+      }
+
       identityId = instrument.identity;
       // Finix's GET/POST /payment_instruments response has `brand` as a flat
       // top-level field, not nested under a `card` object — confirmed

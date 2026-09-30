@@ -7,13 +7,13 @@ import { PrintfulProvider } from "@/lib/integrations/printful/realProvider";
 import { recordAndProcessWebhookEvent } from "@/lib/integrations/printful/webhooks";
 
 /**
- * Real Printful webhook receiver (spec item 44). Verification is only
- * enforced once PRINTFUL_WEBHOOK_SECRET is actually configured — in mock
- * mode / before real credentials arrive, this endpoint still exists and is
- * exercised by the mock webhook simulator (see
- * webhooks.ts/simulateMockWebhookEvent) so the pipeline is genuinely
- * tested end-to-end, but nothing external can reach it usefully without a
- * real Printful account pointed at it.
+ * Real Printful webhook receiver (spec item 44). Fails closed when
+ * PRINTFUL_WEBHOOK_SECRET is not configured — same rule as the Finix
+ * webhook handler. The mock webhook simulator (see
+ * webhooks.ts/simulateMockWebhookEvent) never goes through this HTTP
+ * route; it calls recordAndProcessWebhookEvent directly from the
+ * authenticated merchant order-detail page, so requiring the secret here
+ * never blocks the sandbox pipeline.
  *
  * Printful's v1 webhooks have no universally-documented HMAC signature
  * header the way Finix/Stripe do, so this uses the standard practical
@@ -33,14 +33,18 @@ import { recordAndProcessWebhookEvent } from "@/lib/integrations/printful/webhoo
  */
 export async function POST(req: Request) {
   const webhookSecret = getPrintfulWebhookSecret();
-  if (webhookSecret) {
-    const providedKey = new URL(req.url).searchParams.get("key") || "";
-    const expected = Buffer.from(webhookSecret);
-    const provided = Buffer.from(providedKey);
-    const valid = expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
-    if (!valid) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  if (!webhookSecret) {
+    // Fail closed — mirrors the Finix webhook handler, which rejects with
+    // 401 whenever no authentication is configured. A missing secret must
+    // never silently disable verification.
+    return NextResponse.json({ error: "Unauthorized: No authentication configured" }, { status: 401 });
+  }
+  const providedKey = new URL(req.url).searchParams.get("key") || "";
+  const expected = Buffer.from(webhookSecret);
+  const provided = Buffer.from(providedKey);
+  const valid = expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
+  if (!valid) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   let rawBody: string;
