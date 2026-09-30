@@ -57,6 +57,18 @@ export interface SystemHealthOverview {
     /** null = Unknown (no attempts in the window to compute a rate from). */
     successRatePercent: number | null;
   };
+  /**
+   * "Active Now" — merchant staff and WGC admins with a real, throttled
+   * activity touch (see activity.ts / touchUserActivity()) within the last
+   * 5 minutes. Deliberately does NOT include anonymous donor traffic on
+   * public giving pages (donors don't log in, so there's no account to
+   * attribute activity to) — that's covered separately by Vercel Analytics.
+   */
+  activeUsersNow: {
+    admins: number;
+    merchantStaff: number;
+    total: number;
+  };
 }
 
 const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, ERROR: 1, WARNING: 2, INFO: 3 };
@@ -104,6 +116,11 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
     prisma.paymentAttempt.count({ where: { createdAt: { gte: since1h }, status: "FAILED" } }),
   ]);
   const resolvedLastHour = succeededLastHour + failedLastHour;
+
+  const [activeAdmins, activeMerchantStaff] = await Promise.all([
+    prisma.user.count({ where: { lastActiveAt: { gte: since5min }, role: { in: ["wgc_admin", "wgc_super_admin"] } } }),
+    prisma.user.count({ where: { lastActiveAt: { gte: since5min }, role: { notIn: ["wgc_admin", "wgc_super_admin"] } } }),
+  ]);
 
   const failedApiRequests = await prisma.apiRequestLog.count({ where: { createdAt: { gte: since24h }, statusCode: { gte: 500 } } });
   const totalApiRequests = apiRequestStats._count._all;
@@ -159,6 +176,11 @@ export async function getSystemHealthOverview(): Promise<SystemHealthOverview> {
       succeededLastHour,
       failedLastHour,
       successRatePercent: resolvedLastHour > 0 ? Math.round((succeededLastHour / resolvedLastHour) * 1000) / 10 : null,
+    },
+    activeUsersNow: {
+      admins: activeAdmins,
+      merchantStaff: activeMerchantStaff,
+      total: activeAdmins + activeMerchantStaff,
     },
   };
 }

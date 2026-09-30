@@ -2421,6 +2421,14 @@ model User {
   setPasswordTokenHash      String?
   setPasswordTokenExpiresAt DateTime?
   lastLoginAt               DateTime?
+  // Touched (throttled to at most once every 2 minutes per user — see
+  // touchUserActivity() in src/lib/monitoring/activity.ts) on every
+  // successful authenticated request through requireMerchantSession() /
+  // getAdminSession(), unlike lastLoginAt which only ever updates at
+  // sign-in. This is what "Active Now" on System Health is computed from —
+  // nullable/no-default so it's a purely additive column with zero
+  // migration risk on the existing table.
+  lastActiveAt              DateTime?
   // SMS-based MFA (Settings -> Security). phone/phoneVerifiedAt are the
   // confirmed, active number once enrollment completes; pendingPhone holds
   // the number being verified during enrollment (a code is sent there
@@ -2476,6 +2484,7 @@ model User {
 
   @@index([churchId])
   @@index([mfaLoginChallengeId])
+  @@index([lastActiveAt])
 }
 
 model FinixAuthorization {

@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveImpersonation } from "./impersonation";
+import { touchUserActivity } from "@/lib/monitoring/activity";
 
 export { SESSION_COOKIE_NAME } from "./sessionConstants";
 import { SESSION_COOKIE_NAME } from "./sessionConstants";
@@ -236,6 +237,11 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   const dbChangedAt = user.passwordChangedAt ? user.passwordChangedAt.getTime() : null;
   if (dbChangedAt !== (payload.passwordChangedAt ?? null)) return null;
+
+  // Fire-and-forget, self-throttled at the DB level — see activity.ts.
+  // Never awaited: a slow/failed write here must never add latency to, or
+  // break, a real admin session check.
+  void touchUserActivity(user.id);
 
   return {
     userId: user.id,

@@ -34,6 +34,12 @@ interface CheckoutThroughput {
   successRatePercent: number | null;
 }
 
+interface ActiveUsersNow {
+  admins: number;
+  merchantStaff: number;
+  total: number;
+}
+
 interface Overview {
   overallStatus: "OPERATIONAL" | "DEGRADED" | "MAJOR_ISSUE";
   activeErrors: number;
@@ -47,6 +53,7 @@ interface Overview {
   services: ServiceStatus[];
   activeIssues: ActiveIssue[];
   checkoutThroughput: CheckoutThroughput;
+  activeUsersNow: ActiveUsersNow;
 }
 
 const OVERALL_STATUS_STYLE: Record<Overview["overallStatus"], { label: string; className: string }> = {
@@ -106,11 +113,19 @@ export default function SystemHealthOverviewClient() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/system-health/overview")
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => toast.error("Failed to load System Health overview"))
-      .finally(() => setLoading(false));
+    const load = () =>
+      fetch("/api/admin/system-health/overview")
+        .then((r) => r.json())
+        .then((d) => setData(d))
+        .catch(() => toast.error("Failed to load System Health overview"))
+        .finally(() => setLoading(false));
+
+    load();
+    // Refreshes "Active Now" (and everything else on this page) every 30s
+    // without a manual reload — a short enough interval to feel live, long
+    // enough to stay cheap even with this page open in a background tab.
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -141,15 +156,44 @@ export default function SystemHealthOverviewClient() {
 
       {data && (
         <>
-          <div className={`rounded-2xl border px-5 py-4 mb-6 flex items-center justify-between ${OVERALL_STATUS_STYLE[data.overallStatus].className}`}>
+          <div className={`rounded-2xl border px-5 py-4 mb-6 flex items-center justify-between flex-wrap gap-3 ${OVERALL_STATUS_STYLE[data.overallStatus].className}`}>
             <span className="text-lg font-bold">Overall Status: {OVERALL_STATUS_STYLE[data.overallStatus].label}</span>
-            {data.lastDeployment && (
-              <span className="text-xs font-medium opacity-80">
-                Deployed {data.lastDeployment.commitSha?.slice(0, 7)}
-                {data.lastDeployment.commitRef ? ` (${data.lastDeployment.commitRef})` : ""}
-                {data.lastDeployment.environment ? ` — ${data.lastDeployment.environment}` : ""}
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/60 text-xs font-semibold">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-current"></span>
+                </span>
+                {data.activeUsersNow.total} active now
               </span>
-            )}
+              {data.lastDeployment && (
+                <span className="text-xs font-medium opacity-80">
+                  Deployed {data.lastDeployment.commitSha?.slice(0, 7)}
+                  {data.lastDeployment.commitRef ? ` (${data.lastDeployment.commitRef})` : ""}
+                  {data.lastDeployment.environment ? ` — ${data.lastDeployment.environment}` : ""}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 mb-8 flex items-center gap-8 flex-wrap">
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Active Now</p>
+              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.total}</p>
+              <p className="text-xs text-slate-400">Logged-in users active in the last 5 minutes</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">WGC Admins</p>
+              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.admins}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Merchant Staff</p>
+              <p className="text-2xl font-bold text-slate-900">{data.activeUsersNow.merchantStaff}</p>
+            </div>
+            <p className="text-xs text-slate-400 ml-auto max-w-sm">
+              Counts real logged-in accounts only (merchants + WGC admins). Anonymous donor traffic on public giving pages is tracked separately
+              in Vercel Analytics.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">

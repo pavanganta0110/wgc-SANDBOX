@@ -6,6 +6,7 @@ const mockPrisma = {
   systemHealthEvent: { findMany: vi.fn() },
   apiRequestLog: { aggregate: vi.fn(), count: vi.fn() },
   paymentAttempt: { count: vi.fn() },
+  user: { count: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -33,6 +34,25 @@ beforeEach(() => {
   mockPrisma.apiRequestLog.aggregate.mockResolvedValue({ _count: { _all: 0 }, _avg: { durationMs: null } });
   mockPrisma.apiRequestLog.count.mockResolvedValue(0);
   mockPrisma.paymentAttempt.count.mockResolvedValue(0);
+  mockPrisma.user.count.mockResolvedValue(0);
+});
+
+describe("getSystemHealthOverview — activeUsersNow", () => {
+  it("splits active-now counts between WGC admins and merchant staff, and sums them into total", async () => {
+    mockPrisma.user.count.mockImplementation(({ where }: { where: { role: { in?: string[]; notIn?: string[] } } }) => {
+      if (where.role.in) return Promise.resolve(2); // wgc_admin/wgc_super_admin bucket
+      return Promise.resolve(5); // notIn bucket — everyone else (merchant staff)
+    });
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.activeUsersNow).toEqual({ admins: 2, merchantStaff: 5, total: 7 });
+  });
+
+  it("is zero, not null/undefined, when nobody has been active recently", async () => {
+    const { getSystemHealthOverview } = await loadModule();
+    const overview = await getSystemHealthOverview();
+    expect(overview.activeUsersNow).toEqual({ admins: 0, merchantStaff: 0, total: 0 });
+  });
 });
 
 describe("getSystemHealthOverview — checkoutThroughput", () => {
