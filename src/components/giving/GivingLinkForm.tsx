@@ -207,12 +207,24 @@ export default function GivingLinkForm({
   const [addressPostalCode, setAddressPostalCode] = useState("");
   const [addressCountry, setAddressCountry] = useState("US");
   const [saveAddress, setSaveAddress] = useState(false);
-  // Only sent — and only ever persisted — when the donor both filled it in
-  // AND checked "Save this as my mailing address." Per spec, an address
-  // entered without the checkbox is never stored as the donor's permanent
-  // mailing address.
+  // A church can require a mailing address per giving link rather than the
+  // 6 address sub-fields independently — street/apartment/city/state/
+  // postalCode/country all exist as separate DonorFieldKeys for historical
+  // reasons, but requiring, say, State without City makes no sense as a
+  // donor-facing rule. `street`'s setting is the single bundled driver;
+  // GivingLinkBuilderForm.tsx's admin UI only ever sets it alongside
+  // collectMailingAddress, never independently of the other address keys.
+  const addressRequired = collectMailingAddress && donorFieldSettings.street === "REQUIRED";
+
+  // Optional case (unchanged): only sent — and only ever persisted — when
+  // the donor both filled it in AND checked "Save this as my mailing
+  // address." Per spec, an address entered without the checkbox is never
+  // stored as the donor's permanent mailing address.
+  // Required case: always sent once filled in. There's no separate save
+  // checkbox to gate on when the field is mandatory for the gift itself —
+  // see the JSX below, which doesn't render that checkbox in this case.
   const mailingAddressPayload =
-    saveAddress && addressLine1.trim()
+    (addressRequired || saveAddress) && addressLine1.trim()
       ? {
           addressLine1: addressLine1.trim(),
           addressLine2: addressLine2.trim() || undefined,
@@ -252,12 +264,16 @@ export default function GivingLinkForm({
   }, []);
 
   useEffect(() => {
-    if (addressOpen && !addressOpenedOnce) {
+    // Required sections never collapse (see the JSX below), so they're
+    // effectively "opened" on first render — without this OR, a required
+    // address section would never fire this event at all, since addressOpen
+    // itself stays false and its toggle button doesn't exist in that case.
+    if ((addressOpen || addressRequired) && !addressOpenedOnce) {
       setAddressOpenedOnce(true);
       if (!previewMode) trackMetaEvent("MailingAddressSectionOpened");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressOpen]);
+  }, [addressOpen, addressRequired]);
 
   const [addressCompletedTracked, setAddressCompletedTracked] = useState(false);
   useEffect(() => {
@@ -293,6 +309,15 @@ export default function GivingLinkForm({
   const lastNameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
+  const addressLine1Ref = useRef<HTMLInputElement>(null);
+  const addressCityRef = useRef<HTMLInputElement>(null);
+  // Two refs, not one union-typed ref — React's `ref` prop is invariant per
+  // element type, and which element renders (a <select> for US, an <input>
+  // for everywhere else) depends on addressCountry. focusFirstMissingDonorField
+  // below picks whichever one is actually mounted.
+  const addressStateSelectRef = useRef<HTMLSelectElement>(null);
+  const addressStateInputRef = useRef<HTMLInputElement>(null);
+  const addressPostalCodeRef = useRef<HTMLInputElement>(null);
 
   const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const phoneDigitCount = (value: string) => value.replace(/\D/g, "").length;
@@ -300,6 +325,11 @@ export default function GivingLinkForm({
   const donorInfoValid = Boolean(
     firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneDigitCount(phone) >= 10
   );
+
+  // addressRequired is declared above, alongside mailingAddressPayload.
+  const mailingAddressValid =
+    !addressRequired ||
+    Boolean(addressLine1.trim() && addressCity.trim() && addressState.trim() && addressPostalCode.trim());
 
   function focusFirstMissingDonorField() {
     if (!firstName.trim()) {
@@ -320,6 +350,29 @@ export default function GivingLinkForm({
     if (phoneDigitCount(phone) < 10) {
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressRequired) return;
+    setAddressOpen(true);
+    if (!addressLine1.trim()) {
+      addressLine1Ref.current?.focus();
+      addressLine1Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressCity.trim()) {
+      addressCityRef.current?.focus();
+      addressCityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressState.trim()) {
+      const stateEl = addressCountry === "US" ? addressStateSelectRef.current : addressStateInputRef.current;
+      stateEl?.focus();
+      stateEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressPostalCode.trim()) {
+      addressPostalCodeRef.current?.focus();
+      addressPostalCodeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
@@ -474,8 +527,12 @@ export default function GivingLinkForm({
       toast("This is a preview — no real payment session is started.");
       return;
     }
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -536,8 +593,12 @@ export default function GivingLinkForm({
       toast("This is a preview — no real payment session is started.");
       return;
     }
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -788,8 +849,12 @@ export default function GivingLinkForm({
     // required section above the payment options for every method —
     // card/bank/Apple Pay/Google Pay all enforce the same donorInfoValid
     // rule rather than each having its own partial check.
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -1286,25 +1351,39 @@ export default function GivingLinkForm({
         </div>
         {collectMailingAddress && (
           <div className="mb-3 rounded-lg border" style={{ borderColor: light.borderColor }}>
-            <button
-              type="button"
-              onClick={() => setAddressOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
-              style={{ color: light.bodyTextColor }}
-              aria-expanded={addressOpen}
-            >
-              <span>Add mailing address (optional)</span>
-              <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
-                ▾
-              </span>
-            </button>
-            {addressOpen && (
+            {addressRequired ? (
+              <div className="px-3 py-2.5 text-sm font-medium" style={{ color: light.bodyTextColor }}>
+                Mailing Address <span aria-hidden="true">*</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddressOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+                style={{ color: light.bodyTextColor }}
+                aria-expanded={addressOpen}
+              >
+                <span>Add mailing address (optional)</span>
+                <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
+                  ▾
+                </span>
+              </button>
+            )}
+            {/* Required sections never collapse — there's no toggle button
+                above to reopen them, so gating on addressOpen here too would
+                make a "required" field impossible to fill in. */}
+            {(addressRequired || addressOpen) && (
               <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: light.borderColor }}>
                 <p className="text-xs" style={{ color: light.bodyTextColor, opacity: 0.7 }}>
-                  Used for mailed receipts and annual giving statements.
+                  {addressRequired
+                    ? "Required for this gift — used to send you a thank-you card, mailed receipts, and annual giving statements."
+                    : "Used for mailed receipts and annual giving statements."}
                 </p>
                 <input
-                  placeholder="Address line 1"
+                  ref={addressLine1Ref}
+                  required={addressRequired}
+                  aria-required={addressRequired}
+                  placeholder={addressRequired ? "Address line 1 *" : "Address line 1"}
                   value={addressLine1}
                   onChange={(e) => setAddressLine1(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1319,7 +1398,10 @@ export default function GivingLinkForm({
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <input
-                    placeholder="City"
+                    ref={addressCityRef}
+                    required={addressRequired}
+                    aria-required={addressRequired}
+                    placeholder={addressRequired ? "City *" : "City"}
                     value={addressCity}
                     onChange={(e) => setAddressCity(e.target.value)}
                     className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1327,12 +1409,15 @@ export default function GivingLinkForm({
                   />
                   {addressCountry === "US" ? (
                     <select
+                      ref={addressStateSelectRef}
+                      required={addressRequired}
+                      aria-required={addressRequired}
                       value={addressState}
                       onChange={(e) => setAddressState(e.target.value)}
                       className="px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ borderColor: light.borderColor }}
                     >
-                      <option value="">State</option>
+                      <option value="">{addressRequired ? "State *" : "State"}</option>
                       {US_STATES.map((s) => (
                         <option key={s} value={s}>
                           {s}
@@ -1341,7 +1426,10 @@ export default function GivingLinkForm({
                     </select>
                   ) : (
                     <input
-                      placeholder="State / Province"
+                      ref={addressStateInputRef}
+                      required={addressRequired}
+                      aria-required={addressRequired}
+                      placeholder={addressRequired ? "State / Province *" : "State / Province"}
                       value={addressState}
                       onChange={(e) => setAddressState(e.target.value)}
                       className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1349,7 +1437,14 @@ export default function GivingLinkForm({
                     />
                   )}
                   <input
-                    placeholder={addressCountry === "US" ? "ZIP code" : "Postal code"}
+                    ref={addressPostalCodeRef}
+                    required={addressRequired}
+                    aria-required={addressRequired}
+                    placeholder={
+                      addressRequired
+                        ? `${addressCountry === "US" ? "ZIP code" : "Postal code"} *`
+                        : addressCountry === "US" ? "ZIP code" : "Postal code"
+                    }
                     value={addressPostalCode}
                     onChange={(e) => setAddressPostalCode(e.target.value)}
                     className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1366,10 +1461,12 @@ export default function GivingLinkForm({
                   <option value="CA">Canada</option>
                   <option value="OTHER">Other</option>
                 </select>
-                <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
-                  <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
-                  Save this as my mailing address for receipts and annual statements
-                </label>
+                {!addressRequired && (
+                  <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
+                    <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
+                    Save this as my mailing address for receipts and annual statements
+                  </label>
+                )}
               </div>
             )}
           </div>

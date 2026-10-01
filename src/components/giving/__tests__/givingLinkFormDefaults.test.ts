@@ -102,3 +102,39 @@ describe("GivingLinkForm — what the donor first sees", () => {
     expect(html).not.toContain('placeholder="Custom amount"');
   });
 });
+
+describe("GivingLinkForm — mailing address requirement", () => {
+  it("defaults (collectMailingAddress on, street not required) show the collapsed optional section", () => {
+    const html = render({ collectMailingAddress: true });
+    expect(html).toContain("Add mailing address (optional)");
+    expect(html).not.toContain("Mailing Address <!-- -->*");
+  });
+
+  it("collectMailingAddress off shows no address section at all, even if street is REQUIRED", () => {
+    const html = render({
+      collectMailingAddress: false,
+      donorFieldSettings: { ...DEFAULT_DONOR_FIELD_SETTINGS, street: "REQUIRED" },
+    });
+    expect(html).not.toContain("Add mailing address");
+    expect(html).not.toContain("Mailing Address");
+  });
+
+  it("street REQUIRED renders the address block open (not collapsible) with required fields and no save checkbox", () => {
+    const html = render({
+      collectMailingAddress: true,
+      donorFieldSettings: { ...DEFAULT_DONOR_FIELD_SETTINGS, street: "REQUIRED" },
+    });
+    // No toggle button — a required section can't be collapsed away.
+    expect(html).not.toContain("Add mailing address (optional)");
+    expect(html).toContain("Mailing Address");
+    // Street/City/State/Postal inputs are actually marked required server-
+    // side-rendered, not just cosmetically asterisked.
+    expect(html).toMatch(/required="" aria-required="true" placeholder="Address line 1 \*"/);
+    expect(html).toMatch(/required="" aria-required="true" placeholder="City \*"/);
+    expect(html).toMatch(/<select required="" aria-required="true"[^>]*><option value="" selected="">State \*/);
+    expect(html).toMatch(/required="" aria-required="true" placeholder="ZIP code \*"/);
+    // The explicit opt-in checkbox only makes sense for the optional case —
+    // once it's mandatory for the gift, there's nothing left to opt into.
+    expect(html).not.toContain("Save this as my mailing address");
+  });
+});

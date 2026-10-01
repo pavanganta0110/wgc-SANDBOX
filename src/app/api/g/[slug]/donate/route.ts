@@ -270,6 +270,27 @@ async function handleDonate(req: Request, slug: string) {
       }
       if (normalized) donor.phone = normalized;
     }
+    // Mirrors GivingLinkForm.tsx's client-side addressRequired/
+    // mailingAddressValid gate — never trust that check alone, since this
+    // is a public, unauthenticated endpoint a client-side-only check can't
+    // actually enforce. `street`'s setting is the single bundled driver for
+    // the whole address block (see that file's own comment on why).
+    if (link.collectMailingAddress && fieldSettings.street === "REQUIRED") {
+      const cleanedRequiredAddress = cleanAddressInput(
+        mailingAddress && typeof mailingAddress === "object" ? mailingAddress : {}
+      );
+      if (
+        !cleanedRequiredAddress.addressLine1 ||
+        !cleanedRequiredAddress.city ||
+        !cleanedRequiredAddress.state ||
+        !cleanedRequiredAddress.postalCode
+      ) {
+        return NextResponse.json(
+          { success: false, code: "VALIDATION_ERROR", message: "A mailing address is required for this gift.", retryable: true },
+          { status: 400 }
+        );
+      }
+    }
     if (!fullName || !donor?.email) {
       return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Name and email are required", retryable: true }, { status: 400 });
     }

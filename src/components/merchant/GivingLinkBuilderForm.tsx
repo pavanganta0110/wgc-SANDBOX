@@ -36,6 +36,19 @@ const DONOR_FIELD_LABELS: Record<DonorFieldKey, string> = {
   companyName: "Company/Organization Name",
 };
 
+// street/apartment/city/state/postalCode/country are 6 separate
+// DonorFieldKeys for historical reasons, but the giving page only ever
+// treats them as one bundled "address" block — requiring, say, State
+// without City makes no sense as a donor-facing rule (see
+// GivingLinkForm.tsx's addressRequired comment). Rendered as one control
+// below instead of 6 independent per-field selects, which used to let an
+// admin set e.g. "Street: Required" and have it silently do nothing.
+const ADDRESS_SUBFIELDS = ["street", "apartment", "city", "state", "postalCode", "country"] as const;
+const NON_ADDRESS_DONOR_FIELDS = DONOR_FIELDS.filter(
+  (f) => !(ADDRESS_SUBFIELDS as readonly string[]).includes(f)
+);
+type MailingAddressMode = "HIDDEN" | "OPTIONAL" | "REQUIRED";
+
 const PAYMENT_METHOD_LABELS: Record<PaymentMethodKey, string> = {
   CARD: "Credit/Debit Card",
   BANK: "Bank Account",
@@ -440,6 +453,30 @@ export default function GivingLinkBuilderForm({
     setState((prev) => ({
       ...prev,
       donorFieldSettings: { ...prev.donorFieldSettings, [field]: visibility },
+    }));
+  };
+
+  // The single control for the whole address block. `street`'s setting is
+  // the one GivingLinkForm.tsx and the /donate API actually read to decide
+  // addressRequired — the rest are kept in sync here purely so the stored
+  // JSON doesn't say e.g. "City: Hidden" while the giving page clearly
+  // shows a required City field.
+  const setMailingAddressMode = (mode: MailingAddressMode) => {
+    setState((prev) => ({
+      ...prev,
+      collectMailingAddress: mode !== "HIDDEN",
+      donorFieldSettings: {
+        ...prev.donorFieldSettings,
+        street: mode,
+        city: mode,
+        state: mode,
+        postalCode: mode,
+        // Apartment/suite and country are never required even when the
+        // rest of the address is — line 2 is genuinely optional on any
+        // address, and country already defaults to "US".
+        apartment: mode === "HIDDEN" ? "HIDDEN" : "OPTIONAL",
+        country: mode === "HIDDEN" ? "HIDDEN" : "OPTIONAL",
+      },
     }));
   };
 
@@ -1016,15 +1053,33 @@ export default function GivingLinkBuilderForm({
           </Section>
 
           <Section title="Donor Details" defaultOpen={false}>
-            <label className="flex items-center gap-2 text-sm text-slate-700 mb-3">
-              <input type="checkbox" checked={state.collectMailingAddress} onChange={(e) => update("collectMailingAddress", e.target.checked)} />
-              Include optional mailing-address section
-            </label>
-            <p className="text-xs text-slate-400 mb-3 -mt-2">
-              Shows a collapsed "Add mailing address (optional)" section on this link's giving page. Donors are never required to open or complete it.
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="text-sm text-slate-700">Mailing Address</span>
+              <select
+                value={
+                  !state.collectMailingAddress
+                    ? "HIDDEN"
+                    : state.donorFieldSettings.street === "REQUIRED"
+                      ? "REQUIRED"
+                      : "OPTIONAL"
+                }
+                onChange={(e) => setMailingAddressMode(e.target.value as MailingAddressMode)}
+                className="px-2 py-1 rounded-lg border border-slate-200 text-xs outline-none"
+              >
+                <option value="REQUIRED">Required</option>
+                <option value="OPTIONAL">Optional</option>
+                <option value="HIDDEN">Hidden</option>
+              </select>
+            </div>
+            <p className="text-xs text-slate-400 mb-3">
+              {state.collectMailingAddress && state.donorFieldSettings.street === "REQUIRED"
+                ? "Donors must enter a complete mailing address before they can submit a gift — shown as its own section, not collapsed."
+                : state.collectMailingAddress
+                  ? 'Shows a collapsed "Add mailing address (optional)" section on this link\'s giving page. Donors are never required to open or complete it.'
+                  : "No mailing-address section is shown on this link's giving page."}
             </p>
             <div className="space-y-2">
-              {DONOR_FIELDS.map((field) => (
+              {NON_ADDRESS_DONOR_FIELDS.map((field) => (
                 <div key={field} className="flex items-center justify-between gap-2">
                   <span className="text-sm text-slate-700">{DONOR_FIELD_LABELS[field]}</span>
                   <select
