@@ -33,6 +33,7 @@ export default function Footer() {
                 <FooterLink href="/developers">Api Reference</FooterLink>
                 <FooterLink href="/how-it-works">How it Works</FooterLink>
                 <FooterLink href="/pricing">Fee Structure</FooterLink>
+                <FooterLink href="/compare">Compare Platforms</FooterLink>
               </ul>
             </div>
             <div>

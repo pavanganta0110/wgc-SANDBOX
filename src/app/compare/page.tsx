@@ -10,11 +10,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   alternates: { canonical: "/compare" },
   title: "WGC vs. Tithe.ly, Pushpay, Givebutter & More | Platform Comparison",
-  description: "See how WGC's card rate, ACH rate, and monthly platform fee compare to Tithe.ly, Pushpay, Givebutter, Subsplash, Givelify, Donorbox, Planning Center Giving, Vanco, and Breeze ChMS.",
+  description: "See how WGC's card rate, ACH rate, and monthly platform fee compare to Tithe.ly, Pushpay, Givebutter, Subsplash, Givelify, Donorbox, Planning Center Giving, Vanco, and Breeze ChMS — and how much more of every gift reaches the people your organization serves.",
   openGraph: {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     title: "WGC vs. Tithe.ly, Pushpay, Givebutter & More | Platform Comparison",
-    description: "A side-by-side look at card rates, ACH rates, and monthly platform fees across 9 church and nonprofit giving platforms.",
+    description: "A side-by-side look at card rates, ACH rates, and monthly platform fees across 9 church and nonprofit giving platforms — and what a lower fee means for the mission.",
     url: "https://www.wgcpayments.com/compare",
   },
 };
@@ -123,6 +123,10 @@ const FAQS = [
   {
     question: "Which of these platforms charge a separate monthly platform fee on top of transaction fees?",
     answer: "Most do. Tithe.ly, Pushpay, Subsplash, Planning Center Giving, Vanco, and Breeze ChMS all charge some form of recurring subscription in addition to per-transaction fees. Givebutter and Givelify's free tiers skip the subscription but recover revenue through donor tips or a paid upgrade tier (Givelify Plus) instead.",
+  },
+  {
+    question: "Does a lower processing fee actually help the people my organization serves?",
+    answer: "Directly. Processing fees come out of every gift before it ever reaches a program or a person in need. On $500,000 raised in a year, the difference between a flat-rate platform and one charging an extra 1–2% on every dollar is $5,000–$10,000 — a meaningful program budget, not a rounding error. Choosing a lower, more transparent fee structure is itself a form of stewardship over the gifts donors have entrusted to the mission.",
   },
 ];
 
@@ -274,6 +278,28 @@ export default function ComparePage() {
                 </div>
               </ScrollFade>
             </div>
+          </div>
+        </section>
+
+        {/* MISSION IMPACT */}
+        <section className="py-24 bg-wgc-navy-950">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ScrollFade>
+              <div className="text-center max-w-3xl mx-auto">
+                <div className="inline-flex items-center gap-3 px-5 py-2 rounded-xl mb-8 border border-wgc-gold-500/20 bg-wgc-gold-500/5">
+                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-wgc-gold-500/90 font-mono">Stewardship, Not Just Software</span>
+                </div>
+                <h2 className="text-3xl md:text-4xl font-bold !text-white tracking-tight mb-6">
+                  Every point you don&apos;t pay in fees stays with the mission
+                </h2>
+                <p className="text-white/70 leading-relaxed text-lg mb-10">
+                  A processing fee isn&apos;t a rounding error — it&apos;s taken out of every gift before it ever reaches a meal, a shelter bed, a tuition scholarship, or a mission trip. Take less off the top, and there&apos;s more left for the people your organization exists to serve. On $1.2M raised in a year, the gap between WGC&apos;s flat-rate model and a percentage-heavy platform runs about $18,400 — money that stays in your programs instead of leaving with your processor.
+                </p>
+                <Link href="/pricing#calculator" className="inline-flex items-center justify-center gap-2 bg-wgc-gold-500 text-wgc-navy-950 px-8 py-4 text-[13px] font-bold rounded-2xl shadow-xl transform transition-all hover:scale-105 hover:bg-white uppercase tracking-widest">
+                  See What You&apos;d Keep for the Mission
+                </Link>
+              </div>
+            </ScrollFade>
           </div>
         </section>
 
