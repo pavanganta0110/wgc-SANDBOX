@@ -1,0 +1,48 @@
+# WGC (Waypoint Gateway Collective)
+
+> Fundraising, payments, and donor management platform for mission-driven organizations — nonprofits, churches and ministries, foundations, associations, schools, and government/community organizations. WGC processes card, ACH, Apple Pay, and Google Pay donations with a flat-rate fee structure (card capped at 2.3% + $0.25, ACH a flat 25¢, plus a $10/month platform fee that includes donor management, recurring giving, reporting, settlements, refunds, statements, and team accounts). WGC also partners with software platforms (ChMS, CRM, and nonprofit SaaS products) to embed this payment infrastructure, white-labeled, into their own products.
+
+## Pricing & comparison
+
+- [Pricing](https://www.wgcpayments.com/pricing): Full fee structure — card, ACH, and platform fee rates, plus a savings calculator.
+- [Compare](https://www.wgcpayments.com/compare): WGC vs. Tithe.ly, Pushpay, Givebutter, Subsplash, Givelify, Donorbox, Planning Center Giving, Vanco Faith, and Breeze ChMS — card rate, ACH rate, and monthly platform fee side by side, with sources.
+- [Switch to WGC](https://www.wgcpayments.com/switch): Migrating donor data, giving history, and organization records from another platform.
+
+## Product
+
+- [How It Works](https://www.wgcpayments.com/how-it-works)
+- [Features](https://www.wgcpayments.com/features)
+- [Integrations](https://www.wgcpayments.com/integrations): QuickBooks and Aplos accounting integrations.
+- [Demo](https://www.wgcpayments.com/demo)
+
+## Who WGC is for
+
+- [Churches & Ministries](https://www.wgcpayments.com/for/churches)
+- [Nonprofits](https://www.wgcpayments.com/for/christian-nonprofits)
+- [Schools & Booster Clubs](https://www.wgcpayments.com/for/schools)
+- [Foundations](https://www.wgcpayments.com/for/foundations)
+- [Associations & Memberships](https://www.wgcpayments.com/for/associations)
+- [Government & Public Sector](https://www.wgcpayments.com/for/government)
+
+## For software platforms
+
+- [Software Partners / ISVs](https://www.wgcpayments.com/software-partners): White-label payment infrastructure for platforms serving nonprofits and churches.
+- [Developers](https://www.wgcpayments.com/developers): API reference.
+
+## Guides
+
+- [Church Payment Processing Guide](https://www.wgcpayments.com/resources/church-payment-processing-guide-2026)
+- [Nonprofit Payment Processing Guide](https://www.wgcpayments.com/resources/nonprofit-payment-processing-guide-2026)
+- [Stripe vs Tithe.ly vs WGC Fee Breakdown](https://www.wgcpayments.com/resources/church-payment-processing-pricing-guide)
+- [White-Label Payment Processing Guide](https://www.wgcpayments.com/resources/white-label-payment-processing-nonprofit-church-software)
+
+## Optional
+
+- [About](https://www.wgcpayments.com/about)
+- [Contact](https://www.wgcpayments.com/contact)
+- [Support](https://www.wgcpayments.com/support)
+- [Terms of Use](https://www.wgcpayments.com/legal/terms)
+- [Privacy Policy](https://www.wgcpayments.com/legal/privacy)
+- [Compliance](https://www.wgcpayments.com/legal/compliance)
+
+Not for indexing: /merchant/, /admin/, /api/, /onboarding/, /fundraiser/, /invoice/, /setup/, /activate-subscription/ — authenticated dashboards and token-gated flows, not WGC marketing or reference content.
