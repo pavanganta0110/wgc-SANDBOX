@@ -10,6 +10,7 @@ import GatewayIcon from "@/components/ui/GatewayIcon";
 const PRODUCT_LINKS = [
   { name: "Features", href: "/features" },
   { name: "Pricing", href: "/pricing" },
+  { name: "Compare", href: "/compare" },
   { name: "Demo", href: "/demo" },
   { name: "Integrations", href: "/integrations" },
   { name: "Switch to WGC", href: "/switch" },
