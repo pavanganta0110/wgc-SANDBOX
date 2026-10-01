@@ -25,14 +25,14 @@ const playfair = Playfair_Display({
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.wgcpayments.com"),
   title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
-  description: "Accept donations, manage donors, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools. $0 processing cost when donors cover the fee, simple $10/month platform fee.",
+  description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools. $0 processing cost when donors cover the fee, simple $10/month platform fee.",
   robots: {
     index: true,
     follow: true,
   },
   openGraph: {
     title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
-    description: "Accept donations, manage donors, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
+    description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
     type: "website",
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     url: "https://www.wgcpayments.com/",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
-    description: "Accept donations, manage donors, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
+    description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
     images: ["/og/default.png"],
   },
   icons: {

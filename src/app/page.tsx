@@ -160,7 +160,7 @@ export default function Home() {
                   WGC is a fundraising, payments, and donor management platform built for nonprofits, churches, foundations, associations, schools, and other mission-driven organizations.
                 </p>
                 <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-white/70 max-w-2xl tracking-tight">
-                  Accept donations, manage donors, launch campaigns, automate recurring giving, send invoices, track every gift, and manage your organization — all from one dashboard.
+                  Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, track every gift, and manage your organization — all from one dashboard.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 max-w-lg">
                   <Link href="/start" className="bg-wgc-gold-500 text-wgc-navy-950 inline-flex items-center justify-center px-8 py-4 text-[13px] font-bold rounded-2xl shadow-[0_20px_40px_rgba(234,179,8,0.2)] transform transition-all hover:scale-105 hover:bg-white uppercase tracking-widest w-full sm:w-auto">
@@ -244,7 +244,7 @@ export default function Home() {
                 $0 processing cost to your organization
               </h2>
               <p className="text-lg text-wgc-navy-500 max-w-2xl mx-auto leading-relaxed mb-4">
-                By default, supporters can choose to cover the processing fee — so more of every gift, dues payment, or transaction goes straight to your mission, at no cost to your organization.
+                By default supporters have the opportunity to cover the fees so more of every gift goes straight to your mission at no cost to your organization.
               </p>
               <p className="text-sm text-wgc-navy-400 max-w-2xl mx-auto leading-relaxed">
                 Prefer your organization to absorb the fee instead? That option is available too, at transparent, published rates — see the <Link href="/pricing" className="text-wgc-gold-600 font-bold hover:underline">pricing page</Link> for details.
