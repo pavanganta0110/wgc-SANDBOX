@@ -107,6 +107,22 @@ const ROWS: Row[] = [
   },
 ];
 
+// Dedicated head-to-head pages — kept as plain slugs here rather than
+// importing from compare/[slug]/competitors.ts, since that file's
+// Competitor type carries full page content this table has no use for;
+// a name+slug pair is all a link needs.
+const HEAD_TO_HEAD_LINKS = [
+  { name: "Tithe.ly", slug: "wgc-vs-tithely" },
+  { name: "Pushpay", slug: "wgc-vs-pushpay" },
+  { name: "Givebutter", slug: "wgc-vs-givebutter" },
+  { name: "Subsplash", slug: "wgc-vs-subsplash" },
+  { name: "Givelify", slug: "wgc-vs-givelify" },
+  { name: "Donorbox", slug: "wgc-vs-donorbox" },
+  { name: "Planning Center Giving", slug: "wgc-vs-planning-center-giving" },
+  { name: "Vanco Faith", slug: "wgc-vs-vanco" },
+  { name: "Breeze ChMS", slug: "wgc-vs-breeze-chms" },
+];
+
 const FAQS = [
   {
     question: "How does WGC's pricing compare to Tithe.ly, Pushpay, and Givebutter?",
@@ -242,6 +258,24 @@ export default function ComparePage() {
               <p className="mt-6 text-[12px] font-medium text-wgc-navy-400 leading-relaxed max-w-3xl">
                 Rates shown are each vendor&apos;s own published starting rates, or figures from recent independent teardowns, as of September 2026. Plans, bundled add-ons, and negotiated enterprise pricing vary by vendor — confirm current numbers directly with a platform before signing a contract. See WGC&apos;s own rates in full on the <Link href="/pricing" className="text-wgc-gold-600 font-bold hover:underline">pricing page</Link>.
               </p>
+            </ScrollFade>
+            <ScrollFade>
+              <div className="mt-16">
+                <p className="text-center text-[11px] font-black text-wgc-navy-400 uppercase tracking-[0.3em] mb-6 font-mono">
+                  Go deeper on any one matchup
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {HEAD_TO_HEAD_LINKS.map((c) => (
+                    <Link
+                      key={c.slug}
+                      href={`/compare/${c.slug}`}
+                      className="px-5 py-2.5 rounded-xl bg-wgc-off border border-wgc-navy-100 text-[12px] font-bold text-wgc-navy-700 hover:border-wgc-gold-500/40 hover:text-wgc-navy-950 transition-all"
+                    >
+                      WGC vs. {c.name} &rarr;
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </ScrollFade>
           </div>
         </section>
