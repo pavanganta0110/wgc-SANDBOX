@@ -75,7 +75,7 @@ export default function PricingPage() {
                   <span className="text-wgc-gold-600 italic">$0</span> processing cost to your organization.
                 </h1>
                 <p className="text-lg sm:text-xl font-medium leading-relaxed mb-4 text-wgc-navy-500 max-w-2xl tracking-tight opacity-80">
-                  By default, supporters can choose to cover the processing fee — so more of every gift goes straight to your mission, at no cost to your organization. Prefer your organization to absorb the fee instead? We show that rate too, clearly, below.
+                  By default supporters have the opportunity to cover the fees so more of every gift goes straight to your mission at no cost to your organization. Prefer your organization to absorb the fee instead? We show that rate too, clearly, below.
                 </p>
                 <p className="text-lg sm:text-xl font-medium leading-relaxed mb-12 text-wgc-navy-500 max-w-2xl tracking-tight opacity-80">
                   The $10/month WGC platform fee isn&apos;t just for processing — it includes supporter management, recurring giving, reporting, settlements, refunds, statements, and team accounts.
