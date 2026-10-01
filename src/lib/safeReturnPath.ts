@@ -5,13 +5,13 @@
  * subpaths, for the two entries that need them) falls back to the given
  * default.
  */
-const ALLOWED_RETURN_PATHS = ["/test-billing-form", "/merchant/subscription", "/merchant/dashboard"];
+const ALLOWED_RETURN_PATHS = ["/merchant/subscription", "/merchant/dashboard"];
 // Prefixes for routes with a dynamic segment (e.g. the token in
 // /activate-subscription/[token]) — still same-origin-only, still no open
 // redirect, just can't be listed as an exact string.
 const ALLOWED_RETURN_PREFIXES = ["/activate-subscription/"];
 
-export function resolveSafeReturnPath(returnTo: string | null | undefined, fallback = "/test-billing-form"): string {
+export function resolveSafeReturnPath(returnTo: string | null | undefined, fallback = "/merchant/dashboard"): string {
   if (!returnTo) return fallback;
   // Reject anything that isn't a same-origin absolute path — no protocol,
   // no "//" (protocol-relative), no backslashes (some browsers treat them

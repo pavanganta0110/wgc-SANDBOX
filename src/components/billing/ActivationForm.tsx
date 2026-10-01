@@ -392,7 +392,7 @@ export default function ActivationForm({
         </button>
 
         <div className="mt-6">
-          <SubscriptionLegalFooterLinks returnTo={pathname || "/test-billing-form"} />
+          <SubscriptionLegalFooterLinks returnTo={pathname || "/merchant/dashboard"} />
         </div>
     </div>
   );

@@ -9,6 +9,5 @@ Disallow: /fundraiser/
 Disallow: /invoice/
 Disallow: /setup/
 Disallow: /activate-subscription/
-Disallow: /test-billing-form
 
 Sitemap: https://www.wgcpayments.com/sitemap.xml

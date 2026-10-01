@@ -59,8 +59,6 @@ const ROUTES = [
 //     funnel, a thin iframe wrapper, and a page superseded by a permanent
 //     redirect to /for/churches (next.config.ts) respectively. None are the
 //     canonical version of anything worth ranking.
-//   - /test-billing-form — a dev/mock page that should not be reachable in
-//     production at all; flagged separately, not just excluded here.
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();

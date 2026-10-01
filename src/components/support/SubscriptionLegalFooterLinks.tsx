@@ -6,7 +6,7 @@ import Link from "next/link";
  * the same returnTo-preserving behavior) appears anywhere the subscription
  * activation flow is displayed, not just on one screen.
  */
-export default function SubscriptionLegalFooterLinks({ returnTo = "/test-billing-form" }: { returnTo?: string }) {
+export default function SubscriptionLegalFooterLinks({ returnTo = "/merchant/dashboard" }: { returnTo?: string }) {
   const rt = encodeURIComponent(returnTo);
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-slate-400">
