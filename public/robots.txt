@@ -5,5 +5,10 @@ Disallow: /merchant/
 Disallow: /admin/
 Disallow: /api/
 Disallow: /onboarding/
+Disallow: /fundraiser/
+Disallow: /invoice/
+Disallow: /setup/
+Disallow: /activate-subscription/
+Disallow: /test-billing-form
 
-Sitemap: https://wgcpayments.com/sitemap.xml
+Sitemap: https://www.wgcpayments.com/sitemap.xml
