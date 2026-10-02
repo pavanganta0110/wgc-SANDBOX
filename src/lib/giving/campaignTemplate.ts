@@ -9,14 +9,24 @@ export interface CampaignTemplateVars {
   link: string;
 }
 
-const MERGE_FIELD_PATTERN = /\{\{\s*(firstName|churchName|link)\s*\}\}/g;
+// {{orgName}} is the current, composer-facing merge field — "church" reads
+// wrong for the nonprofit/school/association organizations WGC also
+// serves. {{churchName}} is kept as an accepted alias, never removed: any
+// campaign already drafted (not yet sent) with {{churchName}} literally
+// typed into its saved emailBodyTemplate/textBodyTemplate/emailSubject
+// must keep rendering correctly, not start showing the raw, unreplaced
+// token once this ships.
+const MERGE_FIELD_PATTERN = /\{\{\s*(firstName|orgName|churchName|link)\s*\}\}/g;
 
-/** Replaces {{firstName}}/{{churchName}}/{{link}} in a template — used both
- * for the live preview (composer types, sees the real result) and for the
- * actual per-recipient send, so preview and send can never drift apart by
- * using two different rendering implementations. */
+/** Replaces {{firstName}}/{{orgName}}/{{link}} (and the legacy
+ * {{churchName}} alias) in a template — used both for the live preview
+ * (composer types, sees the real result) and for the actual per-recipient
+ * send, so preview and send can never drift apart by using two different
+ * rendering implementations. */
 export function renderCampaignTemplate(template: string, vars: CampaignTemplateVars): string {
-  return template.replace(MERGE_FIELD_PATTERN, (_match, field: keyof CampaignTemplateVars) => vars[field]);
+  return template.replace(MERGE_FIELD_PATTERN, (_match, field: string) =>
+    field === "orgName" ? vars.churchName : vars[field as keyof CampaignTemplateVars]
+  );
 }
 
 /** Opaque per-recipient tracking token — same random-hex pattern as every

@@ -24,13 +24,13 @@ type Channel = "EMAIL" | "TEXT";
 
 const MERGE_FIELDS = [
   { token: "{{firstName}}", label: "Donor first name" },
-  { token: "{{churchName}}", label: "Your organization's name" },
+  { token: "{{orgName}}", label: "Your organization's name" },
   { token: "{{link}}", label: "Their personal giving link" },
 ];
 
 const DEFAULT_EMAIL_BODY =
-  "Hi {{firstName}},\n\n{{churchName}} would be grateful for your support. You can give securely here:\n{{link}}\n\nThank you!";
-const DEFAULT_TEXT_BODY = "Hi {{firstName}}, {{churchName}} would be grateful for your support. Give securely here: {{link}}";
+  "Hi {{firstName}},\n\n{{orgName}} would be grateful for your support. You can give securely here:\n{{link}}\n\nThank you!";
+const DEFAULT_TEXT_BODY = "Hi {{firstName}}, {{orgName}} would be grateful for your support. Give securely here: {{link}}";
 
 export default function GivingCampaignComposer() {
   const router = useRouter();
