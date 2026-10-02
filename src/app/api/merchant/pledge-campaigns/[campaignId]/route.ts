@@ -4,6 +4,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { validationError } from "@/lib/utils/validationError";
 import { computeCampaignProgress } from "@/lib/pledges/pledgeFulfillment";
 import { loadPledgesList } from "@/lib/pledges/loadPledgesList";
 import { logDashboardAction } from "@/lib/dashboardAudit";
@@ -25,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ campaig
 
   const { campaignId } = await params;
   const campaign = await prisma.pledgeCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId } });
-  if (!campaign) return toSafeErrorResponse("Campaign not found", 404);
+  if (!campaign) return validationError("Campaign not found", 404);
 
   const [progress, pledges] = await Promise.all([
     computeCampaignProgress(auth.churchId, campaignId),
@@ -52,20 +53,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
 
   const { campaignId } = await params;
   const existing = await prisma.pledgeCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId } });
-  if (!existing) return toSafeErrorResponse("Campaign not found", 404);
+  if (!existing) return validationError("Campaign not found", 404);
 
   const body = await req.json().catch(() => ({}));
   const { name, description, goalAmountCents, startDate, endDate, publicSlug } = body;
 
+  // See the matching comment in the create route (route.ts) — this is the
+  // same Postgres `integer` column, same overflow risk.
+  const POSTGRES_INT4_MAX = 2147483647;
   if (goalAmountCents != null && (!Number.isFinite(goalAmountCents) || goalAmountCents < 0)) {
-    return toSafeErrorResponse("Goal amount must be a valid non-negative amount", 400);
+    return validationError("Goal amount must be a valid non-negative amount");
+  }
+  if (goalAmountCents != null && goalAmountCents > POSTGRES_INT4_MAX) {
+    return validationError(
+      `Goal amount is too large — the maximum supported goal is $${(POSTGRES_INT4_MAX / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}.`
+    );
   }
   if (publicSlug != null) {
     if (typeof publicSlug !== "string" || !/^[a-zA-Z0-9-]{3,60}$/.test(publicSlug)) {
-      return toSafeErrorResponse("Public slug must be 3-60 letters, numbers, or hyphens", 400);
+      return validationError("Public slug must be 3-60 letters, numbers, or hyphens");
     }
     const slugTaken = await prisma.pledgeCampaign.findFirst({ where: { publicSlug, NOT: { id: campaignId } } });
-    if (slugTaken) return toSafeErrorResponse("This public URL is already in use", 409);
+    if (slugTaken) return validationError("This public URL is already in use", 409);
   }
 
   const campaign = await prisma.pledgeCampaign.update({
@@ -112,7 +121,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ campa
 
   const { campaignId } = await params;
   const existing = await prisma.pledgeCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId } });
-  if (!existing) return toSafeErrorResponse("Campaign not found", 404);
+  if (!existing) return validationError("Campaign not found", 404);
 
   const campaign = await prisma.pledgeCampaign.update({ where: { id: campaignId }, data: { status: "ARCHIVED" } });
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
 
 export default function EmailLogResendButton({ emailLogId }: { emailLogId: string }) {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function EmailLogResendButton({ emailLogId }: { emailLogId: strin
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not resend");
+        setError(extractApiErrorMessage(data, "Could not resend"));
         setSubmitting(false);
         return;
       }

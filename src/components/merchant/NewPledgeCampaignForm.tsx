@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
 
 export default function NewPledgeCampaignForm({
   funds,
@@ -42,7 +43,7 @@ export default function NewPledgeCampaignForm({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not create campaign");
+        setError(extractApiErrorMessage(data, "Could not create campaign"));
         setSubmitting(false);
         return;
       }

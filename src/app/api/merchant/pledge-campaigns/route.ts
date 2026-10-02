@@ -4,6 +4,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
+import { validationError } from "@/lib/utils/validationError";
 import { loadPledgeCampaignsList } from "@/lib/pledges/loadPledgeCampaignsList";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { generatePublicSlug } from "@/lib/givingLinks/validation";
@@ -48,25 +49,41 @@ export async function POST(req: Request) {
   const { name, description, campaignType, fundId, goalAmountCents, startDate, endDate, unitLabel, unitAmountCents, givingLinkId, publish } = body;
 
   if (!name || typeof name !== "string" || !name.trim()) {
-    return toSafeErrorResponse("Campaign name is required", 400);
+    return validationError("Campaign name is required");
   }
+  // goalAmountCents/unitAmountCents are stored as Postgres `integer` columns
+  // (4 bytes, max 2,147,483,647) — without this check, a goal over ~$21.47M
+  // reaches prisma.pledgeCampaign.create() below, Postgres rejects the
+  // insert with an uncaught "integer out of range" error, and the request
+  // fails as an opaque 500 instead of a clear validation message.
+  const POSTGRES_INT4_MAX = 2147483647;
   if (goalAmountCents != null && (!Number.isFinite(goalAmountCents) || goalAmountCents < 0)) {
-    return toSafeErrorResponse("Goal amount must be a valid non-negative amount", 400);
+    return validationError("Goal amount must be a valid non-negative amount");
+  }
+  if (goalAmountCents != null && goalAmountCents > POSTGRES_INT4_MAX) {
+    return validationError(
+      `Goal amount is too large — the maximum supported goal is $${(POSTGRES_INT4_MAX / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}.`
+    );
   }
   if (unitAmountCents != null && (!Number.isFinite(unitAmountCents) || unitAmountCents < 0)) {
-    return toSafeErrorResponse("Per-unit amount must be a valid non-negative amount", 400);
+    return validationError("Per-unit amount must be a valid non-negative amount");
+  }
+  if (unitAmountCents != null && unitAmountCents > POSTGRES_INT4_MAX) {
+    return validationError(
+      `Per-unit amount is too large — the maximum supported amount is $${(POSTGRES_INT4_MAX / 100).toLocaleString("en-US", { minimumFractionDigits: 2 })}.`
+    );
   }
 
   let fund = null;
   if (fundId) {
     fund = await prisma.fund.findFirst({ where: { id: fundId, churchId: auth.churchId } });
-    if (!fund) return toSafeErrorResponse("Fund not found", 404);
+    if (!fund) return validationError("Fund not found", 404);
   }
 
   let givingLink = null;
   if (givingLinkId) {
     givingLink = await prisma.givingLink.findFirst({ where: { id: givingLinkId, churchId: auth.churchId } });
-    if (!givingLink) return toSafeErrorResponse("Giving link not found", 404);
+    if (!givingLink) return validationError("Giving link not found", 404);
   }
 
   let publicSlug: string | null = null;
