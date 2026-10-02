@@ -63,6 +63,20 @@ export default function RecordExternalDonationForm() {
   const [donationPurpose, setDonationPurpose] = useState("");
   const [internalNote, setInternalNote] = useState("");
 
+  // Link to a pledge / fundraising campaign — ties this offline gift back
+  // into Pledges and Fundraising Campaigns reporting (ExternalDonation.
+  // pledgeId / fundraisingCampaignId / campaignTeamId / campaignFundraiserId
+  // in schema.prisma). Distinct from the free-text `campaign` label above,
+  // which has no relation to any real campaign record.
+  const [openPledges, setOpenPledges] = useState<{ id: string; campaignName: string; pledgeAmountCents: number; fulfilledAmountCents: number }[]>([]);
+  const [selectedPledgeId, setSelectedPledgeId] = useState("");
+  const [fundraisingCampaigns, setFundraisingCampaigns] = useState<{ id: string; name: string }[] | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [campaignTeams, setCampaignTeams] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [campaignFundraisers, setCampaignFundraisers] = useState<{ id: string; displayName: string }[]>([]);
+  const [selectedFundraiserId, setSelectedFundraiserId] = useState("");
+
   // Tax deductibility / goods & services
   const [isTaxDeductible, setIsTaxDeductible] = useState(true);
   const [deductibleAmountDiffers, setDeductibleAmountDiffers] = useState(false);
@@ -135,6 +149,80 @@ export default function RecordExternalDonationForm() {
     };
   }, [donorMode, selectedDonor]);
 
+  // Open pledges for the selected donor — the candidate pool for "this
+  // donation fulfills a pledge." Only meaningful for an existing, matched
+  // donor; a brand-new or anonymous/unmatched donation has no pledge
+  // history to look up yet.
+  useEffect(() => {
+    if (donorMode !== "existing" || !selectedDonor) {
+      setOpenPledges([]);
+      setSelectedPledgeId("");
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/merchant/pledges?donorId=${selectedDonor.id}`)
+      .then((res) => (res.ok ? res.json() : { pledges: [] }))
+      .then((json) => {
+        if (cancelled) return;
+        const open = (json.pledges || []).filter((p: { status: string }) => p.status === "PROMISED" || p.status === "PARTIALLY_FULFILLED");
+        setOpenPledges(open);
+      })
+      .catch(() => {
+        if (!cancelled) setOpenPledges([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [donorMode, selectedDonor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/campaigns?status=ACTIVE")
+      .then((res) => (res.ok ? res.json() : { campaigns: [] }))
+      .then((json) => {
+        if (!cancelled) setFundraisingCampaigns(json.campaigns || []);
+      })
+      .catch(() => {
+        if (!cancelled) setFundraisingCampaigns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Teams/fundraisers are scoped to whichever campaign is picked — reset
+  // both (and whatever was selected within them) the moment the campaign
+  // choice changes, so a leftover team/fundraiser id from a different
+  // campaign can never be submitted alongside a new campaign selection.
+  useEffect(() => {
+    setSelectedTeamId("");
+    setSelectedFundraiserId("");
+    if (!selectedCampaignId) {
+      setCampaignTeams([]);
+      setCampaignFundraisers([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/merchant/campaigns/${selectedCampaignId}/teams`).then((res) => (res.ok ? res.json() : { teams: [] })),
+      fetch(`/api/merchant/campaigns/${selectedCampaignId}/fundraisers`).then((res) => (res.ok ? res.json() : { fundraisers: [] })),
+    ])
+      .then(([teamsJson, fundraisersJson]) => {
+        if (cancelled) return;
+        setCampaignTeams(teamsJson.teams || []);
+        setCampaignFundraisers(fundraisersJson.fundraisers || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCampaignTeams([]);
+          setCampaignFundraisers([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCampaignId]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const donationAmountCents = Math.round((parseFloat(amount) || 0) * 100);
@@ -189,6 +277,10 @@ export default function RecordExternalDonationForm() {
         givingPageLabel: givingPageLabel || undefined,
         donationPurpose: donationPurpose || undefined,
         internalNote: internalNote || undefined,
+        pledgeId: selectedPledgeId || undefined,
+        fundraisingCampaignId: selectedCampaignId || undefined,
+        campaignTeamId: selectedTeamId || undefined,
+        campaignFundraiserId: selectedFundraiserId || undefined,
         includeInAnnualStatement,
         sendReceipt: sendReceipt && (donorMode === "new" ? Boolean(donorEmail) : donorMode === "existing" ? Boolean(selectedDonor?.email) : false),
       };
@@ -495,6 +587,98 @@ export default function RecordExternalDonationForm() {
         {!isCash && (
           <textarea placeholder="Internal note (never shown to the donor)" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
         )}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold text-slate-900">Link to a pledge or fundraising campaign</h2>
+        <p className="text-xs text-slate-500 -mt-2">
+          Optional — ties this gift back into Pledges and Fundraising Campaigns reporting, so it counts toward the right totals automatically.
+        </p>
+
+        {donorMode === "existing" && selectedDonor && openPledges.length > 0 && (
+          <div>
+            <label htmlFor="ext-donation-pledge" className="block text-xs font-medium text-slate-600 mb-1">
+              Fulfills a pledge
+            </label>
+            <select
+              id="ext-donation-pledge"
+              value={selectedPledgeId}
+              onChange={(e) => setSelectedPledgeId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">Not tied to a pledge</option>
+              {openPledges.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.campaignName} — {((p.pledgeAmountCents - p.fulfilledAmountCents) / 100).toLocaleString("en-US", { style: "currency", currency: "USD" })} remaining
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {donorMode === "existing" && selectedDonor && openPledges.length === 0 && (
+          <p className="text-xs text-slate-400">This donor has no open pledges to link this donation to.</p>
+        )}
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label htmlFor="ext-donation-fr-campaign" className="block text-xs font-medium text-slate-600 mb-1">
+              Fundraising campaign
+            </label>
+            <select
+              id="ext-donation-fr-campaign"
+              value={selectedCampaignId}
+              onChange={(e) => setSelectedCampaignId(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            >
+              <option value="">
+                {fundraisingCampaigns === null ? "Loading campaigns…" : "Not tied to a campaign"}
+              </option>
+              {fundraisingCampaigns?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ext-donation-fr-team" className="block text-xs font-medium text-slate-600 mb-1">
+              Team (optional)
+            </label>
+            <select
+              id="ext-donation-fr-team"
+              value={selectedTeamId}
+              onChange={(e) => setSelectedTeamId(e.target.value)}
+              disabled={!selectedCampaignId || campaignTeams.length === 0}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              <option value="">Whole campaign</option>
+              {campaignTeams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ext-donation-fr-fundraiser" className="block text-xs font-medium text-slate-600 mb-1">
+              Fundraiser (optional)
+            </label>
+            <select
+              id="ext-donation-fr-fundraiser"
+              value={selectedFundraiserId}
+              onChange={(e) => setSelectedFundraiserId(e.target.value)}
+              disabled={!selectedCampaignId || campaignFundraisers.length === 0}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              <option value="">No specific fundraiser</option>
+              {campaignFundraisers.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-4 rounded-lg bg-slate-50 p-4">
