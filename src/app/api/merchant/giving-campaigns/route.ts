@@ -76,7 +76,11 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  const givingLinkId = typeof body.givingLinkId === "string" ? body.givingLinkId : "";
+  const requestedGivingLinkId = typeof body.givingLinkId === "string" ? body.givingLinkId : "";
+  const fundraisingCampaignId = typeof body.fundraisingCampaignId === "string" ? body.fundraisingCampaignId : "";
+  const campaignTeamId = typeof body.campaignTeamId === "string" ? body.campaignTeamId : "";
+  const campaignFundraiserId = typeof body.campaignFundraiserId === "string" ? body.campaignFundraiserId : "";
+  const pledgeCampaignId = typeof body.pledgeCampaignId === "string" ? body.pledgeCampaignId : "";
   const channel = typeof body.channel === "string" && CHANNELS.has(body.channel) ? body.channel : "EMAIL";
   const emailSubject = typeof body.emailSubject === "string" ? body.emailSubject.trim() : "";
   const emailBodyTemplate = typeof body.emailBodyTemplate === "string" ? body.emailBodyTemplate : "";
@@ -95,14 +99,79 @@ export async function POST(req: Request) {
   if (channel === "TEXT" && !(await isSmsAddonActive(auth.churchId))) {
     return NextResponse.json({ error: "Text messaging is a paid add-on — subscribe from Billing Plan to send texts." }, { status: 402 });
   }
-  if (!name || !givingLinkId) {
-    return NextResponse.json({ error: "Name and giving link are required." }, { status: 400 });
+  if (!name) {
+    return NextResponse.json({ error: "Name is required." }, { status: 400 });
   }
   if (donorIds.length === 0) {
     return NextResponse.json({ error: "Select at least one donor." }, { status: 400 });
   }
+  if ((fundraisingCampaignId || campaignTeamId || campaignFundraiserId) && pledgeCampaignId) {
+    return NextResponse.json({ error: "Choose either a fundraising campaign or a pledge campaign, not both." }, { status: 400 });
+  }
 
-  const link = await prisma.givingLink.findFirst({ where: { id: givingLinkId, churchId: auth.churchId } });
+  // Resolves to this record's OWN dedicated giving link, never the
+  // requestedGivingLinkId the client might also send — see the comment on
+  // GivingCampaign.givingLinkId in schema.prisma for why this can never be
+  // an independent choice once a tie-in is picked. Falls through to the
+  // plain requestedGivingLinkId only when no tie-in was selected at all,
+  // preserving the original, ordinary "just pick a giving link" flow.
+  let resolvedGivingLinkId = requestedGivingLinkId;
+  let resolvedFundraisingCampaignId: string | null = null;
+  let resolvedCampaignTeamId: string | null = null;
+  let resolvedCampaignFundraiserId: string | null = null;
+  let resolvedPledgeCampaignId: string | null = null;
+
+  if (campaignFundraiserId) {
+    const fundraiser = await prisma.campaignFundraiser.findFirst({ where: { id: campaignFundraiserId, churchId: auth.churchId } });
+    if (!fundraiser) return NextResponse.json({ error: "Fundraiser not found." }, { status: 404 });
+    if (campaignTeamId && fundraiser.campaignTeamId !== campaignTeamId) {
+      return NextResponse.json({ error: "This fundraiser is not on the selected team." }, { status: 400 });
+    }
+    if (fundraisingCampaignId && fundraiser.fundraisingCampaignId !== fundraisingCampaignId) {
+      return NextResponse.json({ error: "This fundraiser is not on the selected campaign." }, { status: 400 });
+    }
+    if (!fundraiser.givingLinkId) {
+      return NextResponse.json({ error: "This fundraiser doesn't have a giving link set up yet." }, { status: 400 });
+    }
+    resolvedCampaignFundraiserId = fundraiser.id;
+    resolvedCampaignTeamId = fundraiser.campaignTeamId;
+    resolvedFundraisingCampaignId = fundraiser.fundraisingCampaignId;
+    resolvedGivingLinkId = fundraiser.givingLinkId;
+  } else if (campaignTeamId) {
+    const team = await prisma.campaignTeam.findFirst({ where: { id: campaignTeamId, churchId: auth.churchId } });
+    if (!team) return NextResponse.json({ error: "Team not found." }, { status: 404 });
+    if (fundraisingCampaignId && team.fundraisingCampaignId !== fundraisingCampaignId) {
+      return NextResponse.json({ error: "This team is not on the selected campaign." }, { status: 400 });
+    }
+    if (!team.givingLinkId) {
+      return NextResponse.json({ error: "This team doesn't have a giving link set up yet." }, { status: 400 });
+    }
+    resolvedCampaignTeamId = team.id;
+    resolvedFundraisingCampaignId = team.fundraisingCampaignId;
+    resolvedGivingLinkId = team.givingLinkId;
+  } else if (fundraisingCampaignId) {
+    const campaign = await prisma.fundraisingCampaign.findFirst({ where: { id: fundraisingCampaignId, churchId: auth.churchId } });
+    if (!campaign) return NextResponse.json({ error: "Fundraising campaign not found." }, { status: 404 });
+    if (!campaign.givingLinkId) {
+      return NextResponse.json({ error: "This campaign doesn't have a giving link set up yet." }, { status: 400 });
+    }
+    resolvedFundraisingCampaignId = campaign.id;
+    resolvedGivingLinkId = campaign.givingLinkId;
+  } else if (pledgeCampaignId) {
+    const pledgeCampaign = await prisma.pledgeCampaign.findFirst({ where: { id: pledgeCampaignId, churchId: auth.churchId } });
+    if (!pledgeCampaign) return NextResponse.json({ error: "Pledge campaign not found." }, { status: 404 });
+    if (!pledgeCampaign.givingLinkId) {
+      return NextResponse.json({ error: "This pledge campaign doesn't have a giving link set up yet." }, { status: 400 });
+    }
+    resolvedPledgeCampaignId = pledgeCampaign.id;
+    resolvedGivingLinkId = pledgeCampaign.givingLinkId;
+  }
+
+  if (!resolvedGivingLinkId) {
+    return NextResponse.json({ error: "A giving link, fundraising campaign, or pledge campaign is required." }, { status: 400 });
+  }
+
+  const link = await prisma.givingLink.findFirst({ where: { id: resolvedGivingLinkId, churchId: auth.churchId } });
   if (!link) {
     return NextResponse.json({ error: "Giving link not found." }, { status: 404 });
   }
@@ -135,6 +204,10 @@ export async function POST(req: Request) {
       emailBodyTemplate: channel === "EMAIL" ? emailBodyTemplate : null,
       textBodyTemplate: channel === "TEXT" ? textBodyTemplate : null,
       createdByUserId: auth.userId,
+      fundraisingCampaignId: resolvedFundraisingCampaignId,
+      campaignTeamId: resolvedCampaignTeamId,
+      campaignFundraiserId: resolvedCampaignFundraiserId,
+      pledgeCampaignId: resolvedPledgeCampaignId,
     },
   });
 
@@ -167,7 +240,17 @@ export async function POST(req: Request) {
     action: "giving_campaign.created",
     entityType: "GivingCampaign",
     entityId: campaign.id,
-    metadata: { name, givingLinkId, channel, requestedCount: donorIds.length, recipientCount: donors.length },
+    metadata: {
+      name,
+      givingLinkId: link.id,
+      channel,
+      requestedCount: donorIds.length,
+      recipientCount: donors.length,
+      fundraisingCampaignId: resolvedFundraisingCampaignId,
+      campaignTeamId: resolvedCampaignTeamId,
+      campaignFundraiserId: resolvedCampaignFundraiserId,
+      pledgeCampaignId: resolvedPledgeCampaignId,
+    },
     req,
   });
 

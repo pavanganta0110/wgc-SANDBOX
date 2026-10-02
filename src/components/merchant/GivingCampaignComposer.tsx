@@ -21,6 +21,10 @@ interface DonorOption {
 }
 
 type Channel = "EMAIL" | "TEXT";
+// What this email is actually about — drives which GivingLink gets used
+// (see the comment on GivingCampaign.givingLinkId in schema.prisma for why
+// that can never be an independent choice once one of these is picked).
+type TieMode = "NONE" | "FUNDRAISING" | "PLEDGE";
 
 const MERGE_FIELDS = [
   { token: "{{firstName}}", label: "Donor first name" },
@@ -38,6 +42,15 @@ export default function GivingCampaignComposer() {
   const [channel, setChannel] = useState<Channel>("EMAIL");
   const [links, setLinks] = useState<GivingLinkOption[]>([]);
   const [givingLinkId, setGivingLinkId] = useState("");
+  const [tieMode, setTieMode] = useState<TieMode>("NONE");
+  const [fundraisingCampaigns, setFundraisingCampaigns] = useState<{ id: string; name: string }[] | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("");
+  const [campaignTeams, setCampaignTeams] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState("");
+  const [campaignFundraisers, setCampaignFundraisers] = useState<{ id: string; displayName: string }[]>([]);
+  const [selectedFundraiserId, setSelectedFundraiserId] = useState("");
+  const [pledgeCampaigns, setPledgeCampaigns] = useState<{ id: string; name: string }[] | null>(null);
+  const [selectedPledgeCampaignId, setSelectedPledgeCampaignId] = useState("");
   const [name, setName] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBodyTemplate, setEmailBodyTemplate] = useState(DEFAULT_EMAIL_BODY);
@@ -68,6 +81,60 @@ export default function GivingCampaignComposer() {
       .then((data) => setLinks((data.links || []).filter((l: GivingLinkOption) => l.status === "ACTIVE")))
       .catch(() => toast.error("Failed to load giving links"));
   }, []);
+
+  useEffect(() => {
+    fetch("/api/merchant/campaigns?status=ACTIVE")
+      .then((res) => (res.ok ? res.json() : { campaigns: [] }))
+      .then((data) => setFundraisingCampaigns(data.campaigns || []))
+      .catch(() => setFundraisingCampaigns([]));
+    fetch("/api/merchant/pledge-campaigns?status=ACTIVE")
+      .then((res) => (res.ok ? res.json() : { campaigns: [] }))
+      .then((data) => setPledgeCampaigns(data.campaigns || []))
+      .catch(() => setPledgeCampaigns([]));
+  }, []);
+
+  // Teams/fundraisers are scoped to whichever fundraising campaign is
+  // picked — reset both the moment the campaign choice changes, same
+  // rationale as RecordExternalDonationForm's identical effect.
+  useEffect(() => {
+    setSelectedTeamId("");
+    setSelectedFundraiserId("");
+    if (!selectedCampaignId) {
+      setCampaignTeams([]);
+      setCampaignFundraisers([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/merchant/campaigns/${selectedCampaignId}/teams`).then((res) => (res.ok ? res.json() : { teams: [] })),
+      fetch(`/api/merchant/campaigns/${selectedCampaignId}/fundraisers`).then((res) => (res.ok ? res.json() : { fundraisers: [] })),
+    ])
+      .then(([teamsJson, fundraisersJson]) => {
+        if (cancelled) return;
+        setCampaignTeams(teamsJson.teams || []);
+        setCampaignFundraisers(fundraisersJson.fundraisers || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCampaignTeams([]);
+          setCampaignFundraisers([]);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCampaignId]);
+
+  // Switching tie mode clears whichever side's selections no longer apply,
+  // so a leftover id from one mode can never be submitted under another.
+  useEffect(() => {
+    if (tieMode !== "FUNDRAISING") {
+      setSelectedCampaignId("");
+    }
+    if (tieMode !== "PLEDGE") {
+      setSelectedPledgeCampaignId("");
+    }
+  }, [tieMode]);
 
   useEffect(() => {
     fetch("/api/merchant/sms-addon")
@@ -174,11 +241,14 @@ export default function GivingCampaignComposer() {
 
   const createAndSend = async () => {
     const messageReady = channel === "TEXT" ? textBodyTemplate.trim() : emailSubject.trim() && emailBodyTemplate.trim();
-    if (!name.trim() || !givingLinkId || !messageReady || selectedDonors.length === 0) {
+    const destinationReady =
+      tieMode === "FUNDRAISING" ? Boolean(selectedCampaignId) : tieMode === "PLEDGE" ? Boolean(selectedPledgeCampaignId) : Boolean(givingLinkId);
+    if (!name.trim() || !destinationReady || !messageReady || selectedDonors.length === 0) {
+      const destinationLabel = tieMode === "NONE" ? "giving link" : tieMode === "FUNDRAISING" ? "fundraising campaign" : "pledge campaign";
       toast.error(
         channel === "TEXT"
-          ? "Fill in a name, giving link, message, and at least one donor."
-          : "Fill in a name, giving link, subject, message, and at least one donor."
+          ? `Fill in a name, ${destinationLabel}, message, and at least one donor.`
+          : `Fill in a name, ${destinationLabel}, subject, message, and at least one donor.`
       );
       return;
     }
@@ -189,7 +259,11 @@ export default function GivingCampaignComposer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          givingLinkId,
+          givingLinkId: tieMode === "NONE" ? givingLinkId : undefined,
+          fundraisingCampaignId: tieMode === "FUNDRAISING" ? selectedCampaignId : undefined,
+          campaignTeamId: tieMode === "FUNDRAISING" ? selectedTeamId || undefined : undefined,
+          campaignFundraiserId: tieMode === "FUNDRAISING" ? selectedFundraiserId || undefined : undefined,
+          pledgeCampaignId: tieMode === "PLEDGE" ? selectedPledgeCampaignId : undefined,
           channel,
           emailSubject,
           emailBodyTemplate,
@@ -291,19 +365,116 @@ export default function GivingCampaignComposer() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Giving Link</label>
-              <select
-                value={givingLinkId}
-                onChange={(e) => setGivingLinkId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
-              >
-                <option value="">Select a giving link…</option>
-                {links.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.internalName}
-                  </option>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tie this email to</label>
+              <div className="flex gap-2 mb-2">
+                {(["NONE", "FUNDRAISING", "PLEDGE"] as TieMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setTieMode(mode)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                      tieMode === mode ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {mode === "NONE" ? "Just a giving link" : mode === "FUNDRAISING" ? "Fundraising campaign" : "Pledge campaign"}
+                  </button>
                 ))}
-              </select>
+              </div>
+
+              {tieMode === "NONE" && (
+                <select
+                  value={givingLinkId}
+                  onChange={(e) => setGivingLinkId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
+                >
+                  <option value="">Select a giving link…</option>
+                  {links.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.internalName}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {tieMode === "FUNDRAISING" && (
+                <div className="space-y-2">
+                  <select
+                    value={selectedCampaignId}
+                    onChange={(e) => setSelectedCampaignId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">
+                      {fundraisingCampaigns === null ? "Loading campaigns…" : "Select a campaign…"}
+                    </option>
+                    {fundraisingCampaigns?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedCampaignId && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <select
+                        value={selectedTeamId}
+                        onChange={(e) => setSelectedTeamId(e.target.value)}
+                        disabled={campaignTeams.length === 0}
+                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">Whole campaign</option>
+                        {campaignTeams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={selectedFundraiserId}
+                        onChange={(e) => setSelectedFundraiserId(e.target.value)}
+                        disabled={campaignFundraisers.length === 0}
+                        className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400 disabled:bg-slate-100 disabled:text-slate-400"
+                      >
+                        <option value="">No specific fundraiser</option>
+                        {campaignFundraisers.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.displayName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {selectedCampaignId && (
+                    <p className="text-[11px] text-slate-500">
+                      Gifts from this email will count toward{" "}
+                      {campaignFundraisers.find((f) => f.id === selectedFundraiserId)?.displayName ||
+                        campaignTeams.find((t) => t.id === selectedTeamId)?.name ||
+                        fundraisingCampaigns?.find((c) => c.id === selectedCampaignId)?.name}
+                      .
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {tieMode === "PLEDGE" && (
+                <div className="space-y-2">
+                  <select
+                    value={selectedPledgeCampaignId}
+                    onChange={(e) => setSelectedPledgeCampaignId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">
+                      {pledgeCampaigns === null ? "Loading pledge campaigns…" : "Select a pledge campaign…"}
+                    </option>
+                    {pledgeCampaigns?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500">
+                    Donors go to this campaign&apos;s giving page. To credit a gift toward a specific donor&apos;s pledge, link it from Pledges afterward.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

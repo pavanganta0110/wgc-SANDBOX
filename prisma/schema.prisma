@@ -4821,6 +4821,15 @@ model QuickBooksBackfillJob {
 model GivingCampaign {
   id           String  @id @default(cuid())
   churchId     String
+  // Always resolved server-side, never a free client choice once one of
+  // the four tie-in fields below is set — see POST
+  // /api/merchant/giving-campaigns. Online-gift attribution to a
+  // FundraisingCampaign/Team/Fundraiser/PledgeCampaign is done PURELY by
+  // which GivingLink was used (Payment has no direct FK to any of them —
+  // see campaignTotals.ts/pledgeFulfillment.ts), so this must always be
+  // that record's own dedicated givingLinkId, never an independently
+  // chosen one, or every gift this campaign drives would silently never
+  // count toward the right totals.
   givingLinkId String
   // Internal label only, never shown to a recipient — e.g. "Fall Giving Email Blast".
   name         String
@@ -4833,6 +4842,20 @@ model GivingCampaign {
   // a campaign only ever populates the one matching its own channel.
   emailBodyTemplate String?
   textBodyTemplate  String?
+
+  // Optional "what is this email actually about" tie-in — mutually
+  // exclusive with pledgeCampaignId below (a campaign is about one or the
+  // other, never both; enforced at the API layer, not here). All null
+  // means an ordinary, untied giving-link email, the only kind that
+  // existed before this feature. campaignTeamId/campaignFundraiserId are
+  // only ever set alongside fundraisingCampaignId, same invariant as
+  // ExternalDonation's matching fields above. Plain strings, no relation —
+  // same established cross-reference convention as every other
+  // campaign/team/fundraiser reference in this schema.
+  fundraisingCampaignId String?
+  campaignTeamId        String?
+  campaignFundraiserId  String?
+  pledgeCampaignId      String?
 
   status          String    @default("DRAFT") // DRAFT | SENDING | SENT | FAILED
   createdByUserId String?
