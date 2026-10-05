@@ -1,10 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { EVENT_TIMEZONES } from "@/lib/eventRegistration/timezone";
+import EventPageView from "@/components/events/EventPageView";
+import { DEFAULT_LIGHT_BRANDING } from "@/lib/givingLinks/types";
+import { buildPreviewAddOns, buildPreviewEvent } from "@/lib/eventRegistration/previewData";
 import type { CustomFieldDefinition } from "@/lib/eventRegistration/customFields";
 import { inputClass, labelClass, primaryButton, secondaryButton, readApiError } from "@/components/events/merchant/api";
 
@@ -113,6 +116,7 @@ export default function EventSettingsForm({
   initialValues = EMPTY_EVENT,
   initialAddOns = [],
   onSaved,
+  organization,
 }: {
   /** Omit to create a new event. */
   eventId?: string;
@@ -120,6 +124,8 @@ export default function EventSettingsForm({
   initialAddOns?: AddOnFormValue[];
   /** Called after a successful edit so the parent can refetch. */
   onSaved?: () => void;
+  /** Shown in the live preview exactly as registrants will see it. */
+  organization: { name: string; logoUrl: string | null };
 }) {
   const router = useRouter();
   const [v, setV] = useState<EventFormValues>(initialValues);
@@ -155,6 +161,9 @@ export default function EventSettingsForm({
   function updateAddOn(i: number, patch: Partial<AddOnFormValue>) {
     setAddOns((p) => p.map((a, idx) => (idx === i ? { ...a, ...patch } : a)));
   }
+
+  const previewEvent = useMemo(() => buildPreviewEvent(v, dollarsToCents(price) ?? 0), [v, price]);
+  const previewAddOns = useMemo(() => buildPreviewAddOns(addOns), [addOns]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -192,7 +201,8 @@ export default function EventSettingsForm({
   }
 
   return (
-    <form onSubmit={save} className="space-y-5" noValidate>
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,470px)] lg:gap-8 lg:items-start">
+    <form onSubmit={save} className="space-y-5 min-w-0" noValidate>
       <Section title="Basics">
         <div>
           <label htmlFor="ev-name" className={labelClass}>Event name *</label>
@@ -459,5 +469,32 @@ export default function EventSettingsForm({
         </button>
       </div>
     </form>
+
+    <aside aria-label="Live preview" className="mt-8 lg:mt-0 lg:sticky lg:top-4">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="text-sm font-bold text-slate-900">Live preview</h3>
+        <p className="text-xs text-slate-500">What registrants will see — updates as you type</p>
+      </div>
+      <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm lg:max-h-[calc(100vh-6rem)] overflow-y-auto bg-white">
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 border-b border-slate-200" aria-hidden="true">
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+          <span className="ml-2 text-[11px] text-slate-500 truncate">{organization.name} · Event Registration</span>
+        </div>
+        <EventPageView
+          preview
+          event={previewEvent}
+          addOns={previewAddOns}
+          organization={{ name: organization.name, logoUrl: organization.logoUrl, finixMerchantId: null }}
+          checkout={null}
+          light={DEFAULT_LIGHT_BRANDING}
+          closedMessage={null}
+          showPoweredByWgc
+        />
+      </div>
+      <p className="text-xs text-slate-500 mt-2">Try it out — nothing here is submitted, saved or charged.</p>
+    </aside>
+    </div>
   );
 }

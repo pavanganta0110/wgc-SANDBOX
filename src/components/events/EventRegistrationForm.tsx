@@ -19,7 +19,10 @@ import type { CustomFieldDefinition, CustomFieldResponses } from "@/lib/eventReg
  * convenience only — the server recomputes it from the event's own prices.
  */
 
-type Props = Pick<PublicEventData, "event" | "addOns" | "organization" | "checkout" | "light">;
+type Props = Pick<PublicEventData, "event" | "addOns" | "organization" | "checkout" | "light"> & {
+  /** Merchant-side preview (event editor): fully interactive so add-ons, attendees and questions can be tried, but nothing is submitted, charged or saved. */
+  previewMode?: boolean;
+};
 
 interface AttendeeDraft {
   key: number;
@@ -118,7 +121,7 @@ function FieldInput({
   );
 }
 
-export default function EventRegistrationForm({ event, addOns, organization, checkout, light }: Props) {
+export default function EventRegistrationForm({ event, addOns, organization, checkout, light, previewMode = false }: Props) {
   const [clientKey] = useState(newClientKey);
   const nextKey = useRef(1);
 
@@ -148,6 +151,22 @@ export default function EventRegistrationForm({ event, addOns, organization, che
     setError(message);
     setErrorTick((t) => t + 1);
   };
+
+  // Tell the website this was embedded on / opened from (if any) that a
+  // registration finished. Deliberately only the slug and whether the bank
+  // payment is still processing — no names, codes or payment details ever
+  // reach a host page (the origin is "*" because the host is unknown; the
+  // receiving loader verifies event.origin before trusting anything).
+  useEffect(() => {
+    if (!confirmation || previewMode) return;
+    const message = { source: "wgc-event", type: "WGC_EVENT_REGISTERED", slug: event.slug, pending: confirmation.pendingBank };
+    try {
+      if (window.opener && window.opener !== window) window.opener.postMessage(message, "*");
+      if (window.parent && window.parent !== window) window.parent.postMessage(message, "*");
+    } catch {
+      // A cross-origin opener can refuse; the registration itself already succeeded.
+    }
+  }, [confirmation, previewMode, event.slug]);
 
   // The Pay button sits far below the cart, so a problem found on submit
   // (a missing required answer) has to be brought into view.
@@ -320,8 +339,54 @@ export default function EventRegistrationForm({ event, addOns, organization, che
   const sectionTitle = "text-sm font-bold mb-3";
   const labelClass = "block text-xs font-semibold mb-1";
 
+  const registrantSection = (
+  <section aria-labelledby="registrant-heading" className="space-y-3">
+    <h2 id="registrant-heading" className={sectionTitle} style={{ color: light.headingColor }}>
+      Your information
+    </h2>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label htmlFor="reg-first" className={labelClass}>
+          First name *
+        </label>
+        <input id="reg-first" autoComplete="given-name" className={inputClass} style={{ borderColor }} value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} />
+      </div>
+      <div>
+        <label htmlFor="reg-last" className={labelClass}>
+          Last name *
+        </label>
+        <input id="reg-last" autoComplete="family-name" className={inputClass} style={{ borderColor }} value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
+      </div>
+    </div>
+    <div>
+      <label htmlFor="reg-email" className={labelClass}>
+        Email *
+      </label>
+      <input id="reg-email" type="email" autoComplete="email" className={inputClass} style={{ borderColor }} value={email} onChange={(e) => setEmail(e.target.value)} />
+    </div>
+    <div>
+      <label htmlFor="reg-phone" className={labelClass}>
+        Phone{event.registrantPhoneRequired ? " *" : " (optional)"}
+      </label>
+      <input id="reg-phone" type="tel" autoComplete="tel" className={inputClass} style={{ borderColor }} value={phone} onChange={(e) => setPhone(e.target.value)} />
+    </div>
+    {event.mailingAddressMode !== "HIDDEN" && (
+      <fieldset className="space-y-3">
+        <legend className={labelClass}>Mailing address{event.mailingAddressMode === "REQUIRED" ? " *" : " (optional)"}</legend>
+        <input aria-label="Street address" autoComplete="address-line1" placeholder="Street address" className={inputClass} style={{ borderColor }} value={address.addressLine1} onChange={(e) => setAddress((p) => ({ ...p, addressLine1: e.target.value }))} />
+        <div className="grid grid-cols-6 gap-3">
+          <input aria-label="City" autoComplete="address-level2" placeholder="City" className={`${inputClass} col-span-3`} style={{ borderColor }} value={address.city} onChange={(e) => setAddress((p) => ({ ...p, city: e.target.value }))} />
+          <input aria-label="State" autoComplete="address-level1" placeholder="State" className={`${inputClass} col-span-1`} style={{ borderColor }} value={address.state} onChange={(e) => setAddress((p) => ({ ...p, state: e.target.value }))} maxLength={2} />
+          <input aria-label="ZIP code" autoComplete="postal-code" placeholder="ZIP" className={`${inputClass} col-span-2`} style={{ borderColor }} value={address.postalCode} onChange={(e) => setAddress((p) => ({ ...p, postalCode: e.target.value }))} />
+        </div>
+      </fieldset>
+    )}
+  </section>
+  );
+
+
   return (
-    <form onSubmit={needsPayment ? (e) => e.preventDefault() : submitFree} className="space-y-8" style={{ color: light.bodyTextColor }} noValidate>
+    <form onSubmit={previewMode || needsPayment ? (e) => e.preventDefault() : submitFree} className="space-y-8" style={{ color: light.bodyTextColor }} noValidate>
       {/* Attendees */}
       <section aria-labelledby="attendees-heading">
         <h2 id="attendees-heading" className={sectionTitle} style={{ color: light.headingColor }}>
@@ -523,7 +588,31 @@ export default function EventRegistrationForm({ event, addOns, organization, che
         </p>
       )}
 
-      {needsPayment ? (
+      {previewMode ? (
+        <>
+          {registrantSection}
+          {needsPayment && (
+            <section aria-label="Payment" className="space-y-3">
+              <h2 className={sectionTitle} style={{ color: light.headingColor }}>
+                Payment
+              </h2>
+              <div className="grid grid-cols-2 gap-2 text-sm font-semibold text-center">
+                <span className="rounded-lg py-2" style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}>Card</span>
+                <span className="rounded-lg py-2 border" style={{ borderColor }}>Bank account</span>
+              </div>
+              <p className="text-xs">Secure card and bank fields appear here for registrants, along with Apple Pay and Google Pay when your organization has them enabled.</p>
+            </section>
+          )}
+          <button
+            type="button"
+            disabled
+            className="w-full py-3 rounded-lg font-semibold text-sm opacity-60 cursor-not-allowed"
+            style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}
+          >
+            {needsPayment ? `Pay ${formatCents(totalCents)} & Register` : "Complete registration"}
+          </button>
+        </>
+      ) : needsPayment ? (
         checkout && organization.finixMerchantId ? (
           <GivingLinkForm
             slug={checkout.givingLinkSlug}
@@ -572,48 +661,7 @@ export default function EventRegistrationForm({ event, addOns, organization, che
         )
       ) : (
         <>
-          <section aria-labelledby="registrant-heading" className="space-y-3">
-            <h2 id="registrant-heading" className={sectionTitle} style={{ color: light.headingColor }}>
-              Your information
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="reg-first" className={labelClass}>
-                  First name *
-                </label>
-                <input id="reg-first" autoComplete="given-name" className={inputClass} style={{ borderColor }} value={first} onChange={(e) => setFirst(e.target.value)} maxLength={80} />
-              </div>
-              <div>
-                <label htmlFor="reg-last" className={labelClass}>
-                  Last name *
-                </label>
-                <input id="reg-last" autoComplete="family-name" className={inputClass} style={{ borderColor }} value={last} onChange={(e) => setLast(e.target.value)} maxLength={80} />
-              </div>
-            </div>
-            <div>
-              <label htmlFor="reg-email" className={labelClass}>
-                Email *
-              </label>
-              <input id="reg-email" type="email" autoComplete="email" className={inputClass} style={{ borderColor }} value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div>
-              <label htmlFor="reg-phone" className={labelClass}>
-                Phone{event.registrantPhoneRequired ? " *" : " (optional)"}
-              </label>
-              <input id="reg-phone" type="tel" autoComplete="tel" className={inputClass} style={{ borderColor }} value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </div>
-            {event.mailingAddressMode !== "HIDDEN" && (
-              <fieldset className="space-y-3">
-                <legend className={labelClass}>Mailing address{event.mailingAddressMode === "REQUIRED" ? " *" : " (optional)"}</legend>
-                <input aria-label="Street address" autoComplete="address-line1" placeholder="Street address" className={inputClass} style={{ borderColor }} value={address.addressLine1} onChange={(e) => setAddress((p) => ({ ...p, addressLine1: e.target.value }))} />
-                <div className="grid grid-cols-6 gap-3">
-                  <input aria-label="City" autoComplete="address-level2" placeholder="City" className={`${inputClass} col-span-3`} style={{ borderColor }} value={address.city} onChange={(e) => setAddress((p) => ({ ...p, city: e.target.value }))} />
-                  <input aria-label="State" autoComplete="address-level1" placeholder="State" className={`${inputClass} col-span-1`} style={{ borderColor }} value={address.state} onChange={(e) => setAddress((p) => ({ ...p, state: e.target.value }))} maxLength={2} />
-                  <input aria-label="ZIP code" autoComplete="postal-code" placeholder="ZIP" className={`${inputClass} col-span-2`} style={{ borderColor }} value={address.postalCode} onChange={(e) => setAddress((p) => ({ ...p, postalCode: e.target.value }))} />
-                </div>
-              </fieldset>
-            )}
-          </section>
+          {registrantSection}
           <button
             type="submit"
             disabled={submitting || !pricing.ok}

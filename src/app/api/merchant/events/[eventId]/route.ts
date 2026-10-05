@@ -5,7 +5,7 @@ import { validationError } from "@/lib/utils/validationError";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { guardEventsRoute, loadOwnedEvent, notFoundResponse } from "@/lib/eventRegistration/merchantGuard";
 import { loadEventStats } from "@/lib/eventRegistration/eventStats";
-import { validateEventSettings, validateAddOns, publicEventUrl } from "@/lib/eventRegistration/eventConfig";
+import { validateEventSettings, validateAddOns, publicEventUrl, appOrigin } from "@/lib/eventRegistration/eventConfig";
 import { provisionEventGivingLink, syncEventGivingLink } from "@/lib/eventRegistration/eventGivingLink";
 import { parseCustomFields } from "@/lib/eventRegistration/customFields";
 import { parseEmailTemplates } from "@/lib/eventRegistration/emailTemplates";
@@ -33,6 +33,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       id: event.id,
       slug: event.slug,
       publicUrl: publicEventUrl(event.slug),
+      embedOrigin: appOrigin(),
       name: event.name,
       description: event.description ?? "",
       coverImageUrl: event.coverImageUrl ?? "",

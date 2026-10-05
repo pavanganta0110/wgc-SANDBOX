@@ -53,10 +53,29 @@ export function publicEventPath(slug: string): string {
   return `/event/${slug}`;
 }
 
+const CANONICAL_ORIGIN = "https://www.wgcpayments.com";
+
+/**
+ * The origin this deployment's public event pages and embed script live on.
+ * Same rule the Giving Page embed uses: each environment's own app URL
+ * (so sandbox links point at sandbox, where its events actually exist),
+ * production always the canonical domain, and the canonical domain as the
+ * safe fallback when nothing is configured.
+ */
+export function appOrigin(): string {
+  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || "";
+  if (!base) return CANONICAL_ORIGIN;
+  try {
+    const url = new URL(base);
+    if (url.hostname === "wgcpayments.com" || url.hostname === "www.wgcpayments.com") return CANONICAL_ORIGIN;
+    return url.origin;
+  } catch {
+    return CANONICAL_ORIGIN;
+  }
+}
+
 export function publicEventUrl(slug: string): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
-  const safeBase = base.includes("localhost") || base.includes("vercel.app") ? base : "https://www.wgcpayments.com";
-  return `${safeBase.replace(/\/$/, "")}${publicEventPath(slug)}`;
+  return `${appOrigin()}${publicEventPath(slug)}`;
 }
 
 export interface EventSettingsData {

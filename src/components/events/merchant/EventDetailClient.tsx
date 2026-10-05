@@ -9,6 +9,7 @@ import EventSettingsForm, { type AddOnFormValue, type EventFormValues } from "@/
 import RegistrationsTab from "@/components/events/merchant/RegistrationsTab";
 import AttendeesTab from "@/components/events/merchant/AttendeesTab";
 import EmailsTab, { type EmailTemplates } from "@/components/events/merchant/EmailsTab";
+import EventEmbedPanel from "@/components/events/merchant/EventEmbedPanel";
 
 interface Stats {
   registrations: number;
@@ -22,6 +23,7 @@ type EventDetail = EventFormValues & {
   id: string;
   slug: string;
   publicUrl: string;
+  embedOrigin: string;
   startsAt: string;
   emailTemplates: EmailTemplates;
   reminderSentAt: string | null;
@@ -36,7 +38,9 @@ export default function EventDetailClient({
   canManage,
   canManageAttendees,
   canExport,
+  organization,
 }: {
+  organization: { name: string; logoUrl: string | null };
   eventId: string;
   canManage: boolean;
   canManageAttendees: boolean;
@@ -138,6 +142,13 @@ export default function EventDetailClient({
               <input id="ev-public-url" readOnly className={inputClass} value={event.publicUrl} onFocus={(e) => e.currentTarget.select()} />
               {event.status !== "ACTIVE" && <p className="text-xs text-amber-700 mt-2">This event is {event.status.toLowerCase()} — the link won&apos;t work until you set the status to Active in Settings.</p>}
             </div>
+            <EventEmbedPanel
+              slug={event.slug}
+              origin={event.embedOrigin}
+              publicUrl={event.publicUrl}
+              isActive={event.status === "ACTIVE"}
+              takesPayment={event.priceCents > 0 || addOns.some((a) => a.isActive) || event.allowOptionalDonation}
+            />
           </div>
         )}
         {tab === "Registrations" && <RegistrationsTab eventId={eventId} canExport={canExport} />}
@@ -145,8 +156,8 @@ export default function EventDetailClient({
         {tab === "Emails" && <EmailsTab eventId={eventId} initial={event.emailTemplates} reminderSentAt={event.reminderSentAt} thankYouSentAt={event.thankYouSentAt} canManage={canManage} onSaved={load} />}
         {tab === "Settings" &&
           (canManage ? (
-            <div className="max-w-3xl">
-              <EventSettingsForm eventId={eventId} initialValues={event} initialAddOns={addOns} onSaved={load} key={JSON.stringify([event.name, event.status, event.startsAtLocal])} />
+            <div>
+              <EventSettingsForm organization={organization} eventId={eventId} initialValues={event} initialAddOns={addOns} onSaved={load} key={JSON.stringify([event.name, event.status, event.startsAtLocal])} />
             </div>
           ) : (
             <p className="text-sm text-slate-500">You don&apos;t have permission to edit this event.</p>
