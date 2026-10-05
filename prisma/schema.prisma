@@ -1026,6 +1026,12 @@ model Payment {
   @@index([churchId, status])
   @@index([churchId, createdAt])
   @@index([churchId, pledgeId])
+  // SANDBOX ONLY: the sandbox database carries this as a real unique
+  // CONSTRAINT (hand-applied by prisma/migration_draft/stage1_payment_safety/
+  // 02_migration.sql); production's schema doesn't declare it. Declaring it
+  // here stops `prisma db push` trying to drop the constraint-backed index
+  // and failing the build. See the DonationReceipt note for how to undo.
+  @@unique([finixTransferId])
 }
 
 // One immutable snapshot per receipt version sent (or prepared) for a
@@ -3846,6 +3852,12 @@ model InvoicePayment {
   @@index([invoiceId])
   @@index([churchId])
   @@index([finixTransferId])
+  // SANDBOX ONLY: the sandbox database carries this as a real unique
+  // CONSTRAINT (hand-applied by prisma/migration_draft/stage1_payment_safety/
+  // 02_migration.sql); production's schema doesn't declare it. Declaring it
+  // here stops `prisma db push` trying to drop the constraint-backed index
+  // and failing the build. See the DonationReceipt note for how to undo.
+  @@unique([finixTransferId])
 }
 
 /// One delivery attempt (email or SMS) of an invoice or a reminder.
