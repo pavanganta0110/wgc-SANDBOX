@@ -1059,6 +1059,13 @@ model DonationReceipt {
 
   payment Payment @relation(fields: [paymentId], references: [id])
 
+  // SANDBOX ONLY. The sandbox database already carries this unique constraint
+  // (created when the unmerged stage1/payment-safety-hardening branch was
+  // built against it); production's schema does not declare it. Declaring it
+  // here keeps `prisma db push` from trying to drop a constraint-backed
+  // index and failing the build. Remove if the sandbox constraint is ever
+  // dropped, or when Stage 1 reaches production.
+  @@unique([paymentId, version])
   @@index([paymentId])
   @@index([churchId])
 }
