@@ -84,6 +84,13 @@ export async function reconcilePendingTransfer(finixTransferId: string): Promise
           data: { status: remoteState },
         });
 
+        try {
+          const { syncEventRegistrationWithPayment } = await import("@/lib/eventRegistration/paymentOutcome");
+          await syncEventRegistrationWithPayment(priorPayment.churchId, priorPayment.id, remoteState);
+        } catch (err) {
+          console.error("Failed to sync event registration with reconciled payment:", err);
+        }
+
         if (priorPayment.status !== "SUCCEEDED" && remoteState === "SUCCEEDED") {
           try {
             const { sendDonationReceipt } = await import("@/lib/giving/generateReceipt");

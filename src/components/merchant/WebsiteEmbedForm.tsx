@@ -28,7 +28,7 @@ interface EmbedConfig {
     allowCustomAmount: boolean;
     quantityItemLabel?: string | null;
   };
-  recurring: { enabled: boolean; allowedFrequencies: string[] };
+  recurring: { enabled: boolean; allowedFrequencies: string[]; defaultDonationType?: string; defaultAmountCents?: number | null };
   funds: { selectionEnabled: boolean; options: { id: string; name: string; isDefault: boolean }[] };
   paymentMethods: string[];
   donorFields: Record<string, "REQUIRED" | "OPTIONAL" | "HIDDEN">;
@@ -371,6 +371,8 @@ export default function WebsiteEmbedForm({
                     quantityItemLabel={config.amount.quantityItemLabel}
                     recurringEnabled={config.recurring.enabled}
                     allowedFrequencies={config.recurring.allowedFrequencies as never}
+                    defaultDonationType={config.recurring.defaultDonationType}
+                    defaultRecurringAmountCents={config.recurring.defaultAmountCents}
                     allowedPaymentMethods={config.paymentMethods as never}
                     feeCoverEnabled={config.feeCover.enabled}
                     feeCoverDefaultOn={config.feeCover.defaultOn}

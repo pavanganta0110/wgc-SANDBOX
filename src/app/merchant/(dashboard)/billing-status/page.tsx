@@ -23,7 +23,7 @@ import type { OrgAccessState } from "@/lib/billing/accessGate";
 const COPY: Partial<Record<OrgAccessState, { title: string; body: string; ctaHref: string; ctaLabel: string; tone: "amber" | "red" }>> = {
   APPROVED_BILLING_REQUIRED: {
     title: "Finish setting up billing",
-    body: "Your organization was approved by Finix, but WGC Platform subscription billing hasn't been set up yet. Add a billing method to unlock full dashboard access.",
+    body: "Your organization has been approved, but WGC Platform subscription billing hasn't been set up yet. Add a billing method to unlock full dashboard access.",
     ctaHref: "/merchant/subscription",
     ctaLabel: "Set Up Billing",
     tone: "amber",

@@ -103,7 +103,7 @@ export default function DonorImportModal({ onClose }: { onClose: () => void }) {
           {!csvText ? (
             <div>
               <p className="text-sm text-slate-500 mb-3">
-                Upload a CSV file with columns for Name, Email, Phone, and optionally Address, City, State, Postal Code, and Company. At least one of email or phone is required per row.
+                Upload a CSV with a Name column (or First Name and Last Name), Email, Phone, and optionally Address, City, State, ZIP, Company, and Source/Notes. At least one of email or phone is required per row. No donation is needed — contacts you import can be emailed from Giving Campaigns. People already on file are matched by email and never overwritten.
               </p>
               <button
                 onClick={() => fileInputRef.current?.click()}

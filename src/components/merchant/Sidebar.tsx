@@ -28,6 +28,11 @@ import {
   HandCoins,
   Target,
   Mail,
+  Send,
+  Megaphone,
+  UploadCloud,
+  MessageSquare,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
@@ -41,15 +46,20 @@ export interface NavItem {
    * matching the API-level access policy (they're denied server-side either way;
    * this just keeps the nav from showing a link that always 404s/401s for them). */
   organizationOnly?: boolean;
+  /** Group header rendered above this item whenever it differs from the
+   * previous visible item's section — keeps the 20+ item nav scannable
+   * instead of one long undifferentiated list. */
+  section: "Overview" | "Money" | "Giving" | "Back Office" | "Organization";
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { name: "Home", href: "/merchant/dashboard", icon: LayoutDashboard },
-  { name: "Insights", href: "/merchant/insights", icon: LineChart },
+  { name: "Home", href: "/merchant/dashboard", icon: LayoutDashboard, section: "Overview" },
+  { name: "Insights", href: "/merchant/insights", icon: LineChart, section: "Overview" },
   {
     name: "Reporting",
     href: "/merchant/reporting",
     icon: BarChart3,
+    section: "Overview",
     children: [
       { name: "Overview", href: "/merchant/reporting" },
       { name: "Donor Report", href: "/merchant/reporting/donors" },
@@ -63,6 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
     name: "Transactions",
     href: "/merchant/transactions",
     icon: ArrowLeftRight,
+    section: "Money",
     children: [
       { name: "Payments", href: "/merchant/transactions/payments" },
       { name: "Authorizations", href: "/merchant/transactions/authorizations" },
@@ -70,17 +81,43 @@ export const NAV_ITEMS: NavItem[] = [
       { name: "Bank Returns", href: "/merchant/transactions/bank-returns" },
     ],
   },
-  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert },
-  { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true },
-  { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true },
-  { name: "Donors", href: "/merchant/donors", icon: Users },
-  { name: "Email Logs", href: "/merchant/email-logs", icon: Mail },
-  { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins },
-  { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake },
+  { name: "Disputes", href: "/merchant/disputes", icon: ShieldAlert, section: "Money" },
+  { name: "Settlements", href: "/merchant/settlements", icon: Landmark, organizationOnly: true, section: "Money" },
+  { name: "Deposits", href: "/merchant/deposits", icon: PiggyBank, organizationOnly: true, section: "Money" },
+  {
+    name: "Recurring Donors",
+    href: "/merchant/recurring-donors",
+    icon: Repeat,
+    section: "Money",
+    children: [
+      { name: "All Recurring Donors", href: "/merchant/recurring-donors" },
+      { name: "Recovery", href: "/merchant/recurring-giving/recovery" },
+    ],
+  },
+  { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw, section: "Money" },
+  { name: "Donors", href: "/merchant/donors", icon: Users, section: "Giving" },
+  { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake, section: "Giving" },
+  { name: "Giving Campaigns", href: "/merchant/giving-campaigns", icon: Send, section: "Giving" },
+  { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins, section: "Giving" },
+  {
+    name: "Pledges",
+    href: "/merchant/pledges",
+    icon: Target,
+    section: "Giving",
+    children: [
+      { name: "All Pledges", href: "/merchant/pledges" },
+      { name: "Campaigns", href: "/merchant/pledge-campaigns" },
+    ],
+  },
+  { name: "Fundraising Campaigns", href: "/merchant/campaigns", icon: Megaphone, section: "Giving" },
+  { name: "Events", href: "/merchant/events", icon: CalendarDays, organizationOnly: true, section: "Giving" },
+  { name: "Text to Give", href: "/merchant/text-to-give", icon: MessageSquare, section: "Giving" },
+  { name: "Migration Center", href: "/merchant/migrations", icon: UploadCloud, organizationOnly: true, section: "Giving" },
   {
     name: "Invoices",
     href: "/merchant/invoices",
     icon: FileText,
+    section: "Back Office",
     children: [
       { name: "All Invoices", href: "/merchant/invoices" },
       { name: "Clients", href: "/merchant/clients" },
@@ -90,28 +127,19 @@ export const NAV_ITEMS: NavItem[] = [
     name: "Merchandise",
     href: "/merchant/merchandise",
     icon: ShoppingBag,
+    section: "Back Office",
     children: [
       { name: "Products", href: "/merchant/merchandise" },
       { name: "Orders", href: "/merchant/merchandise/orders" },
     ],
   },
-  { name: "Recurring Donors", href: "/merchant/recurring-donors", icon: Repeat },
-  { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw },
-  {
-    name: "Pledges",
-    href: "/merchant/pledges",
-    icon: Target,
-    children: [
-      { name: "All Pledges", href: "/merchant/pledges" },
-      { name: "Campaigns", href: "/merchant/pledge-campaigns" },
-    ],
-  },
-  { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true },
-  { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck, organizationOnly: true },
-  { name: "Team", href: "/merchant/settings/team", icon: Users, organizationOnly: true },
-  { name: "Settings", href: "/merchant/settings", icon: Settings, organizationOnly: true },
-  { name: "Support", href: "/merchant/support", icon: LifeBuoy },
-  { name: "Company", href: "/merchant/organization", icon: Building2, organizationOnly: true },
+  { name: "Email Logs", href: "/merchant/email-logs", icon: Mail, section: "Back Office" },
+  { name: "Billing Plan", href: "/merchant/subscription", icon: CreditCard, organizationOnly: true, section: "Organization" },
+  { name: "Compliance", href: "/merchant/compliance", icon: ShieldCheck, organizationOnly: true, section: "Organization" },
+  { name: "Team", href: "/merchant/settings/team", icon: Users, organizationOnly: true, section: "Organization" },
+  { name: "Settings", href: "/merchant/settings", icon: Settings, organizationOnly: true, section: "Organization" },
+  { name: "Support", href: "/merchant/support", icon: LifeBuoy, section: "Organization" },
+  { name: "Company", href: "/merchant/organization", icon: Building2, organizationOnly: true, section: "Organization" },
 ];
 
 const STORAGE_KEY = "wgc_merchant_sidebar_collapsed";
@@ -165,8 +193,8 @@ export default function Sidebar({ role }: { role?: string } = {}) {
           <GatewayIcon className="h-8 w-auto shrink-0" />
           {!collapsed && (
             <div className="flex flex-col leading-none">
-              <span className="font-serif text-base font-bold text-[#14213D]">WGC</span>
-              <span className="text-[9px] uppercase font-mono tracking-widest text-[#41506F] mt-0.5">Payments</span>
+              <span className="font-serif text-base font-bold text-wgc-navy-950">WGC</span>
+              <span className="text-[9px] uppercase font-mono tracking-widest text-wgc-navy-400 mt-0.5">Payments</span>
             </div>
           )}
         </Link>
@@ -184,8 +212,14 @@ export default function Sidebar({ role }: { role?: string } = {}) {
       </div>
 
       <nav className="space-y-1">
-        {visibleItems.map((item) => {
+        {visibleItems.map((item, index) => {
           const Icon = item.icon;
+          const showSectionHeader = index === 0 || visibleItems[index - 1].section !== item.section;
+          const sectionHeader = showSectionHeader && !collapsed && (
+            <p className="px-4 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400 first:pt-1">
+              {item.section}
+            </p>
+          );
 
           if (item.children) {
             const isGroupActive = item.children.some((child) => pathname === child.href);
@@ -193,15 +227,18 @@ export default function Sidebar({ role }: { role?: string } = {}) {
 
             return (
               <div key={item.name}>
+                {sectionHeader}
                 <button
                   onClick={() => toggleGroup(item.name)}
                   title={collapsed ? item.name : undefined}
+                  aria-expanded={isOpen}
+                  aria-controls={`nav-group-${item.name}`}
                   className={cn(
-                    "w-full flex items-center gap-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
-                    collapsed ? "justify-center px-2" : "px-4",
+                    "w-full flex items-center gap-3 py-2.5 rounded-xl text-sm font-semibold transition-colors border-l-2",
+                    collapsed ? "justify-center px-2 border-transparent" : "pl-[14px] pr-4",
                     isGroupActive
-                      ? "text-[#010409]"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "bg-wgc-gold-500/10 text-wgc-navy-950 border-wgc-gold-500"
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-transparent"
                   )}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -215,7 +252,7 @@ export default function Sidebar({ role }: { role?: string } = {}) {
                   )}
                 </button>
                 {!collapsed && isOpen && (
-                  <div className="ml-4 mt-1 space-y-1 border-l border-slate-100 pl-4">
+                  <div id={`nav-group-${item.name}`} className="ml-4 mt-1 space-y-1 border-l border-slate-100 pl-4">
                     {item.children.map((child) => {
                       const isActive = pathname === child.href;
                       return (
@@ -226,7 +263,7 @@ export default function Sidebar({ role }: { role?: string } = {}) {
                           className={cn(
                             "block py-2 rounded-lg text-sm transition-colors",
                             isActive
-                              ? "font-bold text-[#010409]"
+                              ? "font-bold text-wgc-navy-950"
                               : "text-slate-500 hover:text-slate-900"
                           )}
                         >
@@ -242,22 +279,25 @@ export default function Sidebar({ role }: { role?: string } = {}) {
 
           const isActive = pathname === item.href;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              title={collapsed ? item.name : undefined}
-              prefetch={false}
-              className={cn(
-                "flex items-center gap-3 py-2.5 rounded-xl text-sm font-semibold transition-colors",
-                collapsed ? "justify-center px-2" : "px-4",
-                isActive
-                  ? "bg-[#eab308]/10 text-[#010409]"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-              )}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              {!collapsed && item.name}
-            </Link>
+            <div key={item.href}>
+              {sectionHeader}
+              <Link
+                href={item.href}
+                title={collapsed ? item.name : undefined}
+                prefetch={false}
+                aria-current={isActive ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 py-2.5 rounded-xl text-sm font-semibold transition-colors border-l-2",
+                  collapsed ? "justify-center px-2 border-transparent" : "pl-[14px] pr-4",
+                  isActive
+                    ? "bg-wgc-gold-500/10 text-wgc-navy-950 border-wgc-gold-500"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-transparent"
+                )}
+              >
+                <Icon className="w-4 h-4 shrink-0" />
+                {!collapsed && item.name}
+              </Link>
+            </div>
           );
         })}
       </nav>

@@ -24,7 +24,7 @@ function appUrl(): string {
  * that data over an email provider hiccup would be strictly worse than a
  * missed notification.
  */
-async function logEmailAttempt(params: { type: string; to: string; subject: string; success: boolean; error?: unknown }) {
+async function logEmailAttempt(params: { type: string; to: string; subject: string; success: boolean; error?: unknown; bodyHtml: string }) {
   try {
     await prisma.emailLog.create({
       data: {
@@ -34,6 +34,7 @@ async function logEmailAttempt(params: { type: string; to: string; subject: stri
         status: params.success ? "SENT" : "FAILED",
         error: params.success ? null : safeStringify(params.error),
         sentAt: params.success ? new Date() : null,
+        bodyHtml: params.bodyHtml,
       },
     });
   } catch (err) {
@@ -97,7 +98,7 @@ export async function notifyNewSupportTicket(ticket: SupportTicket) {
     success = false;
     error = err;
   }
-  await logEmailAttempt({ type: "SUPPORT_TICKET_CREATED", to: supportEmail, subject, success, error });
+  await logEmailAttempt({ type: "SUPPORT_TICKET_CREATED", to: supportEmail, subject, success, error, bodyHtml });
 }
 
 /** Sent to SUPPORT_EMAIL when a merchant replies to an existing ticket. */
@@ -125,7 +126,7 @@ export async function notifyMerchantReply(ticket: SupportTicket, replyBody: stri
     success = false;
     error = err;
   }
-  await logEmailAttempt({ type: "SUPPORT_TICKET_MERCHANT_REPLY", to: supportEmail, subject, success, error });
+  await logEmailAttempt({ type: "SUPPORT_TICKET_MERCHANT_REPLY", to: supportEmail, subject, success, error, bodyHtml });
 }
 
 /** Sent to the ticket's creator when WGC posts a merchant-visible reply. Never called for internal notes. */
@@ -153,7 +154,7 @@ export async function notifyWgcReply(ticket: SupportTicket, replyBody: string) {
     success = false;
     error = err;
   }
-  await logEmailAttempt({ type: "SUPPORT_TICKET_WGC_REPLY", to: creatorEmail, subject, success, error });
+  await logEmailAttempt({ type: "SUPPORT_TICKET_WGC_REPLY", to: creatorEmail, subject, success, error, bodyHtml });
 }
 
 export async function notifyTicketStatusChange(ticket: SupportTicket, isReopen = false) {
@@ -190,7 +191,7 @@ export async function notifyTicketStatusChange(ticket: SupportTicket, isReopen =
     error = err;
   }
 
-  await logEmailAttempt({ type: isReopen ? "SUPPORT_TICKET_REOPENED" : `SUPPORT_TICKET_STATUS_${ticket.status}`, to: creatorEmail, subject, success, error });
+  await logEmailAttempt({ type: isReopen ? "SUPPORT_TICKET_REOPENED" : `SUPPORT_TICKET_STATUS_${ticket.status}`, to: creatorEmail, subject, success, error, bodyHtml });
 }
 
 export async function notifyTicketResolved(ticket: SupportTicket, resolutionSummary: string) {
@@ -222,7 +223,7 @@ export async function notifyTicketResolved(ticket: SupportTicket, resolutionSumm
     error = err;
   }
 
-  await logEmailAttempt({ type: "SUPPORT_TICKET_RESOLVED", to: creatorEmail, subject, success, error });
+  await logEmailAttempt({ type: "SUPPORT_TICKET_RESOLVED", to: creatorEmail, subject, success, error, bodyHtml });
 }
 
 export async function notifyAdminSupportChange(params: {
@@ -263,5 +264,5 @@ export async function notifyAdminSupportChange(params: {
     error = err;
   }
 
-  await logEmailAttempt({ type: "ADMIN_SUPPORT_CHANGE_NOTIFICATION", to: affectedUserEmail, subject, success, error });
+  await logEmailAttempt({ type: "ADMIN_SUPPORT_CHANGE_NOTIFICATION", to: affectedUserEmail, subject, success, error, bodyHtml });
 }

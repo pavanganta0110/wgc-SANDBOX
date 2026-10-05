@@ -10,6 +10,7 @@ import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionS
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
+import { emitEvent } from "@/lib/events/emitEvent";
 
 const TERMS_VERSION = "2026-01-recurring-admin-v1";
 
@@ -276,6 +277,12 @@ export async function POST(req: Request) {
       metadata: { donorId, amountCents, billingInterval, paymentMethodLastFour: resultPayload.paymentMethodLastFour },
       req,
     });
+
+    try {
+      await emitEvent({ type: "recurring.created", churchId, data: { finixSubscriptionId: finixSubscription.id, donorId, amountCents, billingInterval } });
+    } catch (err) {
+      console.error("Failed to emit recurring.created event:", err);
+    }
 
     return NextResponse.json({ subscription: resultPayload });
   } catch (err: any) {

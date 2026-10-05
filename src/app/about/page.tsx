@@ -7,12 +7,12 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/about" },
-  title: "About WGC | Why We Built Payments for Ministries and 501(c) Organizations",
-  description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries, other 501(c) organizations, and the software that serves them steward resources better.",
+  title: "About WGC | Giving & Payments for Mission-Driven Organizations",
+  description: "Learn why WGC exists — a giving and payment management platform helping nonprofits, churches, foundations, associations, and other mission-driven organizations steward resources better, with infrastructure for the software platforms that serve them too.",
   openGraph: {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
-    title: "About WGC | Why We Built Payments for Ministries",
-    description: "Learn why WGC exists — purpose-built payment infrastructure helping ministries and the software that serves them steward resources better.",
+    title: "About WGC | Giving & Payments for Mission-Driven Organizations",
+    description: "Learn why WGC exists — a giving and payment management platform for mission-driven organizations, with infrastructure for the software platforms that serve them too.",
     url: "https://www.wgcpayments.com/about",
   },
 };
@@ -31,8 +31,8 @@ const PILLARS = [
   },
   {
     emoji: "⚡",
-    title: "Software-first design",
-    description: "We don't compete with you. We power you. WGC is infrastructure — invisible to donors, indispensable to your roadmap.",
+    title: "Direct and embedded",
+    description: "Organizations can use the WGC dashboard directly, and software platforms can embed our infrastructure into their own product — same rails, either way.",
   },
 ];
 
@@ -63,7 +63,7 @@ export default function AboutPage() {
                 Why WGC <span className="text-wgc-gold-500">exists</span>
               </h1>
               <p className="text-xl font-medium leading-relaxed max-w-2xl mx-auto text-wgc-navy-500 tracking-tight">
-                Empowering churches, nonprofits, other 501(c) organizations, and their software with faith-aligned, white-label payment infrastructure.
+                WGC serves mission-driven organizations directly through our platform, and also provides payment infrastructure for the software platforms that serve them.
               </p>
             </ScrollFade>
           </div>
@@ -75,16 +75,16 @@ export default function AboutPage() {
             <ScrollFade>
               <h2 className="text-4xl sm:text-5xl font-bold text-wgc-navy-900 tracking-tight mb-8">Purpose-Built Infrastructure</h2>
               <p className="text-xl leading-relaxed text-wgc-navy-500 font-medium mb-6 tracking-tight opacity-90">
-                Way Point Gateway Collective was founded on a simple belief: the software tools that serve the Church and other 501(c) organizations deserve payment infrastructure that shares their mission and preserves their values.
+                Way Point Gateway Collective was founded on a simple belief: nonprofits, churches, foundations, associations, and other mission-driven organizations deserve payment infrastructure that shares their mission and preserves their values.
               </p>
               <p className="text-lg leading-relaxed text-wgc-navy-500 font-medium mb-10 tracking-tight opacity-80">
-                We&apos;re building WGC to empower software companies that already love and serve churches, nonprofits, and other 501(c) organizations — giving them the tools to process donations, manage merchants, and scale securely without being distracted by technical debt or regulatory complexity.
+                We built WGC as a giving and payment management platform organizations can use directly — and we also empower the software companies that already love and serve nonprofits, churches, and other 501(c) organizations, giving them the tools to process payments, manage merchants, and scale securely without being distracted by technical debt or regulatory complexity.
               </p>
               <div className="bg-wgc-off rounded-3xl p-10 text-left relative overflow-hidden border border-wgc-gold-500/20">
                 <div className="absolute -bottom-4 -right-4 opacity-[0.05] pointer-events-none select-none text-[10rem] font-bold text-wgc-gold-500 leading-none">✝</div>
                 <div className="w-10 h-1 rounded-full mb-6 bg-gradient-to-r from-wgc-gold-500 to-amber-600"></div>
                 <p className="text-2xl font-bold italic leading-snug relative z-10 text-wgc-navy-900">
-                  &quot;We handle the infrastructure. You build the experience. Together, we move more resources toward the Kingdom.&quot;
+                  &quot;We handle the infrastructure. You focus on the mission. Together, we move more resources toward what matters.&quot;
                 </p>
                 <div className="mt-6 flex items-center gap-3">
                   <div className="w-6 h-px bg-wgc-gold-500/50"></div>
@@ -142,8 +142,8 @@ export default function AboutPage() {
 
         {/* CTA */}
         <CTASection
-          headline="Partner with us"
-          subheadline="Join the movement of software companies building the future of Kingdom giving."
+          headline="Ready to work with WGC?"
+          subheadline="Join the mission-driven organizations and software platforms building the future of giving and payments."
           ctaText="Get In Touch"
           ctaLink="/contact"
         />

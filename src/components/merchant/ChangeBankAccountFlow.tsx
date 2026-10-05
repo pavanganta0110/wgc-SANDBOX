@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { mountFinixPaymentForm } from "@/lib/finix/tokenize";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
@@ -58,6 +59,7 @@ export default function ChangeBankAccountFlow({
   onClose: () => void;
   onSubmitted: () => void;
 }) {
+  const router = useRouter();
   const [step, setStep] = useState<"collect" | "review" | "submitting" | "done">("collect");
   const [formReady, setFormReady] = useState(false);
   const [changeReason, setChangeReason] = useState("");
@@ -159,6 +161,11 @@ export default function ChangeBankAccountFlow({
         }),
       });
       const data = await res.json();
+      if (res.status === 403 && data.reauthRequired) {
+        toast.error("Reauthentication required for sensitive changes. Redirecting...");
+        router.push("/merchant/login?reauth=true&redirectTo=/merchant/organization/bank-account&reauthType=bank_account_change");
+        return;
+      }
       if (!res.ok) throw new Error(data.error || "Failed to submit payout bank account change");
 
       const accountId = data.account?.id;

@@ -15,6 +15,7 @@ import { loadSubscriptionActivity } from "@/lib/subscriptions/subscriptionActivi
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import SubscriptionActions from "@/components/merchant/SubscriptionActions";
 import SubscriptionDonorMatcher from "@/components/merchant/SubscriptionDonorMatcher";
+import { needsReconciliation, reconcileSubscription } from "@/lib/subscriptions/subscriptionReconciliation";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -57,6 +58,19 @@ export default async function SubscriptionDetailPage({
   const { subscriptionId } = await params;
   const sp = await searchParams;
   const tab = (TABS.some((t) => t.key === sp.tab) ? sp.tab : "overview") as TabKey;
+
+  // Self-healing fallback for a missed/delayed subscription.updated webhook
+  // — see subscriptionReconciliation.ts. Only re-fetches from Finix when
+  // this one subscription actually looks stale (ACTIVE with a passed
+  // nextBillingDate, throttled to once per 5 minutes), so a merchant sees
+  // corrected data on this same page load rather than the next one.
+  const staleCheck = await prisma.finixSubscription.findFirst({
+    where: { id: subscriptionId, churchId },
+    select: { finixSubscriptionId: true, state: true, nextBillingDate: true, lastReconciledAt: true },
+  });
+  if (staleCheck && needsReconciliation(staleCheck)) {
+    await reconcileSubscription(staleCheck.finixSubscriptionId);
+  }
 
   const [s] = await loadSubscriptionCandidates(churchId, { id: subscriptionId });
   if (!s) notFound();

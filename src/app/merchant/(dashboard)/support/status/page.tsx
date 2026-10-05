@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 import StateBadge from "@/components/merchant/StateBadge";
+import { isSmsConfigured } from "@/lib/sms/sendText";
 
 function ServiceRow({ name, description, operational }: { name: string; description: string; operational: boolean }) {
   return (
@@ -16,7 +17,10 @@ function ServiceRow({ name, description, operational }: { name: string; descript
 export default function SystemStatusPage() {
   const finixConfigured = Boolean(process.env.FINIX_BASE_URL);
   const emailConfigured = Boolean(process.env.RESEND_API_KEY);
-  const smsConfigured = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+  // Donor/Giving Link texting specifically — deliberately NOT the auth-SMS
+  // check, since this row is about donor messaging, which is hard-disabled
+  // until its own separate Twilio number/campaign exists (see sendText.ts).
+  const smsConfigured = isSmsConfigured();
 
   const allOperational = finixConfigured && emailConfigured;
 

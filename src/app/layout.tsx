@@ -3,8 +3,11 @@ import { graph } from "@/lib/schema";
 import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import MetaPixel from "@/components/common/MetaPixel";
 import SimplifiPixel from "@/components/common/SimplifiPixel";
+import CookieConsentBanner from "@/components/common/CookieConsentBanner";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -21,23 +24,23 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.wgcpayments.com"),
-  title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
-  description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
+  title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
+  description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools. $0 processing cost when donors cover the fee, simple $10/month platform fee.",
   robots: {
     index: true,
     follow: true,
   },
   openGraph: {
-    title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
-    description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
+    title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
+    description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
     type: "website",
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
     url: "https://www.wgcpayments.com/",
   },
   twitter: {
     card: "summary_large_image",
-    title: "WGC | Payment Infrastructure for Church, Nonprofit & 501(c) Organization Software",
-    description: "White-label donation engine and settlement rails for software that serves churches, nonprofits, and other 501(c) organizations. Lower fees, low-cost ACH, and PCI Level 1 security.",
+    title: "WGC | Fundraising, Payments & Donor Management for Nonprofits",
+    description: "Accept donations, track donor giving history, launch campaigns, automate recurring giving, send invoices, and track every gift from one dashboard. Built for nonprofits, churches, foundations, associations, and schools.",
     images: ["/og/default.png"],
   },
   icons: {
@@ -91,6 +94,9 @@ export default function RootLayout({
         />
         <MetaPixel />
         <SimplifiPixel />
+        <CookieConsentBanner />
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

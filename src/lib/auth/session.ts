@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveImpersonation } from "./impersonation";
+import { touchUserActivity } from "@/lib/monitoring/activity";
 
 export { SESSION_COOKIE_NAME } from "./sessionConstants";
 import { SESSION_COOKIE_NAME } from "./sessionConstants";
@@ -32,6 +33,20 @@ export interface SessionPayload {
   passwordChangedAt?: number | null;
   exp: number; // unix seconds
   authTime?: number; // unix seconds of sign-in
+  // Session-bound proof that THIS session completed OTP verification —
+  // set true only by completeAdminLogin() when called from the post-OTP
+  // path (src/app/api/admin/login/mfa-verify/route.ts), never true for a
+  // password-only session issued before MFA enrollment. Deliberately NOT
+  // derived from User.mfaEnabled (a live, per-account DB flag) — that
+  // would let a stale/stolen pre-enrollment session cookie retroactively
+  // "become" MFA-satisfied the moment the account enables MFA in a
+  // DIFFERENT browser, since a DB flag has no notion of which session is
+  // asking. This field is signed into the token itself, so the browser
+  // cannot set or modify it, and it can only ever become true through
+  // completeAdminLogin's explicit mfaVerified argument. Absent/false on
+  // every token issued before this field existed — fails closed, not
+  // open. Merchant-side sessions never set this (admin-only concept).
+  mfaVerified?: boolean;
 }
 
 function getSecret(): string {
@@ -136,6 +151,11 @@ export async function getSession(): Promise<SessionPayload | null> {
     const impersonation = await resolveActiveImpersonation(payload.userId);
     if (!impersonation) return null;
 
+    // Fire-and-forget, self-throttled — see activity.ts. payload.userId is
+    // the real admin behind this impersonation session (the merchant-side
+    // identity above is swapped, but this is genuinely them, active).
+    void touchUserActivity(payload.userId);
+
     return {
       userId: impersonation.adminUserId,
       email: impersonation.adminEmail,
@@ -165,6 +185,13 @@ export async function getSession(): Promise<SessionPayload | null> {
   if (!user || user.disabledAt) return null;
   if ((payload.authVersion ?? 0) !== user.authVersion) return null;
 
+  // Fire-and-forget, self-throttled at the DB level — see activity.ts.
+  // This is the auth path most of the ~30 merchant pages mentioned above
+  // actually call, so it needs the same touch requireMerchantSession() and
+  // getAdminSession() already get, or "Active Now" silently misses most
+  // real merchant traffic.
+  void touchUserActivity(payload.userId);
+
   return payload;
 }
 
@@ -173,6 +200,21 @@ export interface AdminSession {
   email: string;
   name: string | null;
   role: "wgc_super_admin" | "wgc_admin";
+  // Whether this admin's ACCOUNT has completed MFA enrollment — a live DB
+  // read, re-checked on every call. Drives the dashboard layout's
+  // enrollment redirect (src/app/admin/(dashboard)/layout.tsx) only. Do
+  // NOT use this to gate a sensitive action — it says nothing about
+  // whether the CURRENT session actually completed OTP. Use mfaVerified
+  // for that (see requireMfaVerifiedAdminSession in
+  // requireAdminSession.ts).
+  mfaEnabled: boolean;
+  // Whether THIS session completed OTP verification — read directly from
+  // the signed token payload (see SessionPayload.mfaVerified's comment for
+  // why this must never be derived from the DB mfaEnabled flag above).
+  // False for a password-only pre-enrollment session, even once the
+  // account later enables MFA elsewhere; true only for a session issued
+  // via the post-OTP completeAdminLogin(..., mfaVerified: true) path.
+  mfaVerified: boolean;
 }
 
 /**
@@ -200,7 +242,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, email: true, name: true, role: true, disabledAt: true, passwordChangedAt: true },
+    select: { id: true, email: true, name: true, role: true, disabledAt: true, passwordChangedAt: true, mfaEnabled: true },
   });
   if (!user || user.disabledAt) return null;
   if (user.role !== "wgc_admin" && user.role !== "wgc_super_admin") return null;
@@ -208,7 +250,19 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   const dbChangedAt = user.passwordChangedAt ? user.passwordChangedAt.getTime() : null;
   if (dbChangedAt !== (payload.passwordChangedAt ?? null)) return null;
 
-  return { userId: user.id, email: user.email, name: user.name, role: user.role as "wgc_super_admin" | "wgc_admin" };
+  // Fire-and-forget, self-throttled at the DB level — see activity.ts.
+  // Never awaited: a slow/failed write here must never add latency to, or
+  // break, a real admin session check.
+  void touchUserActivity(user.id);
+
+  return {
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role as "wgc_super_admin" | "wgc_admin",
+    mfaEnabled: user.mfaEnabled,
+    mfaVerified: payload.mfaVerified === true,
+  };
 }
 
 /**

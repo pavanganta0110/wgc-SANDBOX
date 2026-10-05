@@ -140,7 +140,7 @@ export default function SixMonthsFreePage() {
               </SixMonthsFreeStartButton>
             </div>
             <p className="reassure">No credit card required. Just connect the bank account where you'd like your funds to land.</p>
-            <p className="fineprint">Standard card, ACH, refund, dispute, and other applicable payment-processing fees still apply during the promotional period.</p>
+            <p className="fineprint">Standard card, ACH, refund, dispute, and other applicable payment-processing fees still apply during the promotional period. Offer valid for organizations processing at least $100/month.</p>
           </div>
           <div className="scrollcue">Set up your giving page<span></span></div>
         </section>
@@ -152,7 +152,7 @@ export default function SixMonthsFreePage() {
             <p className="sub">Step through our powerful merchant dashboard, view transaction insights, and track where your funds land. No account required.</p>
           </div>
           <div className="embed-shell">
-            <iframe src="/api/demo/login" title="WGC Merchant Dashboard Walkthrough" loading="lazy"></iframe>
+            <iframe src="/walkthrough" title="WGC Merchant Dashboard Walkthrough" loading="lazy"></iframe>
           </div>
           <div className="demo-cta">
             <p>Still need more info?</p>

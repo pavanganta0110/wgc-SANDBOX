@@ -464,6 +464,11 @@ export async function POST(req: Request) {
     if (!existingLog && contactEmail) {
       try {
         const safeBusinessName = legalBusinessName || "your organization";
+        const onboardingSubmittedBodyHtml = `
+            <p>Thank you for submitting your WGC Payments onboarding for <strong>${safeBusinessName}</strong>.</p>
+            <p>Your application is now under review. Reviews are completed within 48 hours, often quicker.</p>
+            <p>We will notify you once your account is approved or if we require more information.</p>
+          `;
 
         await sendWgcEmail({
           to: contactEmail,
@@ -471,11 +476,7 @@ export async function POST(req: Request) {
           title: "Your onboarding has been submitted",
           badgeText: "UNDER REVIEW",
           badgeColor: "blue",
-          bodyHtml: `
-            <p>Thank you for submitting your WGC Payments onboarding for <strong>${safeBusinessName}</strong>.</p>
-            <p>Your application is now under review. Reviews are completed within 48 hours, often quicker.</p>
-            <p>We will notify you once your account is approved or if we require more information.</p>
-          `
+          bodyHtml: onboardingSubmittedBodyHtml
         });
 
         await prisma.emailLog.create({
@@ -485,7 +486,8 @@ export async function POST(req: Request) {
             to: contactEmail,
             subject: "WGC Payments onboarding submitted",
             status: "SENT",
-            sentAt: new Date()
+            sentAt: new Date(),
+            bodyHtml: onboardingSubmittedBodyHtml
           }
         });
       } catch (err: any) {

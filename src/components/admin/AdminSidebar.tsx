@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+  { name: "System Health", href: "/admin/system-health", icon: Activity },
   { name: "Merchants", href: "/admin/merchants", icon: Building },
+  { name: "Merchant Applications", href: "/admin/merchant-applications", icon: UserCheck },
   { name: "Billing & Subscriptions", href: "/admin/billing", icon: CreditCard },
   { name: "Aplos Sync", href: "/admin/aplos", icon: RefreshCw },
   { name: "Support Tickets", href: "/admin/support/tickets", icon: LifeBuoy },
@@ -15,6 +17,7 @@ const NAV_ITEMS = [
   { name: "Inquiries", href: "/admin/inquiries", icon: Inbox },
   { name: "501(c)(3) Documents", href: "/admin/documents", icon: FileText },
   { name: "Email Logs", href: "/admin/email-logs", icon: Mail },
+  { name: "Finix Webhook Events", href: "/admin/finix-webhook-events", icon: Webhook },
   { name: "My Profile", href: "/admin/profile", icon: UserCircle },
 ];
 
@@ -24,7 +27,7 @@ export default function AdminSidebar({ role }: { role: "wgc_super_admin" | "wgc_
   const pathname = usePathname();
   const items =
     role === "wgc_super_admin"
-      ? [...NAV_ITEMS.slice(0, 5), ...SUPER_ADMIN_NAV_ITEMS, ...NAV_ITEMS.slice(5)]
+      ? [...NAV_ITEMS.slice(0, 6), ...SUPER_ADMIN_NAV_ITEMS, ...NAV_ITEMS.slice(6)]
       : NAV_ITEMS;
 
   return (
@@ -38,9 +41,12 @@ export default function AdminSidebar({ role }: { role: "wgc_super_admin" | "wgc_
               <Link
                 key={item.name}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors",
-                  isActive ? "bg-slate-100 text-[#010409]" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                  "flex items-center gap-3 py-2.5 pl-[14px] pr-4 rounded-xl text-sm font-semibold transition-colors border-l-2",
+                  isActive
+                    ? "bg-slate-100 text-wgc-navy-950 border-wgc-gold-500"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-transparent"
                 )}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -61,9 +67,10 @@ export default function AdminSidebar({ role }: { role: "wgc_super_admin" | "wgc_
             <Link
               key={item.name}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors",
-                isActive ? "bg-slate-100 text-[#010409]" : "text-slate-600 hover:bg-slate-50"
+                "flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors border-b-2",
+                isActive ? "bg-slate-100 text-wgc-navy-950 border-wgc-gold-500" : "text-slate-600 hover:bg-slate-50 border-transparent"
               )}
             >
               <Icon className="w-3.5 h-3.5 shrink-0" />

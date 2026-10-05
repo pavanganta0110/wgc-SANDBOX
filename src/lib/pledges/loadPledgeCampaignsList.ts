@@ -18,6 +18,8 @@ export interface PledgeCampaignRow {
   pledgeCount: number;
   totalPledgedCents: number;
   totalFulfilledCents: number;
+  totalDirectDonationCents: number;
+  totalRaisedCents: number;
   percentOfGoal: number | null;
   createdAt: Date;
 }
@@ -48,6 +50,8 @@ export async function loadPledgeCampaignsList(churchId: string, filters: { statu
     pledgeCount: progress[i].pledgeCount,
     totalPledgedCents: progress[i].totalPledgedCents,
     totalFulfilledCents: progress[i].totalFulfilledCents,
+    totalDirectDonationCents: progress[i].totalDirectDonationCents,
+    totalRaisedCents: progress[i].totalRaisedCents,
     percentOfGoal: progress[i].percentOfGoal,
     createdAt: c.createdAt,
   }));

@@ -55,7 +55,8 @@ export default async function MerchantDetailLayout(props: {
           </div>
           <div className="ml-3">
             <p className="text-sm font-semibold text-amber-700">
-              WGC Support View — financial actions and payment routing changes are disabled.
+              WGC Support View — payment routing changes are disabled. The Settlement Queue on the Settlements tab
+              is the one exception (wgc_super_admin only) — everything else here is read-only.
             </p>
           </div>
         </div>

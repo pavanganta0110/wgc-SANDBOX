@@ -22,6 +22,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ transfe
     // grant this — requirePermission resolves strictly from role +
     // permissionsJson, never from the view-scope cookie.
     requirePermission(auth, "canIssueRefunds");
+    // Reauthentication gate — same pattern/window as bank-account changes
+    // and settings/security/change-password. A refund moves real money
+    // back out; a stolen session cookie alone shouldn't be sufficient,
+    // and this also adds friction to an impersonating admin issuing one
+    // (their own authTime, not the merchant's).
+    const now = Math.floor(Date.now() / 1000);
+    if (!auth.authTime || now - auth.authTime > 600) {
+      return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+    }
     // Refunding is a financial mutation, not a reporting action — blocked
     // while viewing another user's scope, same as team/bank/billing changes.
     await requireFullOrganizationContext(auth);

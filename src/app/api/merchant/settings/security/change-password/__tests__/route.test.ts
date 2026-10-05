@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import crypto from "crypto";
 
 const mockCookieStore = { get: vi.fn(), set: vi.fn(), delete: vi.fn() };
 vi.mock("next/headers", () => ({
@@ -6,8 +7,11 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { church: { findUnique: vi.fn().mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE" }) }, wgcSubscription: { findUnique: vi.fn().mockResolvedValue(null) }, 
+  prisma: {
+    church: { findUnique: vi.fn().mockResolvedValue({ id: "church-a", name: "Test Church", billingSetupStatus: null, status: "ACTIVE" }) },
+    wgcSubscription: { findUnique: vi.fn().mockResolvedValue(null) },
     user: { findUnique: vi.fn(), update: vi.fn() },
+    adminImpersonationSession: { findUnique: vi.fn() },
   },
 }));
 
@@ -31,8 +35,15 @@ function sessionCookie(createSessionToken: any, role: string, userId: string) {
   return createSessionToken({ userId, email: `${userId}@b.com`, role, churchId: "church-a", authVersion: 1 });
 }
 
-function mockUser(userId: string, role: string, churchId = "church-a") {
+function mockUser(userId: string, role: string, churchId: string | null = "church-a") {
   return { id: userId, email: `${userId}@b.com`, churchId, role, disabledAt: null, authVersion: 1, permissionsJson: null, passwordHash: "old-hash" };
+}
+
+function impersonationCookie(adminUserId: string, targetChurchId: string) {
+  const payload = { impersonationSessionId: "imp-1", adminUserId, targetChurchId, exp: Math.floor(Date.now() / 1000) + 3600 };
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", process.env.AUTH_SESSION_SECRET!).update(payloadB64).digest();
+  return `${payloadB64}.${sig.toString("base64url")}`;
 }
 
 describe("POST /api/merchant/settings/security/change-password — CP4C", () => {
@@ -74,6 +85,35 @@ describe("POST /api/merchant/settings/security/change-password — CP4C", () => 
 
     const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ currentPassword: "old", newPassword: "newpassword123" }) }));
     expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("a WGC admin impersonating a merchant ('View as Merchant') cannot change a password through this route — it would silently change the ADMIN's own password otherwise", async () => {
+    const { POST, createSessionToken } = await loadModule();
+    const { prisma } = await import("@/lib/prisma");
+    const { SESSION_COOKIE_NAME } = await import("@/lib/auth/sessionConstants");
+    const { IMPERSONATION_COOKIE_NAME } = await import("@/lib/auth/impersonation");
+
+    const adminToken = sessionCookie(createSessionToken, "wgc_super_admin", "admin-1");
+    const impToken = impersonationCookie("admin-1", "church-a");
+    mockCookieStore.get.mockImplementation((name: string) => {
+      if (name === SESSION_COOKIE_NAME) return { value: adminToken };
+      if (name === IMPERSONATION_COOKIE_NAME) return { value: impToken };
+      return undefined;
+    });
+
+    vi.mocked(prisma.user.findUnique).mockResolvedValue(mockUser("admin-1", "wgc_super_admin", null) as never);
+    vi.mocked(prisma.adminImpersonationSession.findUnique).mockResolvedValue({
+      id: "imp-1",
+      adminUserId: "admin-1",
+      adminEmail: "admin-1@b.com",
+      targetChurchId: "church-a",
+      endedAt: null,
+      expiresAt: new Date(Date.now() + 3600_000),
+    } as never);
+
+    const res = await POST(new Request("http://x", { method: "POST", body: JSON.stringify({ currentPassword: "old", newPassword: "newpassword123" }) }));
+    expect(res.status).toBe(403);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 

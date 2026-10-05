@@ -4,7 +4,7 @@ import { findBestScoredMatch, type MatchCandidateDonor } from "@/lib/donors/dono
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { DONOR_CANDIDATE_CAP } from "@/lib/donors/donorsList";
 
-export type PossibleMatchSourceType = "EXTERNAL_DONATION_ENTRY" | "EXTERNAL_DONATION_IMPORT";
+export type PossibleMatchSourceType = "EXTERNAL_DONATION_ENTRY" | "EXTERNAL_DONATION_IMPORT" | "MIGRATION_IMPORT";
 
 export interface ResolveWithMatchReviewInput extends DonorResolutionInput {
   sourceType: PossibleMatchSourceType;

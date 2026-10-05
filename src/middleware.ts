@@ -17,7 +17,15 @@ const PUBLIC_ADMIN_PATHS = ['/admin/login', '/admin/forgot-password', '/admin/re
 // one-time sandbox admin bootstrap (see that route for its own
 // independent secret-header gate — a session could never exist for the
 // very first admin, so it can't be gated the normal way).
-const PUBLIC_ADMIN_API_PATHS = ['/api/admin/login', '/api/admin/forgot-password', '/api/admin/setup/seed-admin'];
+const PUBLIC_ADMIN_API_PATHS = [
+  '/api/admin/login',
+  // Mid-login MFA steps — called with only the opaque challengeId returned
+  // by /api/admin/login, before any session cookie exists yet.
+  '/api/admin/login/mfa-verify',
+  '/api/admin/login/mfa-resend',
+  '/api/admin/forgot-password',
+  '/api/admin/setup/seed-admin',
+];
 
 // Team-access Checkpoint 2: routes under /merchant and /api/merchant that
 // must stay reachable without a session — the pre-auth flows (login,

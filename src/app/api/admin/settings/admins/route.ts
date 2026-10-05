@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
 
@@ -49,9 +51,18 @@ export async function GET() {
   return NextResponse.json({ admins: admins.map(adminView) });
 }
 
+// Creating a new WGC admin account is a user/role-management action — gated
+// on an MFA-verified session, not just admin authentication, so a stolen
+// pre-enrollment session cookie can't be used to mint new admin accounts.
 export async function POST(req: Request) {
-  const session = await getAdminSession();
-  if (!session || session.role !== "wgc_super_admin") {
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  if (session.role !== "wgc_super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

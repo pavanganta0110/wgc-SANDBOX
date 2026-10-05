@@ -24,7 +24,7 @@ function appUrl(): string {
   return process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
 }
 
-async function logEmailAttempt(params: { type: string; to: string; subject: string; success: boolean; error?: unknown }) {
+async function logEmailAttempt(params: { type: string; to: string; subject: string; success: boolean; error?: unknown; bodyHtml: string }) {
   try {
     await prisma.emailLog.create({
       data: {
@@ -34,6 +34,7 @@ async function logEmailAttempt(params: { type: string; to: string; subject: stri
         status: params.success ? "SENT" : "FAILED",
         error: params.success ? null : safeStringify(params.error),
         sentAt: params.success ? new Date() : null,
+        bodyHtml: params.bodyHtml,
       },
     });
   } catch (err) {
@@ -58,19 +59,20 @@ async function orgManagers(churchId: string): Promise<{ name: string | null; ema
   return users;
 }
 
-async function sendToRecipients(recipients: { name: string | null; email: string }[], type: string, subject: string, bodyHtml: (name: string | null) => string) {
+async function sendToRecipients(recipients: { name: string | null; email: string }[], type: string, subject: string, bodyHtmlFor: (name: string | null) => string) {
   for (const recipient of recipients) {
+    const bodyHtml = bodyHtmlFor(recipient.name);
     let success = true;
     let error: unknown;
     try {
-      const result = await sendWgcEmail({ to: recipient.email, subject, title: "Aplos Sync Notification", bodyHtml: bodyHtml(recipient.name) });
+      const result = await sendWgcEmail({ to: recipient.email, subject, title: "Aplos Sync Notification", bodyHtml });
       success = result.success;
       error = result.success ? undefined : result.error;
     } catch (err) {
       success = false;
       error = err;
     }
-    await logEmailAttempt({ type, to: recipient.email, subject, success, error });
+    await logEmailAttempt({ type, to: recipient.email, subject, success, error, bodyHtml });
   }
 }
 

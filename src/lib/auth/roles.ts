@@ -159,7 +159,39 @@ export type PermissionKey =
   // email type from that page, rather than each category's own existing,
   // inconsistent permission.
   | "canViewEmailLogs"
-  | "canResendEmails";
+  | "canResendEmails"
+  // Fundraising Campaigns (peer-to-peer) — mirrors the Pledges permission
+  // shape above: canCreate/canEdit/canArchive gate the campaign itself
+  // (goal, dates, status); canManageCampaignRoster gates creating/editing
+  // the teams and individual fundraisers under it. canViewFundraisingCampaigns
+  // is separate so a read-only role can see campaign data without any
+  // mutation rights.
+  | "canViewFundraisingCampaigns"
+  | "canCreateFundraisingCampaign"
+  | "canEditFundraisingCampaign"
+  | "canArchiveFundraisingCampaign"
+  | "canManageCampaignRoster"
+  // Developer platform (Settings -> Developers): webhooks and API keys are
+  // separate gates since a merchant might delegate webhook configuration
+  // to a technical volunteer without also handing out API key creation
+  // (which carries broader read/write access to the organization's data).
+  | "canManageWebhooks"
+  | "canManageApiKeys"
+  // Migration Center: bulk-creates/updates donors, donation history, and
+  // funds from an external source in one job — kept as its own gate since
+  // it's higher blast-radius than either single-purpose importer it builds
+  // on (canImportExternalDonations, and the donor importer which has no
+  // gate of its own today).
+  | "canManageMigrations"
+  // Events / Registration — canViewEvents gates seeing events, registrations
+  // and attendees; canManageEvents gates creating/editing/archiving an
+  // event, its add-ons/fields/email templates, and sending event emails;
+  // canManageEventAttendees gates check-in toggles; canExportEvents gates
+  // the attendee/registration CSV (attendee names/emails are PII).
+  | "canViewEvents"
+  | "canManageEvents"
+  | "canManageEventAttendees"
+  | "canExportEvents";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -226,6 +258,18 @@ const ALL_FALSE: PermissionMatrix = {
   canExportPledges: false,
   canViewEmailLogs: false,
   canResendEmails: false,
+  canViewFundraisingCampaigns: false,
+  canCreateFundraisingCampaign: false,
+  canEditFundraisingCampaign: false,
+  canArchiveFundraisingCampaign: false,
+  canManageCampaignRoster: false,
+  canManageWebhooks: false,
+  canManageApiKeys: false,
+  canManageMigrations: false,
+  canViewEvents: false,
+  canManageEvents: false,
+  canManageEventAttendees: false,
+  canExportEvents: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -295,6 +339,18 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canExportPledges: true,
     canViewEmailLogs: true,
     canResendEmails: true,
+    canViewFundraisingCampaigns: true,
+    canCreateFundraisingCampaign: true,
+    canEditFundraisingCampaign: true,
+    canArchiveFundraisingCampaign: true,
+    canManageCampaignRoster: true,
+    canManageWebhooks: true,
+    canManageApiKeys: true,
+    canManageMigrations: true,
+    canViewEvents: true,
+    canManageEvents: true,
+    canManageEventAttendees: true,
+    canExportEvents: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -346,13 +402,26 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canRecordPledgeFulfillment: true,
     canExportPledges: true,
     canViewEmailLogs: true,
+    canViewFundraisingCampaigns: true,
+    canCreateFundraisingCampaign: true,
+    canEditFundraisingCampaign: true,
+    canManageCampaignRoster: true,
+    canViewEvents: true,
+    canManageEvents: true,
+    canManageEventAttendees: true,
+    canExportEvents: true,
+    canManageWebhooks: true,
+    // canManageApiKeys: false by default, override-able — an API key grants
+    // broad programmatic read/write access to the organization's data, same
+    // trust tier as canManageBankAccount/canManageBilling, not a routine
+    // developer-settings toggle.
     // canResendEmails: false by default, override-able — an outbound
     // donor-facing action, same trust tier as canVoidExternalDonation /
     // canRefundInvoicePayments.
-    // canArchivePledgeCampaign, canCancelPledge: false by default,
-    // override-able — archiving a campaign and canceling a pledge are
-    // treated like canVoidExternalDonation/canVoidInvoices, not a
-    // routine edit.
+    // canArchivePledgeCampaign, canCancelPledge, canArchiveFundraisingCampaign:
+    // false by default, override-able — archiving a campaign and canceling
+    // a pledge are treated like canVoidExternalDonation/canVoidInvoices,
+    // not a routine edit.
     // canManageTeam, canIssueRefunds, canManageBankAccount, canManageBilling,
     // canViewAsUser, canVoidExternalDonation, canViewExternalDonationProof:
     // false by default, override-able — voiding a donation record and
@@ -362,6 +431,9 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     // CSV import can create/modify hundreds of financial records and donor
     // profiles in one action, treated like canManageBankAccount, not like
     // the single-record canCreateExternalDonation admin already has.
+    // canManageMigrations: false by default, override-able — a Migration
+    // Center job is a superset of canImportExternalDonations (donors +
+    // donation history + funds in one bulk action), same trust tier.
     // canVoidInvoices, canRecordOfflineInvoicePayments,
     // canRefundInvoicePayments: false by default, override-able, for the
     // same reason — voiding an invoice, recording a manual payment, and
@@ -405,8 +477,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewPledges: true,
     canCreatePledge: true, // same rationale as canCreateExternalDonation — front-line entry for pledge cards/phone calls
     canRecordPledgeFulfillment: true,
-    // No campaign creation/management, no editing/canceling an existing
-    // pledge, no export by default — override-able.
+    // No pledge campaign creation/management, no editing/canceling an
+    // existing pledge, no export by default — override-able. Same for
+    // fundraising campaigns: no create/edit/archive/roster-management, and
+    // canViewFundraisingCampaigns is false by default too — override-able.
     // canViewEmailLogs/canResendEmails: false by default, override-able —
     // no existing "owns donor communications" precedent for this role
     // (unlike invoices, which fundraisers create themselves, these emails

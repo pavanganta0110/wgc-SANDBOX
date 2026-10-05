@@ -46,13 +46,7 @@ export async function sendMerchandiseOrderConfirmation(orderId: string) {
     .filter(Boolean)
     .join("<br>");
 
-  const result = await sendWgcEmail({
-    to: order.customerEmail,
-    subject: `Your order ${order.wgcOrderNumber} from ${orgName}`,
-    title: "Order confirmed",
-    badgeText: "Order Confirmation",
-    badgeColor: "#0B5DBC",
-    bodyHtml: `
+  const bodyHtml = `
       <p>Thanks for your order from <strong>${orgName}</strong>! Here's your confirmation.</p>
       <p style="color:#64748B;font-size:13px;">Order ${order.wgcOrderNumber}</p>
       <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -62,7 +56,14 @@ export async function sendMerchandiseOrderConfirmation(orderId: string) {
       </table>
       <p style="color:#64748B;font-size:13px;">Shipping to:<br>${addressLines || "—"}</p>
       <p>We'll email you again once your order ships.</p>
-    `,
+    `;
+  const result = await sendWgcEmail({
+    to: order.customerEmail,
+    subject: `Your order ${order.wgcOrderNumber} from ${orgName}`,
+    title: "Order confirmed",
+    badgeText: "Order Confirmation",
+    badgeColor: "#0B5DBC",
+    bodyHtml,
     log: {
       churchId: order.churchId,
       donorId: order.donorId,
@@ -81,6 +82,7 @@ export async function sendMerchandiseOrderConfirmation(orderId: string) {
       status: result.success ? "SENT" : "ERROR",
       sentAt: result.success ? new Date() : null,
       error: result.success ? null : String(result.error ?? "unknown error"),
+      bodyHtml,
     },
   });
 
@@ -138,13 +140,7 @@ export async function sendShipmentNotification(orderId: string) {
   const church = await prisma.church.findUnique({ where: { id: order.churchId }, select: { name: true } });
   const orgName = church?.name || "the organization you supported";
 
-  const result = await sendWgcEmail({
-    to: order.customerEmail,
-    subject: `Your order ${order.wgcOrderNumber} has shipped`,
-    title: "Your order has shipped",
-    badgeText: "Shipped",
-    badgeColor: "#16A34A",
-    bodyHtml: `
+  const bodyHtml = `
       <p>Good news — your order from <strong>${orgName}</strong> is on its way!</p>
       <table style="width:100%;text-align:left;border-collapse:collapse;margin-top:16px;font-size:14px;">
         <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Order:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${order.wgcOrderNumber}</td></tr>
@@ -153,7 +149,14 @@ export async function sendShipmentNotification(orderId: string) {
         <tr><td style="padding:8px 0;"><strong>Shipping paid:</strong></td><td style="padding:8px 0;">${formatCents(order.shippingAmount)}</td></tr>
       </table>
       ${order.trackingUrl ? `<p><a href="${order.trackingUrl}">Track your package</a></p>` : ""}
-    `,
+    `;
+  const result = await sendWgcEmail({
+    to: order.customerEmail,
+    subject: `Your order ${order.wgcOrderNumber} has shipped`,
+    title: "Your order has shipped",
+    badgeText: "Shipped",
+    badgeColor: "#16A34A",
+    bodyHtml,
   });
 
   await prisma.emailLog.create({
@@ -164,6 +167,7 @@ export async function sendShipmentNotification(orderId: string) {
       status: result.success ? "SENT" : "ERROR",
       sentAt: result.success ? new Date() : null,
       error: result.success ? null : String(result.error ?? "unknown error"),
+      bodyHtml,
     },
   });
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
@@ -7,7 +8,7 @@ import { resolveWgcTransferFeeStrategy } from "@/lib/giving/serverFeeStrategy";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
-import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
+import { sendDonationReceipt, notifyMerchantOfNewDonation } from "@/lib/giving/generateReceipt";
 import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
@@ -17,10 +18,15 @@ import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionS
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+import { normalizeEmail } from "@/lib/donors/donorContact";
+import { emitEvent } from "@/lib/events/emitEvent";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
-import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
+import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
+import { finalizeEventRegistration } from "@/lib/eventRegistration/registrationService";
+import { gateEventPayment, type EventPaymentContext } from "@/lib/eventRegistration/paymentGate";
+import { isEventGivingLink } from "@/lib/eventRegistration/eventGivingLink";
 import crypto from "crypto";
 
 /**
@@ -95,6 +101,7 @@ async function handleDonate(req: Request, slug: string) {
       clientAttemptId,
       fundId: submittedFundId,
       pledgeId: submittedPledgeId,
+      eventRegistrationId: submittedEventRegistrationId,
     } = body;
 
     const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
@@ -182,6 +189,35 @@ async function handleDonate(req: Request, slug: string) {
       resolvedPledgeId = pledge?.id ?? null;
     }
 
+    // Event registration payment: a registration is created server-side
+    // (with its own server-computed total) BEFORE any charge, and this
+    // route only ever charges exactly that total against that event's own
+    // dedicated giving link — the client's amount is checked against the
+    // registration, never trusted on its own. Anything that doesn't line
+    // up is rejected before Finix is touched. A normal giving-link
+    // donation never sends eventRegistrationId and skips this entirely.
+    let eventCtx: EventPaymentContext | null = null;
+    if (typeof submittedEventRegistrationId === "string" && submittedEventRegistrationId) {
+      const gate = await gateEventPayment({
+        registrationId: submittedEventRegistrationId,
+        churchId: church.id,
+        givingLinkId: link.id,
+        clientAttemptId,
+        isRecurring,
+        donationAmountCents,
+      });
+      if (!gate.ok) {
+        if ("duplicate" in gate) {
+          return NextResponse.json({ success: true, transferId: gate.duplicate.transferId, state: gate.duplicate.state, duplicate: true });
+        }
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: gate.message, retryable: gate.retryable }, { status: gate.status });
+      }
+      eventCtx = gate.ctx;
+    } else if (await isEventGivingLink(church.id, link.id)) {
+      // An event's checkout link can't take a plain gift — there'd be no registration for it.
+      return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "This payment link is not available.", retryable: false }, { status: 404 });
+    }
+
     // Amount rules
     if (link.amountType === "FIXED") {
       if (link.fixedAmountCents != null && donationAmountCents !== link.fixedAmountCents) {
@@ -267,6 +303,27 @@ async function handleDonate(req: Request, slug: string) {
       }
       if (normalized) donor.phone = normalized;
     }
+    // Mirrors GivingLinkForm.tsx's client-side addressRequired/
+    // mailingAddressValid gate — never trust that check alone, since this
+    // is a public, unauthenticated endpoint a client-side-only check can't
+    // actually enforce. `street`'s setting is the single bundled driver for
+    // the whole address block (see that file's own comment on why).
+    if (link.collectMailingAddress && fieldSettings.street === "REQUIRED") {
+      const cleanedRequiredAddress = cleanAddressInput(
+        mailingAddress && typeof mailingAddress === "object" ? mailingAddress : {}
+      );
+      if (
+        !cleanedRequiredAddress.addressLine1 ||
+        !cleanedRequiredAddress.city ||
+        !cleanedRequiredAddress.state ||
+        !cleanedRequiredAddress.postalCode
+      ) {
+        return NextResponse.json(
+          { success: false, code: "VALIDATION_ERROR", message: "A mailing address is required for this gift.", retryable: true },
+          { status: 400 }
+        );
+      }
+    }
     if (!fullName || !donor?.email) {
       return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Name and email are required", retryable: true }, { status: 400 });
     }
@@ -301,6 +358,38 @@ async function handleDonate(req: Request, slug: string) {
       if (!instrument?.id) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Payment method not found on Finix", retryable: true }, { status: 404 });
       }
+
+      // Ownership check — confirmed via security review that without this,
+      // a caller who obtains ANY valid Finix paymentInstrumentId (this
+      // church's own or, if ever leaked by any future code path, another
+      // church's) could charge it while supplying an arbitrary donor
+      // name/email. Worse than an unauthorized charge alone:
+      // resolveOrCreateDonor() below matches an existing Donor by this same
+      // finixIdentityId, so an attacker-supplied email/name would silently
+      // overwrite the real owner's donor profile via applyProfileUpdates().
+      // A saved instrument may only be reused by the same church that
+      // already has a Donor record on file for it, and only when the
+      // request's own email matches that donor's email — a legitimate
+      // returning donor giving again always satisfies this; nothing else
+      // does.
+      const instrumentOwner = await prisma.finixPaymentInstrumentSnapshot.findUnique({
+        where: { finixPaymentInstrumentId: instrumentId },
+        select: { churchId: true, donorId: true },
+      });
+      const ownerDonor = instrumentOwner?.donorId
+        ? await prisma.donor.findUnique({ where: { id: instrumentOwner.donorId }, select: { email: true } })
+        : null;
+      const requestEmail = normalizeEmail(donor?.email);
+      const ownerEmail = normalizeEmail(ownerDonor?.email ?? null);
+      const isOwnershipVerified =
+        instrumentOwner?.churchId === church.id && !!ownerEmail && !!requestEmail && ownerEmail === requestEmail;
+      if (!isOwnershipVerified) {
+        return NextResponse.json(
+          { success: false, code: "VALIDATION_ERROR", message: "This saved payment method is not available for this donor.", retryable: false },
+          { status: 403 }
+        );
+      }
+
       identityId = instrument.identity;
       // Finix's GET/POST /payment_instruments response has `brand` as a flat
       // top-level field, not nested under a `card` object — confirmed
@@ -320,6 +409,12 @@ async function handleDonate(req: Request, slug: string) {
         phone: donor.phone || null,
         companyName: fieldSettings.companyName !== "HIDDEN" ? donor.companyName?.trim() || null : null,
       });
+      try {
+        if (donorRecord.created) await emitEvent({ type: "donor.created", churchId: church.id, data: { donorId: donorRecord.id } });
+        else if (donorRecord.updated) await emitEvent({ type: "donor.updated", churchId: church.id, data: { donorId: donorRecord.id } });
+      } catch (err) {
+        console.error("Failed to emit donor event:", err);
+      }
     } else {
       const [firstName, ...rest] = fullName.trim().split(" ");
       const lastName = rest.join(" ") || firstName;
@@ -445,6 +540,12 @@ async function handleDonate(req: Request, slug: string) {
         phone: donor.phone || null,
         companyName: fieldSettings.companyName !== "HIDDEN" ? donor.companyName?.trim() || null : null,
       });
+      try {
+        if (donorRecord.created) await emitEvent({ type: "donor.created", churchId: church.id, data: { donorId: donorRecord.id } });
+        else if (donorRecord.updated) await emitEvent({ type: "donor.updated", churchId: church.id, data: { donorId: donorRecord.id } });
+      } catch (err) {
+        console.error("Failed to emit donor event:", err);
+      }
 
       try {
         await syncPaymentInstrument(instrumentId, { churchId: church.id, donorId: donorRecord.id });
@@ -671,6 +772,19 @@ async function handleDonate(req: Request, slug: string) {
         },
       });
 
+      try {
+        // A subscription.id fresh off finixClient.createSubscription() a
+        // few lines above can never already exist in our DB, so this
+        // upsert is always effectively a create.
+        await emitEvent({
+          type: "recurring.created",
+          churchId: church.id,
+          data: { finixSubscriptionId: subscription.id, donorId: donorRecord.id, amountCents: totalCents, billingInterval: interval, givingLinkId: link.id },
+        });
+      } catch (err) {
+        console.error("Failed to emit recurring.created event:", err);
+      }
+
       await prisma.paymentAttempt.update({
         where: { id: attempt.id },
         data: { status: "SUCCEEDED", donorId: donorRecord.id },
@@ -709,6 +823,7 @@ async function handleDonate(req: Request, slug: string) {
         fee_percentage_bps: String(feeStrategy.percentageBasisPoints),
         fee_fixed_cents: String(feeStrategy.fixedFeeCents),
         fee_calculation_version: FEE_CALCULATION_VERSION,
+        ...(eventCtx ? { event_registration_id: eventCtx.registrationId } : {}),
       },
     };
 
@@ -793,6 +908,18 @@ async function handleDonate(req: Request, slug: string) {
         fundId: resolvedFund.fundId,
         fundName: resolvedFund.fundName || link.fundName || null,
         pledgeId: resolvedPledgeId,
+        // Quid-pro-quo disclosure for the part of an event registration
+        // that buys something (a dinner, green fees, an add-on): the
+        // existing receipt/annual-statement code already reads these, so
+        // only the genuine contribution portion is ever recorded as a gift.
+        ...(eventCtx && eventCtx.benefitValueCents > 0
+          ? {
+              goodsServicesProvided: true,
+              goodsServicesDescription: `Event registration: ${eventCtx.eventName}`.slice(0, 200),
+              goodsServicesFairMarketValueCents: Math.min(eventCtx.benefitValueCents, donationAmountCents),
+              recordedContributionAmountCents: Math.max(0, donationAmountCents - eventCtx.benefitValueCents),
+            }
+          : {}),
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
         note: fieldSettings.donorNote !== "HIDDEN" ? donor.note?.trim() || null : null,
       },
@@ -822,6 +949,25 @@ async function handleDonate(req: Request, slug: string) {
       }
     }
 
+    // Confirm the registration once the charge is accepted (SUCCEEDED, or
+    // PENDING for ACH). A declined charge leaves it PENDING so the
+    // registrant can retry with another card. Never allowed to turn an
+    // already-completed payment into an error response.
+    if (eventCtx) {
+      const transferState = (transfer.state || "").toUpperCase();
+      if (transferState === "SUCCEEDED" || transferState === "PENDING") {
+        try {
+          await finalizeEventRegistration(eventCtx.registrationId, {
+            donorId: donorRecord.id,
+            paymentId: newPayment.id,
+            paidAt: transferState === "SUCCEEDED" ? new Date() : null,
+          });
+        } catch (err) {
+          console.error("Failed to finalize event registration:", err);
+        }
+      }
+    }
+
     const receiptSettings = link.receiptSettingsJson as { sendAutomatically?: boolean } | null;
     if (succeeded && (receiptSettings?.sendAutomatically ?? true)) {
       try {
@@ -831,11 +977,56 @@ async function handleDonate(req: Request, slug: string) {
       }
     }
 
+    // Independent of receiptSettings.sendAutomatically (that setting is
+    // about the donor's own receipt) — gated only by the org's own
+    // DONATION_RECEIVED notification preference, same as every other
+    // seller-facing event.
+    if (succeeded) {
+      try {
+        await notifyMerchantOfNewDonation(newPayment.id, church.id);
+      } catch (err) {
+        console.error("Failed to notify merchant of new donation:", err);
+      }
+    }
+
     if (succeeded) {
       try {
         await syncPaymentToQuickBooks(newPayment.id);
       } catch (err) {
         console.error("Failed to sync payment to QuickBooks:", err);
+      }
+    }
+
+    if (succeeded) {
+      try {
+        await emitEvent({
+          type: "donation.created",
+          churchId: church.id,
+          data: { paymentId: newPayment.id, donorId: donorRecord.id, amountCents: totalCents, donationAmountCents, givingLinkId: link.id },
+        });
+      } catch (err) {
+        console.error("Failed to emit donation.created event:", err);
+      }
+    }
+
+    // Giving Campaign attribution — if this donor arrived via a campaign's
+    // per-recipient /gc/[token] link (see that route), credit their click
+    // with this payment. Best-effort and silent: absence of the cookie is
+    // the overwhelmingly common case (a normal, non-campaign donation), not
+    // an error. Only ever sets paidAt/paymentId once — a donor re-donating
+    // later in the same 2-hour cookie window shouldn't overwrite their
+    // first attribution with a second, unrelated gift.
+    if (succeeded) {
+      try {
+        const campaignRef = (await cookies()).get("wgc_campaign_ref")?.value;
+        if (campaignRef) {
+          await prisma.givingCampaignRecipient.updateMany({
+            where: { trackingToken: campaignRef, churchId: church.id, paidAt: null },
+            data: { paidAt: new Date(), paymentId: newPayment.id },
+          });
+        }
+      } catch (err) {
+        console.error("Failed to attribute payment to campaign recipient:", err);
       }
     }
 

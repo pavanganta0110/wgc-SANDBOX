@@ -1,15 +1,23 @@
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 import { notifyAdminSupportChange } from "@/lib/support/ticketNotifications";
 import { sendWgcEmail } from "@/lib/email";
 
+// Every action this route can take (disable/reactivate a merchant user,
+// correct their profile/email, revoke their sessions, resend credentials)
+// materially affects a merchant account — an MFA-verified admin session is
+// required, not just admin authentication.
 export async function POST(req: Request) {
   try {
-    const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    let session;
+    try {
+      session = await requireMfaVerifiedAdminSession();
+    } catch (err) {
+      if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+      throw err;
     }
 
     const { userId, churchId, actionType, reason, ticketId, ticketNumber, ...extraData } = await req.json();
@@ -75,18 +83,19 @@ export async function POST(req: Request) {
 
         const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/merchant/set-password/${token}`;
         const isInvite = actionType === "RESEND_INVITE";
+        const bodyHtml = `<p>Hi ${user.name || church?.name || "there"},</p>
+                     <p>${isInvite
+                       ? `Your WGC Payments merchant dashboard is ready. Use the secure link below to set your password and log in.`
+                       : `Use the secure link below to set a new password for your WGC Payments account.`}</p>
+                     <p><a href="${setPasswordLink}">${isInvite ? "Set your password" : "Reset your password"}</a></p>
+                     <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`;
         const emailResult = await sendWgcEmail({
           to: user.email,
           subject: isInvite ? "Your WGC Payments dashboard access" : "Reset your WGC Payments password",
           title: isInvite ? "Set up your dashboard access" : "Reset your password",
           badgeText: "Action Required",
           badgeColor: "#0B5DBC",
-          bodyHtml: `<p>Hi ${user.name || church?.name || "there"},</p>
-                     <p>${isInvite
-                       ? `Your WGC Payments merchant dashboard is ready. Use the secure link below to set your password and log in.`
-                       : `Use the secure link below to set a new password for your WGC Payments account.`}</p>
-                     <p><a href="${setPasswordLink}">${isInvite ? "Set your password" : "Reset your password"}</a></p>
-                     <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`,
+          bodyHtml,
         });
 
         await prisma.emailLog.create({
@@ -97,6 +106,7 @@ export async function POST(req: Request) {
             status: emailResult.success ? "SENT" : "ERROR",
             sentAt: emailResult.success ? new Date() : null,
             error: emailResult.success ? null : String(emailResult.error ?? "unknown error"),
+            bodyHtml,
           },
         });
 

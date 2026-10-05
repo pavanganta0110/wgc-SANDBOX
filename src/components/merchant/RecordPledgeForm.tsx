@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
 
 interface DonorOption {
   id: string;
@@ -56,7 +57,7 @@ export default function RecordPledgeForm({
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not record pledge");
+        setError(extractApiErrorMessage(data, "Could not record pledge"));
         setSubmitting(false);
         return;
       }

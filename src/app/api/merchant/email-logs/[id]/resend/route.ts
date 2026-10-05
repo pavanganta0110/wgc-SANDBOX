@@ -9,10 +9,11 @@ import { sendExternalDonationReceiptEmail } from "@/lib/donations/sendExternalDo
 import { sendYearEndStatementEmail } from "@/lib/donors/generateStatement";
 import { sendInvoiceEmail } from "@/lib/invoices/invoiceEmails";
 import { ensureInvoicePublicToken, InvoicePublicTokenAlreadyExistsError, regenerateInvoicePublicToken } from "@/lib/invoices/invoicePublicToken";
-import { sendWgcEmail } from "@/lib/email";
+import { sendWgcEmail, parseAdditionalRecipients } from "@/lib/email";
 import { generateSetupLinkToken } from "@/lib/subscriptions/setupLinkToken";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { formatCents } from "@/lib/format";
+import { resendEventNotice, sendRegistrationConfirmationEmail } from "@/lib/eventRegistration/eventEmails";
 
 const SETUP_LINK_EXPIRY_DAYS = 14;
 
@@ -47,14 +48,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return toSafeErrorResponse("This email cannot be resent (no related record).", 400);
   }
 
+  // Optional "also send this to other people" list — currently only
+  // honored for the two receipt categories below. A malformed/empty body
+  // is fine (no additional recipients, same as before this existed).
+  let additionalRecipients: string[] = [];
+  try {
+    const body = await req.json();
+    additionalRecipients = parseAdditionalRecipients(body?.additionalRecipients);
+  } catch {
+    // No JSON body sent — resend with no extra recipients, as before.
+  }
+
   try {
     switch (log.category) {
       case "DONATION_RECEIPT":
-        await sendDonationReceipt(log.relatedEntityId, auth.churchId, auth.userId);
+        await sendDonationReceipt(log.relatedEntityId, auth.churchId, auth.userId, additionalRecipients);
         break;
 
       case "EXTERNAL_DONATION_RECEIPT":
-        await sendExternalDonationReceiptEmail(log.relatedEntityId, auth.churchId, auth.userId);
+        await sendExternalDonationReceiptEmail(log.relatedEntityId, auth.churchId, auth.userId, additionalRecipients);
         break;
 
       case "ANNUAL_STATEMENT":
@@ -128,6 +140,33 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         });
 
         if (!emailResult.success) return toSafeErrorResponse("Failed to resend the setup link email.", 502);
+        break;
+      }
+
+      case "EVENT_CONFIRMATION": {
+        if (log.relatedEntityType !== "EventRegistration") return toSafeErrorResponse("This email cannot be resent.", 400);
+        // Church-scoped lookup first: the sender below loads by id alone.
+        const registration = await prisma.eventRegistration.findFirst({ where: { id: log.relatedEntityId, churchId: auth.churchId }, select: { id: true } });
+        if (!registration) return toSafeErrorResponse("Registration not found", 404);
+        const sent = await sendRegistrationConfirmationEmail(registration.id, { force: true, resendByUserId: auth.userId });
+        if (!sent) return toSafeErrorResponse("Failed to resend the confirmation email.", 502);
+        break;
+      }
+
+      case "EVENT_REMINDER":
+      case "EVENT_THANK_YOU": {
+        if (log.relatedEntityType !== "EventRegistration") {
+          return toSafeErrorResponse("Test emails can't be resent — send another test from the event's Emails tab.", 400);
+        }
+        const r = await resendEventNotice({
+          churchId: auth.churchId,
+          kind: log.category === "EVENT_REMINDER" ? "reminder" : "thankYou",
+          registrationId: log.relatedEntityId,
+          to: log.recipientEmail,
+          recipientName: log.recipientName,
+          userId: auth.userId,
+        });
+        if (!r.ok) return toSafeErrorResponse(r.error, 502);
         break;
       }
 

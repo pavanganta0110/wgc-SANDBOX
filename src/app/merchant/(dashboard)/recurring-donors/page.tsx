@@ -13,6 +13,7 @@ import RecurringDonorDrawer from "@/components/merchant/RecurringDonorDrawer";
 import RecurringDonorsFilterBar from "@/components/merchant/RecurringDonorsFilterBar";
 import Pagination from "@/components/merchant/Pagination";
 import { loadRecurringDonorsList, type RecurringDonorsSortKey } from "@/lib/subscriptions/recurringDonorsList";
+import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 import { loadRecurringDonorsAnalytics } from "@/lib/subscriptions/recurringDonorsAnalytics";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 
@@ -60,6 +61,13 @@ export default async function RecurringDonorsPage({
 
   const viewScope = await resolveViewScope(auth);
   const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+
+  // Self-healing fallback for a missed/delayed subscription.updated webhook
+  // — see subscriptionReconciliation.ts. Throttled to once per subscription
+  // per 5 minutes and bounded to 25 rows, so this stays cheap on repeat
+  // views; awaited before the query below so a merchant sees corrected data
+  // on this same page load, not the next one.
+  await reconcileStaleActiveSubscriptions(churchId);
 
   const [list, analytics] = await Promise.all([
     loadRecurringDonorsList(

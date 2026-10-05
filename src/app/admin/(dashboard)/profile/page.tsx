@@ -26,6 +26,7 @@ export default function AdminProfilePage() {
   const [savingName, setSavingName] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [confirmingLogoutAll, setConfirmingLogoutAll] = useState(false);
 
   useEffect(() => {
     fetch('/api/admin/profile')
@@ -97,7 +98,7 @@ export default function AdminProfilePage() {
   }
 
   async function handleLogoutAll() {
-    if (!confirm('This will sign you out of every session, including this one. Continue?')) return;
+    setConfirmingLogoutAll(false);
     setLoggingOutAll(true);
     try {
       await fetch('/api/admin/profile', {
@@ -177,13 +178,37 @@ export default function AdminProfilePage() {
         <h2 className="text-sm font-bold text-slate-900 mb-2">Sessions</h2>
         <p className="text-sm text-slate-500 mb-3">Sign out of this account everywhere, on every device.</p>
         <button
-          onClick={handleLogoutAll}
+          onClick={() => setConfirmingLogoutAll(true)}
           disabled={loggingOutAll}
           className="px-4 py-2 rounded-lg border border-red-300 text-red-700 text-sm font-semibold disabled:opacity-50"
         >
           {loggingOutAll ? 'Signing out…' : 'Log out of all sessions'}
         </button>
       </div>
+
+      {confirmingLogoutAll && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full">
+            <p className="text-sm text-slate-800 mb-6">This will sign you out of every session, including this one. Continue?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmingLogoutAll(false)}
+                className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLogoutAll}
+                className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Log out everywhere
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ export async function POST(request: Request) {
         type: type || "SUPPORT",
         status: "SENT",
         providerMessageId: "mock-message-id-" + Date.now(),
+        bodyHtml: message,
       },
     });
 

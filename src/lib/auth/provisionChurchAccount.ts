@@ -34,12 +34,6 @@ export async function provisionChurchAccount(app: {
     where: { onboardingApplicationId: app.id },
   });
 
-  const applicationDb = await prisma.onboardingApplication.findUnique({
-    where: { id: app.id },
-    select: { promotion: true },
-  });
-  const promotion = applicationDb?.promotion || null;
-
   if (!church) {
     let slug = slugBase;
     let suffix = 1;
@@ -58,7 +52,6 @@ export async function provisionChurchAccount(app: {
           finixIdentityId: app.finixIdentityId,
           finixApplicationId: app.finixApplicationId,
           status: "ACTIVE",
-          promotion: promotion,
         },
       });
     } catch (err) {
@@ -82,7 +75,6 @@ export async function provisionChurchAccount(app: {
         finixIdentityId: app.finixIdentityId,
         finixApplicationId: app.finixApplicationId,
         status: "ACTIVE",
-        promotion: promotion,
       },
     });
   }
@@ -110,9 +102,34 @@ export async function provisionChurchAccount(app: {
 
     const existingUser = await tx.user.findUnique({ where: { email: app.contactEmail } });
 
-    if (existingUser && (existingUser.passwordHash || existingUser.lastLoginAt)) {
-      if (existingUser.churchId !== church.id) {
-        await tx.user.update({ where: { id: existingUser.id }, data: { churchId: church.id } });
+    // Confirmed in production (2026-09-05): two Finix events for the same
+    // merchant landing seconds apart (not milliseconds) each pass the
+    // advisory-lock window above cleanly — the lock is transaction-scoped
+    // and releases as soon as the FIRST call's transaction commits, well
+    // before that call's own email even sends. The second call then sees
+    // an existingUser with no passwordHash/lastLoginAt yet (the merchant
+    // hasn't set a password), so the old condition treated it as "never
+    // invited" and issued a SECOND token + SECOND email. A still-valid,
+    // not-yet-expired setPasswordTokenHash means an invite was already
+    // durably issued — that's enough to skip an automatic re-send here.
+    // The admin "Resend" action (a separate route/table entry) is
+    // unaffected and remains the deliberate way to force a new send.
+    const hasValidPendingInvite = Boolean(
+      existingUser?.setPasswordTokenHash && existingUser?.setPasswordTokenExpiresAt && existingUser.setPasswordTokenExpiresAt > new Date()
+    );
+
+    if (existingUser && (existingUser.passwordHash || existingUser.lastLoginAt || hasValidPendingInvite)) {
+      const churchIdChanged = existingUser.churchId !== church.id;
+      const needsNameBackfill = !existingUser.name;
+      if (churchIdChanged || needsNameBackfill) {
+        const updated = await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            ...(churchIdChanged ? { churchId: church.id } : {}),
+            ...(needsNameBackfill ? { name: app.contactName } : {}),
+          },
+        });
+        return { alreadySetUp: true as const, user: updated };
       }
       return { alreadySetUp: true as const, user: existingUser };
     }
@@ -178,18 +195,24 @@ export async function provisionChurchAccount(app: {
 
   const { user, rawToken } = claim;
 
-  const setPasswordLink = `https://www.wgcpayments.com/merchant/set-password/${rawToken}`;
+  // Previously hardcoded to https://www.wgcpayments.com regardless of
+  // environment — every sandbox-provisioned account got an email pointing
+  // at production, where the token doesn't exist (sandbox and production
+  // use separate databases). Mirrors the NEXT_PUBLIC_APP_URL fallback
+  // pattern already used in billingEmails.ts.
+  const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/merchant/set-password/${rawToken}`;
 
+  const bodyHtml = `<p>Hi ${app.contactName || orgName},</p>
+               <p>Your WGC Payments merchant dashboard is ready. Use the secure link below to set your password and log in.</p>
+               <p><a href="${setPasswordLink}">Set your password</a></p>
+               <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`;
   const result = await sendWgcEmail({
     to: app.contactEmail,
     subject: "Your WGC Payments dashboard access",
     title: "Set up your dashboard access",
     badgeText: "Action Required",
     badgeColor: "#0B5DBC",
-    bodyHtml: `<p>Hi ${app.contactName || orgName},</p>
-               <p>Your WGC Payments merchant dashboard is ready. Use the secure link below to set your password and log in.</p>
-               <p><a href="${setPasswordLink}">Set your password</a></p>
-               <p>This link expires in 7 days. If it expires, contact WGC Payments Support and we'll send a new one.</p>`,
+    bodyHtml,
   });
 
   // Logged unconditionally (success or failure) so this is visible in the
@@ -205,6 +228,7 @@ export async function provisionChurchAccount(app: {
       status: result.success ? "SENT" : "ERROR",
       sentAt: result.success ? new Date() : null,
       error: result.success ? null : String(result.error ?? "unknown error"),
+      bodyHtml,
     },
   });
 

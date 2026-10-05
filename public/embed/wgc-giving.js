@@ -384,6 +384,11 @@
         state.config = config;
         state.selectedFundId = (config.funds.options.filter(function (f) { return f.isDefault; })[0] || config.funds.options[0] || {}).id || null;
         state.selectedMethod = config.paymentMethods.indexOf("CARD") !== -1 ? "card" : "bank";
+        // The organization's chosen starting point — the API only ever sends
+        // "RECURRING" when recurring giving is on (already validated
+        // server-side, same rules as the hosted page). The donor can still
+        // switch either way; this only sets what the form opens on.
+        state.isRecurring = !!(config.recurring && config.recurring.enabled && config.recurring.defaultDonationType === "RECURRING");
         renderForm(state);
       })
       .catch(function (err) {
@@ -454,11 +459,11 @@
 
     if (cfg.recurring.enabled) {
       html += '<div class="wgc-inline-toggle" data-role="frequency-toggle">';
-      html += '<button type="button" class="wgc-inline-toggle-btn wgc-selected" data-value="onetime">One-time</button>';
-      html += '<button type="button" class="wgc-inline-toggle-btn" data-value="recurring">Recurring</button>';
+      html += '<button type="button" class="wgc-inline-toggle-btn' + (state.isRecurring ? "" : " wgc-selected") + '" data-value="onetime">One-time</button>';
+      html += '<button type="button" class="wgc-inline-toggle-btn' + (state.isRecurring ? " wgc-selected" : "") + '" data-value="recurring">Recurring</button>';
       html += "</div>";
       if (cfg.recurring.allowedFrequencies.length > 1) {
-        html += '<div class="wgc-inline-field" data-role="interval-field" hidden><label>Frequency</label><select class="wgc-inline-select" data-role="interval">';
+        html += '<div class="wgc-inline-field" data-role="interval-field"' + (state.isRecurring ? "" : " hidden") + '><label>Frequency</label><select class="wgc-inline-select" data-role="interval">';
         for (var fq = 0; fq < cfg.recurring.allowedFrequencies.length; fq++) {
           html += '<option value="' + cfg.recurring.allowedFrequencies[fq] + '">' + cfg.recurring.allowedFrequencies[fq].charAt(0) + cfg.recurring.allowedFrequencies[fq].slice(1).toLowerCase() + "</option>";
         }
@@ -478,7 +483,7 @@
       html +=
         '<label class="wgc-inline-checkbox-row"><input type="checkbox" data-role="cover-fees"' +
         (cfg.feeCover.defaultOn ? " checked" : "") +
-        " /> I'll cover the processing fee so " + escapeHtml(cfg.organization.name) + " keeps 100% of my gift</label>";
+        " /> I'll cover the transaction cost so " + escapeHtml(cfg.organization.name) + " keeps 100% of my gift</label>";
     }
 
     var hasCard = cfg.paymentMethods.indexOf("CARD") !== -1;
@@ -565,6 +570,26 @@
         var dollars = parseFloat(customInput.value.replace(/[^0-9.]/g, ""));
         state.customAmountCents = isNaN(dollars) ? null : Math.round(dollars * 100);
       });
+    }
+
+    // Default recurring amount: when the form opens as Recurring, start with
+    // the organization's chosen amount selected (a suggested-amount button
+    // if it matches one, otherwise typed into the custom field). Same as any
+    // other pre-selection: one click on another amount, or typing a custom
+    // one, replaces it. defaultAmountCents is only ever sent when the hosted
+    // page would honor it too (VARIABLE amount, within min/max, selectable).
+    var defaultAmountCents = state.config.recurring && state.config.recurring.defaultAmountCents;
+    if (state.isRecurring && defaultAmountCents) {
+      var matched = null;
+      for (var da = 0; da < amountButtons.length; da++) {
+        if (parseInt(amountButtons[da].getAttribute("data-amount"), 10) === defaultAmountCents) matched = amountButtons[da];
+      }
+      if (matched) {
+        matched.click();
+      } else if (customInput) {
+        customInput.value = defaultAmountCents % 100 === 0 ? String(defaultAmountCents / 100) : (defaultAmountCents / 100).toFixed(2);
+        state.customAmountCents = defaultAmountCents;
+      }
     }
 
     // FIXED_QUANTITY: quantity stepper (can go to 0 — a donor can skip the

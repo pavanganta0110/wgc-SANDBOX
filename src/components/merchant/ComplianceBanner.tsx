@@ -10,15 +10,15 @@ export default function ComplianceBanner({ status }: { status: ComplianceStatus 
   return (
     <div
       className={`flex items-center gap-3 px-6 md:px-10 py-3 border-b ${
-        overdue ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"
+        overdue ? "bg-wgc-error-50 border-wgc-error-100" : "bg-wgc-warning-50 border-wgc-warning-100"
       }`}
     >
       {overdue ? (
-        <ShieldAlert className="w-5 h-5 text-red-600 shrink-0" />
+        <ShieldAlert className="w-5 h-5 text-wgc-error-600 shrink-0" />
       ) : (
-        <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+        <AlertTriangle className="w-5 h-5 text-wgc-warning-600 shrink-0" />
       )}
-      <p className={`text-sm font-semibold flex-grow ${overdue ? "text-red-800" : "text-amber-800"}`}>
+      <p className={`text-sm font-semibold flex-grow ${overdue ? "text-wgc-error-800" : "text-wgc-warning-800"}`}>
         {overdue
           ? "Your PCI compliance attestation is overdue. Payments may be affected until it's completed."
           : status.daysUntilDue !== null && status.daysUntilDue <= 0
@@ -28,7 +28,7 @@ export default function ComplianceBanner({ status }: { status: ComplianceStatus 
       <Link
         href="/merchant/compliance"
         className={`text-xs font-bold uppercase tracking-wide px-3 py-1.5 rounded-lg shrink-0 ${
-          overdue ? "bg-red-600 text-white hover:bg-red-700" : "bg-amber-600 text-white hover:bg-amber-700"
+          overdue ? "bg-wgc-error-600 text-white hover:bg-wgc-error-700" : "bg-wgc-warning-600 text-white hover:bg-wgc-warning-700"
         }`}
       >
         Complete Now

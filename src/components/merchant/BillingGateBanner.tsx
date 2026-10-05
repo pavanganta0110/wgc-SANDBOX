@@ -33,13 +33,13 @@ export default function BillingGateBanner({ state }: { state: OrgAccessState }) 
   if (!copy) return null;
   const isSuspended = state === "SUSPENDED";
   return (
-    <div className={`text-sm px-6 py-3 flex items-center justify-between gap-4 ${isSuspended ? "bg-red-600" : "bg-amber-500"} text-white`}>
+    <div className={`text-sm px-6 py-3 flex items-center justify-between gap-4 ${isSuspended ? "bg-wgc-error-600" : "bg-wgc-warning"} text-white`}>
       <p>
         <strong>{isSuspended ? "Account restricted:" : "Action needed:"}</strong> {copy.text}
       </p>
       <Link
         href={isSuspended ? "/merchant/support" : "/merchant/subscription"}
-        className={`whitespace-nowrap px-4 py-1.5 rounded-full bg-white font-semibold hover:bg-slate-50 ${isSuspended ? "text-red-700" : "text-amber-700"}`}
+        className={`whitespace-nowrap px-4 py-1.5 rounded-full bg-white font-semibold hover:bg-slate-50 ${isSuspended ? "text-wgc-error-700" : "text-wgc-warning-700"}`}
       >
         {copy.cta}
       </Link>

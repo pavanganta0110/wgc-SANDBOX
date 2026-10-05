@@ -3,6 +3,9 @@ export const WGC_PRICING = {
     nonAmexCardBasisPoints: 300,
     mastercardBasisPoints: 350,
     amexCardBasisPoints: 350,
+    // Apple Pay / Google Pay, donor-covers-fee rate — 3%, same as a
+    // standard non-Amex card, not the Amex-equivalent rate.
+    walletBasisPoints: 300,
     achFixedFeeCents: 25,
   },
   organizationPaid: {
@@ -13,7 +16,7 @@ export const WGC_PRICING = {
   },
 } as const;
 
-export const FEE_CALCULATION_VERSION = "wgc_fee_matrix_v4";
+export const FEE_CALCULATION_VERSION = "wgc_fee_matrix_v5";
 
 export function normalizeCardBrand(brand: string | null | undefined): string {
   if (!brand) return "UNKNOWN";
@@ -33,12 +36,11 @@ export type FeeCalculationInput = {
   // Apple Pay / Google Pay: the underlying card's brand can never be known
   // before the donor authorizes a fixed dollar amount inside Apple/Google's
   // own native payment sheet — Finix only reports the real brand afterward,
-  // once tokenized. Rather than risk under-collecting on a wallet backed by
-  // an Amex card (silently, with no way to correct it after the fact), the
-  // donor-covered rate for any wallet payment always uses the Amex-
-  // equivalent rate, regardless of the real brand. Org-paid wallet fees are
-  // unaffected — this only changes what a donor who checks "I'll cover the
-  // fee" actually pays.
+  // once tokenized. Rather than branch on a brand that isn't known yet, the
+  // donor-covered rate for any wallet payment always uses a flat wallet
+  // rate (WGC_PRICING.donorCovered.walletBasisPoints), regardless of the
+  // real underlying card. Org-paid wallet fees are unaffected — this only
+  // changes what a donor who checks "I'll cover the fee" actually pays.
   isWallet?: boolean;
 };
 
@@ -89,11 +91,13 @@ export function calculateWgcFeeAmounts(input: FeeCalculationInput): FeeCalculati
 
   // Card
   if (donorCoversFee) {
-    const percentageBasisPoints = isWallet || isAmex
-      ? WGC_PRICING.donorCovered.amexCardBasisPoints
-      : isMastercard
-        ? WGC_PRICING.donorCovered.mastercardBasisPoints
-        : WGC_PRICING.donorCovered.nonAmexCardBasisPoints;
+    const percentageBasisPoints = isWallet
+      ? WGC_PRICING.donorCovered.walletBasisPoints
+      : isAmex
+        ? WGC_PRICING.donorCovered.amexCardBasisPoints
+        : isMastercard
+          ? WGC_PRICING.donorCovered.mastercardBasisPoints
+          : WGC_PRICING.donorCovered.nonAmexCardBasisPoints;
     const feeCents = Math.round((donationAmountCents * percentageBasisPoints) / 10000);
     return {
       feePaidBy: "DONOR",

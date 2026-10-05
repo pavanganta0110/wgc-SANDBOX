@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { extractFileUploadRequests } from "@/lib/finix/parseVerificationOutcomes";
 import UpdateForm from "./UpdateForm"; // We will create this client component next
 
 export default async function SecureUpdatePage({
@@ -78,10 +79,20 @@ export default async function SecureUpdatePage({
 
         <div className="bg-orange-50 border border-orange-100 rounded-xl p-5 mb-8">
           <h3 className="font-bold text-orange-900 mb-2">Requested Items:</h3>
-          <div className="text-orange-800 text-sm space-y-2 whitespace-pre-wrap">{app.updateRequestedItems || "Additional documentation is required."}</div>
+          <div className="text-orange-800 text-sm space-y-2">
+            {/* updateRequestedItems is built as "<br/>"-joined lines for the
+                HTML update-request email (see webhooks/finix/route.ts) — split
+                on that same separator here rather than rendering it as plain
+                text, where it previously showed up as literal "<br/>" tags. */}
+            {(app.updateRequestedItems || "Additional documentation is required.")
+              .split(/<br\s*\/?>/i)
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line, i) => <div key={i}>{line}</div>)}
+          </div>
         </div>
 
-        <UpdateForm token={token} />
+        <UpdateForm token={token} fileUploadRequests={extractFileUploadRequests(app.updateRequestedCodes)} />
 
         <div className="mt-8 pt-6 border-t text-center text-sm text-gray-500">
           Need help? <a href="mailto:support@wgcpayments.com" className="text-blue-600 hover:underline">Contact Support</a>

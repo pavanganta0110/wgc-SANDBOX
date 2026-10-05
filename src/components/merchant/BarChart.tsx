@@ -1,9 +1,13 @@
 export default function BarChart({
   data,
   formatValue,
+  title,
 }: {
   data: { label: string; value: number }[];
   formatValue: (n: number) => string;
+  /** Used to build the chart's aria-label, since the SVG otherwise carries
+   * no text a screen reader can announce beyond per-bar hover tooltips. */
+  title?: string;
 }) {
   const max = Math.max(...data.map((d) => d.value), 1);
   const width = 700;
@@ -25,8 +29,15 @@ export default function BarChart({
 
   const gridLines = [0.25, 0.5, 0.75, 1];
 
+  const values = data.map((d) => d.value);
+  const rangeSummary =
+    data.length > 0
+      ? `${data[0].label} to ${data[data.length - 1].label}, ranging from ${formatValue(Math.min(...values))} to ${formatValue(Math.max(...values))}`
+      : "";
+  const chartLabel = title ? `${title}. ${rangeSummary}` : `Bar chart. ${rangeSummary}`;
+
   return (
-    <svg viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-auto">
+    <svg role="img" aria-label={chartLabel} viewBox={`0 0 ${width} ${height + 30}`} className="w-full h-auto">
       <defs>
         <linearGradient id="wgcBarFill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#facc15" />

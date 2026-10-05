@@ -1,3 +1,5 @@
+import { recordFinixTechnicalFailure, newFinixRequestId, extractFinixErrorCode, normalizeFinixOperation } from "@/lib/monitoring/finixHealth";
+
 // A hung/slow Finix connection previously had no bound, holding the
 // calling serverless function open indefinitely. GET/HEAD requests are
 // safe to retry (no side effects); writes retry only on 429 with the
@@ -68,6 +70,14 @@ export class FinixClient {
     const isWrite = method !== "GET" && method !== "HEAD";
     const maxAttempts = FINIX_MAX_ATTEMPTS;
 
+    // One id per Finix call (not per attempt/retry) — a System Health event
+    // recorded on final failure and a Sentry report a caller makes for the
+    // same failure (via captureError's requestId option) can be correlated
+    // by this id. See finixHealth.ts's doc comment for why this isn't the
+    // same thing as a client-facing WGC-XXXXXX reference.
+    const requestId = newFinixRequestId();
+    const startedAt = Date.now();
+
     let lastErr: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const controller = new AbortController();
@@ -85,8 +95,21 @@ export class FinixClient {
           await sleep(FINIX_RETRY_BASE_DELAY_MS * attempt);
           continue;
         }
+        // Genuine technical failure, not a business outcome — Finix never
+        // gets the chance to answer at all here.
+        recordFinixTechnicalFailure({
+          path,
+          method,
+          httpStatus: null,
+          kind: isAbort ? "TIMEOUT" : "NETWORK_ERROR",
+          message: isAbort ? `Finix API timeout after ${FINIX_REQUEST_TIMEOUT_MS}ms` : `Finix API network error: ${err instanceof Error ? err.message : String(err)}`,
+          requestId,
+          durationMs: Date.now() - startedAt,
+          attempt,
+        });
         const timeoutErr: any = new Error(isAbort ? `Finix Error: request timed out after ${FINIX_REQUEST_TIMEOUT_MS}ms` : `Finix Error: ${err instanceof Error ? err.message : String(err)}`);
         timeoutErr.status = null;
+        timeoutErr.requestId = requestId;
         throw timeoutErr;
       }
       clearTimeout(timeout);
@@ -117,10 +140,51 @@ export class FinixClient {
           continue;
         }
 
+        // A business decline (card declined, insufficient funds, ordinary
+        // ACH return, etc.) is NEVER represented as a non-2xx status —
+        // Finix returns those as 200/201 with state="FAILED" in the body,
+        // handled entirely by cardDeclineReasons.ts and friends downstream
+        // of a normal return from this method. Everything reaching this
+        // branch is, by construction, a technical/infrastructure problem:
+        // a broken credential, Finix's own 5xx, a rate limit, or an
+        // unexpected 4xx that isn't one of those two.
+        const kind = res.status === 401 || res.status === 403 ? "AUTH_FAILURE" : res.status === 429 ? "RATE_LIMITED" : res.status >= 500 ? "SERVER_ERROR" : "CLIENT_ERROR";
+        recordFinixTechnicalFailure({
+          path,
+          method,
+          httpStatus: res.status,
+          kind,
+          message: `Finix API error [${res.status}] on ${normalizeFinixOperation(path)}`,
+          finixErrorCode: extractFinixErrorCode(data),
+          requestId,
+          durationMs: Date.now() - startedAt,
+          attempt,
+        });
+
         const err: any = new Error(`Finix Error: ${errorStr}`);
         err.details = typeof data === 'object' ? data : null;
         err.status = res.status;
+        err.requestId = requestId;
         throw err;
+      }
+
+      // Success, but the body wasn't valid JSON — every real caller
+      // destructures fields off the result, so this will fail downstream
+      // in a much harder-to-trace way than flagging it here. Deliberately
+      // non-throwing: changing this method's contract (it has always
+      // returned whatever the body was, even a raw string) is a bigger,
+      // riskier change than System Health visibility is worth.
+      if (typeof data === "string" && text.length > 0) {
+        recordFinixTechnicalFailure({
+          path,
+          method,
+          httpStatus: res.status,
+          kind: "MALFORMED_RESPONSE",
+          message: `Finix API returned a non-JSON 2xx response on ${normalizeFinixOperation(path)}`,
+          requestId,
+          durationMs: Date.now() - startedAt,
+          attempt,
+        });
       }
 
       return data;
@@ -309,6 +373,54 @@ export class FinixClient {
 
   async getMerchant(merchantId: string) {
     return this.fetchApi(`/merchants/${merchantId}`);
+  }
+
+  /**
+   * Sets fields on a Merchant — today used only for `settlement_queue_mode`
+   * ("MANUAL" | "UNSET"). Per Finix's Settlement Queue docs, this call only
+   * takes effect once Finix support has enabled the Settlement Queue
+   * feature at the Application level for this account; until then it may
+   * error or silently no-op. Mirrors updateIdentity's PUT convention.
+   */
+  async updateMerchant(merchantId: string, payload: Record<string, unknown>) {
+    return this.fetchApi(`/merchants/${merchantId}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  // ==========================================
+  // Settlement Queue
+  // ==========================================
+
+  /**
+   * Lists Settlement Queue Entries. Finix's docs confirm an `entity_id`
+   * filter (the specific Transfer/Fee/Refund the entry holds); a `merchant`
+   * filter is NOT confirmed against a real response — it follows the same
+   * `?merchant=` convention listSettlements() already uses, but if it's
+   * ignored, this falls back to returning every entry on the Application.
+   * Verify against a real sandbox response before trusting `merchant=` to
+   * actually scope the result.
+   */
+  async listSettlementQueueEntries(params: { merchantId?: string; entityId?: string } = {}) {
+    const query = new URLSearchParams();
+    if (params.merchantId) query.set("merchant", params.merchantId);
+    if (params.entityId) query.set("entity_id", params.entityId);
+    const qs = query.toString();
+    return this.fetchApi(`/settlement_queue_entries${qs ? `?${qs}` : ""}`);
+  }
+
+  /**
+   * Releases one or more Settlement Queue Entries so their transactions
+   * move into a Settlement. Finix rejects releasing an entry before its
+   * own `ready_to_settle_at` date with "Unable to Release Entries." —
+   * callers should surface that message rather than a generic failure.
+   */
+  async releaseSettlementQueueEntries(ids: string[]) {
+    return this.fetchApi("/settlement_queue_entries", {
+      method: "PUT",
+      body: JSON.stringify({ ids, action: "RELEASE" }),
+    });
   }
 
   // ==========================================

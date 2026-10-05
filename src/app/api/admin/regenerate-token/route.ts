@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import { sendWgcEmail } from "@/lib/email";
+import { sendWgcEmail, buildOnboardingStatusEmailContent } from "@/lib/email";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { applicationId } = await req.json();
 
@@ -22,7 +26,7 @@ export async function POST(req: Request) {
     // Generate new secure token
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    
+
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
 
@@ -36,25 +40,19 @@ export async function POST(req: Request) {
     });
 
     const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
-    const safeOrgName = app.organizationName || "your organization";
 
-    let requestedItemsStr = app.updateRequestedItems || "Additional documentation is required to verify your business and identity.";
+    const { subject, title, badgeText, badgeColor, bodyHtml } = buildOnboardingStatusEmailContent(
+      "MORE_INFORMATION_REQUIRED",
+      app.organizationName || app.legalBusinessName,
+      { requestedItems: app.updateRequestedItems, secureLink }
+    );
 
-    await sendWgcEmail({
-      to: app.contactEmail,
-      subject: "Additional information needed for your WGC Payments account",
-      title: "Additional information is required",
-      badgeText: "Action Required",
-      badgeColor: "#F59E0B",
-      bodyHtml: `<p>We need additional information to continue reviewing your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
-                 <p><strong>Requested items:</strong><br/>${requestedItemsStr}</p>
-                 <p>Please use the secure link below to submit the requested information.</p>
-                 <p><a href="${secureLink}">Submit Required Information</a></p>`
-    });
+    await sendWgcEmail({ to: app.contactEmail, subject, title, badgeText, badgeColor, bodyHtml });
 
     return NextResponse.json({ success: true, message: "Token regenerated and email sent." });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Regenerate token error:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

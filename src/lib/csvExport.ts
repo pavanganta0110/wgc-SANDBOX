@@ -44,7 +44,15 @@ export function buildCsvExport<T>(
 
   const lines = [visibleColumns.map((c) => csvEscape(c.header)).join(",")];
   for (const row of rows) {
-    lines.push(visibleColumns.map((c) => csvEscape(c.value(row))).join(","));
+    // Applied centrally here (not left to each caller) so every export
+    // built on buildCsvExport is covered automatically — confirmed via
+    // security review that most of the 13+ callers of this function never
+    // called sanitizeCsvFormulaValue themselves, leaving donor-controlled
+    // free text (name, email, phone, notes — entered on the public,
+    // unauthenticated donate form) to land unsanitized in a cell an admin
+    // later opens in Excel/Sheets. Headers are never attacker-controlled,
+    // so only row values need this.
+    lines.push(visibleColumns.map((c) => csvEscape(sanitizeCsvFormulaValue(c.value(row)))).join(","));
   }
   return lines.join("\n");
 }

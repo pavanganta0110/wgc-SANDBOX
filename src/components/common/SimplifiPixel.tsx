@@ -1,7 +1,9 @@
 "use client";
 
 import Script from "next/script";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { getStoredConsent, CONSENT_CHANGE_EVENT, type ConsentState } from "@/lib/analytics/consent";
 
 const SIMPLIFI_TAG_ID = "2be2d93c-ab3d-4d24-be16-2f8803014632";
 
@@ -18,13 +20,23 @@ function isExcludedPath(pathname: string): boolean {
   );
 }
 
-/** Simpli.fi site-retargeting pixel. Mirrors this repo's current MetaPixel
- * convention (unconditional load, no cookie-consent gate — production has
- * since added consent gating for MetaPixel that hasn't been ported here). */
+/**
+ * Simpli.fi site-retargeting pixel. Gated behind the same shared
+ * wgc_analytics_consent state as MetaPixel — one consent decision covers
+ * every tracking pixel on the site, not a separate banner per vendor.
+ */
 export default function SimplifiPixel() {
   const pathname = usePathname();
+  const [consent, setConsent] = useState<ConsentState | "denied">("denied");
 
-  if (isExcludedPath(pathname)) {
+  useEffect(() => {
+    setConsent(getStoredConsent() ?? "denied");
+    const onChange = (e: Event) => setConsent((e as CustomEvent<ConsentState>).detail);
+    window.addEventListener(CONSENT_CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(CONSENT_CHANGE_EVENT, onChange);
+  }, []);
+
+  if (isExcludedPath(pathname) || consent !== "granted") {
     return null;
   }
 

@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { sendWgcEmail } from "@/lib/email";
+import { sendWgcEmail, buildOnboardingStatusEmailContent } from "@/lib/email";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { applicationId } = await req.json();
 
@@ -19,47 +24,34 @@ export async function POST(req: Request) {
     }
 
     const contactEmail = app.contactEmail;
-    const safeOrgName = app.organizationName || "your organization";
-
-    let subject = "";
-    let title = "";
-    let badgeText = "";
-    let badgeColor = "";
-    let bodyHtml = "";
-
     const status = app.onboardingStatus;
 
-    if (status === "APPROVED") {
-      subject = "Your WGC Payments account has been approved";
-      title = "Your account has been approved";
-      badgeText = "Approved";
-      badgeColor = "#10B981";
-      bodyHtml = `<p>Good news — your WGC Payments account for <strong>${safeOrgName}</strong> has been approved.</p>
-                  <p>You can now access your merchant dashboard to view payments, create payment links, and manage account activity.</p>`;
-    } else if (status === "MORE_INFORMATION_REQUIRED" || status === "ADDITIONAL_INFO_NEEDED") {
-      subject = "Additional information needed for your WGC Payments account";
-      title = "Additional information is required";
-      badgeText = "Action Required";
-      badgeColor = "#F59E0B";
-      bodyHtml = `<p>We need a little more information to continue reviewing your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
-                  <p>Please log in to your merchant dashboard or contact WGC Payments Support so we can help you complete the required updates.</p>`;
-    } else if (status === "REJECTED") {
-      subject = "Update on your WGC Payments application";
-      title = "Update on your application";
-      badgeText = "Not Approved";
-      badgeColor = "#EF4444";
-      bodyHtml = `<p>Thank you for your interest in WGC Payments.</p>
-                  <p>After review, we are unable to approve the onboarding application for <strong>${safeOrgName}</strong> at this time.</p>
-                  <p>If you believe this was a mistake or would like more information, please contact WGC Payments Support.</p>`;
-    } else {
-      subject = "WGC Payments onboarding update";
-      title = "Your onboarding is in progress";
-      badgeText = "Under Review";
-      badgeColor = "#0B5DBC";
-      bodyHtml = `<p>Thank you for submitting your WGC Payments onboarding for <strong>${safeOrgName}</strong>.</p>
-                  <p>Your application is currently being reviewed. Most reviews are completed within 24–48 hours.</p>
-                  <p>We will notify you once your account is approved or if additional information is required.</p>`;
+    let secureLink: string | undefined;
+    if (status === "MORE_INFORMATION_REQUIRED" || status === "ADDITIONAL_INFO_NEEDED") {
+      // A resend regenerates the secure token — the previous one may be
+      // expired or already invalidated by an earlier submission.
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      await prisma.onboardingApplication.update({
+        where: { id: app.id },
+        data: { updateTokenHash: tokenHash, updateTokenExpiresAt: expiresAt },
+      });
+      secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
     }
+
+    const { subject, title, badgeText, badgeColor, bodyHtml } = buildOnboardingStatusEmailContent(
+      status,
+      // organizationName is frequently empty on real applications (this
+      // codebase captures the legal name during onboarding, not always a
+      // separate DBA/org name) — legalBusinessName is the fallback the
+      // original MERCHANT.UPDATED webhook email already used; this resend
+      // route hadn't (2026-09-04 finding: it showed "your organization"
+      // instead of the church's actual name).
+      app.organizationName || app.legalBusinessName,
+      { requestedItems: app.updateRequestedItems, secureLink }
+    );
 
     const response = await sendWgcEmail({
       to: contactEmail,
@@ -78,7 +70,8 @@ export async function POST(req: Request) {
           to: contactEmail,
           subject: subject,
           status: "SENT",
-          sentAt: new Date()
+          sentAt: new Date(),
+          bodyHtml
         }
       });
       return NextResponse.json({ success: true });

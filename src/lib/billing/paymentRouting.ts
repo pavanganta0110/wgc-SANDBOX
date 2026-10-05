@@ -17,7 +17,13 @@ import { getWgcBillingMerchantId, getConfiguredFinixEnvironment } from "@/lib/bi
  * client-submitted value used without ownership verification.
  */
 
-export type WgcChargeType = "WGC_PLATFORM_SUBSCRIPTION" | "WGC_INVOICE_ADD_ON" | "WGC_INVOICE_USAGE" | "WGC_PLAN_UPGRADE";
+export type WgcChargeType =
+  | "WGC_PLATFORM_SUBSCRIPTION"
+  | "WGC_INVOICE_ADD_ON"
+  | "WGC_INVOICE_USAGE"
+  | "WGC_PLAN_UPGRADE"
+  | "WGC_SMS_ADDON_SUBSCRIPTION"
+  | "WGC_SMS_ADDON_OVERAGE";
 
 export type MerchantChargeType =
   | "MERCHANT_DONATION"
@@ -33,6 +39,8 @@ const WGC_CHARGE_TYPES: ReadonlySet<ChargeType> = new Set<ChargeType>([
   "WGC_INVOICE_ADD_ON",
   "WGC_INVOICE_USAGE",
   "WGC_PLAN_UPGRADE",
+  "WGC_SMS_ADDON_SUBSCRIPTION",
+  "WGC_SMS_ADDON_OVERAGE",
 ]);
 
 export function isWgcChargeType(chargeType: ChargeType): chargeType is WgcChargeType {

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { sendWgcEmail } from "@/lib/email";
 
 async function countActiveSuperAdmins(excludeUserId?: string) {
@@ -14,9 +15,19 @@ async function countActiveSuperAdmins(excludeUserId?: string) {
   });
 }
 
+// Disable/promote/demote/reactivate a WGC admin account — an MFA-verified
+// session is required for every action this route can take, not just the
+// account-level admin auth check, since this is a direct role/access
+// management surface for the admin panel itself.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getAdminSession();
-  if (!session || session.role !== "wgc_super_admin") {
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
+  if (session.role !== "wgc_super_admin") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

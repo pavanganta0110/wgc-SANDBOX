@@ -7,6 +7,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { cleanAddressInput, hasAnyAddressField, isAddressSource } from "@/lib/donors/donorAddress";
+import { emitEvent } from "@/lib/events/emitEvent";
 
 function cleanString(value: unknown, maxLength = 200): string | null {
   if (typeof value !== "string") return null;
@@ -112,6 +113,12 @@ export async function POST(req: Request) {
     entityId: donor.id,
     req,
   });
+
+  try {
+    await emitEvent({ type: "donor.created", churchId: auth.churchId, data: { donorId: donor.id, name: donor.name, email: donor.email } });
+  } catch (err) {
+    console.error("Failed to emit donor.created event:", err);
+  }
 
   return NextResponse.json({ donor });
 }

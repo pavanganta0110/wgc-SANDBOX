@@ -87,18 +87,17 @@ export default function FirstLookPage() {
         {/* PRODUCT SCREENSHOT */}
         <section className="px-6 pb-24 max-w-[1120px] mx-auto">
           <div className="bg-[#FFFDF8] rounded-[6px] border border-[rgba(20,33,61,0.13)] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-2 md:p-4">
-            <div className="w-full aspect-[16/9] bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
-              {/* Dashboard Preview Image */}
-              <Image 
-                src="/images/first-look-dashboard-v2.png"
-                alt="Admin View — Transaction Insights"
-                fill
-                className="object-cover object-top"
-                sizes="(max-width: 1120px) 100vw, 1120px"
-              />
+            <div className="w-full bg-[#E8E0CF] rounded overflow-hidden relative flex items-center justify-center">
+              {/* Interactive Walkthrough */}
+              <iframe 
+                src="/walkthrough" 
+                title="WGC Merchant Dashboard Walkthrough" 
+                loading="lazy"
+                className="w-full h-[760px] md:h-[900px] border-0 rounded-lg bg-transparent block"
+              ></iframe>
             </div>
           </div>
-          <p className="text-center text-xs font-mono uppercase tracking-widest text-[#41506F] mt-4">Admin View — Transaction Insights, Live</p>
+          <p className="text-center text-xs font-mono uppercase tracking-widest text-[#41506F] mt-4">Interactive Walkthrough — Transaction Insights, Live</p>
         </section>
 
         {/* FEATURE SECTION */}
@@ -147,7 +146,7 @@ export default function FirstLookPage() {
               
               <div className="border-l-2 border-[#C9992E] pl-6 py-2 mb-8">
                 <p className="font-serif text-xl md:text-2xl text-[#14213D] italic leading-relaxed">
-                  “I'll cover the $0.75 processing fee so my full $25.00 gift goes to First Community Church.”
+                  “I'll cover the $0.75 transaction cost so my full $25.00 gift goes to First Community Church.”
                 </p>
               </div>
               

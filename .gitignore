@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the documented template itself, which must be committed and
+# kept up to date (no real secrets belong in it — see the file's own header).
+!.env.example
 
 # vercel
 .vercel
@@ -51,3 +54,9 @@ next-env.d.ts
 /playwright-report/
 /playwright/.cache/
 e2e/.fixtures.json
+
+# Local-only Strix LLM API key (never commit)
+.strix.env
+
+# Local-only Strix scan output (never commit)
+strix_runs/

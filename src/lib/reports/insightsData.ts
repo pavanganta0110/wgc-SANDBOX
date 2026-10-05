@@ -121,9 +121,10 @@ export function dimensionValue(
 ): string {
   switch (dimension) {
     case "cardBrand":
-      // A bank-account instrument legitimately has no cardBrand — it isn't
-      // a card at all, so it shouldn't fall into the same UNKNOWN bucket as
-      // a card whose brand genuinely wasn't captured.
+      // A bank-account instrument (ACH) has no card brand at all — it's
+      // not that WGC failed to capture it, there simply isn't one. Labeling
+      // it "ACH" instead of lumping it into the same "UNKNOWN" bucket as a
+      // genuinely-unrecognized card brand keeps the two honestly distinct.
       if (instrument?.paymentMethodType === "BANK_ACCOUNT") return "ACH";
       return instrument?.cardBrand ?? "UNKNOWN";
     case "paymentChannel":

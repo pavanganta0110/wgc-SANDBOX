@@ -10,12 +10,12 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/software-partners" },
-  title: "Embedded Payments for Ministry & 501(c) Organization SaaS | WGC for Partners",
-  description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches, nonprofits, and other 501(c) organizations, with developer-ready APIs.",
+  title: "Payment Infrastructure for Software Platforms | WGC for Partners",
+  description: "WGC serves mission-driven organizations directly through our platform, and also provides embedded payment infrastructure — onboarding, payments, and recurring giving — for software companies serving nonprofits, churches, and other 501(c) organizations.",
   openGraph: {
     images: [{ url: "/og/default.png", width: 1200, height: 630 }],
-    title: "Embedded Payments for Ministry SaaS | WGC for Partners",
-    description: "Power your platform with WGC's white-label payment rails. Built for software companies serving churches and nonprofits, with developer-ready APIs.",
+    title: "Payment Infrastructure for Software Platforms | WGC for Partners",
+    description: "WGC serves organizations directly, and also provides embedded payment infrastructure for software platforms serving nonprofits, churches, and other mission-driven organizations.",
     url: "https://www.wgcpayments.com/software-partners",
   },
 };
@@ -24,12 +24,12 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     title: "White-Labeled Infrastructure",
-    description: "Launch your own payment platform in days. WGC stays hidden while providing the ministry rails your partners expect.",
+    description: "Launch your own payment platform in days, fully embedded in your product with your own branding.",
     icon: Settings,
   },
   {
     title: "Flat-Rate ACH",
-    description: "Honoring the donor's intent with 25¢ flat-rate ACH transfers. No percentage-based gouging on large tithes.",
+    description: "Honoring supporters' intent with 25¢ flat-rate ACH transfers. No percentage-based fees on large gifts.",
     icon: Zap,
   },
   {
@@ -44,12 +44,12 @@ const FEATURES = [
   },
   {
     title: "Merchant Orchestration",
-    description: "Onboard merchants, manage settlements, and handle payouts across your entire network from a single API.",
+    description: "Onboard organizations, manage settlements, and handle payouts across your entire network through one guided integration.",
     icon: BarChart3,
   },
   {
-    title: "Mission Alignment",
-    description: "We don't serve retail. We don't serve the world. We serve the people who serve the Kingdom.",
+    title: "Built for Mission-Driven Organizations",
+    description: "Purpose-built for the nonprofits, churches, foundations, and other 501(c) organizations your platform already serves.",
     icon: CheckCircle2,
   },
 ];
@@ -76,13 +76,16 @@ export default function SoftwarePartnersPage() {
               <ScrollFade>
                 <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8 border border-wgc-gold-500/30 bg-wgc-gold-500/10">
                   <div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-wgc-gold-500/90">Software Partnership</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-wgc-gold-500/90">For Software Platforms</span>
                 </div>
                 <h1 className="text-5xl sm:text-6xl font-bold tracking-tight leading-[1.05] mb-6 text-wgc-navy-900">
-                  Embedded payments for <br /><span className="text-wgc-gold-500">Ministry SaaS.</span>
+                  Payment infrastructure for <br /><span className="text-wgc-gold-500">software platforms.</span>
                 </h1>
-                <p className="text-xl font-medium leading-relaxed mb-10 text-wgc-navy-500 tracking-tight">
-                  Integrate donations, recurring giving, ACH payments, and payouts directly into your platform — fully white-labeled.
+                <p className="text-xl font-medium leading-relaxed mb-6 text-wgc-navy-500 tracking-tight">
+                  Integrate giving, recurring payments, ACH, and payouts directly into your platform — fully white-labeled.
+                </p>
+                <p className="text-base font-medium leading-relaxed mb-10 text-wgc-navy-400 tracking-tight">
+                  WGC serves organizations directly through our own dashboard, and also provides this same infrastructure for the software platforms that serve them.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Link href="/contact" className="bg-wgc-gold-500 text-wgc-navy-900 inline-flex items-center justify-center px-8 py-4 text-sm font-bold rounded-full shadow-xl transform transition-all hover:scale-105 uppercase tracking-wider">
@@ -110,15 +113,15 @@ export default function SoftwarePartnersPage() {
                     <div className="absolute bottom-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md p-10 border-t border-white/10">
                       <div className="relative z-10 flex items-center gap-3 mb-6">
                         <div className="w-10 h-px bg-wgc-gold-500"></div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-wgc-gold-500/70">Our Core Mandate</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-wgc-gold-500/70">Our Core Focus</span>
                       </div>
 
                       <blockquote className="relative z-10">
                         <p className="text-xl sm:text-2xl font-bold leading-snug italic mb-4 text-slate-50 tracking-tight">
-                          &quot;Go and make disciples of all nations.&quot;
+                          &quot;Help mission-driven organizations keep more of what they raise.&quot;
                         </p>
                         <footer className="flex items-center gap-3">
-                          <span className="font-bold text-[11px] uppercase tracking-widest text-wgc-gold-500/60 font-mono">Matthew 28:19</span>
+                          <span className="font-bold text-[11px] uppercase tracking-widest text-wgc-gold-500/60 font-mono">WGC Mission</span>
                         </footer>
                       </blockquote>
                     </div>
@@ -129,10 +132,44 @@ export default function SoftwarePartnersPage() {
           </div>
         </section>
 
+        {/* TWO PATHS */}
+        <section className="py-20 bg-white border-b border-wgc-navy-100">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <ScrollFade>
+              <div className="text-center mb-14">
+                <h2 className="text-3xl md:text-4xl font-bold text-wgc-navy-900 tracking-tight mb-4">Two ways to work with WGC</h2>
+                <p className="text-lg text-wgc-navy-500 max-w-2xl mx-auto">WGC serves mission-driven organizations directly, and also provides payment infrastructure for the software platforms that serve them.</p>
+              </div>
+            </ScrollFade>
+            <div className="grid md:grid-cols-2 gap-8">
+              <ScrollFade>
+                <div className="h-full p-10 rounded-3xl border border-wgc-navy-100 bg-wgc-off">
+                  <div className="text-[10px] font-black text-wgc-gold-600 uppercase tracking-widest mb-4 font-mono">For Organizations</div>
+                  <h3 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">Use the WGC dashboard directly</h3>
+                  <p className="text-wgc-navy-500 leading-relaxed mb-6">Nonprofits, churches, foundations, associations, and schools can sign up and run payments, supporters, and reporting from the WGC dashboard — no engineering required.</p>
+                  <Link href="/start" className="inline-flex items-center text-[13px] font-bold text-wgc-gold-600 hover:text-wgc-navy-900 transition-colors">
+                    Get Started &rarr;
+                  </Link>
+                </div>
+              </ScrollFade>
+              <ScrollFade delay={100}>
+                <div className="h-full p-10 rounded-3xl border border-wgc-navy-100 bg-wgc-off">
+                  <div className="text-[10px] font-black text-wgc-gold-600 uppercase tracking-widest mb-4 font-mono">For Software Platforms</div>
+                  <h3 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">Embed WGC into your platform</h3>
+                  <p className="text-wgc-navy-500 leading-relaxed mb-6">Software companies can embed WGC&apos;s payment infrastructure — onboarding, recurring payments, and payouts — directly into their own product through a guided integration.</p>
+                  <Link href="/contact" className="inline-flex items-center text-[13px] font-bold text-wgc-gold-600 hover:text-wgc-navy-900 transition-colors">
+                    Apply for Partnership &rarr;
+                  </Link>
+                </div>
+              </ScrollFade>
+            </div>
+          </div>
+        </section>
+
         {/* PROOF BAND */}
         <div className="bg-wgc-off border-b border-wgc-navy-800 py-8 text-center px-4 overflow-hidden relative">
           <div className="max-w-4xl mx-auto flex flex-wrap justify-center gap-6 sm:gap-12 text-wgc-navy-900 font-bold uppercase tracking-widest text-[11px]">
-            <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div> Built for Church CRMs</div>
+            <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div> Built for Nonprofit & Church CRMs</div>
             <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div> Recurring Giving Engine</div>
             <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div> ACH + Card Payments</div>
             <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full bg-wgc-gold-500"></div> White-label Experience</div>
@@ -146,12 +183,12 @@ export default function SoftwarePartnersPage() {
               <div className="text-center mb-16">
                 <div className="inline-flex items-center px-4 py-1.5 rounded-full bg-wgc-navy-50 text-wgc-navy-600 text-[10px] font-bold tracking-[0.2em] uppercase mb-6 border border-wgc-navy-100 font-mono">Partnership focus</div>
                 <h2 className="text-4xl font-bold text-wgc-navy-900 tracking-tight">Built for the platforms you trust</h2>
-                <p className="text-lg text-wgc-navy-500 font-medium max-w-2xl mx-auto mt-4 tracking-tight opacity-90">Providing ministry-grade payment rails beneath the software that ministries and other 501(c) organizations use every day.</p>
+                <p className="text-lg text-wgc-navy-500 font-medium max-w-2xl mx-auto mt-4 tracking-tight opacity-90">Providing mission-grade payment rails beneath the software that nonprofits, ministries, and other 501(c) organizations use every day.</p>
               </div>
             </ScrollFade>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {['Church Management (ChMS)', 'Donation Platforms', 'Nonprofit CRMs', '501(c) Organization Software', 'Faith-based SaaS'].map((platform, i) => (
+              {['Church Management (ChMS)', 'Donation Platforms', 'Nonprofit CRMs', '501(c) Organization Software', 'Faith-based SaaS', 'Individual Fundraisers'].map((platform, i) => (
                 <ScrollFade key={platform} delay={i * 100}>
                   <div className="p-8 rounded-2xl bg-white border border-wgc-navy-100 shadow-sm hover:shadow-md transition-all group hover:-translate-y-1">
                      <div className="text-lg font-bold text-wgc-navy-900 group-hover:text-wgc-gold-600 transition-colors">{platform}</div>
@@ -191,8 +228,6 @@ export default function SoftwarePartnersPage() {
               <ScrollFade delay={150} className="w-full lg:flex-1 relative z-10">
                 <div className="h-full p-12 rounded-[2.5rem] border border-wgc-gold-500/30 bg-white shadow-2xl relative overflow-hidden group hover:scale-[1.02] transition-transform duration-500">
                   <div className="absolute inset-0 bg-gradient-to-br from-wgc-gold-500/5 to-transparent opacity-50"></div>
-                  <div className="absolute -bottom-10 -right-10 opacity-10 pointer-events-none select-none text-[12rem] font-bold text-wgc-gold-500 leading-none transition-transform group-hover:scale-110">✝</div>
-                  
                   <div className="relative z-10 text-[10px] font-bold text-wgc-gold-500 uppercase tracking-[0.3em] mb-8 font-mono">Core Infrastructure</div>
                   <div className="relative z-10 text-3xl font-bold text-wgc-navy-900 tracking-tighter leading-none">WGC Payments <br /><span className="text-wgc-gold-500">Gateway API</span></div>
                 </div>
@@ -209,7 +244,7 @@ export default function SoftwarePartnersPage() {
               <ScrollFade delay={300} className="w-full lg:flex-1 relative z-10">
                 <div className="h-full p-12 rounded-[2.5rem] border border-wgc-navy-100 bg-wgc-off shadow-sm hover:bg-white hover:shadow-xl transition-all duration-500 group">
                   <div className="text-[10px] font-bold text-wgc-navy-400 uppercase tracking-[0.3em] mb-8 font-mono group-hover:text-wgc-gold-600">Final Recipients</div>
-                  <div className="text-3xl font-bold text-wgc-navy-900 tracking-tighter leading-none">Ministry <br />Merchant</div>
+                  <div className="text-3xl font-bold text-wgc-navy-900 tracking-tighter leading-none">Served <br />Organization</div>
                 </div>
               </ScrollFade>
             </div>
@@ -247,13 +282,13 @@ export default function SoftwarePartnersPage() {
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <ScrollFade>
               <div className="w-12 h-1.5 metallic-gold mx-auto mb-10 rounded-full"></div>
-              <h2 className="text-4xl font-bold text-wgc-navy-900 mb-10 tracking-tight leading-tight">Embedded Payments for Church, Nonprofit, and 501(c) Organization Software</h2>
+              <h2 className="text-4xl font-bold text-wgc-navy-900 mb-10 tracking-tight leading-tight">Payment Infrastructure for Nonprofit, Church, and 501(c) Organization Software</h2>
               <div className="max-w-3xl mx-auto text-wgc-navy-500 space-y-8">
                 <p className="text-2xl italic font-bold text-wgc-navy-900 leading-snug">
-                  &quot;We exist to make software companies that serve churches and other 501(c) organizations more successful. We&apos;re not building a direct-to-church product. We&apos;re your silent infrastructure.&quot;
+                  &quot;WGC serves mission-driven organizations directly through the WGC platform, and also provides payment infrastructure for the software companies that serve them.&quot;
                 </p>
                 <p className="text-lg font-medium leading-relaxed tracking-tight opacity-90">
-                  WGC is the ministry infrastructure under your software — aligned with your growth and your mission. By using a transferable vault and providing flat-rate ACH, we ensure that your platform scales efficiently while honoring the donors&apos; generosity.
+                  When you embed WGC, your platform gets the same infrastructure that powers our own dashboard — aligned with your growth and your customers&apos; mission. With a transferable vault and flat-rate ACH, your platform scales efficiently while honoring your customers&apos; supporters.
                 </p>
               </div>
             </ScrollFade>
@@ -282,7 +317,7 @@ export default function SoftwarePartnersPage() {
                   </thead>
                   <tbody className="divide-y divide-wgc-navy-50">
                     {[
-                      { f: 'Built for Ministries', w: 'Native alignment', s: 'Broad Retail' },
+                      { f: 'Built for Mission-Driven Orgs', w: 'Native alignment', s: 'Broad Retail' },
                       { f: 'ACH Optimization', w: '25¢ Flat-rate', s: 'Margin heavy' },
                       { f: 'Experience', w: 'Fully White-labeled', s: 'Redirected' }
                     ].map((row) => (
@@ -301,7 +336,7 @@ export default function SoftwarePartnersPage() {
 
         {/* CTA */}
         <CTASection
-          headline="Ready to power Kingdom giving?"
+          headline="Ready to embed payments into your platform?"
           subheadline="Contact our team to review your software roadmap and request sandbox access."
           ctaText="Contact us"
           ctaLink="/contact"

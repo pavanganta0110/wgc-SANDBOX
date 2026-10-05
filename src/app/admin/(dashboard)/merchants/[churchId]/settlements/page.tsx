@@ -7,6 +7,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import { resolveSettlementDisplayStatus, getSettlementStatusLabel } from "@/lib/finix/settlementStatus";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
+import SettlementQueuePanel from "@/components/admin/SettlementQueuePanel";
 
 const PAGE_SIZE = 25;
 
@@ -26,6 +27,7 @@ export default async function AdminSettlementsPage({
   if (!session) redirect("/admin/login");
 
   const { churchId } = await params;
+  const canManageSettlementQueue = session.role === "wgc_super_admin";
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
 
@@ -43,6 +45,10 @@ export default async function AdminSettlementsPage({
       <div>
         <h2 className="text-lg font-medium">Settlements</h2>
         <p className="mt-2 text-sm text-gray-500">Settlement batches this organization has been funded for.</p>
+      </div>
+
+      <div className="mt-8">
+        <SettlementQueuePanel churchId={churchId} canManage={canManageSettlementQueue} />
       </div>
 
       <div className="mt-8 flow-root">

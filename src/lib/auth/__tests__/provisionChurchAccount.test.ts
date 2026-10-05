@@ -47,11 +47,11 @@ beforeEach(() => {
 });
 
 describe("provisionChurchAccount", () => {
-  it("creates a User and sends the dashboard-access email when no account exists yet", async () => {
+  it("creates a User (with its name backfilled from OnboardingApplication.contactName) and sends the dashboard-access email when no account exists yet", async () => {
     const { provisionChurchAccount } = await load();
     const result = await provisionChurchAccount(baseApp());
 
-    expect(mockPrisma.user.create).toHaveBeenCalled();
+    expect(mockPrisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: "Merchant Person" }) }));
     expect(mockSendWgcEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "merchant@example.com" }));
     expect(result.emailSent).toBe(true);
   });
@@ -92,11 +92,12 @@ describe("provisionChurchAccount", () => {
     );
   });
 
-  it("never re-sends once the merchant has already set a password — a real completed account is left alone", async () => {
+  it("never re-sends once the merchant has already set a password — a real completed account with a name already set is left alone entirely", async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       id: "user-1",
       email: "merchant@example.com",
       churchId: "church-1",
+      name: "Already Set Name",
       passwordHash: "hashed",
       lastLoginAt: null,
     });
@@ -106,6 +107,25 @@ describe("provisionChurchAccount", () => {
     expect(mockSendWgcEmail).not.toHaveBeenCalled();
     expect(mockPrisma.user.create).not.toHaveBeenCalled();
     expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    expect(result.emailSent).toBe(false);
+  });
+
+  it("backfills the owner's name (from OnboardingApplication.contactName) onto an already-completed account that's missing one — the fix for the admin Merchants Directory showing \"Unnamed owner\" — but still never re-sends the invite email or touches password/login state", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      email: "merchant@example.com",
+      churchId: "church-1",
+      name: null,
+      passwordHash: "hashed",
+      lastLoginAt: null,
+    });
+    mockPrisma.user.update.mockResolvedValue({ id: "user-1", name: "Merchant Person" });
+    const { provisionChurchAccount } = await load();
+    const result = await provisionChurchAccount(baseApp());
+
+    expect(mockSendWgcEmail).not.toHaveBeenCalled();
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: "user-1" }, data: { name: "Merchant Person" } });
     expect(result.emailSent).toBe(false);
   });
 
@@ -143,17 +163,74 @@ describe("provisionChurchAccount", () => {
     expect(result.emailSent).toBe(true);
   });
 
-  it("re-links an already-completed account to the current church without touching its password/email state", async () => {
+  it("re-links an already-completed account to the current church without touching its password/email state, and preserves an existing name rather than overwriting it", async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       id: "user-1",
       email: "merchant@example.com",
       churchId: "different-church",
+      name: "Existing Real Name",
       passwordHash: "hashed",
       lastLoginAt: null,
     });
     const { provisionChurchAccount } = await load();
     await provisionChurchAccount(baseApp());
     expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: "user-1" }, data: { churchId: "church-1" } });
+  });
+
+  it("re-links to the current church AND backfills a missing name in the same update when both are needed", async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      email: "merchant@example.com",
+      churchId: "different-church",
+      name: null,
+      passwordHash: "hashed",
+      lastLoginAt: null,
+    });
+    const { provisionChurchAccount } = await load();
+    await provisionChurchAccount(baseApp());
+    expect(mockPrisma.user.update).toHaveBeenCalledWith({ where: { id: "user-1" }, data: { churchId: "church-1", name: "Merchant Person" } });
+  });
+
+  it("never re-sends when a still-valid, unexpired invite was already issued — the actual production bug: two Finix events for the same merchant landing seconds (not milliseconds) apart, past the advisory lock's transaction-scoped window, each saw no passwordHash/lastLoginAt and sent a second DASHBOARD_ACCESS email", async () => {
+    const notExpired = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      email: "merchant@example.com",
+      churchId: "church-1",
+      name: "Merchant Person",
+      passwordHash: null,
+      lastLoginAt: null,
+      setPasswordTokenHash: "already-issued-hash",
+      setPasswordTokenExpiresAt: notExpired,
+    });
+    const { provisionChurchAccount } = await load();
+    const result = await provisionChurchAccount(baseApp());
+
+    expect(mockSendWgcEmail).not.toHaveBeenCalled();
+    expect(mockPrisma.user.create).not.toHaveBeenCalled();
+    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    expect(result.emailSent).toBe(false);
+  });
+
+  it("still retries once a previously-issued invite has actually expired", async () => {
+    const expired = new Date(Date.now() - 60 * 1000);
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      email: "merchant@example.com",
+      churchId: "church-1",
+      name: "Merchant Person",
+      passwordHash: null,
+      lastLoginAt: null,
+      setPasswordTokenHash: "stale-hash",
+      setPasswordTokenExpiresAt: expired,
+    });
+    mockPrisma.user.update.mockResolvedValue({ id: "user-1", email: "merchant@example.com", churchId: "church-1" });
+
+    const { provisionChurchAccount } = await load();
+    const result = await provisionChurchAccount(baseApp());
+
+    expect(mockSendWgcEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "merchant@example.com" }));
+    expect(result.emailSent).toBe(true);
   });
 
   it("skips sending entirely when a concurrent call already holds the advisory lock — the exact bug seen in production: two different Finix webhook events for the same merchant landing milliseconds apart both sent the DASHBOARD_ACCESS email", async () => {

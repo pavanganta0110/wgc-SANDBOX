@@ -90,6 +90,12 @@ export default function InvoicePaymentsPanel({
     try {
       const res = await fetch(`/api/merchant/invoices/${invoiceId}/payments/${paymentId}/refund`, { method: "POST" });
       const data = await res.json();
+      if (res.status === 403 && data.reauthRequired) {
+        toast.error("Reauthentication required for sensitive changes. Redirecting...");
+        const redirectTo = encodeURIComponent(window.location.pathname);
+        router.push(`/merchant/login?reauth=true&redirectTo=${redirectTo}&reauthType=refund`);
+        return;
+      }
       if (!res.ok || !data.success) {
         toast.error(data.error || "Could not process this refund.");
         return;

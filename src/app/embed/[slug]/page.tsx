@@ -95,6 +95,8 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           quantityItemLabel={link.quantityItemLabel}
           recurringEnabled={link.recurringEnabled}
           allowedFrequencies={allowedFrequencies}
+          defaultDonationType={link.defaultDonationType}
+          defaultRecurringAmountCents={link.defaultRecurringAmountCents}
           allowedPaymentMethods={allowedPaymentMethods}
           feeCoverEnabled={link.feeCoverEnabled}
           feeCoverDefaultOn={link.feeCoverDefaultOn}

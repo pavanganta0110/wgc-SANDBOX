@@ -16,6 +16,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -72,6 +73,13 @@ export default async function RecurringDonorDetailPage({
 
   const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId } });
   if (!donor) notFound();
+
+  // Self-healing fallback for a missed/delayed subscription.updated webhook
+  // — see subscriptionReconciliation.ts. Throttled to once per subscription
+  // per 5 minutes and bounded to 25 rows, so this stays cheap on repeat
+  // views; awaited before the query below so this donor's data is corrected
+  // on this same page load, not the next one.
+  await reconcileStaleActiveSubscriptions(churchId);
 
   const subscriptions = await loadSubscriptionCandidates(churchId, { donorId, attributedUserId: scopedUserId });
   if (subscriptions.length === 0) notFound();

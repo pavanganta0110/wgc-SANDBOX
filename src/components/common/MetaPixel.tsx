@@ -1,9 +1,10 @@
 "use client";
 
 import Script from "next/script";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { getMetaPixelId, pageView } from "@/lib/analytics/metaPixel";
+import { getStoredConsent, CONSENT_CHANGE_EVENT, type ConsentState } from "@/lib/analytics/consent";
 
 // Re-exported for existing call sites (src/components/giving/GivingLinkForm.tsx)
 // that import trackMetaEvent from this module path. New code should import
@@ -45,8 +46,22 @@ function MetaPixelPageviewTracker() {
 export default function MetaPixel() {
   const pixelId = getMetaPixelId();
   const pathname = usePathname();
+  // Starts as "denied" (not "unknown") for the very first server-rendered
+  // pass — localStorage isn't available during SSR, and the pixel must
+  // never load before consent is confirmed on the client. The effect
+  // below immediately corrects this from the actual stored value once
+  // mounted, and listens for CONSENT_CHANGE_EVENT so accepting the
+  // CookieConsentBanner loads the pixel right away, no reload needed.
+  const [consent, setConsent] = useState<ConsentState | "denied">("denied");
 
-  if (!pixelId || isExcludedPath(pathname)) {
+  useEffect(() => {
+    setConsent(getStoredConsent() ?? "denied");
+    const onChange = (e: Event) => setConsent((e as CustomEvent<ConsentState>).detail);
+    window.addEventListener(CONSENT_CHANGE_EVENT, onChange);
+    return () => window.removeEventListener(CONSENT_CHANGE_EVENT, onChange);
+  }, []);
+
+  if (!pixelId || isExcludedPath(pathname) || consent !== "granted") {
     return null;
   }
 

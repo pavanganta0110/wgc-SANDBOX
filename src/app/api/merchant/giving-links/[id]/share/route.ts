@@ -4,6 +4,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail } from "@/lib/email";
 import { sendText, isSmsConfigured } from "@/lib/sms/sendText";
+import { isSmsAddonActive } from "@/lib/billing/smsAddonSubscriptionService";
 import { isValidEmail, normalizeUSPhone } from "@/lib/validation";
 
 const CHANNELS = new Set(["COPY_LINK", "QR_CODE", "EMAIL", "TEXT", "MANUAL", "EMBED"]);
@@ -97,6 +98,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (channel === "TEXT") {
     if (!isSmsConfigured()) {
       return NextResponse.json({ error: "Text messaging is not configured for this organization." }, { status: 400 });
+    }
+    if (!(await isSmsAddonActive(auth.churchId))) {
+      return NextResponse.json({ error: "Text messaging is a paid add-on — subscribe from Billing Plan to send texts." }, { status: 402 });
     }
     const normalized = recipient ? normalizeUSPhone(recipient) : null;
     if (!normalized) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { syncFeesForTransfer } from "@/lib/finix/sync/syncFees";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /**
  * Re-syncs Finix fees for every transfer from the PREVIOUS calendar month,
@@ -42,31 +43,35 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { start, end } = previousCalendarMonthRange(new Date());
+  const result = await withJobRunTracking({ jobName: "resync-monthly-transfer-fees", jobType: "finix" }, async () => {
+    const { start, end } = previousCalendarMonthRange(new Date());
 
-  const payments = await prisma.payment.findMany({
-    where: {
-      status: "SUCCEEDED",
-      finixTransferId: { not: null },
-      createdAt: { gte: start, lt: end },
-    },
-    select: { id: true, churchId: true, finixTransferId: true },
-    take: MAX_PAYMENTS_PER_RUN,
-    orderBy: { createdAt: "asc" },
+    const payments = await prisma.payment.findMany({
+      where: {
+        status: "SUCCEEDED",
+        finixTransferId: { not: null },
+        createdAt: { gte: start, lt: end },
+      },
+      select: { id: true, churchId: true, finixTransferId: true },
+      take: MAX_PAYMENTS_PER_RUN,
+      orderBy: { createdAt: "asc" },
+    });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const payment of payments) {
+      try {
+        await syncFeesForTransfer(payment.finixTransferId as string, payment.churchId);
+        succeeded++;
+      } catch (err) {
+        failed++;
+        console.error("resync-monthly-transfer-fees: failed for payment", payment.id, err);
+      }
+    }
+
+    return { processedCount: payments.length, successCount: succeeded, failedCount: failed, metadata: { monthStart: start, monthEnd: end } };
   });
 
-  let succeeded = 0;
-  let failed = 0;
-
-  for (const payment of payments) {
-    try {
-      await syncFeesForTransfer(payment.finixTransferId as string, payment.churchId);
-      succeeded++;
-    } catch (err) {
-      failed++;
-      console.error("resync-monthly-transfer-fees: failed for payment", payment.id, err);
-    }
-  }
-
-  return NextResponse.json({ monthStart: start, monthEnd: end, scanned: payments.length, succeeded, failed });
+  return NextResponse.json({ success: true, ...result });
 }

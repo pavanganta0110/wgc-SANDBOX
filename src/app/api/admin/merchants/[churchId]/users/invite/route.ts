@@ -1,4 +1,5 @@
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
@@ -17,9 +18,15 @@ const INVITABLE_ROLES = ["admin", "fundraiser", "viewer"] as const;
 export async function POST(req: Request, { params }: { params: Promise<{ churchId: string }> }) {
   const { churchId } = await params;
 
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Creates a new user with an assigned role on a merchant organization —
+  // an MFA-verified session is required, matching the other role/account
+  // management routes in this file's audit.
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const adminUser = await prisma.user.findUnique({ where: { id: session.userId }, select: { permissionsJson: true } });
@@ -75,15 +82,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
 
   const roleLabel = role.charAt(0).toUpperCase() + role.slice(1);
   const setPasswordLink = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/merchant/set-password/${rawToken}`;
+  const bodyHtml = `<p>You've been invited to join <strong>${church.name}</strong> as a ${roleLabel} on WGC Payments.</p>
+               <p><a href="${setPasswordLink}">Accept invitation and set your password</a></p>
+               <p>This invitation link expires in 7 days.</p>`;
   const emailResult = await sendWgcEmail({
     to: email,
     subject: `You've been invited to join ${church.name} on WGC Payments`,
     title: "You're invited",
     badgeText: "Team Invitation",
     badgeColor: "#0B5DBC",
-    bodyHtml: `<p>You've been invited to join <strong>${church.name}</strong> as a ${roleLabel} on WGC Payments.</p>
-               <p><a href="${setPasswordLink}">Accept invitation and set your password</a></p>
-               <p>This invitation link expires in 7 days.</p>`,
+    bodyHtml,
   });
 
   await prisma.emailLog.create({
@@ -94,6 +102,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
       status: emailResult.success ? "SENT" : "ERROR",
       sentAt: emailResult.success ? new Date() : null,
       error: emailResult.success ? null : String(emailResult.error ?? "unknown error"),
+      bodyHtml,
     },
   });
 

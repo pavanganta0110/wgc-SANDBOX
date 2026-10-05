@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
+import { extractRequestedFileType } from "@/lib/finix/parseVerificationOutcomes";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const formData = await req.formData();
     
@@ -36,11 +41,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No Finix Merchant ID associated with this application" }, { status: 400 });
     }
 
-    // 1. Create File Resource in Finix
+    // 1. Create File Resource in Finix — tagged with the real type Finix's
+    // outstanding Verification asked for when we have it on file, not a
+    // hardcoded generic type (2026-09-04 finding: this admin-side upload
+    // path had the exact same bug already fixed on the merchant-facing
+    // secure-link path).
+    const finixFileType = extractRequestedFileType(app.updateRequestedCodes) || "ADDITIONAL_DOCUMENTATION";
     const fileResource = await finixClient.createFileResource({
       display_name: file.name,
       linked_to: app.finixMerchantId,
-      type: "ADDITIONAL_DOCUMENTATION"
+      type: finixFileType
     });
 
     const finixFileId = fileResource.id;
@@ -65,7 +75,7 @@ export async function POST(req: Request) {
     await prisma.merchantDocument.create({
       data: {
         onboardingApplicationId: app.id,
-        documentType: "ADDITIONAL_DOCUMENTATION",
+        documentType: finixFileType,
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,
@@ -87,7 +97,7 @@ export async function POST(req: Request) {
     });
 
     // 5. Send Email to Merchant
-    const safeOrgName = app.organizationName || "your organization";
+    const safeOrgName = app.organizationName || app.legalBusinessName || "your organization";
     await sendWgcEmail({
       to: app.contactEmail,
       subject: "Additional information received — WGC Payments",
@@ -113,8 +123,9 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true, message: "Documents uploaded and verification triggered." });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload evidence error:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

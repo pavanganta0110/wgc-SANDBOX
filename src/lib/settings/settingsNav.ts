@@ -19,6 +19,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { key: "integrations", label: "Integrations", href: "/merchant/settings/integrations" },
   { key: "embed", label: "Website Embed", href: "/merchant/settings/embed" },
   { key: "sync", label: "Webhooks & Sync", href: "/merchant/settings/sync" },
+  // Developer platform — distinct from "Webhooks & Sync" above (that page
+  // shows inbound processor sync history; these are outbound webhooks a
+  // merchant configures to notify their OWN systems, plus API key
+  // management for /api/v1).
+  { key: "developer-webhooks", label: "Developer Webhooks", href: "/merchant/settings/developers/webhooks" },
+  { key: "api-keys", label: "API Keys", href: "/merchant/settings/developers/api-keys" },
   { key: "data-privacy", label: "Data & Privacy", href: "/merchant/settings/data-privacy" },
   { key: "audit", label: "Audit History", href: "/merchant/settings/audit" },
 ];

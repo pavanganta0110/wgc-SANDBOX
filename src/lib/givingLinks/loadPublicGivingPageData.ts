@@ -13,6 +13,7 @@ import {
 import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVerificationGuard";
 import type { Church, GivingLink } from "@prisma/client";
 import type { FrequencyKey, PaymentMethodKey } from "@/lib/givingLinks/types";
+import { isEventGivingLink } from "@/lib/eventRegistration/eventGivingLink";
 import { loadAssignedActiveFunds, type AssignedActiveFund } from "@/lib/giving/fundAssignment";
 
 export type PublicGivingPageData =
@@ -44,6 +45,9 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
 
   const church = await prisma.church.findUnique({ where: { id: link.churchId } });
   if (!church || !church.finixMerchantId) return { ok: false, notFound: true };
+
+  // An event's dedicated checkout link is paid through its event page only.
+  if (await isEventGivingLink(link.churchId, link.id)) return { ok: false, notFound: true };
 
   const branding = parseBrandingSettings(link.brandingSettingsJson);
   const light = branding.light;

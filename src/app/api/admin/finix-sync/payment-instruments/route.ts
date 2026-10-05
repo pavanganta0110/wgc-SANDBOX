@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { runSyncJob } from "@/lib/finix/sync/runSyncJob";
+import { getAdminSession } from "@/lib/auth/session";
 
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { finixMerchantId, finixIdentityId, churchId } = await req.json();
 

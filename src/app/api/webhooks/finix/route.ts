@@ -1,3 +1,4 @@
+import { syncEventRegistrationWithPayment } from "@/lib/eventRegistration/paymentOutcome";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import crypto from "crypto";
@@ -6,6 +7,8 @@ import { prisma } from "@/lib/prisma";
 import { resolveRecurringPaymentAttribution } from "@/lib/auth/attributionSnapshot";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
 import { redactFinixPayload } from "@/lib/finix/redact";
+import { finixClient } from "@/lib/finix/client";
+import { parseVerificationOutcomes } from "@/lib/finix/parseVerificationOutcomes";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { mapFinixDisputeStateToWgcStatus } from "@/lib/finix/statusMapping";
 import { provisionChurchAndBillingGateOrAlert } from "@/lib/billing/provisionChurchAndBillingGate";
@@ -21,6 +24,11 @@ import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
 import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
 import { isSettlementTerminalStatus } from "@/lib/finix/settlementStatus";
 import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
+import { emitEvent } from "@/lib/events/emitEvent";
+import { emitRecurringPaymentOutcomeEvent } from "@/lib/events/recurringPaymentEvents";
+import { triggerRecoveryOnPaymentFailure } from "@/lib/subscriptions/recoveryAutomation";
+import { handleMerchantTermination } from "@/lib/onboarding/handleMerchantTermination";
+import { recordWebhookProcessingFailure } from "@/lib/monitoring/webhookHealth";
 
 // Credentials pasted into a dashboard env editor routinely pick up a trailing
 // newline or a wrapping pair of quotes (this repo's own .env.local stores these
@@ -93,6 +101,7 @@ export async function sendWebhookEmail(
         to: to,
         subject: subject,
         status: "PENDING",
+        bodyHtml,
       },
     });
   });
@@ -371,10 +380,30 @@ export async function syncFinixDataFromWebhookEvent(
         where: { finixTransferId: data.id },
       });
       if (priorPayment && priorPayment.status !== (data.state || "PENDING").toUpperCase()) {
+        const newStatus = (data.state || "PENDING").toUpperCase();
         await prisma.payment.updateMany({
           where: { finixTransferId: data.id },
-          data: { status: (data.state || "PENDING").toUpperCase() },
+          data: { status: newStatus },
         });
+
+        try {
+          await syncEventRegistrationWithPayment(priorPayment.churchId, priorPayment.id, newStatus);
+        } catch (err) {
+          console.error("Failed to sync event registration with payment outcome:", err);
+        }
+
+        if (newStatus === "SUCCEEDED" || newStatus === "FAILED") {
+          try {
+            await emitRecurringPaymentOutcomeEvent({ ...priorPayment, status: newStatus });
+          } catch (err) {
+            console.error("Failed to emit recurring payment outcome event (async):", err);
+          }
+          try {
+            await triggerRecoveryOnPaymentFailure({ ...priorPayment, status: newStatus, failureCode: data.failure_code ?? null, failureMessage: data.failure_message ?? null });
+          } catch (err) {
+            console.error("Failed to trigger recurring payment recovery (async):", err);
+          }
+        }
 
         if (
           priorPayment.status !== "SUCCEEDED" &&
@@ -387,9 +416,20 @@ export async function syncFinixDataFromWebhookEvent(
             console.error("Failed to send async donation receipt:", err);
           }
           try {
+            const { notifyMerchantOfNewDonation } = await import("@/lib/giving/generateReceipt");
+            await notifyMerchantOfNewDonation(priorPayment.id, churchId);
+          } catch (err) {
+            console.error("Failed to notify merchant of new donation (async):", err);
+          }
+          try {
             await syncPaymentToQuickBooks(priorPayment.id);
           } catch (err) {
             console.error("Failed to sync payment to QuickBooks:", err);
+          }
+          try {
+            await emitEvent({ type: "donation.created", churchId, data: { paymentId: priorPayment.id, donorId: priorPayment.donorId } });
+          } catch (err) {
+            console.error("Failed to emit donation.created event (async):", err);
           }
         }
       }
@@ -530,6 +570,35 @@ export async function syncFinixDataFromWebhookEvent(
                 } catch (err) {
                   console.error("Failed to sync payment to QuickBooks:", err);
                 }
+                // Same gap as the QuickBooks sync above: a recurring charge
+                // created already-SUCCEEDED (never PENDING first) never hit
+                // the priorPayment status-transition block elsewhere in this
+                // handler, so it got neither a donor receipt nor a merchant
+                // notification. Both are idempotent-safe to add here (this
+                // payment didn't exist before this exact webhook call, so
+                // there's no way this fires twice for it).
+                try {
+                  const { sendDonationReceipt, notifyMerchantOfNewDonation } = await import("@/lib/giving/generateReceipt");
+                  await sendDonationReceipt(newRecurringPayment.id, churchId);
+                  await notifyMerchantOfNewDonation(newRecurringPayment.id, churchId);
+                } catch (err) {
+                  console.error("Failed to send receipt/notify merchant for recurring charge:", err);
+                }
+                try {
+                  await emitEvent({ type: "donation.created", churchId, data: { paymentId: newRecurringPayment.id, donorId: newRecurringPayment.donorId, recurring: true } });
+                } catch (err) {
+                  console.error("Failed to emit donation.created event (recurring charge):", err);
+                }
+              }
+              try {
+                await emitRecurringPaymentOutcomeEvent(newRecurringPayment);
+              } catch (err) {
+                console.error("Failed to emit recurring payment outcome event:", err);
+              }
+              try {
+                await triggerRecoveryOnPaymentFailure({ ...newRecurringPayment, failureCode: data.failure_code ?? null, failureMessage: data.failure_message ?? null });
+              } catch (err) {
+                console.error("Failed to trigger recurring payment recovery:", err);
               }
             }
           }
@@ -632,6 +701,18 @@ export async function syncFinixDataFromWebhookEvent(
         } catch (err) {
           console.error("Failed to reconcile invoice payment refund:", err);
         }
+        if (churchId) {
+          try {
+            const refundedPayment = await prisma.payment.findFirst({ where: { finixTransferId: data.parent_transfer }, select: { id: true, donorId: true } });
+            await emitEvent({
+              type: "donation.refunded",
+              churchId,
+              data: { paymentId: refundedPayment?.id ?? null, donorId: refundedPayment?.donorId ?? null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
+            });
+          } catch (err) {
+            console.error("Failed to emit donation.refunded event:", err);
+          }
+        }
       }
     }
 
@@ -708,6 +789,12 @@ export async function syncFinixDataFromWebhookEvent(
           where: { finixTransferId: originalTransferId },
           data: { status: "RETURNED" },
         });
+        try {
+          const returnedPayment = await prisma.payment.findFirst({ where: { finixTransferId: originalTransferId }, select: { id: true, churchId: true } });
+          if (returnedPayment) await syncEventRegistrationWithPayment(returnedPayment.churchId, returnedPayment.id, "RETURNED");
+        } catch (err) {
+          console.error("Failed to sync event registration with bank return:", err);
+        }
 
         const wasSucceeded = (priorReturn?.state || "").toUpperCase() === "SUCCEEDED";
         const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";
@@ -727,6 +814,18 @@ export async function syncFinixDataFromWebhookEvent(
             await reconcileInvoicePaymentReversal(originalTransferId, data.amount ?? 0, "ACH_RETURN");
           } catch (err) {
             console.error("Failed to reconcile invoice payment ACH return:", err);
+          }
+          if (churchId) {
+            try {
+              const returnedPayment = await prisma.payment.findFirst({ where: { finixTransferId: originalTransferId }, select: { id: true, donorId: true } });
+              await emitEvent({
+                type: "donation.returned",
+                churchId,
+                data: { paymentId: returnedPayment?.id ?? null, donorId: returnedPayment?.donorId ?? null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
+              });
+            } catch (err) {
+              console.error("Failed to emit donation.returned event:", err);
+            }
           }
         }
       }
@@ -778,6 +877,8 @@ export async function syncFinixDataFromWebhookEvent(
       await notifyEvent({
         churchId,
         eventKey: "DISPUTE_OPENED",
+        relatedEntityType: "Dispute",
+        relatedEntityId: data.id,
         subject: "New payment dispute opened",
         title: "New Dispute Opened",
         badgeText: "Action May Be Required",
@@ -836,6 +937,7 @@ export async function syncFinixDataFromWebhookEvent(
     // no separate refund_amount/dispute_amount at the settlement level.
     const churchId = await resolveChurchIdForMerchant(data.merchant_id);
     const priorSettlement = await prisma.finixSettlement.findUnique({ where: { finixSettlementId: data.id }, select: { state: true, updatedAtFinix: true } });
+    const isNewSettlement = !priorSettlement;
 
     // An out-of-order webhook delivery must never overwrite a newer,
     // already-applied state with an older one.
@@ -897,11 +999,21 @@ export async function syncFinixDataFromWebhookEvent(
       console.error("Failed to link transfers to settlement:", err);
     }
 
+    if (churchId && isNewSettlement) {
+      try {
+        await emitEvent({ type: "settlement.created", churchId, data: { settlementId: data.id, totalAmountCents: data.total_amount ?? null, netAmountCents: data.net_amount ?? null } });
+      } catch (err) {
+        console.error("Failed to emit settlement.created event:", err);
+      }
+    }
+
     if (churchId && isSettlementTerminalStatus(data.status) && !isSettlementTerminalStatus(priorSettlement?.state)) {
       const { notifyEvent } = await import("@/lib/settings/notificationDispatch");
       await notifyEvent({
         churchId,
         eventKey: "SETTLEMENT_FUNDED",
+        relatedEntityType: "Settlement",
+        relatedEntityId: data.id,
         subject: "Settlement funded",
         title: "Settlement Funded",
         badgeText: "Funds Deposited",
@@ -1090,6 +1202,19 @@ export async function syncFinixDataFromWebhookEvent(
       ? (await prisma.finixPaymentInstrumentSnapshot.findUnique({ where: { finixPaymentInstrumentId: instrumentId }, select: { donorId: true } }))?.donorId ?? null
       : null;
 
+    // Prior-state read so a genuine state TRANSITION (e.g. into cancelled)
+    // can be distinguished from a routine resync that just reports the
+    // same state again — this webhook is a state-sync/backup path, not the
+    // primary creation point (that's donate/route.ts's subscription upsert
+    // and the admin "create subscription" action, both of which already
+    // emit recurring.created themselves), so this block never emits
+    // recurring.created itself even on a first-sighting upsert, to avoid a
+    // duplicate event for the same subscription.
+    const priorSubscription = await prisma.finixSubscription.findUnique({
+      where: { finixSubscriptionId: data.id },
+      select: { state: true },
+    });
+
     await prisma.finixSubscription.upsert({
       where: { finixSubscriptionId: data.id },
       create: {
@@ -1125,6 +1250,23 @@ export async function syncFinixDataFromWebhookEvent(
         lastSyncedAt: new Date(),
       },
     });
+
+    if (churchId && priorSubscription) {
+      const priorState = (priorSubscription.state || "").toUpperCase();
+      const newState = (data.state || "").toUpperCase();
+      const isCancelState = (s: string) => s === "CANCELED" || s === "CANCELLED";
+      if (priorState !== newState) {
+        try {
+          if (!isCancelState(priorState) && isCancelState(newState)) {
+            await emitEvent({ type: "recurring.cancelled", churchId, data: { finixSubscriptionId: data.id, donorId: resolvedDonorId } });
+          } else {
+            await emitEvent({ type: "recurring.updated", churchId, data: { finixSubscriptionId: data.id, donorId: resolvedDonorId, state: data.state ?? null } });
+          }
+        } catch (err) {
+          console.error("Failed to emit recurring state-change event:", err);
+        }
+      }
+    }
     return;
   }
 
@@ -1480,6 +1622,17 @@ export async function POST(req: Request) {
       if (handled) {
         return NextResponse.json({ message: "WGC billing event processed" }, { status: 200 });
       }
+
+      // Same finixSubscriptionId-matching shape as above, for the separate
+      // SMS add-on subscription table — see that handler's doc comment for
+      // why it's a distinct function rather than a branch inside the one
+      // above (SmsAddonSubscription is a separate table from
+      // WgcSubscription, not a second row on it).
+      const { handleSmsAddonSubscriptionWebhookEvent } = await import("@/lib/billing/smsAddonSubscriptionWebhook");
+      const smsAddonHandled = await handleSmsAddonSubscriptionWebhookEvent(eventType, data);
+      if (smsAddonHandled) {
+        return NextResponse.json({ message: "SMS add-on billing event processed" }, { status: 200 });
+      }
     } catch (wgcBillingError) {
       console.error("WGC subscription webhook handling failed:", wgcBillingError);
       // Fall through to the existing logic below rather than failing the
@@ -1539,6 +1692,17 @@ export async function POST(req: Request) {
           if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 300));
         }
       }
+      // All 3 inline sync attempts exhausted — an actual operational
+      // problem, not a transient single-attempt blip the loop already
+      // recovered from. Fire-and-forget: the webhook always returns 200 to
+      // Finix regardless of this, so this must never add latency or risk.
+      void recordWebhookProcessingFailure({
+        provider: "finix",
+        eventType,
+        finixEventId: eventId,
+        finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+        errorMessage: lastSyncError instanceof Error ? lastSyncError.message : String(lastSyncError),
+      });
     }
 
     try {
@@ -1579,7 +1743,32 @@ export async function POST(req: Request) {
         const onboardingState = data?.onboarding_state;
         const status = data?.status;
 
-        if (onboardingState === "APPROVED" || status === "APPROVED") {
+        if (data?.is_terminated) {
+          // Finix tracks termination separately from onboarding_state — a
+          // terminated merchant's onboarding_state can still read APPROVED
+          // in the very same payload (confirmed 2026-09-23: Springfield
+          // Area Collegiate Ministry's termination event had
+          // onboarding_state: "APPROVED" alongside is_terminated: true).
+          // This check must come before the APPROVED branch below, or a
+          // churn event gets misread as a fresh approval and re-sends the
+          // dashboard-access invite for an account that's being closed.
+          // Delegated to the same shared function the admin "Resync from
+          // Finix" backfill action uses, so there's exactly one place
+          // this logic lives.
+          const church = await prisma.church.findFirst({ where: { onboardingApplicationId: app.id } });
+          await handleMerchantTermination({
+            church: church ? { id: church.id, status: church.status } : null,
+            onboardingApplication: {
+              id: app.id,
+              onboardingStatus: app.onboardingStatus,
+              contactEmail,
+              organizationName: app.organizationName,
+              legalBusinessName: app.legalBusinessName,
+            },
+            finixMerchantId: app.finixMerchantId || data.id,
+            terminationDetails: data?.termination_details ?? null,
+          });
+        } else if (onboardingState === "APPROVED" || status === "APPROVED") {
           const wasAlreadyApproved = app.onboardingStatus === "APPROVED";
           updateData.onboardingStatus = "APPROVED";
           updateData.onboardingState = "APPROVED";
@@ -1611,7 +1800,8 @@ export async function POST(req: Request) {
             newStatus: "APPROVED",
             whatHappened: "Finix approved the merchant onboarding application.",
             actionNeeded: "None.",
-            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",
+            onboardingApplicationId: app.id
           });
 
           // Provision the Church row + church_admin User account, and the
@@ -1637,6 +1827,76 @@ export async function POST(req: Request) {
             finixApplicationId: app.finixApplicationId,
           });
         } else if (onboardingState === "UPDATE_REQUESTED") {
+          // Work out what Finix is actually asking for on EVERY delivery of
+          // this state, not just the first — previously this whole capture
+          // was nested inside the "first transition" guard below, so a
+          // second/later MERCHANT.UPDATED webhook (still onboarding_state
+          // UPDATE_REQUESTED, e.g. Finix refining or re-sending the
+          // requirement) was silently skipped entirely and the admin
+          // dashboard's "Required Info / Errors" column stayed blank even
+          // though Finix had told us something (2026-08-15 admin bug
+          // report).
+          //
+          // Confirmed against a real production UPDATE_REQUESTED delivery
+          // (Lighthouse Baptist Church, 2026-09-04): the Merchant webhook
+          // payload itself never carries the reason — `data.messages`,
+          // `data.verification?.messages`, and `data.outstanding_requirements`
+          // are all absent; `data.verification` is a bare ID string
+          // pointing at a *separate* Finix Verification resource. Per
+          // Finix's docs (docs.finix.com/guides/platform-payments/
+          // onboarding-sellers/seller-onboarding-update-requests), that
+          // Verification is the actual source of truth: it carries an
+          // `outcomes` array, each entry an `outcome_code` (e.g.
+          // "BANK_STATEMENT_ONE_MONTH_REQUESTED") plus `remediation_details`
+          // describing what to update. So fetch it and parse that first;
+          // the old merchant-payload guesses stay as a fallback in case a
+          // future delivery ever does carry something inline, or the fetch
+          // fails/returns no outcomes.
+          let requestedItemsStr = "Additional documentation is required to verify your business and identity.";
+          let requestedItemsResolved = false;
+          let verificationPayload: unknown = null;
+
+          const verificationId = typeof data?.verification === "string" ? data.verification : null;
+          if (verificationId) {
+            try {
+              verificationPayload = await finixClient.getVerification(verificationId);
+              const parsed = parseVerificationOutcomes(verificationPayload);
+              if (parsed) {
+                requestedItemsStr = parsed;
+                requestedItemsResolved = true;
+              }
+            } catch (err) {
+              // Never let a Finix Verification fetch failure block the
+              // webhook's own 200 response — falls through to the
+              // merchant-payload guesses, then the generic message.
+              console.error(`Failed to fetch Finix verification ${verificationId} for UPDATE_REQUESTED requirement details:`, err);
+            }
+          }
+
+          if (!requestedItemsResolved) {
+            const messagesSource = data?.messages ?? data?.verification?.messages ?? data?.outstanding_requirements ?? null;
+            if (messagesSource) {
+              try {
+                const msgs = Array.isArray(messagesSource) ? messagesSource : [messagesSource];
+                const items = msgs.map((m: any) => (typeof m === "object" ? (m.message || m.code || m.description || JSON.stringify(m)) : String(m)));
+                if (items.length > 0) {
+                  requestedItemsStr = items.map((i: string) => `• ${i}`).join("<br/>");
+                  requestedItemsResolved = true;
+                }
+              } catch (e) {
+                console.error("Failed to parse requested items:", e);
+              }
+            }
+          }
+
+          if (requestedItemsResolved) updateData.updateRequestedItems = requestedItemsStr;
+          // Always store the raw (redacted) source of truth — the fetched
+          // Verification when we got one, otherwise the Merchant payload —
+          // so the real requirement is recoverable from the admin UI even
+          // when the outcome_code parsing above doesn't match Finix's
+          // actual shape for a given failure type.
+          updateData.updateRequestedCodes = redactFinixPayload((verificationPayload ?? data ?? {}) as object);
+
           if (app.onboardingStatus !== "MORE_INFORMATION_REQUIRED" && app.onboardingStatus !== "APPROVED") {
             updateData.onboardingStatus = "MORE_INFORMATION_REQUIRED";
             updateData.onboardingState = "UPDATE_REQUESTED";
@@ -1651,21 +1911,6 @@ export async function POST(req: Request) {
 
             updateData.updateTokenHash = tokenHash;
             updateData.updateTokenExpiresAt = expiresAt;
-
-            let requestedItemsStr = "Additional documentation is required to verify your business and identity.";
-            if (data?.messages) {
-              updateData.updateRequestedCodes = data.messages;
-              try {
-                const msgs = Array.isArray(data.messages) ? data.messages : [data.messages];
-                const items = msgs.map((m: any) => typeof m === "object" ? (m.message || m.code || JSON.stringify(m)) : m);
-                if (items.length > 0) {
-                  requestedItemsStr = items.map((i: string) => `• ${i}`).join("<br/>");
-                  updateData.updateRequestedItems = requestedItemsStr;
-                }
-              } catch (e) {
-                console.error("Failed to parse requested items:", e);
-              }
-            }
 
             const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
 
@@ -1690,7 +1935,8 @@ export async function POST(req: Request) {
               newStatus: "MORE_INFORMATION_REQUIRED",
               whatHappened: "Finix requested additional information or documents for the merchant.",
               actionNeeded: "Merchant has been sent a secure upload link.",
-              adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
+              adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",
+              onboardingApplicationId: app.id
             });
           }
         } else if (onboardingState === "REJECTED" || status === "REJECTED" || status === "FAILED") {
@@ -1720,7 +1966,8 @@ export async function POST(req: Request) {
             newStatus: "REJECTED",
             whatHappened: "Finix rejected the merchant onboarding application.",
             actionNeeded: "Review rejection reason in Finix. Contact merchant if needed.",
-            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
+            adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",
+            onboardingApplicationId: app.id
           });
         }
       } else if (eventType === "verification.created") {
@@ -1770,6 +2017,13 @@ export async function POST(req: Request) {
         whatHappened: `Failed to process webhook event: ${eventType} (${eventId})`,
         actionNeeded: `Check logs. Error: ${processError.message}`,
         adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications"
+      });
+      void recordWebhookProcessingFailure({
+        provider: "finix",
+        eventType,
+        finixEventId: eventId,
+        finixMerchantId: data?.merchant ?? data?.linked_to ?? null,
+        errorMessage: processError.message,
       });
 
       throw processError;

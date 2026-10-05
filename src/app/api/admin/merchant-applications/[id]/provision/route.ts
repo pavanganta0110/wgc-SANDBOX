@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { createAuditLog } from "@/lib/audit";
 import { provisionChurchAndBillingGate } from "@/lib/billing/provisionChurchAndBillingGate";
 
@@ -11,13 +12,21 @@ import { provisionChurchAndBillingGate } from "@/lib/billing/provisionChurchAndB
  * 2026-08-15 admin bug report). Safe to call even if a Church already
  * exists — provisionChurchAccount looks one up by onboardingApplicationId
  * before creating one, so this never creates a duplicate.
+ *
+ * MFA-verified session required — this creates a real, live Church row
+ * that can immediately accept payments, so it gets the same defense-in-
+ * depth gate as every other action that can materially affect a merchant
+ * account.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
 
   const app = await prisma.onboardingApplication.findUnique({ where: { id } });

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, type SessionPayload } from "@/lib/auth/session";
+import { resolveActiveImpersonation } from "@/lib/auth/impersonation";
+import { maskPhone } from "@/lib/auth/mfaCode";
+import { isAuthSmsConfigured } from "@/lib/sms/authSmsSender";
 
 // GET: retrieve login methods and recent activity
 export async function GET() {
@@ -10,9 +13,30 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // getSession()'s "View as Merchant" branch deliberately sets
+    // session.userId to the impersonating ADMIN's own real id (see that
+    // function's comment in session.ts) — it doesn't expose an
+    // impersonation flag the way requireMerchantSession() does, so this
+    // route re-resolves it directly. Without this check, the fields below
+    // would show the ADMIN's own password/phone/MFA/connected-account
+    // status inside what the UI presents as the merchant's Security page.
+    const impersonation = await resolveActiveImpersonation(session.userId);
+    if (impersonation) {
+      return NextResponse.json({
+        connectedProviders: [],
+        hasPassword: false,
+        recentActivity: [],
+        recentAuthTime: null,
+        mfaEnabled: false,
+        maskedPhone: null,
+        mfaAvailable: false,
+        impersonating: true,
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { passwordHash: true },
+      select: { passwordHash: true, mfaEnabled: true, phone: true },
     });
 
     if (!user) {
@@ -35,6 +59,9 @@ export async function GET() {
       hasPassword: user.passwordHash !== null,
       recentActivity,
       recentAuthTime: session.authTime || null,
+      mfaEnabled: user.mfaEnabled,
+      maskedPhone: user.phone ? maskPhone(user.phone) : null,
+      mfaAvailable: isAuthSmsConfigured(),
     });
   } catch (err) {
     console.error("Failed to fetch auth accounts info:", err);
@@ -48,6 +75,13 @@ export async function DELETE(req: Request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // See GET's comment — never let an impersonated session disconnect
+    // the impersonating ADMIN's own login methods.
+    const impersonation = await resolveActiveImpersonation(session.userId);
+    if (impersonation) {
+      return NextResponse.json({ error: "Personal account security settings aren't available while viewing as a merchant." }, { status: 403 });
     }
 
     const { provider } = await req.json();

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WGC Giving Page Walkthrough</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+  :root{
+    --gold:#eab308; --gold-deep:#c48f09;
+    --ink:#1a1d29; --ink-soft:#3a3f4f;
+    --stone-50:#faf8f3; --stone-100:#f2ede3; --stone-200:#e4ddcd;
+    --stone-400:#a89f8c; --stone-500:#7a7466; --line:#e6dfd0;
+    --paper:#ffffff; --ok:#3f7d52;
+    --radius:14px; --shadow:0 18px 50px -20px rgba(26,29,41,.4);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:transparent}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);line-height:1.5;padding:14px}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;max-width:1040px;margin:0 auto}
+
+  .cap{padding:18px 22px 16px;border-bottom:1px solid var(--line)}
+  .cap .stepno{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--gold-deep);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .cap .stepno .opttag{background:var(--stone-100);color:var(--ink-soft);border:1px solid var(--line);padding:2px 7px;border-radius:99px;letter-spacing:.6px}
+  .cap h3{font-family:'Fraunces',serif;font-weight:600;font-size:21px;letter-spacing:-.3px;margin-bottom:5px}
+  .cap p{font-size:13.5px;color:var(--ink-soft)}
+
+  .frame{position:relative;line-height:0;background:var(--stone-100)}
+  .frame img{width:100%;height:auto;display:block}
+
+  .hs{position:absolute;transform:translate(-50%,-50%);z-index:3}
+  .hs .pin{width:32px;height:32px;border-radius:50%;color:var(--ink);font-weight:700;font-size:14px;display:grid;place-items:center;cursor:pointer;border:2.5px solid #fff;box-shadow:0 3px 12px rgba(26,29,41,.35);position:relative;background:var(--stone-200)}
+  .hs.adv .pin{background:var(--gold)}
+  .hs .pin::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--stone-400);opacity:.5;animation:pulse 2.1s ease-out infinite}
+  .hs.adv .pin::before{border-color:var(--gold)}
+  @media(prefers-reduced-motion:reduce){.hs .pin::before{animation:none}}
+  @keyframes pulse{0%{transform:scale(.7);opacity:.6}100%{transform:scale(1.5);opacity:0}}
+  .hs .tip{position:absolute;top:50%;left:calc(100% + 14px);transform:translateY(-50%);width:250px;background:var(--ink);color:#fff;padding:12px 14px;border-radius:11px;font-size:12.5px;line-height:1.5;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .16s;z-index:5}
+  .hs .tip::before{content:"";position:absolute;top:50%;right:100%;transform:translateY(-50%);border:7px solid transparent;border-right-color:var(--ink)}
+  .hs.open .tip,.hs:hover .tip{opacity:1;pointer-events:auto}
+  .hs.flip .tip{left:auto;right:calc(100% + 14px)}
+  .hs.flip .tip::before{right:auto;left:100%;border-right-color:transparent;border-left-color:var(--ink)}
+  .hs .tip b{color:var(--gold)}
+  .hs .tip .cue{display:block;margin-top:7px;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--gold)}
+
+  .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 22px;border-top:1px solid var(--line);background:var(--stone-50)}
+  .btn{font-family:'Inter';font-weight:600;font-size:13px;border-radius:10px;padding:9px 15px;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);transition:all .15s}
+  .btn:hover{border-color:var(--stone-400)}
+  .btn[disabled]{opacity:.35;cursor:not-allowed}
+  .optlinks{display:flex;align-items:center;gap:8px;margin-left:6px}
+  .optlinks .lbl{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--stone-400)}
+  .optlink{font-size:12.5px;font-weight:600;color:var(--gold-deep);background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:7px}
+  .optlink:hover{background:var(--stone-100)}
+  .optlink.active{color:var(--ink);text-decoration:underline}
+  .prog{margin-left:auto;font-size:12px;color:var(--stone-500);font-weight:500}
+  .hint{text-align:center;font-size:11px;color:var(--stone-400);margin:10px auto 0;max-width:1040px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="cap">
+      <div class="stepno" id="stepno"></div>
+      <h3 id="title"></h3>
+      <p id="blurb"></p>
+    </div>
+    <div class="frame" id="frame"></div>
+    <div class="controls">
+      <button class="btn" id="back">← Back</button>
+      <button class="btn" id="restart" style="display:none">↺ Start over</button>
+      <span class="optlinks">
+        <span class="lbl">Optional:</span>
+        <button class="optlink" data-opt="insights">Transaction insights</button>
+        <button class="optlink" data-opt="general">Org settings</button>
+      </span>
+      <span class="prog" id="prog"></span>
+    </div>
+  </div>
+  <p class="hint">Hover any marker to read it · gold markers advance the tour · ← / → keys work too</p>
+
+<script>
+const STEPS = [
+  {"id": "login", "img": "login", "kind": "spine", "title": "Sign in", "blurb": "The church admin logs in at their own branded WGC dashboard. No separate app, no ticket to IT.", "hotspots": [{"x": 50, "y": 58, "label": "1", "text": "Enter email and password, then <b>Log in</b> — that's the whole gate. Click to continue.", "advance": true}], "src": "img/login.jpg"},
+  {"id": "dashboard", "img": "dashboard", "kind": "spine", "title": "Land on the dashboard", "blurb": "Giving totals, disputes, and refunds at a glance. To spin up a new giving page, one shortcut does it.", "hotspots": [{"x": 90, "y": 40, "label": "1", "text": "<b>Manage Giving Links</b> — the fast path to your giving pages. Click to open it.", "advance": true}, {"x": 7.5, "y": 50, "label": "2", "text": "Or reach it anytime from <b>Giving Links</b> in the left rail."}], "src": "img/dashboard.jpg"},
+  {"id": "links", "img": "links", "kind": "spine", "title": "Open Giving Links", "blurb": "Every giving page the org has — attempts, successful donations, total collected. A new page starts here.", "hotspots": [{"x": 92, "y": 26, "label": "1", "text": "<b>+ Create Giving Link</b> starts a brand-new page. Click to begin.", "advance": true}, {"x": 45, "y": 50, "label": "2", "text": "Each row is a live page: status, attempts, and dollars raised (names blurred for privacy)."}], "src": "img/links.jpg"},
+  {"id": "basic", "img": "basic", "kind": "spine", "title": "Name it & set the basics", "blurb": "Give the page an internal name and a public title. Flip “Powered by WGC” off for a fully white-labeled look. A live preview mirrors every change.", "hotspots": [{"x": 36, "y": 33, "label": "1", "text": "Uncheck <b>Powered by WGC</b> for a 100% white-labeled giving page."}, {"x": 80, "y": 48, "label": "2", "text": "Live preview — the real giving component, updating as you type."}, {"x": 36, "y": 52, "label": "3", "text": "Fill the name and title, then continue to branding. Click to move on.", "advance": true}], "src": "img/basic.jpg"},
+  {"id": "custom", "img": "custom", "kind": "spine", "title": "Brand & customize", "blurb": "Upload a logo, set brand colors, and let donors cover the processing fee so 100% reaches the ministry. Then create the link.", "hotspots": [{"x": 36, "y": 63, "label": "1", "text": "Logo and color pickers — the page takes on the church's brand, not WGC's."}, {"x": 36, "y": 40, "label": "2", "text": "<b>Allow donor to cover fees</b>, checked by default, so the ministry keeps the full gift."}, {"x": 92, "y": 94, "label": "3", "text": "<b>Create Giving Link</b> — the page is live the moment this is clicked. Continue.", "advance": true}], "src": "img/custom.jpg"},
+  {"id": "inline", "img": "inline", "kind": "spine", "title": "Embed it — inline form", "blurb": "From Settings → Website Embed, drop the whole giving form into any page. No code beyond a paste.", "hotspots": [{"x": 80, "y": 60, "label": "1", "text": "Live preview of exactly what donors will see once embedded."}, {"x": 30, "y": 47, "label": "2", "text": "<b>Inline Form</b> embeds the full giving experience on the church's site. See the button option next.", "advance": true}], "src": "img/inline.jpg"},
+  {"id": "button", "img": "button", "kind": "spine", "title": "Or a donate button", "blurb": "Prefer a simple button? Style it, copy the snippet, paste it in. Setup instructions for WordPress and more are built in.", "hotspots": [{"x": 30, "y": 47, "label": "1", "text": "<b>Donate Button</b> mode — size, corners, and color to match the site."}, {"x": 88, "y": 64, "label": "2", "text": "Copy the snippet and paste (embed code masked here). That's the full setup — finish the tour.", "advance": true}], "src": "img/button.jpg"},
+  {"id": "insights", "img": "insights", "kind": "optional", "title": "Transaction insights", "blurb": "The analytics side: volume and count by payment method and card brand, plus refunds, disputes, and deposits — all filterable.", "hotspots": [{"x": 45, "y": 72, "label": "1", "text": "Giving broken down by method and brand — how the ministry actually receives gifts."}, {"x": 50, "y": 33, "label": "2", "text": "Summary vs. the previous period, across any date range."}], "src": "img/insights.jpg"},
+  {"id": "general", "img": "general", "kind": "optional", "title": "Org settings", "blurb": "Where the admin manages the organization's identity, contacts, and address — the housekeeping behind the giving pages.", "hotspots": [{"x": 36, "y": 40, "label": "1", "text": "Organization identity and contact info — set once, reused across every giving page."}], "src": "img/general.jpg"}
+];
+const spine = STEPS.filter(s=>s.kind==='spine');
+const idOf = id => STEPS.findIndex(s=>s.id===id);
+let i = 0, returnTo = null;
+
+const frame=document.getElementById('frame');
+
+function render(){
+  const s=STEPS[i], isOpt=s.kind==='optional';
+  document.getElementById('stepno').innerHTML = isOpt
+     ? 'Optional <span class="opttag">side view</span>'
+     : 'Step '+(spine.indexOf(s)+1)+' of '+spine.length;
+  document.getElementById('title').textContent=s.title;
+  document.getElementById('blurb').textContent=s.blurb;
+
+  frame.innerHTML='';
+  const img=new Image(); img.src=s.src; img.alt=s.title; frame.appendChild(img);
+  (s.hotspots||[]).forEach(h=>{
+    const d=document.createElement('div');
+    d.className='hs'+(h.advance?' adv':'')+(h.x>62?' flip':'');
+    d.style.left=h.x+'%'; d.style.top=h.y+'%';
+    const cue = h.advance ? '<span class="cue">Click to continue →</span>' : '';
+    d.innerHTML='<div class="pin">'+h.label+'</div><div class="tip">'+h.text+cue+'</div>';
+    d.querySelector('.pin').onclick=(e)=>{
+      e.stopPropagation();
+      if(h.advance){ advance(); }
+      else { d.classList.toggle('open');
+        [...frame.querySelectorAll('.hs')].forEach(o=>{if(o!==d)o.classList.remove('open')}); }
+    };
+    frame.appendChild(d);
+  });
+
+  document.getElementById('back').disabled = i===0 && !isOpt;
+  const isLastSpine = s.kind==='spine' && spine.indexOf(s)===spine.length-1;
+  document.getElementById('restart').style.display = isLastSpine ? 'inline-block':'none';
+  document.getElementById('prog').textContent = isOpt ? 'Optional view' : (spine.indexOf(s)+1)+' / '+spine.length;
+  document.querySelectorAll('.optlink').forEach(b=>b.classList.toggle('active', isOpt && s.id===b.dataset.opt));
+}
+
+function advance(){
+  const s=STEPS[i];
+  if(s.kind==='optional'){ go(returnTo!=null?returnTo:0); returnTo=null; return; }
+  const n=spine.indexOf(s);
+  if(n < spine.length-1) go(idOf(spine[n+1].id));
+}
+function go(idx){ i=(idx+STEPS.length)%STEPS.length; render(); }
+
+document.getElementById('back').onclick=()=>{
+  if(STEPS[i].kind==='optional' && returnTo!=null){ go(returnTo); returnTo=null; return; }
+  if(i>0) go(i-1);
+};
+document.getElementById('restart').onclick=()=>go(0);
+document.querySelectorAll('.optlink').forEach(b=>{
+  b.onclick=()=>{ if(STEPS[i].kind!=='optional') returnTo=i; go(idOf(b.dataset.opt)); };
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight')advance();
+  if(e.key==='ArrowLeft')document.getElementById('back').click();
+});
+
+// auto-fit iframe height to content
+function postH(){ const h=document.body.scrollHeight;
+  if(window.parent!==window) parent.postMessage({wgcWalkthroughHeight:h},'*'); }
+const ro=new ResizeObserver(postH); ro.observe(document.body);
+window.addEventListener('load',postH);
+const _go=go; go=function(x){_go(x); setTimeout(postH,60);};
+
+render();
+</script>
+</body>
+</html>

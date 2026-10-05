@@ -9,6 +9,7 @@ import { generateReceiptNumber } from "@/lib/giving/receiptNumber";
 import { computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 import { describeInstrumentType } from "@/lib/givingLinks/attempts";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { notifyEvent } from "@/lib/settings/notificationDispatch";
 import { DonationReceiptPdf, type DonationReceiptPdfProps } from "@/lib/giving/pdf/DonationReceiptPdf";
 
 /**
@@ -64,8 +65,15 @@ export async function buildDonationReceiptPdfProps(
   const settings = resolveReceiptSettings(church);
   const orgName = church.statementSenderName || church.name;
 
-  const isAnonymousDisplay = donor?.anonymousPreference || payment.isAnonymous;
-  const donorName = isAnonymousDisplay ? "Anonymous Donor" : formatPersonName(donor?.name || "Donor");
+  // anonymousPreference / Payment.isAnonymous mean "don't show my name
+  // publicly" (donor walls, staff-facing top-donor lists) — they must
+  // never apply here. A receipt is a private tax document sent only to
+  // the donor themselves; blanking their own name on their own copy
+  // doesn't protect anyone's privacy, it just looks like a broken receipt
+  // (2026-09-07 report: a real donor's receipt showed "Anonymous Donor"
+  // instead of their name). Always show the real donor identity on the
+  // document itself.
+  const donorName = formatPersonName(donor?.name || "Donor");
 
   const last4 = instrument?.cardLast4 || instrument?.bankLast4 || null;
   const paymentMethodLabel = `${describeInstrumentType(payment.paymentMethodType)}${last4 ? ` •••• ${last4}` : ""}`;
@@ -87,7 +95,7 @@ export async function buildDonationReceiptPdfProps(
     organizationWebsite: settings.showWebsite ? church.website || null : null,
     organizationTaxId: settings.showTaxId ? church.taxId || null : null,
     donorName,
-    donorEmail: isAnonymousDisplay ? null : donor?.email || null,
+    donorEmail: donor?.email || null,
     donorAddress,
     receiptNumber: snapshot.receiptNumber,
     transactionReference: settings.showDonationReference ? payment.finixTransferId || payment.id : payment.id,
@@ -108,7 +116,12 @@ export async function buildDonationReceiptPdfProps(
   return { props, donorEmail: donor?.email || null, donorName, church };
 }
 
-export async function sendDonationReceipt(paymentId: string, churchId: string, actorUserId: string | null = null) {
+export async function sendDonationReceipt(
+  paymentId: string,
+  churchId: string,
+  actorUserId: string | null = null,
+  additionalRecipients: string[] = []
+) {
   const payment = await prisma.payment.findFirst({ where: { id: paymentId, churchId } });
   if (!payment) throw new Error("Payment not found");
 
@@ -169,6 +182,7 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
 
   const result = await sendWgcEmail({
     to: donorEmail,
+    cc: additionalRecipients,
     subject,
     title: "Thank You for Your Gift",
     badgeText: "Receipt",
@@ -227,4 +241,65 @@ export async function sendDonationReceipt(paymentId: string, churchId: string, a
 
   if (!result.success) throw new Error("Failed to send donation receipt");
   return { receiptNumber, recipientEmail: donorEmail, version: nextVersion };
+}
+
+/**
+ * Sent to the church/seller when a donation completes — the merchant-facing
+ * counterpart to sendDonationReceipt (which goes to the donor). Routes
+ * through notifyEvent so it respects the org's own NotificationPreference
+ * for DONATION_RECEIVED (opt-in by default — see that event's own comment
+ * in notificationEvents.ts for why) and the same recipient priority
+ * (supportEmail -> financeEmail -> primaryContactEmail) as every other
+ * seller-facing notification.
+ *
+ * Call this from the same place(s) sendDonationReceipt is called for a
+ * genuinely new success — the synchronous /api/g/[slug]/donate success path
+ * and the async Finix webhook's PENDING->SUCCEEDED transition — never from
+ * a resend or reconciliation backfill, so an org is only ever notified once
+ * per real donation.
+ */
+export async function notifyMerchantOfNewDonation(paymentId: string, churchId: string) {
+  const payment = await prisma.payment.findFirst({ where: { id: paymentId, churchId } });
+  if (!payment) return;
+
+  const donor = payment.donorId ? await prisma.donor.findUnique({ where: { id: payment.donorId } }) : null;
+  // Matches the anonymous-donor convention already used for staff-facing
+  // surfaces (donor walls, top-donor lists) — see buildDonationReceiptPdfProps's
+  // own comment above for why the donor's *own* receipt is the one place
+  // this never applies.
+  const donorName = payment.isAnonymous ? "An anonymous donor" : formatPersonName(donor?.name || "A donor");
+  const amountCents = payment.donationAmountCents ?? payment.amountCents;
+
+  await notifyEvent({
+    churchId,
+    eventKey: "DONATION_RECEIVED",
+    // Payment.attributedUserId is already the single source of truth for
+    // "who this donation's activity belongs to" — the giving link's own
+    // ownerUserId (self-service, on either the hosted /g/[slug] page or
+    // the embedded widget — both create the Payment through the same
+    // donate route), the staff member who ran Take Payment, or a
+    // recurring charge's inherited subscription attribution (see
+    // resolvePaymentAttributionFromGivingLink / resolveRecurringPaymentAttribution
+    // in attributionSnapshot.ts). Reusing it here — rather than each
+    // caller re-deriving or passing its own actor — means this
+    // notification is correctly attributed on every donation path
+    // automatically, with nothing new to wire up when a new one is added.
+    recipientUserId: payment.attributedUserId,
+    relatedEntityType: "Payment",
+    relatedEntityId: paymentId,
+    subject: `New donation received: ${formatCents(amountCents)}`,
+    title: "New donation received",
+    badgeText: "New Donation",
+    badgeColor: "#16A34A",
+    bodyHtml: `
+      <p>${donorName} gave <strong>${formatCents(amountCents)}</strong>${payment.fundName ? ` to <strong>${payment.fundName}</strong>` : ""}.</p>
+      <table style="width:100%;text-align:left;border-collapse:collapse;margin-top:16px;font-size:14px;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Amount:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${formatCents(amountCents)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Donor:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${donorName}</td></tr>
+        ${payment.fundName ? `<tr><td style="padding:8px 0;"><strong>Fund:</strong></td><td style="padding:8px 0;">${payment.fundName}</td></tr>` : ""}
+      </table>
+    `,
+  });
+
+  await logDashboardAction({ churchId, action: "donation.merchant_notified", entityType: "payment", entityId: paymentId });
 }

@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 import { runSyncJob } from "@/lib/finix/sync/runSyncJob";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
- * Admin-triggered merchant snapshot sync. Protected by src/middleware.ts
- * (all /api/admin/* routes require Basic Auth).
+ * Admin-triggered merchant snapshot sync. middleware.ts's cookie check
+ * alone is signature/expiry-only — it never revokes a disabled admin's or
+ * a just-password-reset admin's existing session — so this route verifies
+ * a real, DB-backed admin session itself via getAdminSession().
  */
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { finixMerchantId, churchId } = await req.json();
 

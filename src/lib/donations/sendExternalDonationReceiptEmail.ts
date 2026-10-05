@@ -29,7 +29,8 @@ import { RECEIPT_METHOD_LABELS, type ExternalPaymentMethod } from "@/lib/donatio
 export async function sendExternalDonationReceiptEmail(
   externalDonationId: string,
   churchId: string,
-  actorUserId: string | null = null
+  actorUserId: string | null = null,
+  additionalRecipients: string[] = []
 ) {
   const donation = await prisma.externalDonation.findFirst({ where: { id: externalDonationId, churchId } });
   if (!donation) throw new Error("External donation not found");
@@ -134,6 +135,7 @@ export async function sendExternalDonationReceiptEmail(
 
   const result = await sendWgcEmail({
     to: donor.email,
+    cc: additionalRecipients,
     subject,
     title: "Thank You for Your Gift",
     badgeText: "Receipt",

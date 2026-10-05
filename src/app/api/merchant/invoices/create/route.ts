@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { parseAndCalculateLineItems, totalsFromParsedItems } from "@/lib/invoices/invoiceLineItemInput";
 import { generateNextInvoiceNumber, isValidCustomInvoiceNumber } from "@/lib/invoices/invoiceNumber";
+import { emitEvent } from "@/lib/events/emitEvent";
 
 function cleanString(value: unknown, maxLength = 500): string | null {
   if (typeof value !== "string") return null;
@@ -164,6 +165,12 @@ export async function POST(req: Request) {
       invoiceAmountCents: invoice.totalCents,
       idempotencyKey: `${invoice.id}:INVOICE_CREATED`,
     }).catch((err) => console.error("Invoice usage ledger recording failed (non-fatal):", err));
+
+    try {
+      await emitEvent({ type: "invoice.created", churchId: auth.churchId, data: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, totalCents: invoice.totalCents, clientId } });
+    } catch (err) {
+      console.error("Failed to emit invoice.created event:", err);
+    }
 
     return NextResponse.json({ success: true, invoice });
   } catch (err) {

@@ -1,16 +1,22 @@
 import { NextResponse } from "next/server";
 import { backfillSettlementDeposits } from "@/lib/finix/sync/backfillSettlementDeposits";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Protected admin backfill for settlements stuck showing UNKNOWN status or
- * no linked merchant deposit. Gated two ways: (1) this whole /api/admin/*
- * path is behind middleware.ts's HTTP Basic Auth, same as every other
- * admin route in this codebase; (2) it additionally requires
- * ALLOW_SETTLEMENT_BACKFILL=true to actually run, so it can never fire in
- * production by accident (e.g. a stray request) without someone having
- * explicitly turned it on for that environment first.
+ * no linked merchant deposit. Gated two ways: (1) requires a real,
+ * DB-backed admin session via getAdminSession() (middleware.ts's own
+ * cookie check alone is signature/expiry-only — it does not revoke a
+ * disabled admin's or a just-password-reset admin's existing session, so
+ * every route in this admin surface must call getAdminSession() itself);
+ * (2) additionally requires ALLOW_SETTLEMENT_BACKFILL=true to actually run,
+ * so it can never fire in production by accident (e.g. a stray request)
+ * without someone having explicitly turned it on for that environment first.
  */
 export async function POST(req: Request) {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   if (process.env.ALLOW_SETTLEMENT_BACKFILL !== "true") {
     return NextResponse.json(
       { error: "Settlement backfill is disabled. Set ALLOW_SETTLEMENT_BACKFILL=true to enable it in this environment." },

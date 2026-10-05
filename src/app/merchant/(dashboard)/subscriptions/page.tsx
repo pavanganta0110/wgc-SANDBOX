@@ -16,6 +16,7 @@ import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPerm
 import { loadSubscriptionsList, type SubscriptionsSortKey } from "@/lib/subscriptions/subscriptionsList";
 import { loadSubscriptionsAnalytics } from "@/lib/subscriptions/subscriptionsAnalytics";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
+import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 
 const PAGE_SIZE = 25;
 
@@ -62,6 +63,13 @@ export default async function SubscriptionsPage({
 
   const viewScope = await resolveViewScope(auth);
   const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+
+  // Self-healing fallback for a missed/delayed subscription.updated webhook
+  // — see subscriptionReconciliation.ts. Throttled to once per subscription
+  // per 5 minutes and bounded to 25 rows, so this stays cheap on repeat
+  // views; awaited before the query below so a merchant sees corrected data
+  // on this same page load, not the next one.
+  await reconcileStaleActiveSubscriptions(churchId);
 
   const [list, analytics] = await Promise.all([
     loadSubscriptionsList(

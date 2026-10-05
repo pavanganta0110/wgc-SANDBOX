@@ -43,7 +43,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
 
       <div className="mt-6 bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-baseline justify-between mb-2">
-          <p className="text-2xl font-bold text-slate-900">{formatCents(progress.totalFulfilledCents)}</p>
+          <p className="text-2xl font-bold text-slate-900">{formatCents(progress.totalRaisedCents)}</p>
           {progress.goalAmountCents != null && (
             <p className="text-sm text-slate-500">of {formatCents(progress.goalAmountCents)} goal</p>
           )}
@@ -53,10 +53,21 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
             <div className="h-full rounded-full bg-indigo-500" style={{ width: `${progress.percentOfGoal}%` }} />
           </div>
         )}
-        <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
+        <p className="mt-1 text-xs text-slate-400">
+          Total raised includes both fulfilled pledges and direct &quot;Give now&quot; donations that were never tied to a pledge.
+        </p>
+        <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
           <div>
             <p className="text-slate-500">Pledged</p>
             <p className="font-semibold text-slate-900">{formatCents(progress.totalPledgedCents)}</p>
+          </div>
+          <div>
+            <p className="text-slate-500">Fulfilled (Pledges)</p>
+            <p className="font-semibold text-slate-900">{formatCents(progress.totalFulfilledCents)}</p>
+          </div>
+          <div>
+            <p className="text-slate-500">Direct Donations</p>
+            <p className="font-semibold text-slate-900">{formatCents(progress.totalDirectDonationCents)}</p>
           </div>
           <div>
             <p className="text-slate-500">Pledges</p>

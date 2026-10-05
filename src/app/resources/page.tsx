@@ -2,7 +2,7 @@ import Link from "next/link";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ScrollFade from "@/components/ui/ScrollFade";
-import { BookOpen, Newspaper, Shield, CreditCard, ArrowRight } from "lucide-react";
+import { BookOpen, Newspaper, Shield, CreditCard, HeartHandshake, ArrowRight } from "lucide-react";
 
 import type { Metadata } from "next";
 
@@ -20,6 +20,13 @@ const RESOURCES = [
     description: "Learn how church and 501(c) organization payment processing works in 2026, including card fees, ACH transfers, and recurring giving.",
     href: "/resources/church-payment-processing-guide-2026",
     icon: CreditCard,
+    tag: "Market Research"
+  },
+  {
+    title: "Best Payment Processor for Nonprofits and 501(c) Organizations in 2026",
+    description: "Learn how nonprofit and 501(c) organization payment processing works in 2026, including membership dues, event ticketing, and recurring giving.",
+    href: "/resources/nonprofit-payment-processing-guide-2026",
+    icon: HeartHandshake,
     tag: "Market Research"
   },
   {

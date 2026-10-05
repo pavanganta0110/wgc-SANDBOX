@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import Sidebar from "@/components/merchant/Sidebar";
+import MobileSidebar from "@/components/merchant/MobileSidebar";
 import LogoutButton from "@/components/merchant/LogoutButton";
 import ComplianceBanner from "@/components/merchant/ComplianceBanner";
 import BillingGateBanner from "@/components/merchant/BillingGateBanner";
@@ -123,15 +124,18 @@ export default async function MerchantDashboardLayout({
       <div className="flex-grow flex">
         <Sidebar role={auth.role ?? undefined} />
         <div className="flex-grow flex flex-col min-w-0">
-          <div className="flex items-center justify-between px-6 md:px-10 py-6 border-b border-slate-100 bg-white">
-            <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
-              <div>
+          <div className="flex items-center justify-between px-4 md:px-10 py-6 border-b border-slate-100 bg-white">
+            <div className="flex items-center gap-2">
+              <MobileSidebar role={auth.role ?? undefined} />
+              <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
+                <div>
                 <h1 className="text-lg font-bold text-slate-900">
                   {isDemoMode ? "Grace Community Church" : church.name}
                 </h1>
                 <p className="text-[11px] text-slate-500">Powered by WGC Payments</p>
               </div>
-            </Link>
+              </Link>
+            </div>
             <div className="flex items-center gap-4">
               {scopeSelector}
               <span className="text-sm text-slate-600 hidden md:inline">

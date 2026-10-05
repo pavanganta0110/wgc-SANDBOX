@@ -93,6 +93,17 @@ export async function applyInvoicePaymentTransferState(finixTransferId: string, 
         console.error("Failed to send invoice ACH settlement receipt email:", err);
       }
     }
+
+    // Gated the same way as the paidAt once-only write above — fires
+    // exactly once, the moment an invoice first reaches PAID.
+    if (derivedStatus === "PAID" && !invoice.paidAt) {
+      try {
+        const { emitEvent } = await import("@/lib/events/emitEvent");
+        await emitEvent({ type: "invoice.paid", churchId: invoice.churchId, data: { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber, totalCents: invoice.totalCents } });
+      } catch (err) {
+        console.error("Failed to emit invoice.paid event:", err);
+      }
+    }
   }
 
   return { status: newStatus, applied: true };

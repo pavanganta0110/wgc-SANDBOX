@@ -208,7 +208,7 @@ export default async function MerchantDashboardPage({
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <h3 className="text-sm font-bold text-slate-900 mb-4">Total Transaction Volume and Count</h3>
-          <BarChart data={volumeTrend} formatValue={(n) => `$${n.toFixed(0)}`} />
+          <BarChart data={volumeTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Total Transaction Volume and Count" />
         </div>
       </div>
 
@@ -232,12 +232,12 @@ export default async function MerchantDashboardPage({
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-900 mb-4">Settlement Volume (Weekly)</h3>
-        <BarChart data={settlementTrend} formatValue={(n) => `$${n.toFixed(0)}`} />
+        <BarChart data={settlementTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Settlement Volume (Weekly)" />
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-900 mb-4">Merchant Deposits (Weekly)</h3>
-        <BarChart data={depositTrend} formatValue={(n) => `$${n.toFixed(0)}`} />
+        <BarChart data={depositTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Merchant Deposits (Weekly)" />
       </div>
         </div>
 

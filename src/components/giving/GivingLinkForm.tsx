@@ -14,6 +14,7 @@ import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, ty
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 import { trackMetaEvent } from "@/components/common/MetaPixel";
+import { resolveInitialDonationState } from "@/lib/givingLinks/defaultDonationSettings";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 
@@ -75,6 +76,8 @@ export default function GivingLinkForm({
   quantityItemLabel,
   recurringEnabled,
   allowedFrequencies,
+  defaultDonationType,
+  defaultRecurringAmountCents,
   allowedPaymentMethods,
   feeCoverEnabled,
   feeCoverDefaultOn,
@@ -91,6 +94,7 @@ export default function GivingLinkForm({
   fundSelectionEnabled = false,
   assignedFunds = [],
   pledgeId,
+  eventMode,
   onFormError,
   onResult,
 }: {
@@ -107,6 +111,10 @@ export default function GivingLinkForm({
   quantityItemLabel?: string | null;
   recurringEnabled: boolean;
   allowedFrequencies: FrequencyKey[];
+  /** Which option the form opens on. Omitted/unrecognized = ONE_TIME (every existing giving page). Only honored while recurringEnabled — the donor can always switch. */
+  defaultDonationType?: string | null;
+  /** Amount pre-selected when the form opens as Recurring (VARIABLE-amount pages only). The donor can always change it. */
+  defaultRecurringAmountCents?: number | null;
   allowedPaymentMethods: PaymentMethodKey[];
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
@@ -129,16 +137,61 @@ export default function GivingLinkForm({
   assignedFunds?: AssignedActiveFund[];
   /** Optional campaign pledge this donation should be tagged against — passed straight through to /donate as pledgeId, server-validated there. */
   pledgeId?: string;
+  /**
+   * Event registration checkout (src/components/events/EventRegistrationForm.tsx).
+   * When set, the amount is dictated by the parent (the server-computed
+   * registration total) instead of chosen here, the recurring/amount/fund
+   * sections are hidden, and the donate request is tagged with the
+   * registration it pays for. beforeCharge runs after local validation and
+   * before any tokenization/charge — it creates (or refreshes) the PENDING
+   * registration server-side and returns its id; returning null aborts the
+   * submit. The success/pending screens are left to the parent. Entirely
+   * inert when omitted, which is every ordinary giving page.
+   */
+  eventMode?: {
+    totalCents: number;
+    phoneRequired: boolean;
+    /** Event-side checks (required answers, attendee names) that must pass before any wallet sheet opens. Returns a message to show, or null when fine. */
+    validate?: () => string | null;
+    beforeCharge: (registrant: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      mailingAddress: Record<string, string | undefined> | undefined;
+    }) => Promise<{ registrationId: string } | null>;
+  };
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
   onResult?: (result: ResultState) => void;
 }) {
-  const [amountCents, setAmountCents] = useState<number>(fixedAmountCents ?? suggestedAmountsCents[0] ?? 2500);
-  const [customAmount, setCustomAmount] = useState("");
+  // What the form opens on — computed once at mount (like every other
+  // initial value here), so it never fights the donor's own later choices.
+  const [initialDonation] = useState(() =>
+    resolveInitialDonationState({
+      recurringEnabled,
+      allowedFrequencies,
+      defaultDonationType,
+      defaultRecurringAmountCents,
+      amountType,
+      fixedAmountCents,
+      minAmountCents,
+      maxAmountCents,
+      suggestedAmountsCents,
+      allowCustomAmount,
+    })
+  );
+  const [amountCents, setAmountCents] = useState<number>(initialDonation.amountCents);
+  const [customAmount, setCustomAmount] = useState(initialDonation.customAmount);
   const [quantity, setQuantity] = useState(0);
   const [extraAmount, setExtraAmount] = useState("");
-  const [isRecurring, setIsRecurring] = useState(false);
+  // Live BIN-detected card brand — see mountFinixPaymentForm's onUpdate.
+  // Only ever affects the client-side fee PREVIEW below; the actual charge
+  // always uses the real brand Finix reports at tokenization time
+  // server-side, regardless of whether this detection fires.
+  const [detectedCardBrand, setDetectedCardBrand] = useState<string | null>(null);
+  const [isRecurring, setIsRecurring] = useState(initialDonation.isRecurring);
   const [frequency, setFrequency] = useState<FrequencyKey>(allowedFrequencies[0] ?? "MONTHLY");
   const [coverFees, setCoverFees] = useState(feeCoverDefaultOn);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank">(
@@ -179,12 +232,24 @@ export default function GivingLinkForm({
   const [addressPostalCode, setAddressPostalCode] = useState("");
   const [addressCountry, setAddressCountry] = useState("US");
   const [saveAddress, setSaveAddress] = useState(false);
-  // Only sent — and only ever persisted — when the donor both filled it in
-  // AND checked "Save this as my mailing address." Per spec, an address
-  // entered without the checkbox is never stored as the donor's permanent
-  // mailing address.
+  // A church can require a mailing address per giving link rather than the
+  // 6 address sub-fields independently — street/apartment/city/state/
+  // postalCode/country all exist as separate DonorFieldKeys for historical
+  // reasons, but requiring, say, State without City makes no sense as a
+  // donor-facing rule. `street`'s setting is the single bundled driver;
+  // GivingLinkBuilderForm.tsx's admin UI only ever sets it alongside
+  // collectMailingAddress, never independently of the other address keys.
+  const addressRequired = collectMailingAddress && donorFieldSettings.street === "REQUIRED";
+
+  // Optional case (unchanged): only sent — and only ever persisted — when
+  // the donor both filled it in AND checked "Save this as my mailing
+  // address." Per spec, an address entered without the checkbox is never
+  // stored as the donor's permanent mailing address.
+  // Required case: always sent once filled in. There's no separate save
+  // checkbox to gate on when the field is mandatory for the gift itself —
+  // see the JSX below, which doesn't render that checkbox in this case.
   const mailingAddressPayload =
-    saveAddress && addressLine1.trim()
+    (addressRequired || saveAddress) && addressLine1.trim()
       ? {
           addressLine1: addressLine1.trim(),
           addressLine2: addressLine2.trim() || undefined,
@@ -224,12 +289,16 @@ export default function GivingLinkForm({
   }, []);
 
   useEffect(() => {
-    if (addressOpen && !addressOpenedOnce) {
+    // Required sections never collapse (see the JSX below), so they're
+    // effectively "opened" on first render — without this OR, a required
+    // address section would never fire this event at all, since addressOpen
+    // itself stays false and its toggle button doesn't exist in that case.
+    if ((addressOpen || addressRequired) && !addressOpenedOnce) {
       setAddressOpenedOnce(true);
       if (!previewMode) trackMetaEvent("MailingAddressSectionOpened");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressOpen]);
+  }, [addressOpen, addressRequired]);
 
   const [addressCompletedTracked, setAddressCompletedTracked] = useState(false);
   useEffect(() => {
@@ -265,13 +334,30 @@ export default function GivingLinkForm({
   const lastNameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
+  const addressLine1Ref = useRef<HTMLInputElement>(null);
+  const addressCityRef = useRef<HTMLInputElement>(null);
+  // Two refs, not one union-typed ref — React's `ref` prop is invariant per
+  // element type, and which element renders (a <select> for US, an <input>
+  // for everywhere else) depends on addressCountry. focusFirstMissingDonorField
+  // below picks whichever one is actually mounted.
+  const addressStateSelectRef = useRef<HTMLSelectElement>(null);
+  const addressStateInputRef = useRef<HTMLInputElement>(null);
+  const addressPostalCodeRef = useRef<HTMLInputElement>(null);
 
   const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const phoneDigitCount = (value: string) => value.replace(/\D/g, "").length;
 
-  const donorInfoValid = Boolean(
-    firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneDigitCount(phone) >= 10
-  );
+  // Event registrations make the registrant's phone optional unless the
+  // event requires it — a typed-but-short number is still rejected.
+  const phoneOk = eventMode
+    ? phoneDigitCount(phone) >= 10 || (phone.trim() === "" && !eventMode.phoneRequired)
+    : phoneDigitCount(phone) >= 10;
+  const donorInfoValid = Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneOk);
+
+  // addressRequired is declared above, alongside mailingAddressPayload.
+  const mailingAddressValid =
+    !addressRequired ||
+    Boolean(addressLine1.trim() && addressCity.trim() && addressState.trim() && addressPostalCode.trim());
 
   function focusFirstMissingDonorField() {
     if (!firstName.trim()) {
@@ -289,9 +375,32 @@ export default function GivingLinkForm({
       emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (phoneDigitCount(phone) < 10) {
+    if (!phoneOk) {
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressRequired) return;
+    setAddressOpen(true);
+    if (!addressLine1.trim()) {
+      addressLine1Ref.current?.focus();
+      addressLine1Ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressCity.trim()) {
+      addressCityRef.current?.focus();
+      addressCityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressState.trim()) {
+      const stateEl = addressCountry === "US" ? addressStateSelectRef.current : addressStateInputRef.current;
+      stateEl?.focus();
+      stateEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (!addressPostalCode.trim()) {
+      addressPostalCodeRef.current?.focus();
+      addressPostalCodeRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
@@ -304,8 +413,9 @@ export default function GivingLinkForm({
   // happens to be selected — kept separate from the card/bank form's own
   // paymentMethod-driven totalCents/feeCoveredCents declared further below.
   const extraAmountCents = extraAmount ? Math.round(parseFloat(extraAmount) * 100) || 0 : 0;
-  const effectiveAmountCents =
-    amountType === "FIXED"
+  const effectiveAmountCents = eventMode
+    ? eventMode.totalCents
+    : amountType === "FIXED"
       ? (fixedAmountCents ?? 0)
       : amountType === "FIXED_QUANTITY"
         ? (fixedAmountCents ?? 0) * quantity + extraAmountCents
@@ -328,6 +438,24 @@ export default function GivingLinkForm({
   ): Promise<{ success: boolean }> => {
     setWalletSubmitting(true);
     try {
+      // Event registration: the wallet has authorized, but nothing has been
+      // charged yet — create/refresh the PENDING registration now so the
+      // charge below can be tied to it. If that fails, nothing is charged.
+      let eventRegistrationId: string | undefined;
+      if (eventMode) {
+        const registration = await eventMode.beforeCharge({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim() || walletResult.billingContact.email || "",
+          phone: phone.trim(),
+          mailingAddress: mailingAddressPayload,
+        });
+        if (!registration) {
+          setWalletProcessing(null);
+          return { success: false };
+        }
+        eventRegistrationId = registration.registrationId;
+      }
       walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
       // getFraudSessionId has no internal timeout — on a slow mobile
       // connection (or if cdn.sift.com is blocked/slow) it can hang
@@ -354,6 +482,7 @@ export default function GivingLinkForm({
           clientAttemptId: attemptId,
           fundId: selectedFundId || undefined,
           pledgeId: pledgeId || undefined,
+          eventRegistrationId,
           // Donor Information is now required and collected before any
           // wallet button is reachable (see donorInfoValid gating below),
           // so the entered fields — not the wallet's own billing contact,
@@ -446,8 +575,12 @@ export default function GivingLinkForm({
       toast("This is a preview — no real payment session is started.");
       return;
     }
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -457,6 +590,11 @@ export default function GivingLinkForm({
     }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
+      return;
+    }
+    const eventProblem = eventMode?.validate?.();
+    if (eventProblem) {
+      toast.error(eventProblem);
       return;
     }
     if (walletProcessing !== null) return;
@@ -508,8 +646,12 @@ export default function GivingLinkForm({
       toast("This is a preview — no real payment session is started.");
       return;
     }
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -519,6 +661,11 @@ export default function GivingLinkForm({
     }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
+      return;
+    }
+    const eventProblem = eventMode?.validate?.();
+    if (eventProblem) {
+      toast.error(eventProblem);
       return;
     }
     if (!googlePayGatewayMerchantId) return;
@@ -656,7 +803,7 @@ export default function GivingLinkForm({
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
     };
-    createGooglePayButton(config, () => handleGooglePayClickRef.current())
+    createGooglePayButton(config, () => handleGooglePayClickRef.current(), eventMode ? "pay" : "donate")
       .then((button) => {
         if (cancelled || !googlePayButtonRef.current) {
           walletLog("Google Pay: button created but discarded (cancelled or ref gone)");
@@ -681,10 +828,22 @@ export default function GivingLinkForm({
     if (container) container.innerHTML = "";
     formInstanceRef.current = null;
     setFormReady(false);
+    setDetectedCardBrand(null);
 
     mountFinixPaymentForm("giving-link-finix-form", APPLICATION_ID, {
       paymentMethods: [paymentMethod],
       showAddress: false,
+      onUpdate: (_state, binInformation) => {
+        if (paymentMethod !== "card") return;
+        // Confirmed against Finix's own hosted-form bundle (js.finix.com/v/2/application/app.js):
+        // BIN_INFORMATION_UPDATED posts { cardBrand, bin } — cardBrand is a
+        // card-validator-style string (e.g. "american-express"), not
+        // "brand"/"card_brand"/"network" as originally guessed, which is why
+        // this never actually updated the preview despite being wired up.
+        const info = binInformation as { cardBrand?: string | null } | undefined;
+        const brand = info?.cardBrand || null;
+        setDetectedCardBrand((prev) => (brand ? brand : prev));
+      },
     })
       .then((instance) => {
         if (cancelled) return;
@@ -705,14 +864,14 @@ export default function GivingLinkForm({
   const feeResult = calculateWgcFeeAmounts({
     donationAmountCents: effectiveAmountCents || 0,
     paymentMethod: paymentMethod === "bank" ? "ACH" : "CARD",
-    cardBrand: null,
+    cardBrand: paymentMethod === "card" ? detectedCardBrand : null,
     donorCoversFee: feeCoverEnabled ? coverFees : false,
   });
-  
+
   const donorCoveredFeeResult = calculateWgcFeeAmounts({
     donationAmountCents: effectiveAmountCents || 0,
     paymentMethod: paymentMethod === "bank" ? "ACH" : "CARD",
-    cardBrand: null,
+    cardBrand: paymentMethod === "card" ? detectedCardBrand : null,
     donorCoversFee: true,
   });
   
@@ -748,8 +907,12 @@ export default function GivingLinkForm({
     // required section above the payment options for every method —
     // card/bank/Apple Pay/Google Pay all enforce the same donorInfoValid
     // rule rather than each having its own partial check.
-    if (!donorInfoValid) {
-      toast.error("Enter your name, email, and phone number to continue.");
+    if (!donorInfoValid || !mailingAddressValid) {
+      toast.error(
+        !donorInfoValid
+          ? "Enter your name, email, and phone number to continue."
+          : "A mailing address is required for this gift."
+      );
       focusFirstMissingDonorField();
       return;
     }
@@ -766,6 +929,26 @@ export default function GivingLinkForm({
     setResult({ step: "processing" });
 
     try {
+      // Event registration: create/refresh the PENDING registration (and
+      // learn its id) before touching the card, so a validation problem on
+      // the event side never costs the registrant a tokenization attempt.
+      let eventRegistrationId: string | undefined;
+      if (eventMode) {
+        const registration = await eventMode.beforeCharge({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          mailingAddress: mailingAddressPayload,
+        });
+        if (!registration) {
+          setSubmitting(false);
+          setResult({ step: "form" });
+          return;
+        }
+        eventRegistrationId = registration.registrationId;
+      }
+
       // For ACH/bank payments, Finix.Auth callback never fires — skip it.
       // The backend already omits fraud_session_id for bank transfers.
       const fraudSessionId = paymentMethod === "bank" ? "" : await getFraudSessionId(finixMerchantId);
@@ -807,6 +990,7 @@ export default function GivingLinkForm({
               clientAttemptId: attemptId,
               fundId: selectedFundId || undefined,
               pledgeId: pledgeId || undefined,
+              eventRegistrationId,
               donor: {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
@@ -880,6 +1064,11 @@ export default function GivingLinkForm({
     }
   };
 
+  // Event registrations show their own confirmation (it needs the
+  // confirmation code, attendee list, and event details) — the parent reads
+  // the result through onResult.
+  if (eventMode && (result.step === "success" || result.step === "pending")) return null;
+
   if (result.step === "success") {
     return (
       <div className="text-center space-y-4 py-4">
@@ -896,7 +1085,7 @@ export default function GivingLinkForm({
           <div className="text-sm space-y-1" style={{ color: light.bodyTextColor }}>
             <p>Donation Amount: <span className="font-semibold">{formatCents(result.donationAmountCents)}</span></p>
             {result.feeCoveredCents > 0 && (
-              <p>Processing Fee Covered: <span className="font-semibold">{formatCents(result.feeCoveredCents)}</span></p>
+              <p>Transaction Cost Covered: <span className="font-semibold">{formatCents(result.feeCoveredCents)}</span></p>
             )}
             <p>Total Charged: <span className="font-semibold">{formatCents(result.totalCents)}</span></p>
           </div>
@@ -959,7 +1148,7 @@ export default function GivingLinkForm({
       <div className="text-center space-y-4 py-4">
         <AlertCircle className="w-12 h-12 mx-auto text-red-500" />
         <h2 className="text-lg font-bold" style={{ color: light.headingColor }}>
-          Donation Was Not Completed
+          {eventMode ? "Payment Was Not Completed" : "Donation Was Not Completed"}
         </h2>
         <p className="text-sm text-red-600">{result.error}</p>
         <button
@@ -996,7 +1185,7 @@ export default function GivingLinkForm({
           <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
         </div>
       )}
-      {recurringEnabled && (
+      {recurringEnabled && !eventMode && (
         <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
           <button
             onClick={() => setIsRecurring(false)}
@@ -1033,6 +1222,16 @@ export default function GivingLinkForm({
         </div>
       )}
 
+      {eventMode ? (
+        <div>
+          <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
+            Amount due
+          </label>
+          <p className="text-2xl font-bold" style={{ color: light.headingColor }}>
+            {formatCents(eventMode.totalCents)}
+          </p>
+        </div>
+      ) : (
       <div>
         <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
           Amount
@@ -1124,6 +1323,7 @@ export default function GivingLinkForm({
           </>
         )}
       </div>
+      )}
 
       {fundSelectionEnabled && assignedFunds.length > 0 && (
         <div>
@@ -1157,7 +1357,7 @@ export default function GivingLinkForm({
           number), so this was previously uncollectable for wallet gifts. */}
       <div>
         <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
-          Donor Information
+          {eventMode ? "Registrant Information" : "Donor Information"}
         </h3>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
@@ -1229,15 +1429,15 @@ export default function GivingLinkForm({
         </div>
         <div>
           <label htmlFor="donor-phone" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
-            Phone <span aria-hidden="true">*</span>
+            Phone {(!eventMode || eventMode.phoneRequired) && <span aria-hidden="true">*</span>}
           </label>
           <input
             id="donor-phone"
             ref={phoneRef}
             type="tel"
-            required
-            aria-required="true"
-            placeholder="Phone"
+            required={!eventMode || eventMode.phoneRequired}
+            aria-required={!eventMode || eventMode.phoneRequired}
+            placeholder={eventMode && !eventMode.phoneRequired ? "Phone (optional)" : "Phone"}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1246,25 +1446,39 @@ export default function GivingLinkForm({
         </div>
         {collectMailingAddress && (
           <div className="mb-3 rounded-lg border" style={{ borderColor: light.borderColor }}>
-            <button
-              type="button"
-              onClick={() => setAddressOpen((v) => !v)}
-              className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
-              style={{ color: light.bodyTextColor }}
-              aria-expanded={addressOpen}
-            >
-              <span>Add mailing address (optional)</span>
-              <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
-                ▾
-              </span>
-            </button>
-            {addressOpen && (
+            {addressRequired ? (
+              <div className="px-3 py-2.5 text-sm font-medium" style={{ color: light.bodyTextColor }}>
+                Mailing Address <span aria-hidden="true">*</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddressOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-medium"
+                style={{ color: light.bodyTextColor }}
+                aria-expanded={addressOpen}
+              >
+                <span>Add mailing address (optional)</span>
+                <span aria-hidden="true" style={{ transform: addressOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }}>
+                  ▾
+                </span>
+              </button>
+            )}
+            {/* Required sections never collapse — there's no toggle button
+                above to reopen them, so gating on addressOpen here too would
+                make a "required" field impossible to fill in. */}
+            {(addressRequired || addressOpen) && (
               <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: light.borderColor }}>
                 <p className="text-xs" style={{ color: light.bodyTextColor, opacity: 0.7 }}>
-                  Used for mailed receipts and annual giving statements.
+                  {addressRequired
+                    ? "Required for this gift — used to send you a thank-you card, mailed receipts, and annual giving statements."
+                    : "Used for mailed receipts and annual giving statements."}
                 </p>
                 <input
-                  placeholder="Address line 1"
+                  ref={addressLine1Ref}
+                  required={addressRequired}
+                  aria-required={addressRequired}
+                  placeholder={addressRequired ? "Address line 1 *" : "Address line 1"}
                   value={addressLine1}
                   onChange={(e) => setAddressLine1(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1279,7 +1493,10 @@ export default function GivingLinkForm({
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <input
-                    placeholder="City"
+                    ref={addressCityRef}
+                    required={addressRequired}
+                    aria-required={addressRequired}
+                    placeholder={addressRequired ? "City *" : "City"}
                     value={addressCity}
                     onChange={(e) => setAddressCity(e.target.value)}
                     className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1287,12 +1504,15 @@ export default function GivingLinkForm({
                   />
                   {addressCountry === "US" ? (
                     <select
+                      ref={addressStateSelectRef}
+                      required={addressRequired}
+                      aria-required={addressRequired}
                       value={addressState}
                       onChange={(e) => setAddressState(e.target.value)}
                       className="px-3 py-2 rounded-lg border text-sm outline-none"
                       style={{ borderColor: light.borderColor }}
                     >
-                      <option value="">State</option>
+                      <option value="">{addressRequired ? "State *" : "State"}</option>
                       {US_STATES.map((s) => (
                         <option key={s} value={s}>
                           {s}
@@ -1301,7 +1521,10 @@ export default function GivingLinkForm({
                     </select>
                   ) : (
                     <input
-                      placeholder="State / Province"
+                      ref={addressStateInputRef}
+                      required={addressRequired}
+                      aria-required={addressRequired}
+                      placeholder={addressRequired ? "State / Province *" : "State / Province"}
                       value={addressState}
                       onChange={(e) => setAddressState(e.target.value)}
                       className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1309,7 +1532,14 @@ export default function GivingLinkForm({
                     />
                   )}
                   <input
-                    placeholder={addressCountry === "US" ? "ZIP code" : "Postal code"}
+                    ref={addressPostalCodeRef}
+                    required={addressRequired}
+                    aria-required={addressRequired}
+                    placeholder={
+                      addressRequired
+                        ? `${addressCountry === "US" ? "ZIP code" : "Postal code"} *`
+                        : addressCountry === "US" ? "ZIP code" : "Postal code"
+                    }
                     value={addressPostalCode}
                     onChange={(e) => setAddressPostalCode(e.target.value)}
                     className="px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1326,10 +1556,12 @@ export default function GivingLinkForm({
                   <option value="CA">Canada</option>
                   <option value="OTHER">Other</option>
                 </select>
-                <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
-                  <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
-                  Save this as my mailing address for receipts and annual statements
-                </label>
+                {!addressRequired && (
+                  <label className="flex items-center gap-2 text-xs pt-1" style={{ color: light.bodyTextColor }}>
+                    <input type="checkbox" checked={saveAddress} onChange={(e) => setSaveAddress(e.target.checked)} />
+                    Save this as my mailing address for receipts and annual statements
+                  </label>
+                )}
               </div>
             )}
           </div>
@@ -1343,7 +1575,7 @@ export default function GivingLinkForm({
             style={{ borderColor: light.borderColor }}
           />
         )}
-        {isFieldVisible("anonymousDonation") && (
+        {!eventMode && isFieldVisible("anonymousDonation") && (
           <label className="flex items-center gap-2 text-sm mt-3" style={{ color: light.bodyTextColor }}>
             <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
             Give anonymously
@@ -1355,8 +1587,8 @@ export default function GivingLinkForm({
         <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
-            I&apos;ll cover the {formatCents(feeCoveredCents)} processing fee so my full{" "}
-            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
+            I&apos;ll cover the {formatCents(feeCoveredCents)} transaction cost so my full{" "}
+            {formatCents(effectiveAmountCents)} {eventMode ? "goes" : "gift goes"} to {churchName}.
           </span>
         </label>
       )}
@@ -1423,14 +1655,14 @@ export default function GivingLinkForm({
                       <apple-pay-button
                         ref={applePayButtonRef}
                         buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
-                        type="donate"
+                        type={eventMode ? "plain" : "donate"}
                         locale="en-US"
                         style={{ width: "100%", height: "44px", display: "block" }}
                       />
                     </>
                   )}
                   {walletProcessing === "apple_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
                   )}
                 </div>
               )}
@@ -1455,7 +1687,7 @@ export default function GivingLinkForm({
                     <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
                   )}
                   {walletProcessing === "google_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
                   )}
                 </div>
               )}
@@ -1507,7 +1739,13 @@ export default function GivingLinkForm({
         className="w-full py-3 rounded-xl font-bold disabled:opacity-50"
         style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}
       >
-        {submitting ? "Processing donation…" : `Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`}
+        {submitting
+          ? eventMode
+            ? "Processing registration…"
+            : "Processing donation…"
+          : eventMode
+            ? `Pay ${formatCents(totalCents)} & Register`
+            : `Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`}
       </button>
     </div>
   );

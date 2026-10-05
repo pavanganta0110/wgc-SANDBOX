@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runSyncJob } from "@/lib/finix/sync/runSyncJob";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Syncs merchant + transfers + settlements + disputes + fees + payouts (+
@@ -13,6 +14,9 @@ import { runSyncJob } from "@/lib/finix/sync/runSyncJob";
  * the Finix Dashboard for that merchant.
  */
 export async function POST() {
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const churches = await prisma.church.findMany({
     where: { finixMerchantId: { not: null } },
   });

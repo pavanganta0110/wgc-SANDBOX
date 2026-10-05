@@ -73,6 +73,18 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canExportPledges",
   "canViewEmailLogs",
   "canResendEmails",
+  "canViewFundraisingCampaigns",
+  "canCreateFundraisingCampaign",
+  "canEditFundraisingCampaign",
+  "canArchiveFundraisingCampaign",
+  "canManageCampaignRoster",
+  "canManageWebhooks",
+  "canManageApiKeys",
+  "canManageMigrations",
+  "canViewEvents",
+  "canManageEvents",
+  "canManageEventAttendees",
+  "canExportEvents",
 ];
 
 /**
@@ -182,6 +194,18 @@ export function resolveEffectivePermissions(
       canExportPledges: false,
       canViewEmailLogs: false,
       canResendEmails: false,
+      canViewFundraisingCampaigns: false,
+      canCreateFundraisingCampaign: false,
+      canEditFundraisingCampaign: false,
+      canArchiveFundraisingCampaign: false,
+      canManageCampaignRoster: false,
+      canManageWebhooks: false,
+      canManageApiKeys: false,
+      canManageMigrations: false,
+      canViewEvents: false,
+      canManageEvents: false,
+      canManageEventAttendees: false,
+      canExportEvents: false,
     };
   }
 

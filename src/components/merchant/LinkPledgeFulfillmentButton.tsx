@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCents } from "@/lib/format";
 import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
 
 interface DonationOption {
   id: string;
@@ -39,7 +40,7 @@ export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: st
       const res = await fetch(`/api/merchant/pledges/${pledgeId}/fulfillments`);
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not load donations");
+        setError(extractApiErrorMessage(data, "Could not load donations"));
         setLoading(false);
         return;
       }
@@ -63,7 +64,7 @@ export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: st
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Could not link donation");
+        setError(extractApiErrorMessage(data, "Could not link donation"));
         setSubmitting(false);
         return;
       }

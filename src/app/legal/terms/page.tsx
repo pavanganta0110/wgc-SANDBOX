@@ -179,21 +179,47 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">16. Suspension / Termination</h2>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">16. SMS Account Verification</h2>
+              <p>
+                WGC Payments provides optional SMS account verification / two-factor authentication for merchant/account users. A user
+                affirmatively enrolls in this feature from their authenticated account under Settings &gt; Security — it is never enabled
+                automatically, and providing a phone number elsewhere on the platform (such as during account registration) does not
+                enroll a user in SMS messaging.
+              </p>
+              <ul className="list-disc pl-6 space-y-2 mt-4">
+                <li>SMS enrollment is optional and is never a condition of creating or using a WGC Payments account.</li>
+                <li>Messages relate solely to authentication and account security — one-time verification codes, not marketing.</li>
+                <li>Message frequency varies based on login and account-security activity.</li>
+                <li>Message and data rates may apply.</li>
+                <li>Reply STOP to opt out at any time; reply HELP for assistance.</li>
+                <li>
+                  Contact <a href="mailto:support@wgcpayments.com" className="text-wgc-navy-600 font-medium hover:underline">support@wgcpayments.com</a>{" "}
+                  for support.
+                </li>
+                <li>Carriers are not liable for delayed or undelivered messages.</li>
+                <li>
+                  See our <Link href="/legal/privacy" className="text-wgc-navy-600 font-medium hover:underline">Privacy Policy</Link> for
+                  how SMS consent and phone number data is handled.
+                </li>
+              </ul>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">17. Suspension / Termination</h2>
               <p>
                 WGC may suspend or terminate access for compliance, risk, non-payment, suspected fraud, dispute issues, inaccurate information, violation of terms, or Finix/processor instruction.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">17. Changes to Terms</h2>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">18. Changes to Terms</h2>
               <p>
                 WGC may update terms with notice. Continued use after notice means acceptance.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">18. Support</h2>
+              <h2 className="text-2xl font-bold text-wgc-navy-900 mb-4 tracking-tight">19. Support</h2>
               <p>
                 For questions, support, or issues regarding your account, please contact us at <strong>support@wgcpayments.com</strong>.
               </p>

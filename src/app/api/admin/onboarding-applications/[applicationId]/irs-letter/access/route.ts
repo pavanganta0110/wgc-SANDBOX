@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentIrsLetter, generateIrsLetterAccessUrl } from "@/lib/onboarding/irsLetterService";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Admin-only: generates a short-lived (5 minute) signed URL to view or
@@ -8,17 +9,21 @@ import { getCurrentIrsLetter, generateIrsLetterAccessUrl } from "@/lib/onboardin
  * only the fact that access occurred (see generateIrsLetterAccessUrl's
  * audit call).
  *
- * Auth: this whole /api/admin/* path family is gated by middleware.ts's
- * HTTP Basic Auth (ADMIN_USERNAME/ADMIN_PASSWORD) before any request
- * reaches here — the same pattern every other /api/admin/* route in this
- * codebase already relies on (none of them do their own session check).
- * Basic Auth carries no per-admin identity, so the audit trail records
- * the actor as "wgc_admin" rather than a specific user id, consistent
- * with how MerchantDocument.uploadedBy already stores "ADMIN" rather than
- * a real user id for admin-side actions.
+ * Auth: requires a real, DB-backed admin session via getAdminSession() —
+ * middleware.ts's own cookie check is signature/expiry-only (this file's
+ * previous comment claiming HTTP Basic Auth gates this route was stale;
+ * this codebase has used signed session cookies for years, not Basic
+ * Auth) and never revokes a disabled admin's or a just-password-reset
+ * admin's existing session on its own. The audit trail now also records
+ * the real admin's own id/email instead of the generic "wgc_admin"
+ * placeholder this route previously always used.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ applicationId: string }> }) {
   const { applicationId } = await params;
+
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const body = await req.json().catch(() => ({}));
   const intent: "view" | "download" = body.intent === "download" ? "download" : "view";
 
@@ -31,8 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ applica
     const { url, expiresInSeconds } = await generateIrsLetterAccessUrl({
       onboardingApplicationId: applicationId,
       documentId: document.id,
-      actorUserId: "wgc_admin",
-      actorRole: "wgc_admin",
+      actorUserId: session.userId,
+      actorRole: session.role,
       intent,
     });
     return NextResponse.json({ url, expiresInSeconds });

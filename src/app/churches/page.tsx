@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CreditCard, Banknote, ShieldCheck, LayoutDashboard, Undo2, ArrowRightLeft } from "lucide-react";
+import { CreditCard, Banknote, ShieldCheck, LayoutDashboard, Undo2, ArrowRightLeft, Heart, Users, Mail, MessageSquare } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import FeatureCard from "@/components/ui/FeatureCard";
@@ -14,19 +14,30 @@ export const metadata: Metadata = {
 
 const CHURCH_FEATURES = [
   {
+    icon: Heart,
+    title: "Donor management",
+    description: "A full donor record — giving history, contact info, and notes — for every member and guest who gives.",
+  },
+  {
     icon: CreditCard,
     title: "Card and ACH donations",
     description: "Accept all major credit cards and low-cost ACH bank transfers directly from your donors.",
   },
   {
-    icon: ShieldCheck,
-    title: "Secure onboarding",
-    description: "Our PCI Level 1 compliant onboarding process ensures your organization's data is verified securely and swiftly.",
+    icon: Mail,
+    title: "Email giving campaigns",
+    description: "Send your giving link straight to a donor list by email for a fund drive or appeal, with per-donor tracking.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Text campaigns",
+    description: "Send your giving link to a donor list by text message.",
+    badge: "Coming Soon",
   },
   {
     icon: LayoutDashboard,
-    title: "Sub-merchant dashboard",
-    description: "Get direct access to your dedicated portal for complete transparency over your operations.",
+    title: "Full giving dashboard",
+    description: "Reporting, settlements, and complete transparency over your organization's giving in one place.",
   },
   {
     icon: ArrowRightLeft,
@@ -36,12 +47,22 @@ const CHURCH_FEATURES = [
   {
     icon: Undo2,
     title: "Refunds & disputes",
-    description: "Easily issue refunds or handle chargeback disputes directly from the sub-merchant dashboard.",
+    description: "Easily issue refunds or handle chargeback disputes directly from your dashboard.",
+  },
+  {
+    icon: Users,
+    title: "Team accounts & permissions",
+    description: "Give staff and volunteers their own logins with Owner, Admin, Fundraiser, or Viewer access.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Secure onboarding",
+    description: "Our PCI Level 1 compliant onboarding process ensures your organization's data is verified securely and swiftly.",
   },
   {
     icon: Banknote,
     title: "Transparent pricing",
-    description: "No hidden fees. A flat stewardship-first rate to ensure more money stays within the ministry.",
+    description: "$0 processing cost when a donor covers the fee, plus a simple $10/month platform fee — no hidden fees.",
   },
 ];
 
@@ -72,10 +93,10 @@ export default function ChurchesPage() {
             <div className="text-center max-w-4xl mx-auto">
               <ScrollFade>
                 <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-8 leading-[1.1]">
-                  Payment rails for <span className="text-wgc-gold-500 italic font-playfair pr-2">churches</span>, nonprofits, and other 501(c) organizations
+                  The giving platform for <span className="text-wgc-gold-500 italic font-playfair pr-2">churches</span>, nonprofits, and other 501(c) organizations
                 </h1>
                 <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto mb-10 leading-relaxed">
-                  WGC Payments helps churches, nonprofits, and other 501(c) organizations accept digital donations through our secure onboarding and payment infrastructure.
+                  Donor management, recurring giving, email campaigns, reporting, settlements, refunds, and team accounts — all in one platform, so your organization spends less time on administration and more on its mission.
                 </p>
                 <div className="flex flex-col sm:flex-row justify-center gap-6">
                   <Link href="/start" className="metallic-gold inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all shadow-2xl hover:-translate-y-1 tracking-wide">
@@ -92,20 +113,21 @@ export default function ChurchesPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-3xl mx-auto mb-16">
               <h2 className="text-3xl md:text-4xl font-bold text-wgc-navy-900 mb-4">
-                Everything your ministry needs
+                Everything your organization needs
               </h2>
               <p className="text-wgc-navy-400">
-                A complete payment ecosystem designed to facilitate generous giving without the headache of legacy processors.
+                A complete giving and operations platform — not just payment processing.
               </p>
             </div>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {CHURCH_FEATURES.map((feature, idx) => (
                 <ScrollFade key={feature.title} delay={idx * 0.1}>
-                  <FeatureCard 
+                  <FeatureCard
                     icon={feature.icon}
                     title={feature.title}
                     description={feature.description}
+                    badge={feature.badge}
                   />
                 </ScrollFade>
               ))}
@@ -114,9 +136,9 @@ export default function ChurchesPage() {
         </section>
 
         {/* CTA SECTION */}
-        <CTASection 
-          headline="Ready to streamline giving?"
-          subheadline="Join the churches, nonprofits, and other 501(c) organizations utilizing our robust payment infrastructure."
+        <CTASection
+          headline="Ready to save time and put more toward the mission?"
+          subheadline="Join the churches, nonprofits, and other 501(c) organizations using WGC to run giving, donors, and operations from one place."
           ctaText="Start Onboarding"
           ctaLink="/start"
         />

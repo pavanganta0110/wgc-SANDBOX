@@ -4,8 +4,9 @@
 
 - **Component**: [`src/components/common/MetaPixel.tsx`](../src/components/common/MetaPixel.tsx) — a client component rendered once from the root layout: [`src/app/layout.tsx`](../src/app/layout.tsx).
 - **Helpers**: [`src/lib/analytics/metaPixel.ts`](../src/lib/analytics/metaPixel.ts) — `getMetaPixelId`, `isMetaPixelEnabled`, `pageView`, `trackEvent`, `trackCustomEvent`. SSR-safe (every function checks `typeof window` before touching it).
+- **Consent**: [`src/lib/analytics/consent.ts`](../src/lib/analytics/consent.ts) (`getStoredConsent`, `setStoredConsent`, `CONSENT_CHANGE_EVENT`) + [`src/components/common/CookieConsentBanner.tsx`](../src/components/common/CookieConsentBanner.tsx), also rendered from the root layout. See "Consent behavior" below.
 
-The component mounts in the root layout so it's structurally present on every route, but it self-excludes on non-public paths (see "Pages covered" below) and no-ops entirely when the pixel ID isn't configured.
+The component mounts in the root layout so it's structurally present on every route, but it self-excludes on non-public paths (see "Pages covered" below), no-ops entirely when the pixel ID isn't configured, and — as of the consent work below — no-ops until the visitor has actually accepted the cookie banner.
 
 ## Pixel ID
 
@@ -56,11 +57,14 @@ Per the requirement to not invent tracking for actions that don't exist, none of
 
 ## Consent behavior
 
-**No cookie/consent banner or consent-gating system exists anywhere in this codebase** (verified by full-codebase search). This was true before this change and remains true after it — this work did not add or remove any consent mechanism.
+**Opt-in consent gating is now implemented** (`src/lib/analytics/consent.ts`, `src/components/common/CookieConsentBanner.tsx`). The pixel script is not injected into the page at all — not even in a suppressed/no-op state — until the visitor explicitly clicks "Accept" on the banner. This is the safer default across both GDPR (requires opt-in before non-essential cookies load) and CCPA (requires opt-out) rather than trying to geo-detect which regime applies to a given visitor.
 
-This means the pixel fires unconditionally for all visitors, in all jurisdictions, once `NEXT_PUBLIC_META_PIXEL_ID` is set in an environment. This is called out explicitly in the final report as something requiring a business/legal decision, not something resolved as part of this implementation — building a consent management platform is a separate, larger scope than "add the pixel," and false Positive/negative consent logic invented without a legal reviewer's input would be worse than clearly flagging the gap.
+How it works:
+- `CookieConsentBanner` renders on the same public-page scope as the pixel itself (`EXCLUDED_PATH_PREFIXES = ["/merchant", "/admin", "/embed"]`), shown whenever `getStoredConsent()` returns `null` (not yet decided). Decisions persist to `localStorage` under the key `wgc_analytics_consent`.
+- `MetaPixel.tsx` only renders the bootstrap `<Script>` (which is what actually defines `window.fbq` and loads `fbevents.js`) when `getStoredConsent() === "granted"`. It listens for `CONSENT_CHANGE_EVENT` on `window`, so clicking Accept loads the pixel immediately in the same page view — no reload needed. Declining (or leaving the banner untouched) means `fbq` never becomes defined and no request to `connect.facebook.net` is ever made.
+- The decision is remembered across visits (persisted in `localStorage`), so returning visitors who already decided don't see the banner again.
 
-If a consent gate is added later, the natural integration point is `MetaPixel.tsx`: wrap the early-return check with a call into whatever consent state the future banner exposes (e.g. `if (!pixelId || isExcludedPath(pathname) || !hasMarketingConsent()) return null;`), and gate `pageView`/`trackEvent`/`trackCustomEvent` in `metaPixel.ts` the same way.
+This does not implement a full consent-management-platform (granular per-vendor toggles, IAB TCF string, etc.) — it's a binary all-analytics accept/decline, which is what this site actually needs today (one pixel, no other trackers). If more trackers are added later, consider whether a fuller CMP is warranted at that point.
 
 ## How to verify the pixel
 

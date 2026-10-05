@@ -20,6 +20,8 @@ export default function GivingLinkPreviewPanel({
   quantityItemLabel,
   recurringEnabled,
   allowedFrequencies,
+  defaultDonationType,
+  defaultRecurringAmountCents,
   allowedPaymentMethods,
   feeCoverEnabled,
   feeCoverDefaultOn,
@@ -49,6 +51,8 @@ export default function GivingLinkPreviewPanel({
   quantityItemLabel?: string | null;
   recurringEnabled: boolean;
   allowedFrequencies: FrequencyKey[];
+  defaultDonationType?: string | null;
+  defaultRecurringAmountCents?: number | null;
   allowedPaymentMethods: PaymentMethodKey[];
   feeCoverEnabled: boolean;
   feeCoverDefaultOn: boolean;
@@ -192,7 +196,11 @@ export default function GivingLinkPreviewPanel({
                     </p>
                   )}
                   <GivingLinkForm
-                    key={formKey}
+                    // The form only reads its default type/amount when it
+                    // mounts, so remount whenever the merchant changes them
+                    // — otherwise the preview would keep showing the old
+                    // starting state until the page was reloaded.
+                    key={`${formKey}-${recurringEnabled ? defaultDonationType ?? "" : ""}-${defaultRecurringAmountCents ?? ""}`}
                     slug="preview"
                     finixMerchantId=""
                     churchName={churchName}
@@ -206,6 +214,8 @@ export default function GivingLinkPreviewPanel({
                     quantityItemLabel={quantityItemLabel}
                     recurringEnabled={recurringEnabled}
                     allowedFrequencies={allowedFrequencies}
+                    defaultDonationType={defaultDonationType}
+                    defaultRecurringAmountCents={defaultRecurringAmountCents}
                     allowedPaymentMethods={allowedPaymentMethods}
                     feeCoverEnabled={feeCoverEnabled}
                     feeCoverDefaultOn={feeCoverDefaultOn}

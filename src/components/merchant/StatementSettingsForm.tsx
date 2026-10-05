@@ -67,7 +67,13 @@ export default function StatementSettingsForm({ initial }: { initial: Settings }
         Show EIN / Tax ID on statements
       </label>
 
-      <Field label="Statement Sender Name" value={values.statementSenderName} onChange={(v) => set("statementSenderName", v)} placeholder={"Defaults to organization name"} />
+      <Field
+        label="Sender Name"
+        value={values.statementSenderName}
+        onChange={(v) => set("statementSenderName", v)}
+        placeholder={"Defaults to organization name"}
+        hint="Used as the signature on receipts, statements, and Giving Campaign emails."
+      />
       <Field label="Reply-To Email" value={values.statementReplyToEmail} onChange={(v) => set("statementReplyToEmail", v)} placeholder="support@yourorganization.org" />
       <Field label="Subject Template" value={values.statementSubjectTemplate} onChange={(v) => set("statementSubjectTemplate", v)} placeholder="Your [YEAR] Year-End Donation Statement from [Organization Name]" />
 
@@ -117,7 +123,7 @@ export default function StatementSettingsForm({ initial }: { initial: Settings }
   );
 }
 
-function Field({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+function Field({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
   return (
     <div>
       <label className="block text-xs font-semibold text-slate-500 mb-1">{label}</label>
@@ -128,6 +134,7 @@ function Field({ label, value, onChange, placeholder }: { label: string; value: 
         placeholder={placeholder}
         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
+      {hint && <p className="text-xs text-slate-400 mt-1">{hint}</p>}
     </div>
   );
 }

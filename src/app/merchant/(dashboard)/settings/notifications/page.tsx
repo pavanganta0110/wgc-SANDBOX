@@ -1,6 +1,6 @@
 import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { NOTIFICATION_EVENTS, DEFAULT_NOTIFICATION_PREFERENCE } from "@/lib/settings/notificationEvents";
+import { NOTIFICATION_EVENTS, resolveNotificationDefault } from "@/lib/settings/notificationEvents";
 import NotificationSettingsForm from "@/components/merchant/NotificationSettingsForm";
 
 export default async function NotificationSettingsPage() {
@@ -10,11 +10,12 @@ export default async function NotificationSettingsPage() {
 
   const preferences = NOTIFICATION_EVENTS.map((event) => {
     const row = byKey.get(event.key);
+    const fallback = resolveNotificationDefault(event);
     return {
       ...event,
-      inAppEnabled: row?.inAppEnabled ?? DEFAULT_NOTIFICATION_PREFERENCE.inAppEnabled,
-      emailEnabled: row?.emailEnabled ?? DEFAULT_NOTIFICATION_PREFERENCE.emailEnabled,
-      frequency: row?.frequency ?? DEFAULT_NOTIFICATION_PREFERENCE.frequency,
+      inAppEnabled: row?.inAppEnabled ?? fallback.inAppEnabled,
+      emailEnabled: row?.emailEnabled ?? fallback.emailEnabled,
+      frequency: row?.frequency ?? fallback.frequency,
     };
   });
 

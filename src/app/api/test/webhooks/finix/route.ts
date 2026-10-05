@@ -2,6 +2,26 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    // Production safety gate — this route exists purely to help test
+    // /api/webhooks/finix's own logic by relaying a request to it (with an
+    // optionally-generated signature). middleware.ts always lets /api/test/*
+    // through and its own comment claims "TEST_WEBHOOK_SECRET, checked by
+    // the route itself" — but until now nothing here ever actually checked
+    // it, leaving this fully unauthenticated in production. Confirmed via
+    // security review: it was only ever non-exploitable by accident (the
+    // signature this route generated used the wrong header key names, so
+    // the real verifier below always rejected it) — fixing that formatting
+    // bug without this gate would have turned it into a live webhook-
+    // forgery oracle. Local dev (no TEST_WEBHOOK_SECRET set, non-production)
+    // keeps working exactly as before.
+    if (process.env.NODE_ENV === "production") {
+      const configuredSecret = process.env.TEST_WEBHOOK_SECRET;
+      const providedSecret = req.headers.get("x-test-webhook-secret");
+      if (!configuredSecret || providedSecret !== configuredSecret) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     const rawBody = await req.text();
     
     // Fire the request to the real webhook endpoint internally to test it
@@ -31,7 +51,13 @@ export async function POST(req: Request) {
         .update(payloadToSign, "utf-8")
         .digest("hex");
         
-      headers["finix-signature"] = `t=${timestamp},v1=${signature}`;
+      // Must match the real verifier's expected key names exactly (see
+      // /api/webhooks/finix's own parsing: "timestamp"/"sig", not "t"/"v1")
+      // — this was previously the accidental reason a forged signature here
+      // always failed verification. Now that the production gate above is
+      // in place, a correctly-shaped signature is what makes this tool
+      // actually useful for its intended purpose again.
+      headers["finix-signature"] = `timestamp=${timestamp},sig=${signature}`;
     } else {
       const sig = req.headers.get("finix-signature");
       if (sig) headers["finix-signature"] = sig;

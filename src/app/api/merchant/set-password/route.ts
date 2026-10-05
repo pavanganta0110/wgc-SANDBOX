@@ -38,13 +38,22 @@ export async function POST(req: Request) {
 
     const passwordHash = await hashPassword(password);
 
-    await prisma.user.update({
+    // authVersion is bumped in the same update — this is also the reset
+    // path (not just first-time invite setup), and a password reset must
+    // kill any other session for this user (e.g. an attacker who stole a
+    // cookie and is still using it) exactly like the in-dashboard change-
+    // password flow does. The auto-login session below is built from this
+    // call's returned (already-incremented) authVersion, not the stale
+    // pre-update value, so the fresh session it creates isn't immediately
+    // invalidated by the bump that just happened.
+    const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
         passwordHash,
         setPasswordTokenHash: null,
         setPasswordTokenExpiresAt: null,
         lastLoginAt: new Date(),
+        authVersion: { increment: 1 },
       },
     });
 
@@ -59,7 +68,7 @@ export async function POST(req: Request) {
         email: user.email,
         role: user.role as SessionPayload["role"],
         churchId: user.churchId,
-        authVersion: user.authVersion,
+        authVersion: updatedUser.authVersion,
       });
     } catch (sessionError) {
       console.error("Password set but auto-login session failed:", sessionError);

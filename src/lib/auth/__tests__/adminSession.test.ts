@@ -66,6 +66,26 @@ describe("getAdminSession", () => {
 
   it("accepts a valid, current wgc_admin session", async () => {
     const { getAdminSession, createSessionToken } = await loadModule();
+    const token = createSessionToken({ userId: "admin-1", email: "admin-1@wgc.com", role: "wgc_admin", churchId: null, passwordChangedAt: null, mfaVerified: true });
+    mockCookieStore.get.mockReturnValue({ value: token });
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: "admin-1",
+      email: "admin-1@wgc.com",
+      name: "Admin One",
+      role: "wgc_admin",
+      disabledAt: null,
+      passwordChangedAt: null,
+      mfaEnabled: true,
+    });
+
+    const session = await getAdminSession();
+    expect(session).toEqual({ userId: "admin-1", email: "admin-1@wgc.com", name: "Admin One", role: "wgc_admin", mfaEnabled: true, mfaVerified: true });
+  });
+
+  it("mfaVerified reflects the TOKEN's claim, not the account's live mfaEnabled flag — a password-only session stays mfaVerified: false even once the account later enables MFA elsewhere", async () => {
+    const { getAdminSession, createSessionToken } = await loadModule();
+    // No mfaVerified on the token at all — a pre-enrollment / password-only
+    // session, same as completeAdminLogin(..., false) would issue.
     const token = createSessionToken({ userId: "admin-1", email: "admin-1@wgc.com", role: "wgc_admin", churchId: null, passwordChangedAt: null });
     mockCookieStore.get.mockReturnValue({ value: token });
     mockPrisma.user.findUnique.mockResolvedValue({
@@ -75,10 +95,15 @@ describe("getAdminSession", () => {
       role: "wgc_admin",
       disabledAt: null,
       passwordChangedAt: null,
+      // DB says MFA is now enabled on the account (e.g. enrolled in a
+      // different, current session) — this stale token must still report
+      // mfaVerified: false.
+      mfaEnabled: true,
     });
 
     const session = await getAdminSession();
-    expect(session).toEqual({ userId: "admin-1", email: "admin-1@wgc.com", name: "Admin One", role: "wgc_admin" });
+    expect(session?.mfaEnabled).toBe(true);
+    expect(session?.mfaVerified).toBe(false);
   });
 
   it("accepts a valid wgc_super_admin session", async () => {

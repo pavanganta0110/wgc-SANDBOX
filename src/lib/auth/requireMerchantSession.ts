@@ -7,6 +7,7 @@ import { normalizeMerchantRole, type NormalizedOrgRole, type RawUserRole } from 
 import { UnauthorizedError, BillingAccessRestrictedError } from "./errors";
 import { resolveOrgAccessState, type OrgAccessState } from "@/lib/billing/accessGate";
 import { resolveActiveImpersonation, type ActiveImpersonation } from "./impersonation";
+import { touchUserActivity } from "@/lib/monitoring/activity";
 
 export interface MerchantAuthContext {
   userId: string;
@@ -112,6 +113,13 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
 
   if (!user) throw new UnauthorizedError("User no longer exists.");
   if (user.disabledAt) throw new UnauthorizedError("This account has been disabled.");
+
+  // Fire-and-forget, self-throttled at the DB level — see
+  // src/lib/monitoring/activity.ts. Never awaited: a slow/failed write
+  // here must never add latency to, or break, this function's auth check.
+  // Covers both branches below (impersonating admin and normal merchant
+  // user) since it only needs "this is a real, non-disabled account."
+  void touchUserActivity(user.id);
 
   const rawRole = user.role as RawUserRole;
 

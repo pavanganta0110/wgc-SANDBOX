@@ -7,6 +7,7 @@ import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFreque
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { loadAllAssignedFunds } from "@/lib/giving/fundAssignment";
+import { parseDefaultDonationType } from "@/lib/givingLinks/defaultDonationSettings";
 
 export default async function EditGivingLinkPage({ params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -65,6 +66,8 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     feeCoverDefaultOn: link.feeCoverDefaultOn,
     recurringEnabled: link.recurringEnabled,
     allowedFrequencies: parseAllowedFrequencies(link.allowedFrequenciesJson),
+    defaultDonationType: parseDefaultDonationType(link.defaultDonationType),
+    defaultRecurringAmount: link.defaultRecurringAmountCents != null ? (link.defaultRecurringAmountCents / 100).toString() : "",
     receiptSettings: parseReceiptSettings(link.receiptSettingsJson),
     statementDescriptor: link.statementDescriptor || "",
     internalNote: link.internalNote || "",

@@ -254,6 +254,13 @@ model EmailLog {
   status                  String
   providerMessageId       String?
   error                   String?
+  /// The actual rendered HTML body sent (or attempted) — previously never
+  /// stored anywhere, so there was no way to see what an email actually
+  /// said after the fact short of the Resend provider's own dashboard
+  /// (2026-09-04 request). Nullable: older rows predate this column, and
+  /// a handful of send paths that don't build a bodyHtml string directly
+  /// (e.g. account-link emails composed inline) may leave it unset.
+  bodyHtml                String?
   sentAt                  DateTime?
   createdAt               DateTime  @default(now())
 }
@@ -305,6 +312,14 @@ model Church {
   finixMerchantId               String?
   finixIdentityId               String?
   finixApplicationId            String?
+  // Auto-release cadence for this merchant's Settlement Queue (see
+  // /admin/merchants/[churchId]/settlements — SettlementQueuePanel).
+  // Weekday numbers matching JS Date.getDay() (0=Sunday..6=Saturday); e.g.
+  // [1] releases once a week (every Monday), [1,4] releases twice a week
+  // (Monday and Thursday). Empty/default = no auto-release, manual only.
+  // Only meaningful while the merchant's settlement_queue_mode is MANUAL —
+  // see /api/cron/release-settlement-queue.
+  settlementAutoReleaseWeekdays  Int[]     @default([])
   // WGC platform-billing gate, checked on every dashboard request (denormalized
   // here for a fast session-level check rather than joining WgcSubscription on
   // every request). Null = grandfathered/no gate (organizations that existed
@@ -326,7 +341,13 @@ model Church {
   // cross-references (see User.invitedByUserId/disabledByUserId) and to keep
   // this migration additive-only.
   primaryOwnerUserId            String?
+  // ACTIVE | TERMINATED. Set to TERMINATED only when Finix itself reports
+  // the merchant account terminated (merchant.updated/underwritten with
+  // is_terminated: true) — see the webhook handler. terminatedAt/
+  // terminationReason are only meaningful when status is TERMINATED.
   status                        String
+  terminatedAt                  DateTime?
+  terminationReason             String?
   // Organization identity used on annual donation statements and the
   // organization profile — not required by onboarding/payments, so all
   // nullable. Intentionally not backfilled from OnboardingApplication:
@@ -780,6 +801,13 @@ model Donor {
   // attached to it, so nothing here is ever hard-deleted.
   mergedIntoDonorId      String?
   mergedAt               DateTime?
+  // How this contact first entered the audience, when it wasn't a payment:
+  // CSV_IMPORT (contact-only import — no donation required) | EVENT
+  // (registered for an event without necessarily ever giving). Null for
+  // every donor created by a payment/subscription/external donation — this
+  // is purely so an email audience can target "imported contacts" without
+  // faking a donation to create the row. Never overwritten once set.
+  contactSource          String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -952,6 +980,13 @@ model Payment {
   achAuthorizationAcceptedAt        DateTime?
   fundName                          String?
   fundId                            String?
+  // Set when this payment fulfills (fully or partially) a campaign Pledge —
+  // either via the public campaign page's "Give now" flow or a merchant
+  // linking an existing payment as evidence. Server-validated to belong to
+  // the same church before being trusted; see donate/route.ts. Never blocks
+  // the donation if the pledge lookup fails — the donation still succeeds
+  // untagged. See the Pledges section below for the full model.
+  pledgeId                          String?
   note                              String?
   isAnonymous                       Boolean   @default(false)
   createdByAdminUserId              String?
@@ -979,11 +1014,6 @@ model Payment {
   merchantExpectedNetCents          Int?
   actualFinixFeesCents              Int?
   finixSubscriptionId               String?
-  // Set when a donor fulfills a Pledge through the normal Finix giving
-  // flow (the public campaign page's "Give now" action). Purely a tag
-  // for rollup/reporting — no Payment behavior branches on it. See
-  // pledgeFulfillment.ts.
-  pledgeId                          String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -991,11 +1021,11 @@ model Payment {
   receipts DonationReceipt[]
 
   @@index([churchId, attributedUserId])
-  @@index([churchId, pledgeId])
   @@index([donorId])
   @@index([finixTransferId])
   @@index([churchId, status])
   @@index([churchId, createdAt])
+  @@index([churchId, pledgeId])
 }
 
 // One immutable snapshot per receipt version sent (or prepared) for a
@@ -1264,6 +1294,47 @@ model PromotionEntitlement {
   @@index([status])
 }
 
+/// One row per organization per calendar month where a monthly compliance
+/// check (see promoShortfallDetection.ts) found the org's actual Finix
+/// processing volume fell below the promo's minimum-processing threshold
+/// while its PromotionEntitlement was ACTIVE. Deliberately review-first, not
+/// auto-charged: the row starts FLAGGED and a WGC billing admin must
+/// explicitly charge or waive it (see promoShortfallCharge.ts) — nothing
+/// automatically moves money. @@unique on (organizationId, billingPeriod)
+/// is the hard guarantee against the detection cron ever double-flagging
+/// (and therefore double-charging) the same org for the same month, even if
+/// the cron somehow runs twice.
+model PromoShortfallCharge {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  promotionEntitlementId String
+  // e.g. "2026-09" — the calendar month that was found short.
+  billingPeriod          String
+  processedVolumeCents   Int
+  thresholdCents         Int
+  // Snapshotted from PromotionEntitlement.normalMonthlyAmountCents at
+  // detection time — the amount an admin's "Charge now" action will
+  // actually charge, immune to a later pricing-template edit.
+  chargeAmountCents      Int
+  currency               String    @default("USD")
+  // FLAGGED | CHARGED | CHARGE_FAILED | WAIVED
+  status                 String    @default("FLAGGED")
+  finixTransferId        String?
+  billingChargeId        String?
+  chargedByUserId        String?
+  chargedAt              DateTime?
+  waivedByUserId         String?
+  waivedAt               DateTime?
+  waiveReason            String?
+  failureMessage         String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([organizationId, billingPeriod])
+  @@index([status])
+  @@index([organizationId])
+}
+
 /// A promotional signup lead, captured server-side the moment a visitor
 /// clicks "Start Six Months Free" on the trusted /six-months-free landing
 /// page — never derived from a client-submitted query parameter, cookie
@@ -1312,7 +1383,8 @@ model BillingCharge {
   id                  String    @id @default(cuid())
   organizationId      String
   // WGC_PLATFORM_SUBSCRIPTION | WGC_INVOICE_ADD_ON | WGC_INVOICE_USAGE |
-  // WGC_PLAN_UPGRADE | PROMOTIONAL_CREDIT | BILLING_ADJUSTMENT | REFUND
+  // WGC_PLAN_UPGRADE | PROMOTIONAL_CREDIT | BILLING_ADJUSTMENT | REFUND |
+  // SMS_ADDON_SUBSCRIPTION | SMS_ADDON_OVERAGE
   chargeType          String
   // e.g. "2027-02" for a monthly billing period; null for one-off charges.
   billingPeriod       String?
@@ -2078,36 +2150,26 @@ model FinixSubscription {
   // correct donor — never auto-matched by name alone.
   needsDonorMatching     Boolean   @default(false)
 
-  // Pledge fields — present only when this subscription was created to
-  // fulfill a fixed-total pledge (e.g. "$600 over 12 months") rather than
-  // an open-ended recurring gift. Finix's own subscriptions API has no
-  // total-amount/installment-count/end-date concept (confirmed in
-  // src/lib/finix/client.ts createSubscription) — Finix only drives
-  // amount + billingInterval on its own schedule. Everything below is
-  // WGC-side bookkeeping, computed/enforced locally by
-  // subscriptionPledgeCompletion.ts, never sent to Finix.
-  isPledge          Boolean @default(false)
-  totalAmountCents  Int?
-  installmentsTotal Int?
-  // Denormalized progress counter, updated only by the completion-check
-  // routine after each reconcile — never authoritative for the
-  // dollar-total decision (lifetimeCollectedCents, computed from
-  // FinixTransfer rows, is authoritative for that). Exists purely so
-  // list views can show "8 of 12 payments" without re-summing transfers
-  // per row. Can diverge from totalAmountCents if amountCents is later
-  // changed via the existing update-amount cancel/recreate flow.
-  installmentsCompleted Int?
-  // Set by the pledge-completion routine the first time the pledge total
-  // is reached, immediately before it calls finixClient.cancelSubscription().
-  // Distinct from completedAt (reserved for Finix itself reporting a
-  // natural end) and from a plain admin cancellation — a pledge-fulfilled
-  // cancellation sets cancelReason = "PLEDGE_FULFILLED" and this
-  // timestamp together.
-  pledgeFulfilledAt DateTime?
-
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   lastSyncedAt DateTime?
+
+  // Installment pledge fields — Finix's subscriptions API (see
+  // src/lib/finix/client.ts) has no total-amount/installment-count/end-date
+  // concept, so a "pledge with a total" is entirely WGC-side bookkeeping
+  // layered on top of an otherwise-ordinary recurring subscription. When
+  // isPledge is true, totalAmountCents is authoritative for the
+  // completion-detection routine (subscriptionPledgeCompletion.ts, wired
+  // into the existing reconciliation sweep); installmentsTotal/
+  // installmentsCompleted are informational only and can diverge from the
+  // dollar total if amountCents is ever changed mid-pledge via the existing
+  // update-amount cancel/recreate flow. pledgeFulfilledAt is set once, the
+  // moment the completion check auto-cancels the subscription.
+  isPledge              Boolean   @default(false)
+  totalAmountCents      Int?
+  installmentsTotal     Int?
+  installmentsCompleted Int?
+  pledgeFulfilledAt     DateTime?
 
   @@index([churchId, donorId])
   @@index([churchId, state])
@@ -2366,6 +2428,34 @@ model User {
   setPasswordTokenHash      String?
   setPasswordTokenExpiresAt DateTime?
   lastLoginAt               DateTime?
+  // Touched (throttled to at most once every 2 minutes per user — see
+  // touchUserActivity() in src/lib/monitoring/activity.ts) on every
+  // successful authenticated request through requireMerchantSession() /
+  // getAdminSession(), unlike lastLoginAt which only ever updates at
+  // sign-in. This is what "Active Now" on System Health is computed from —
+  // nullable/no-default so it's a purely additive column with zero
+  // migration risk on the existing table.
+  lastActiveAt              DateTime?
+  // SMS-based MFA (Settings -> Security). phone/phoneVerifiedAt are the
+  // confirmed, active number once enrollment completes; pendingPhone holds
+  // the number being verified during enrollment (a code is sent there
+  // before it's trusted). mfaCodeHash/mfaCodeExpiresAt/mfaCodeAttempts are
+  // reused for both enrollment codes and login challenge codes — a user is
+  // never in both states at once, same reuse-one-field-set convention as
+  // setPasswordTokenHash serving both invite-setup and password-reset.
+  // mfaCodeAttempts locks out (forces a fresh code) after repeated wrong
+  // guesses against a 6-digit code, which is otherwise brute-forceable.
+  // mfaLoginChallengeId is the opaque token returned to the client during
+  // login instead of the userId itself, so the mfa-verify step never has
+  // the client echo back a real user id.
+  phone                     String?
+  phoneVerifiedAt           DateTime?
+  pendingPhone              String?
+  mfaEnabled                Boolean    @default(false)
+  mfaCodeHash               String?
+  mfaCodeExpiresAt          DateTime?
+  mfaCodeAttempts           Int        @default(0)
+  mfaLoginChallengeId       String?
   // Team & Access (Settings -> Team). A User with passwordHash null and a
   // live setPasswordTokenHash is "invited, pending" — the exact same
   // pattern already used by forgot-password, reused here rather than
@@ -2400,6 +2490,8 @@ model User {
   authAccounts              AuthAccount[]
 
   @@index([churchId])
+  @@index([mfaLoginChallengeId])
+  @@index([lastActiveAt])
 }
 
 model FinixAuthorization {
@@ -2476,6 +2568,14 @@ model GivingLink {
   fundSelectionEnabled      Boolean   @default(false)
   recurringEnabled          Boolean   @default(false)
   allowedFrequenciesJson    Json?
+  // Which option the public form opens on: ONE_TIME (today's behavior, and
+  // the default for every existing link) or RECURRING. RECURRING only takes
+  // effect while recurringEnabled is true; the donor can always switch.
+  defaultDonationType       String    @default("ONE_TIME") // ONE_TIME | RECURRING
+  // Amount pre-selected when the form opens as RECURRING. VARIABLE-amount
+  // links only (a FIXED price can't be pre-empted); the donor can always
+  // pick another amount or type a custom one. Null = no pre-selection.
+  defaultRecurringAmountCents Int?
   allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
   donorFieldSettingsJson    Json?
   // Shows the collapsed "Add mailing address (optional)" accordion on this
@@ -2528,7 +2628,27 @@ model GivingLink {
   merchandiseEnabled      Boolean @default(false)
   merchandiseSettingsJson Json?
 
+  // Peer-to-peer fundraising attribution (see the Fundraising Campaigns
+  // section below) — set when this GivingLink is the dedicated "give"
+  // link auto-provisioned for a FundraisingCampaign, CampaignTeam, or
+  // CampaignFundraiser's public page. Purely additive: a normal,
+  // non-campaign giving link never sets any of these, and the entire
+  // existing checkout/payment/refund/webhook flow is completely
+  // unaffected — a campaign-linked GivingLink is processed exactly like
+  // any other. All three are set together when applicable
+  // (fundraisingCampaignId is always set if campaignTeamId or
+  // campaignFundraiserId is), so a campaign-level total never has to walk
+  // down through team/fundraiser rows. "Amount raised" for a campaign/
+  // team/fundraiser is always computed by summing
+  // totalCollectedCents/refundedCents/returnedCents across its tagged
+  // GivingLink(s) — see src/lib/campaigns/campaignTotals.ts — never
+  // stored redundantly here or on the campaign row itself.
+  fundraisingCampaignId String?
+  campaignTeamId        String?
+  campaignFundraiserId  String?
+
   @@index([churchId, ownerUserId])
+  @@index([fundraisingCampaignId])
 }
 
 model GivingLinkShare {
@@ -2877,11 +2997,6 @@ model ExternalDonation {
   campaign        String?
   givingPageLabel String?
   donationPurpose String?
-  // Set when this offline donation is recorded as fulfillment toward a
-  // Pledge — optional, additive, never required. Does not change any
-  // other invariant on this table; a pledge-linked row is still a normal
-  // ExternalDonation in every other query. See pledgeFulfillment.ts.
-  pledgeId        String?
 
   // Never usernames, passwords, full card/bank numbers — see field-level
   // notes below and the form-layer validation that enforces this.
@@ -2973,6 +3088,25 @@ model ExternalDonation {
   voidedByUserId  String?
   voidReason      String?
 
+  // Set when this offline donation (cash/check/etc) fulfills, in whole or
+  // part, a campaign Pledge — see the Pledges section below. Additive only;
+  // no existing invariant of this model changes when set.
+  pledgeId String?
+
+  // Peer-to-peer fundraising attribution (see the Fundraising Campaigns
+  // section below) — set when a manually-recorded offline gift (cash,
+  // check, etc.) should count toward a FundraisingCampaign's total. All
+  // three are set together when applicable (fundraisingCampaignId is
+  // always set if campaignTeamId or campaignFundraiserId is), so a
+  // campaign-level rollup never has to walk down through team/fundraiser
+  // rows — see src/lib/campaigns/campaignTotals.ts. Distinct from the
+  // pre-existing free-text `campaign` label above, which has no relation
+  // to any campaign record and is left untouched for ad-hoc offline gifts
+  // with no formal FundraisingCampaign.
+  fundraisingCampaignId String?
+  campaignTeamId        String?
+  campaignFundraiserId  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -2986,6 +3120,7 @@ model ExternalDonation {
   @@index([churchId, importFingerprint])
   @@index([importBatchId])
   @@index([churchId, pledgeId])
+  @@index([churchId, fundraisingCampaignId])
 }
 
 /// A single CSV/spreadsheet upload of external donations. One batch per
@@ -3088,150 +3223,6 @@ model ExternalDonationAuditLog {
   externalDonation ExternalDonation @relation(fields: [externalDonationId], references: [id], onDelete: Cascade)
 
   @@index([externalDonationId])
-}
-
-// ============================================================================
-// Pledges — a donor's promise to give a specific amount toward a
-// fundraising campaign or event, recorded now, fulfilled later (possibly
-// manually, cash/check, possibly through a normal donation) rather than
-// automatically charged. Deliberately not built on ExternalDonation: that
-// model's donationAmountCents/donationDate are non-nullable and its
-// status enum has no "promised, not yet given" state — its entire shape
-// assumes money already changed hands. A Pledge instead links OUT to
-// ExternalDonation/Payment rows as fulfillment evidence accumulates, via
-// pledgeId on those tables. This is the "campaign pledge" type — for the
-// separate "installment pledge" type (a fixed-total commitment paid
-// automatically over time), see the isPledge/totalAmountCents fields on
-// FinixSubscription above; a campaign pledge here is never itself an
-// auto-charging subscription.
-// ============================================================================
-
-/// A fundraising campaign or event a merchant tracks pledges against
-/// (building campaign, mission trip, per-mile run, annual gala goal,
-/// etc). Deliberately separate from Fund: Fund is a flat, permanent,
-/// dateless designation catalog for routing money; a campaign has a
-/// goal, a date range, and a progress rollup, and may span multiple
-/// funds or reuse the same fund across many campaigns over time. A
-/// campaign optionally points at the Fund pledged money should ultimately
-/// be recorded against, but is never itself a place money is "in."
-model PledgeCampaign {
-  id          String  @id @default(cuid())
-  churchId    String
-  name        String
-  description String?
-  // GENERAL | BUILDING | MISSION | EVENT | OTHER — purely descriptive,
-  // never branches behavior.
-  campaignType String @default("GENERAL")
-  // ACTIVE | COMPLETED | ARCHIVED. COMPLETED/ARCHIVED are never auto-set —
-  // always an explicit merchant action; a campaign reaching its goal does
-  // not by itself stop new pledges or fulfillments.
-  status String @default("ACTIVE")
-
-  // Snapshotted convenience label, same rationale as
-  // FinixSubscription.fundName — never re-read from Fund after pledge
-  // creation so a later fund rename doesn't rewrite history on pledges
-  // already routed here.
-  fundId   String?
-  fundName String?
-
-  goalAmountCents Int?
-  startDate       DateTime?
-  endDate         DateTime?
-
-  // Optional per-unit pledge support (e.g. "$X per mile run") — when set,
-  // the public/merchant pledge form may collect a unitCount instead of
-  // (or in addition to) a flat amount; Pledge.unitCount * unitAmountCents
-  // is computed into Pledge.pledgeAmountCents once at creation time,
-  // never recomputed later if unitAmountCents here changes.
-  unitLabel       String? // e.g. "mile", "lap"
-  unitAmountCents Int?
-
-  // Public donor-facing page slug (see /campaign/[slug]) — mirrors
-  // GivingLink.publicSlug's exact convention. Null until a merchant
-  // publishes the campaign publicly; a merchant-only campaign never
-  // needs one.
-  publicSlug String? @unique
-
-  // Optional link to an existing GivingLink for the public campaign
-  // page's "Give now" button — snapshotted slug, same rationale as
-  // fundName above, so a later giving-link rename/rotation doesn't break
-  // an already-shared campaign URL. Null means the campaign page shows
-  // only the pledge form, no direct online-giving shortcut.
-  givingLinkId   String?
-  givingLinkSlug String?
-
-  createdByUserId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  pledges Pledge[]
-
-  @@index([churchId, status])
-}
-
-/// A donor's recorded promise to give a specific amount toward a
-/// PledgeCampaign — recorded now, fulfilled later, possibly never through
-/// Finix at all (cash/check) and possibly not through a single payment
-/// (partial fulfillments over time).
-model Pledge {
-  id               String @id @default(cuid())
-  churchId         String
-  pledgeCampaignId String
-
-  donorId String?
-  // MATCHED | ANONYMOUS | UNMATCHED — same three states and same UI
-  // treatment as ExternalDonation.donorMatchStatus (an "Unmatched
-  // Pledges" queue), for a merchant recording a pledge on behalf of
-  // someone not yet in the donor list.
-  donorMatchStatus String  @default("MATCHED")
-  isAnonymous      Boolean @default(false)
-
-  pledgeAmountCents Int
-  currency          String @default("USD")
-  // Set only when the campaign has unitLabel/unitAmountCents configured
-  // (e.g. "pledged $10/mile x 26 miles"); null for a flat-amount pledge.
-  unitCount Int?
-
-  pledgedAt DateTime @default(now())
-  // Merchant/donor-stated target date for fulfillment — informational
-  // only, never enforced or auto-actioned when it passes.
-  dueDate DateTime?
-
-  // PROMISED | PARTIALLY_FULFILLED | FULFILLED | CANCELED. Never
-  // DEPOSITED/CLEARED/RETURNED — those are money-movement states that
-  // belong on the linked ExternalDonation/Payment row, not the promise
-  // itself. Rolled up from linked fulfillment rows' amounts vs.
-  // pledgeAmountCents (see pledgeFulfillment.ts) but persisted here too,
-  // written only by that same rollup routine, so list/summary queries
-  // don't have to join and sum on every request.
-  status                String    @default("PROMISED")
-  fulfilledAmountCents  Int       @default(0)
-  fulfilledAt           DateTime?
-  canceledAt            DateTime?
-  cancelReason          String?
-
-  // How the pledge was captured — mirrors
-  // FinixSubscription.consentSource's ADMIN_CONFIRMED | DONOR_DIRECT
-  // distinction. MERCHANT_ENTERED is written by the merchant-dashboard
-  // creation flow; DONOR_SELF_SERVICE by the public campaign page.
-  source String @default("MERCHANT_ENTERED") // MERCHANT_ENTERED | DONOR_SELF_SERVICE
-
-  notes           String?
-  createdByUserId String?
-  // Team-access Checkpoint 3 pattern: snapshotted attribution, same
-  // plain-string-FK rationale as Payment.attributedUserId /
-  // FinixSubscription.attributedUserId.
-  attributedUserId String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  pledgeCampaign PledgeCampaign @relation(fields: [pledgeCampaignId], references: [id])
-
-  @@index([churchId, pledgeCampaignId])
-  @@index([churchId, donorId])
-  @@index([churchId, status])
-  @@index([churchId, attributedUserId])
 }
 
 // ============================================================================
@@ -4004,85 +3995,6 @@ model InvoiceSettings {
   updatedAt DateTime @updatedAt
 }
 
-model QuickBooksConnection {
-  id       String @id @default(cuid())
-  churchId String @unique // one active connection per church
-
-  provider String @default("QUICKBOOKS")
-  status   String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
-
-  // Intuit's company/tenant identifier — required on every QBO API call,
-  // returned alongside the authorization code on the OAuth callback.
-  realmId     String?
-  companyName String?
-
-  // Versioned encrypted-envelope JSON strings (see encryption.ts
-  // serializeEnvelope/deserializeEnvelope) — never plaintext, never
-  // returned to the client.
-  accessTokenEncrypted  String?
-  refreshTokenEncrypted String?
-  tokenExpiresAt        DateTime? // access token expiry (~1hr for QBO)
-  refreshTokenExpiresAt DateTime? // refresh token expiry (~100 days) — reconnection required once this passes
-  scopesJson            Json?
-
-  connectionType           String  @default("oauth") // oauth — QuickBooks has no other supported mode
-  // SHA-256 fingerprint of the encryption key active when the tokens were
-  // encrypted — detects key-rotation mismatches explicitly at decrypt time
-  // rather than an opaque GCM auth-tag failure, same as Aplos/Printful.
-  encryptionKeyFingerprint String?
-
-  connectedAt          DateTime?
-  lastConnectionTestAt DateTime?
-  lastSuccessfulSyncAt DateTime?
-  lastSyncAt           DateTime?
-  lastSyncStatus       String? // SUCCESS | FAILED | PARTIAL
-  lastSyncError        String?
-  lastErrorAt          DateTime?
-  lastErrorCode        String?
-  lastErrorMessage     String?
-
-  automaticSyncEnabled Boolean @default(false)
-  syncVersion          Int     @default(1)
-
-  connectedByUserId String?
-
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  disconnectedAt DateTime?
-
-  syncRecords QuickBooksSyncRecord[]
-
-  @@index([status])
-  @@index([automaticSyncEnabled])
-}
-
-model QuickBooksSyncRecord {
-  id                     String @id @default(cuid())
-  quickBooksConnectionId String
-  churchId               String
-
-  // CUSTOMER | INVOICE | PAYMENT | ITEM
-  entityType    String
-  // The WGC-side record this sync row represents (Donor.id, Payment.id, etc.)
-  localEntityId String
-
-  quickBooksEntityId String? // Intuit's Id for the created/matched object
-  syncTokenSnapshot  String? // QBO's optimistic-concurrency SyncToken at last write
-
-  // PENDING | SUCCEEDED | FAILED | SKIPPED
-  status       String  @default("PENDING")
-  errorMessage String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  connection QuickBooksConnection @relation(fields: [quickBooksConnectionId], references: [id], onDelete: Cascade)
-
-  @@index([quickBooksConnectionId])
-  @@index([churchId])
-  @@index([entityType, localEntityId])
-}
-
 model PrintfulConnection {
   id       String @id @default(cuid())
   churchId String @unique // one active connection per church
@@ -4518,6 +4430,367 @@ model MerchandiseSettings {
   @@index([churchId])
 }
 
+// ============================================================================
+// Pledges — a donor's promise to give a specific amount toward a
+// fundraising campaign or event, recorded now, fulfilled later (possibly
+// manually, cash/check, possibly through a normal donation) rather than
+// automatically charged. Deliberately not built on ExternalDonation: that
+// model's donationAmountCents/donationDate are non-nullable and its
+// status enum has no "promised, not yet given" state — its entire shape
+// assumes money already changed hands. A Pledge instead links OUT to
+// ExternalDonation/Payment rows as fulfillment evidence accumulates, via
+// pledgeId on those tables. This is the "campaign pledge" type — for the
+// separate "installment pledge" type (a fixed-total commitment paid
+// automatically over time), see the isPledge/totalAmountCents fields on
+// FinixSubscription above; a campaign pledge here is never itself an
+// auto-charging subscription.
+// ============================================================================
+
+/// A fundraising campaign or event a merchant tracks pledges against
+/// (building campaign, mission trip, per-mile run, annual gala goal,
+/// etc). Deliberately separate from Fund: Fund is a flat, permanent,
+/// dateless designation catalog for routing money; a campaign has a
+/// goal, a date range, and a progress rollup, and may span multiple
+/// funds or reuse the same fund across many campaigns over time. A
+/// campaign optionally points at the Fund pledged money should ultimately
+/// be recorded against, but is never itself a place money is "in."
+model PledgeCampaign {
+  id          String  @id @default(cuid())
+  churchId    String
+  name        String
+  description String?
+  // GENERAL | BUILDING | MISSION | EVENT | OTHER — purely descriptive,
+  // never branches behavior.
+  campaignType String @default("GENERAL")
+  // ACTIVE | COMPLETED | ARCHIVED. COMPLETED/ARCHIVED are never auto-set —
+  // always an explicit merchant action; a campaign reaching its goal does
+  // not by itself stop new pledges or fulfillments.
+  status String @default("ACTIVE")
+
+  // Snapshotted convenience label, same rationale as
+  // FinixSubscription.fundName — never re-read from Fund after pledge
+  // creation so a later fund rename doesn't rewrite history on pledges
+  // already routed here.
+  fundId   String?
+  fundName String?
+
+  goalAmountCents Int?
+  startDate       DateTime?
+  endDate         DateTime?
+
+  // Optional per-unit pledge support (e.g. "$X per mile run") — when set,
+  // the public/merchant pledge form may collect a unitCount instead of
+  // (or in addition to) a flat amount; Pledge.unitCount * unitAmountCents
+  // is computed into Pledge.pledgeAmountCents once at creation time,
+  // never recomputed later if unitAmountCents here changes.
+  unitLabel       String? // e.g. "mile", "lap"
+  unitAmountCents Int?
+
+  // Public donor-facing page slug (see /campaign/[slug]) — mirrors
+  // GivingLink.publicSlug's exact convention. Null until a merchant
+  // publishes the campaign publicly; a merchant-only campaign never
+  // needs one.
+  publicSlug String? @unique
+
+  // Optional link to an existing GivingLink for the public campaign
+  // page's "Give now" button — snapshotted slug, same rationale as
+  // fundName above, so a later giving-link rename/rotation doesn't break
+  // an already-shared campaign URL. Null means the campaign page shows
+  // only the pledge form, no direct online-giving shortcut.
+  givingLinkId   String?
+  givingLinkSlug String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pledges Pledge[]
+
+  @@index([churchId, status])
+}
+
+/// A donor's recorded promise to give a specific amount toward a
+/// PledgeCampaign — recorded now, fulfilled later, possibly never through
+/// Finix at all (cash/check) and possibly not through a single payment
+/// (partial fulfillments over time).
+model Pledge {
+  id               String @id @default(cuid())
+  churchId         String
+  pledgeCampaignId String
+
+  donorId String?
+  // MATCHED | ANONYMOUS | UNMATCHED — same three states and same UI
+  // treatment as ExternalDonation.donorMatchStatus (an "Unmatched
+  // Pledges" queue), for a merchant recording a pledge on behalf of
+  // someone not yet in the donor list.
+  donorMatchStatus String  @default("MATCHED")
+  isAnonymous      Boolean @default(false)
+
+  pledgeAmountCents Int
+  currency          String @default("USD")
+  // Set only when the campaign has unitLabel/unitAmountCents configured
+  // (e.g. "pledged $10/mile x 26 miles"); null for a flat-amount pledge.
+  unitCount Int?
+
+  pledgedAt DateTime @default(now())
+  // Merchant/donor-stated target date for fulfillment — informational
+  // only, never enforced or auto-actioned when it passes.
+  dueDate DateTime?
+
+  // PROMISED | PARTIALLY_FULFILLED | FULFILLED | CANCELED. Never
+  // DEPOSITED/CLEARED/RETURNED — those are money-movement states that
+  // belong on the linked ExternalDonation/Payment row, not the promise
+  // itself. Rolled up from linked fulfillment rows' amounts vs.
+  // pledgeAmountCents (see pledgeFulfillment.ts) but persisted here too,
+  // written only by that same rollup routine, so list/summary queries
+  // don't have to join and sum on every request.
+  status                String    @default("PROMISED")
+  fulfilledAmountCents  Int       @default(0)
+  fulfilledAt           DateTime?
+  canceledAt            DateTime?
+  cancelReason          String?
+
+  // How the pledge was captured — mirrors
+  // FinixSubscription.consentSource's ADMIN_CONFIRMED | DONOR_DIRECT
+  // distinction. MERCHANT_ENTERED is written by the merchant-dashboard
+  // creation flow; DONOR_SELF_SERVICE by the public campaign page.
+  source String @default("MERCHANT_ENTERED") // MERCHANT_ENTERED | DONOR_SELF_SERVICE
+
+  notes           String?
+  createdByUserId String?
+  // Team-access Checkpoint 3 pattern: snapshotted attribution, same
+  // plain-string-FK rationale as Payment.attributedUserId /
+  // FinixSubscription.attributedUserId.
+  attributedUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pledgeCampaign PledgeCampaign @relation(fields: [pledgeCampaignId], references: [id])
+
+  @@index([churchId, pledgeCampaignId])
+  @@index([churchId, donorId])
+  @@index([churchId, status])
+  @@index([churchId, attributedUserId])
+}
+
+// ---------------------------------------------------------------------------
+// FUNDRAISING CAMPAIGNS (peer-to-peer)
+//
+// Distinct from PledgeCampaign above: a PledgeCampaign tracks promises
+// fulfilled over time (capital/building funds, "$X per mile" walkathons
+// with a formal pledge step). A FundraisingCampaign tracks live totals
+// raised toward a goal for peer-to-peer style drives (galas, giving days,
+// team fundraisers), broken down by team and individual fundraiser, where
+// every gift counts immediately — no separate pledge/commitment step.
+//
+// "Amount raised" is never stored on these rows. It's always computed by
+// summing the already-correct, webhook-maintained
+// GivingLink.totalCollectedCents/refundedCents/returnedCents counters (plus
+// tagged ExternalDonation rows) — see src/lib/campaigns/campaignTotals.ts.
+// This means a refund/chargeback that already updates GivingLink via the
+// existing Finix webhook handler automatically keeps every campaign total
+// correct, with zero changes to the payment/refund/webhook code path.
+//
+// Every campaign, team, and fundraiser gets its own dedicated GivingLink for
+// "give here" — donors always check out through the exact same, already
+// battle-tested public giving flow (/g/[slug]) as any other giving link.
+// ---------------------------------------------------------------------------
+
+model FundraisingCampaign {
+  id          String  @id @default(cuid())
+  churchId    String
+  name        String
+  description String?
+  imageUrl    String?
+
+  // Public-facing vanity slug (e.g. "spring-gala-2026"), globally unique
+  // across the platform — human-readable, distinct from
+  // GivingLink.publicSlug's random-token convention, since this is the URL
+  // shared on flyers/social media/QR codes. See src/lib/campaigns/slugs.ts.
+  slug String @unique
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  goalAmountCents Int?
+
+  // DRAFT | ACTIVE | PAUSED | COMPLETED. Only ACTIVE campaigns are
+  // reachable on their public page/wall; DRAFT/PAUSED/COMPLETED all 404
+  // publicly, mirroring GivingLink's status-gate convention. Reaching the
+  // goal never auto-completes a campaign — always an explicit action,
+  // same rationale as PledgeCampaign.status above.
+  status String @default("DRAFT")
+
+  leaderboardEnabled Boolean @default(true)
+  // When false, the public campaign/team/fundraiser pages render a
+  // noindex meta tag and are omitted from the sitemap — for a campaign an
+  // organization wants reachable only by direct link, not search-indexed.
+  publiclyIndexable  Boolean @default(true)
+  // When true, a fundraiser on this campaign may log into /fundraiser and
+  // edit their own story/goal/image — never anything financial, never the
+  // merchant dashboard. Off by default so an organization opts in per
+  // campaign rather than every fundraiser suddenly gaining edit access.
+  fundraiserSelfEditEnabled Boolean @default(false)
+
+  // The campaign's own "give directly, undesignated" GivingLink — always
+  // auto-created alongside the campaign. Plain string, no relation
+  // (matches this schema's established GivingLink-cross-reference
+  // convention, e.g. PledgeCampaign.givingLinkId above).
+  givingLinkId String?
+
+  createdByUserId String?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  teams       CampaignTeam[]
+  fundraisers CampaignFundraiser[]
+
+  @@index([churchId, status])
+}
+
+model CampaignTeam {
+  id                    String  @id @default(cuid())
+  churchId              String
+  fundraisingCampaignId String
+  name                  String
+  slug                  String  @unique
+  goalAmountCents       Int?
+  imageUrl              String?
+
+  // The team's own "give to this team" GivingLink (undesignated to a
+  // specific member). Plain string, no relation — see FundraisingCampaign
+  // .givingLinkId above for the same convention.
+  givingLinkId String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaign    FundraisingCampaign  @relation(fields: [fundraisingCampaignId], references: [id])
+  fundraisers CampaignFundraiser[]
+
+  @@index([churchId, fundraisingCampaignId])
+}
+
+/// An individual's personal fundraiser page under a FundraisingCampaign,
+/// optionally part of a CampaignTeam. Deliberately NOT modeled as a User —
+/// most peer-to-peer fundraisers are volunteers, students, alumni, or
+/// donors with no dashboard login at all, not organization staff. donorId
+/// is an optional soft link (no relation, same convention as elsewhere)
+/// for a future self-service fundraiser portal to authenticate against;
+/// unused until that portal is built. Do not confuse with the "fundraiser"
+/// NormalizedOrgRole in src/lib/auth/roles.ts, an unrelated concept (an
+/// organization staff member's dashboard permission level).
+model CampaignFundraiser {
+  id                    String  @id @default(cuid())
+  churchId              String
+  fundraisingCampaignId String
+  campaignTeamId        String?
+
+  displayName   String
+  slug          String  @unique
+  email         String?
+  personalStory String?
+  imageUrl      String?
+  goalAmountCents Int?
+
+  donorId String?
+
+  // The fundraiser's own personal "give to me" GivingLink. Plain string,
+  // no relation — see FundraisingCampaign.givingLinkId above.
+  givingLinkId String?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  campaign FundraisingCampaign @relation(fields: [fundraisingCampaignId], references: [id])
+  team     CampaignTeam?       @relation(fields: [campaignTeamId], references: [id])
+
+  @@index([churchId, fundraisingCampaignId])
+  @@index([campaignTeamId])
+}
+
+model QuickBooksConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  provider String @default("QUICKBOOKS")
+  status   String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // Intuit's company/tenant identifier — required on every QBO API call,
+  // returned alongside the authorization code on the OAuth callback.
+  realmId     String?
+  companyName String?
+
+  // Versioned encrypted-envelope JSON strings (see encryption.ts
+  // serializeEnvelope/deserializeEnvelope) — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime? // access token expiry (~1hr for QBO)
+  refreshTokenExpiresAt DateTime? // refresh token expiry (~100 days) — reconnection required once this passes
+  scopesJson            Json?
+
+  connectionType           String  @default("oauth") // oauth — QuickBooks has no other supported mode
+  // SHA-256 fingerprint of the encryption key active when the tokens were
+  // encrypted — detects key-rotation mismatches explicitly at decrypt time
+  // rather than an opaque GCM auth-tag failure, same as Aplos/Printful.
+  encryptionKeyFingerprint String?
+
+  connectedAt          DateTime?
+  lastConnectionTestAt DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastSyncAt           DateTime?
+  lastSyncStatus       String? // SUCCESS | FAILED | PARTIAL
+  lastSyncError        String?
+  lastErrorAt          DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+
+  automaticSyncEnabled Boolean @default(false)
+  syncVersion          Int     @default(1)
+
+  connectedByUserId String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  disconnectedAt DateTime?
+
+  syncRecords QuickBooksSyncRecord[]
+
+  @@index([status])
+  @@index([automaticSyncEnabled])
+}
+
+model QuickBooksSyncRecord {
+  id                     String @id @default(cuid())
+  quickBooksConnectionId String
+  churchId               String
+
+  // CUSTOMER | INVOICE | PAYMENT | ITEM
+  entityType    String
+  // The WGC-side record this sync row represents (Donor.id, Payment.id, etc.)
+  localEntityId String
+
+  quickBooksEntityId String? // Intuit's Id for the created/matched object
+  syncTokenSnapshot  String? // QBO's optimistic-concurrency SyncToken at last write
+
+  // PENDING | SUCCEEDED | FAILED | SKIPPED
+  status       String  @default("PENDING")
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  connection QuickBooksConnection @relation(fields: [quickBooksConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([quickBooksConnectionId])
+  @@index([churchId])
+  @@index([entityType, localEntityId])
+}
 
 // Self-service backfill for donations that succeeded before a church
 // connected QuickBooks (or before automatic sync existed at all) — same
@@ -4543,4 +4816,1259 @@ model QuickBooksBackfillJob {
   completedAt     DateTime?
 
   @@index([churchId, status])
+}
+
+// =============================================================================
+// Giving Campaigns — bulk-send a giving link to a donor list, by email or
+// text, with per-recipient click/payment tracking and a template+live-
+// preview composer. See GivingCampaignRecipient's own comment for how
+// attribution actually works end to end.
+// =============================================================================
+
+model GivingCampaign {
+  id           String  @id @default(cuid())
+  churchId     String
+  // Always resolved server-side, never a free client choice once one of
+  // the four tie-in fields below is set — see POST
+  // /api/merchant/giving-campaigns. Online-gift attribution to a
+  // FundraisingCampaign/Team/Fundraiser/PledgeCampaign is done PURELY by
+  // which GivingLink was used (Payment has no direct FK to any of them —
+  // see campaignTotals.ts/pledgeFulfillment.ts), so this must always be
+  // that record's own dedicated givingLinkId, never an independently
+  // chosen one, or every gift this campaign drives would silently never
+  // count toward the right totals.
+  givingLinkId String
+  // Internal label only, never shown to a recipient — e.g. "Fall Giving Email Blast".
+  name         String
+  channel      String // EMAIL | TEXT
+  emailSubject String?
+  // Merge-field templates — {{firstName}}, {{churchName}}, {{link}} —
+  // rendered per recipient at send time (renderCampaignTemplate in
+  // campaignTemplate.ts) and for the live preview before sending.
+  // emailBodyTemplate is used for channel EMAIL, textBodyTemplate for TEXT;
+  // a campaign only ever populates the one matching its own channel.
+  emailBodyTemplate String?
+  textBodyTemplate  String?
+
+  // Optional "what is this email actually about" tie-in — mutually
+  // exclusive with pledgeCampaignId below (a campaign is about one or the
+  // other, never both; enforced at the API layer, not here). All null
+  // means an ordinary, untied giving-link email, the only kind that
+  // existed before this feature. campaignTeamId/campaignFundraiserId are
+  // only ever set alongside fundraisingCampaignId, same invariant as
+  // ExternalDonation's matching fields above. Plain strings, no relation —
+  // same established cross-reference convention as every other
+  // campaign/team/fundraiser reference in this schema.
+  fundraisingCampaignId String?
+  campaignTeamId        String?
+  campaignFundraiserId  String?
+  pledgeCampaignId      String?
+
+  status          String    @default("DRAFT") // DRAFT | SENDING | SENT | FAILED
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  sentAt          DateTime?
+
+  // Recipients are looked up by campaignId (plain string, not a Prisma
+  // relation), matching this schema's established cross-reference
+  // convention elsewhere — see GivingCampaignRecipient below.
+  @@index([churchId, createdAt])
+}
+
+// One row per donor targeted by a campaign. trackingToken is what makes
+// per-recipient attribution possible at all: the link this specific person
+// receives is /gc/{trackingToken}, not the giving link's own URL directly —
+// that redirect route (src/app/gc/[token]/route.ts) records clickedAt and
+// sets a short-lived cookie naming this token before forwarding to the real
+// /g/[slug] page, and the donate route reads that cookie to fill in paidAt/
+// paymentId here once a payment actually completes. Without the unique
+// per-recipient link, there would be no way to tell which of many
+// recipients on the same giving link actually paid.
+model GivingCampaignRecipient {
+  id         String @id @default(cuid())
+  campaignId String
+  // Denormalized for scoping safety — every lookup by trackingToken (an
+  // unauthenticated route, since a donor clicking their link isn't logged
+  // in) re-verifies churchId rather than trusting the token/campaign join
+  // alone, same defense-in-depth convention used elsewhere in this schema.
+  churchId String
+  donorId  String?
+
+  trackingToken  String  @unique
+  recipientEmail String?
+  recipientPhone String?
+  recipientName  String?
+
+  sendStatus String    @default("PENDING") // PENDING | SENT | FAILED
+  sendError  String?
+  sentAt     DateTime?
+
+  clickedAt DateTime?
+  paidAt    DateTime?
+  // Plain-string reference to the Payment this recipient's click eventually
+  // produced, matching this schema's established cross-reference convention
+  // (see Payment.attributedUserId's own comment) rather than a Prisma relation.
+  paymentId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, campaignId])
+}
+
+// =============================================================================
+// SMS Add-on billing — text-message sending (Giving Campaign text channel
+// and the giving-link Share modal's Send Text tab) is gated behind its own
+// paid subscription, separate from the WGC platform subscription
+// (WgcSubscription). One row per organization, same lifecycle shape as
+// WgcSubscription (see activateWgcSubscription's doc comment for the real
+// Finix field semantics this mirrors) but its OWN Finix subscription object
+// — organizations don't get a second line item bolted onto their platform
+// subscription, they get a second, independent one billed to the same
+// on-file payment method.
+// =============================================================================
+
+model SmsAddonSubscription {
+  id             String @id @default(cuid())
+  organizationId String @unique
+  planCode       String // SMS_STARTER | SMS_GROWTH — see smsAddonPlans.ts for the definitions this references
+  includedTexts  Int
+  // Snapshotted from the plan at activation time, like WgcSubscription
+  // snapshots WgcPricingVersion — a later change to smsAddonPlans.ts must
+  // never retroactively change what an already-subscribed org is billed.
+  monthlyAmountCents Int
+  overageRateCents   Int
+  currency           String @default("USD")
+
+  finixSubscriptionId        String? @unique
+  billingIdentityId          String?
+  billingPaymentInstrumentId String?
+
+  // INCOMPLETE | ACTIVE | PAST_DUE | CANCELED — INCOMPLETE only ever exists
+  // transiently between the upsert and the Finix call succeeding, same as
+  // WgcSubscription; the send-time gate treats only ACTIVE as usable.
+  status String @default("INCOMPLETE")
+
+  lastChargeAt      DateTime?
+  pastDueAt         DateTime?
+  gracePeriodEndsAt DateTime?
+  canceledAt        DateTime?
+  createdByUserId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// One row per organization per calendar-month billing period that ended
+// over its included-texts allowance. Deliberately review-first, matching
+// PromoShortfallCharge's design: the monthly detection cron only ever
+// creates a FLAGGED row here — see smsAddonOverageCharge.ts for the actual
+// (admin-triggered) charge/waive actions. Nothing in detection ever calls
+// Finix or moves money.
+model SmsAddonOverageCharge {
+  id             String @id @default(cuid())
+  organizationId String
+  // e.g. "2026-09" — the calendar month that was found over-allowance.
+  billingPeriod String
+
+  textsIncluded    Int
+  textsSent        Int
+  overageTexts     Int
+  overageRateCents Int
+  // Snapshotted at detection time so a later plan-price edit can never
+  // retroactively change what an admin's "Charge now" action actually charges.
+  chargeAmountCents Int
+  currency          String @default("USD")
+
+  // FLAGGED | CHARGED | CHARGE_FAILED | WAIVED
+  status          String    @default("FLAGGED")
+  finixTransferId String?
+  billingChargeId String?
+  chargedByUserId String?
+  chargedAt       DateTime?
+  waivedByUserId  String?
+  waivedAt        DateTime?
+  waiveReason     String?
+  failureMessage  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, billingPeriod])
+  @@index([status])
+  @@index([organizationId])
+}
+
+// =============================================================================
+// SMS 2FA consent audit trail — append-only record of every grant/withdrawal
+// of consent to receive SMS authentication codes, required for Twilio A2P
+// 10DLC compliance (Error 30909: reviewers need documented, verifiable
+// opt-in). Separate from User.mfaEnabled (the current-state flag) — this is
+// the historical record proving when and how consent was given, which
+// version of the disclosure text the user saw, and where the consent
+// happened. Never mutated after creation; a withdrawal is a new row, not an
+// update to the grant row.
+// =============================================================================
+
+model SmsConsentEvent {
+  id       String  @id @default(cuid())
+  userId   String
+  churchId String?
+  // Stored as entered (E.164-normalized where possible) — matches this
+  // schema's existing convention of storing phone numbers in plain text
+  // (see User.phone, Donor.phone); never written to application logs (see
+  // the enroll/disable routes' console.error calls, which log user/church
+  // ids only, never the phone value itself).
+  phone String
+
+  // GRANTED | WITHDRAWN
+  eventType String
+
+  consentTimestamp DateTime @default(now())
+  // Where consent was captured — e.g. "settings_security_mfa_enroll" —
+  // distinct from consentTextVersion so the disclosure copy can change
+  // independently of where in the product it's shown.
+  consentSource     String
+  consentTextVersion String
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([churchId])
+  @@index([phone])
+}
+
+// =============================================================================
+// Authentication SMS send log — persistent (DB-backed, not in-memory) record
+// of every OTP send attempt, for two purposes that share one table on
+// purpose: (1) resend cooldown / per-account / per-phone / per-IP send caps,
+// computed from recent rows rather than a process-local counter that resets
+// per serverless instance; (2) Twilio delivery-status tracking, updated by
+// the status callback webhook once Twilio reports queued/sent/delivered/
+// undelivered/failed for a given providerMessageId. Every row here
+// represents an AUTHENTICATION send only (login OTP, enrollment OTP, resend,
+// admin login OTP) — donor/invoice SMS never writes here because that
+// sending path is hard-disabled (see src/lib/sms/authSmsSender.ts).
+// =============================================================================
+
+model AuthSmsSendLog {
+  id     String  @id @default(cuid())
+  userId String
+  // Denormalized (not just looked up via userId) so a rate-limit query can
+  // filter by phone directly — catches abuse patterns where the same
+  // number is targeted across what look like different accounts.
+  phone String
+  // ENROLL | LOGIN | RESEND | ADMIN_LOGIN | ADMIN_RESEND
+  purpose   String
+  ipAddress String?
+
+  providerMessageId String?
+  // QUEUED | SENT | DELIVERED | UNDELIVERED | FAILED — null until Twilio's
+  // status callback updates it, or forever null if delivery webhooks
+  // aren't configured.
+  deliveryStatus   String?
+  deliveryStatusAt DateTime?
+  // Twilio's own error code (a number as a string, e.g. "30003") — safe to
+  // store, never shown to the end user verbatim (see the status callback
+  // route's own comment on why).
+  errorCode String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([phone, createdAt])
+  @@index([providerMessageId])
+}
+
+// =============================================================================
+// INTEGRATION FOUNDATION — outbound events, webhook delivery, and the
+// public/partner API. One event abstraction (WebhookEvent, written by
+// emitEvent() in src/lib/events/emitEvent.ts) backs webhook delivery,
+// analytics, and — later — Zapier/Make triggers, instead of scattering
+// direct HTTP calls through business logic. See src/lib/events/types.ts
+// for the full event-type catalog and src/lib/webhooks/deliverWebhook.ts
+// for the delivery engine.
+// =============================================================================
+
+/// A merchant-configured outbound webhook destination. One row per endpoint
+/// URL; a merchant can have several, each subscribed to a different subset
+/// of event types (e.g. one endpoint for accounting events, another for a
+/// Zapier/Make connection).
+model WebhookEndpoint {
+  id          String  @id @default(cuid())
+  churchId    String
+  url         String
+  description String?
+
+  // ACTIVE | DISABLED (merchant-toggled) | DISABLED_AUTO (auto-disabled by
+  // the retry cron after too many consecutive delivery failures, distinct
+  // from DISABLED so the UI can explain *why* it stopped delivering).
+  status String @default("ACTIVE")
+
+  // Array of WgcEventType strings (see src/lib/events/types.ts) this
+  // endpoint receives. An empty array subscribes to nothing — deliberately
+  // never "all events" implicitly, so adding a new event type in the
+  // future never silently starts delivering to an existing endpoint that
+  // never asked for it.
+  subscribedEventsJson Json
+
+  // AES-256-GCM envelope (see src/lib/webhooks/encryption.ts), same
+  // versioned-envelope scheme as the QuickBooks/Aplos/Printful integration
+  // credentials — reversible, because the raw secret is needed at delivery
+  // time to compute the HMAC signature. Never returned to the client after
+  // creation; only signingSecretLast4 is shown in the dashboard afterward.
+  signingSecretEncrypted String
+  signingSecretLast4     String
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  disabledAt      DateTime?
+  disabledReason  String?
+
+  // Consecutive failed deliveries since the last success — reset to 0 on
+  // any successful delivery. The retry cron auto-disables an endpoint once
+  // this crosses a threshold (see webhookRetryPolicy.ts) rather than
+  // retrying a dead URL forever.
+  consecutiveFailures Int       @default(0)
+  lastDeliveryAt      DateTime?
+  lastSuccessAt       DateTime?
+
+  @@index([churchId])
+  @@index([status])
+}
+
+/// A durable, immutable record of something that happened — the "source of
+/// truth" event, written once by emitEvent() regardless of whether any
+/// webhook endpoint is even subscribed to it yet. This id is what's sent
+/// as the event's unique ID in every webhook payload (for idempotent
+/// receipt on the merchant's side) and is what a future Zapier/Make
+/// polling trigger or partner-API "list events" endpoint would read from.
+model WebhookEvent {
+  id       String @id @default(cuid())
+  churchId String
+  // See src/lib/events/types.ts WgcEventType — intentionally a plain
+  // string, not a Prisma enum, so adding a new event type is a one-line
+  // TypeScript change with no migration.
+  type     String
+  dataJson Json
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, type])
+  @@index([churchId, createdAt])
+}
+
+/// One delivery attempt tracking row per (event, endpoint) pair. Mirrors
+/// FinixWebhookEvent's processingStatus/errorMessage shape (this codebase's
+/// existing inbound-webhook convention) for the outbound direction.
+model WebhookDelivery {
+  id                String @id @default(cuid())
+  webhookEventId    String
+  webhookEndpointId String
+  churchId          String
+
+  // PENDING (queued, not yet attempted or awaiting retry) | SUCCEEDED |
+  // FAILED (will retry, see nextRetryAt) | ABANDONED (exhausted retries).
+  status       String    @default("PENDING")
+  attemptCount Int       @default(0)
+  nextRetryAt  DateTime?
+  lastAttemptAt DateTime?
+
+  responseStatusCode Int?
+  // Truncated to a few KB — never the full response body, this is for
+  // debugging a misconfigured endpoint, not general storage.
+  responseBodySnippet String?
+  errorMessage        String?
+
+  // The exact unix timestamp embedded in this attempt's HMAC signature
+  // (`timestamp=<t>,sig=<hex>` header, same scheme as the inbound Finix
+  // webhook signature) — stored so a re-delivery / "view payload" action
+  // in the dashboard can show exactly what was signed, and so replay
+  // protection is auditable after the fact.
+  signedAtTimestamp Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, webhookEndpointId])
+  @@index([status, nextRetryAt])
+  @@index([webhookEventId])
+}
+
+/// A merchant-issued API key for the public/partner API (/api/v1/*).
+/// Scoped, not all-or-nothing — see src/lib/api/scopes.ts for the full
+/// scope catalog. Never grants access to processor/admin-sensitive
+/// functionality (Finix credentials, bank account numbers, other
+/// organizations' data) regardless of scopes granted.
+model ApiKey {
+  id       String @id @default(cuid())
+  churchId String
+  name     String
+
+  // Shown in the dashboard list to help a merchant recognize which key is
+  // which without ever displaying the full secret again — e.g.
+  // "wgc_live_4f2a...". The full key is shown exactly once, at creation.
+  keyPrefix String
+
+  // SHA-256 hash of the full API key — one-way, never decrypted. A
+  // request's Authorization header is hashed and looked up by this column;
+  // there is deliberately no reversible storage of the key itself, unlike
+  // WebhookEndpoint's signing secret (which must be reversible to compute
+  // an outgoing signature — an API key only ever needs to be verified,
+  // never re-displayed or re-derived).
+  hashedKey String @unique
+
+  // Array of scope strings, e.g. ["donors:read", "campaigns:write"] — see
+  // src/lib/api/scopes.ts for the full catalog. Never includes anything
+  // that would expose Finix processor credentials or cross-tenant data.
+  scopesJson Json
+
+  status String @default("ACTIVE") // ACTIVE | REVOKED
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  lastUsedAt      DateTime?
+  revokedAt       DateTime?
+  revokedByUserId String?
+
+  @@index([churchId])
+}
+
+/// One row per authenticated /api/v1/* request — the API usage log
+/// referenced by the dashboard's "last used" column and available for a
+/// future usage-analytics view. Never logs request/response bodies
+/// (which could contain donor PII); only routing/outcome metadata.
+model ApiRequestLog {
+  id       String @id @default(cuid())
+  apiKeyId String
+  churchId String
+
+  method     String
+  path       String
+  statusCode Int
+  // Unique per request — returned to the caller as the `X-Request-Id`
+  // response header for support/debugging correlation.
+  requestId String @unique
+  // Client-supplied Idempotency-Key header on a write request, if any —
+  // stored so a retried request with the same key can be detected and
+  // short-circuited to the original response rather than double-processed.
+  idempotencyKey String?
+  // Wall-clock time the handler took to produce a response, measured in
+  // withApiAuth.ts — added for System Health's Average API Response Time
+  // card (src/lib/monitoring/overviewStats.ts). Nullable/additive: rows
+  // written before this field existed simply have no duration, and are
+  // excluded from the average rather than treated as zero.
+  durationMs Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, createdAt])
+  @@index([apiKeyId, createdAt])
+  @@index([idempotencyKey])
+}
+
+/// A cached response for one (API key, Idempotency-Key) pair on a write
+/// request to /api/v1 — a retried POST/PATCH with the same key returns the
+/// original response verbatim instead of re-processing, the standard
+/// idempotent-write pattern. Expires after 24h (checked against createdAt
+/// at lookup time, no separate cleanup job needed at this data volume).
+model ApiIdempotencyRecord {
+  id             String @id @default(cuid())
+  apiKeyId       String
+  idempotencyKey String
+  method         String
+  path           String
+
+  responseStatus Int
+  responseBodyJson Json
+
+  createdAt DateTime @default(now())
+
+  @@unique([apiKeyId, idempotencyKey])
+}
+
+/// A generic connection record for FUTURE native integrations (Salesforce,
+/// HubSpot, Planning Center, Bloomerang, Virtuous, HighLevel, etc.) so each
+/// new provider doesn't need its own bespoke table + dashboard redesign,
+/// the way QuickBooks/Aplos/Printful currently each have their own model.
+/// QuickBooks and Aplos are NOT migrated onto this table — they already
+/// have dedicated, working, tested connection models; this table is
+/// intentionally unused by them and only comes into play once a new
+/// provider is actually built on top of it.
+model IntegrationConnection {
+  id       String @id @default(cuid())
+  churchId String
+
+  // e.g. "SALESFORCE" | "HUBSPOT" | "PLANNING_CENTER" | "BLOOMERANG" |
+  // "VIRTUOUS" | "HIGHLEVEL" — see src/lib/integrations/catalog.ts for the
+  // full provider catalog and category grouping.
+  provider String
+
+  status String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTING | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // AES-256-GCM envelope JSON strings (same scheme as
+  // src/lib/webhooks/encryption.ts) — never plaintext, never returned to
+  // the client. credentialsEncrypted covers API-key-style auth;
+  // oauthTokensEncrypted covers OAuth access/refresh tokens. A given
+  // provider uses one or the other, never both.
+  credentialsEncrypted  String?
+  oauthTokensEncrypted  String?
+  oauthTokenExpiresAt   DateTime?
+
+  connectedAt  DateTime?
+  lastSyncAt   DateTime?
+  // IDLE | SYNCING | ERROR
+  syncStatus   String    @default("IDLE")
+  lastSyncError String?
+
+  // Provider-specific settings (e.g. which objects to sync) and
+  // field-mapping configuration (e.g. "WGC Fund" -> "Salesforce Campaign")
+  // — free-form JSON since every provider's shape differs.
+  configurationJson Json?
+  fieldMappingsJson Json?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([churchId, provider])
+  @@index([churchId])
+}
+
+/// The WGC Migration Center's orchestration record. One job represents one
+/// organization's attempt to bring data in from an outside system. v1 only
+/// implements sourceSystem = "CSV_GENERIC" (zero vendor dependency); every
+/// other source is a placeholder pending that vendor's OAuth app
+/// registration (see MigrationSourceSystem doc in src/lib/migrations/types.ts).
+/// Deliberately reuses the same chunked, cursor-based resumability
+/// convention as BulkReceiptJob/AnnualStatementJob rather than a cron
+/// worker — this project's Vercel plan only allows daily cron jobs, so a
+/// client-driven "process the next chunk" loop is the only fit for
+/// anything needing finer-grained progress.
+model MigrationJob {
+  id       String @id @default(cuid())
+  churchId String
+
+  // CSV_GENERIC | STRIPE | AUTHORIZE_NET | PLANNING_CENTER | GIVEBUTTER |
+  // PUSHPAY | SUBSPLASH | PAYPAL — only CSV_GENERIC is implemented.
+  sourceSystem String
+
+  // DRAFT | MAPPING | VALIDATING | READY | IMPORTING | COMPLETED |
+  // COMPLETED_WITH_ERRORS | FAILED | CANCELLED
+  status String @default("DRAFT")
+
+  // Which WGC entities this job creates/updates — a job may cover more
+  // than one, e.g. ["DONOR", "DONATION_HISTORY"] for a combined CSV.
+  // DONOR | DONATION_HISTORY | FUND
+  entityTypesJson Json
+
+  fileName String?
+
+  totalRecords     Int @default(0)
+  processedRecords Int @default(0)
+  succeededRecords Int @default(0)
+  failedRecords    Int @default(0)
+  skippedRecords   Int @default(0)
+
+  // Raw source rows the job will process, keyed by entity type — set once
+  // at commit time and never mutated; processing only ever advances the
+  // processedRecords cursor, mirroring BulkReceiptJob's targetIds pattern.
+  sourceDataJson Json?
+
+  createdByUserId String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  mappings MigrationMapping[]
+  records  MigrationRecord[]
+  errors   MigrationError[]
+
+  @@index([churchId])
+  @@index([churchId, status])
+  @@index([churchId, createdAt])
+}
+
+/// The confirmed source-column -> WGC-field mapping for one entity type
+/// within a job. Kept as its own row (rather than one JSON blob on the
+/// job) so a multi-entity job can carry a distinct mapping per entity type.
+model MigrationMapping {
+  id             String @id @default(cuid())
+  migrationJobId String
+
+  // DONOR | DONATION_HISTORY | FUND
+  entityType String
+
+  // rawHeader -> canonical field key or null (skip), same shape as
+  // externalDonationImport.ts's ColumnMapping.
+  columnMappingJson Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job MigrationJob @relation(fields: [migrationJobId], references: [id], onDelete: Cascade)
+
+  @@unique([migrationJobId, entityType])
+  @@index([migrationJobId])
+}
+
+/// One outcome row per source record, generalizing ExternalDonationImportRow
+/// across entity types so donors/donations/funds share one reconciliation
+/// model instead of three.
+model MigrationRecord {
+  id             String @id @default(cuid())
+  migrationJobId String
+  churchId       String
+
+  // DONOR | DONATION_HISTORY | FUND
+  entityType String
+  rowNumber  Int
+
+  // Post-mapping, pre-validation field values — never the untouched raw
+  // CSV text, matching ExternalDonationImportRow's convention.
+  rawDataJson Json
+
+  fingerprint String
+
+  // PENDING | VALID | WARNING | INVALID | DUPLICATE | IMPORTED | SKIPPED | FAILED
+  status String @default("PENDING")
+
+  // Id of the WGC record this row resolved to (donorId / externalDonationId
+  // / fundId) once imported.
+  resultEntityId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  job MigrationJob @relation(fields: [migrationJobId], references: [id], onDelete: Cascade)
+
+  @@unique([migrationJobId, entityType, rowNumber])
+  @@index([migrationJobId])
+  @@index([churchId])
+  @@index([fingerprint])
+}
+
+/// Structured, queryable error log for a job's reconciliation report —
+/// richer than a JSON array on the row so the report can filter/group by
+/// error type without deserializing every record.
+model MigrationError {
+  id             String @id @default(cuid())
+  migrationJobId String
+  churchId       String
+
+  entityType String
+  rowNumber  Int
+  message    String
+
+  createdAt DateTime @default(now())
+
+  job MigrationJob @relation(fields: [migrationJobId], references: [id], onDelete: Cascade)
+
+  @@index([migrationJobId])
+  @@index([churchId])
+}
+
+/// Auditable log of the automated recovery flow triggered when a recurring
+/// charge fails — one row per failure event processed, whether or not it
+/// resulted in an email actually going out. Deliberately does NOT attempt
+/// or schedule a re-charge: Finix's subscriptions API has no documented
+/// account-updater/dunning behavior we could safely build on top of, so
+/// recovery here means "get the donor a payment-update link," never
+/// "retry the charge ourselves" (see recoveryAutomation.ts doc comment).
+model SubscriptionRecoveryAttempt {
+  id                   String  @id @default(cuid())
+  churchId             String
+  finixSubscriptionId  String
+  donorId              String?
+
+  // PAYMENT_FAILED — the only trigger today.
+  trigger String
+
+  // UPDATE_LINK_SENT | UPDATE_LINK_SEND_FAILED | SKIPPED_NO_DONOR_EMAIL |
+  // SKIPPED_NOT_ACTIVE_OR_PAST_DUE | SKIPPED_RECENTLY_SENT
+  action String
+
+  // Set only when action is UPDATE_LINK_SENT/UPDATE_LINK_SEND_FAILED —
+  // links back to the actual SubscriptionSetupLink row for detail.
+  setupLinkId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, finixSubscriptionId])
+  @@index([churchId, createdAt])
+}
+
+/// A single-use, expiring magic-link token emailed to a CampaignFundraiser
+/// to log into /fundraiser — the only authentication method for the
+/// portal (no password). Mirrors SubscriptionSetupLink's hashed-token
+/// pattern; consumedAt is set the moment it's exchanged for a
+/// FundraiserPortalSession, never reusable after.
+model FundraiserLoginToken {
+  id                   String    @id @default(cuid())
+  campaignFundraiserId String
+  tokenHash            String    @unique
+  expiresAt            DateTime
+  consumedAt           DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([campaignFundraiserId])
+}
+
+/// The fundraiser portal's own session — deliberately a separate model
+/// from every merchant/admin session concept in this schema, so a
+/// fundraiser session can never be mistaken for or upgraded into
+/// dashboard access. DB-backed (not a bare signed cookie) so a merchant
+/// can revoke a fundraiser's portal access on demand.
+model FundraiserPortalSession {
+  id                   String    @id @default(cuid())
+  campaignFundraiserId String
+  tokenHash            String    @unique
+  expiresAt            DateTime
+  lastActiveAt         DateTime?
+  revokedAt            DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([campaignFundraiserId])
+}
+
+/// A merchant-configured Text to Give keyword (Project 9). Sending is
+/// gated the same way src/lib/sms/sendText.ts already gates all donor-
+/// facing SMS: inert until TWILIO_DONOR_FROM_NUMBER is deliberately set
+/// alongside its own carrier-approved A2P 10DLC campaign — this model and
+/// its admin UI are safe to ship ahead of that, since nothing here sends
+/// or receives a real message until that separate approval exists.
+model TextToGiveKeyword {
+  id                    String  @id @default(cuid())
+  churchId              String
+  // Globally unique, not per-church: the likely MVP path is one shared
+  // WGC number across every organization (the same model most Text to
+  // Give products use), where the keyword itself — not the destination
+  // number — is what disambiguates the organization. If WGC instead gives
+  // each church its own dedicated number later, global uniqueness is
+  // still safe, just stricter than required. Never assume per-church
+  // scoping here without confirming the number-provisioning model first.
+  keyword               String  @unique // normalized upper-case, e.g. "BUILDING"
+  fundraisingCampaignId String?
+  givingLinkId          String?
+  replyMessageTemplate  String?
+  status                String  @default("ACTIVE") // ACTIVE | PAUSED
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([churchId])
+}
+
+/// Audit log of every inbound text matched (or not) against a keyword —
+/// populated only once a real Twilio inbound number/campaign exists; the
+/// model ships now so the webhook handler and reporting have somewhere to
+/// write to the moment that happens.
+model TextToGiveInboundMessage {
+  id               String   @id @default(cuid())
+  churchId         String?
+  fromPhone        String
+  toPhone          String
+  body             String
+  matchedKeywordId String?
+  replySent        Boolean  @default(false)
+  replyError       String?
+  createdAt        DateTime @default(now())
+
+  @@index([churchId, createdAt])
+}
+
+
+// ─── System Health / Incident Detection / Alerting ("WGC Command Center") ──
+//
+// This is the WGC-OWNED operational layer (Layer 2 per the design doc) that
+// sits alongside Sentry (Layer 1, technical exception detail) — deliberately
+// NOT a duplicate of it. Sentry answers "what broke technically"; these
+// models answer "what service/operation broke, for which merchant, how
+// often, and is it still happening." Every field here is written and read
+// by src/lib/monitoring/healthEvents.ts and the src/app/admin/(dashboard)/
+// system-health/** admin pages.
+//
+// Per the "do not create millions of rows for every successful request"
+// requirement: SystemHealthEvent is written only for genuine failures/
+// recoveries recordHealthEvent() is explicitly called for (Phase 2 wires
+// exactly one producer — uncaught server errors via
+// src/instrumentation.ts's onRequestError hook; Phase 3 adds Finix/
+// Supabase/Resend/Twilio/Aplos/webhook/job producers on top of this same
+// table without any schema change).
+
+/// One row per notable operational occurrence (a failure, a recovery, a
+/// meaningful warning) — never one row per successful request. See
+/// recordHealthEvent() in src/lib/monitoring/healthEvents.ts, the only
+/// intended writer.
+model SystemHealthEvent {
+  id           String   @id @default(cuid())
+  // Canonical service name this event is about — "WGC API" | "Supabase" |
+  // "Finix" | "Resend" | "Twilio" | "Aplos" | "Webhooks" | "Background Jobs"
+  // today, kept as a plain string (not an enum) so Phase 3+ can introduce a
+  // new service without a migration.
+  service      String
+  // Free-form operation name, e.g. "refund", "webhook.process", "sync",
+  // "render" — whatever the producer finds meaningful.
+  operation    String?
+  // Third-party system involved, when relevant and distinct from `service`
+  // (e.g. service="Webhooks", integration="finix").
+  integration  String?
+  route        String?
+  // SUCCESS | WARNING | FAILED | RECOVERED
+  status       String
+  // INFO | WARNING | ERROR | CRITICAL
+  severity     String
+  merchantId   String?
+  userId       String?
+  requestId    String?
+  // An external system's own identifier for this operation, when relevant
+  // (a Finix transfer id, an Aplos sync record id, etc.) — never a payment
+  // instrument, card, or bank account identifier.
+  externalId   String?
+  // Safe, already-redacted message — see recordHealthEvent()'s use of
+  // redactSensitiveData() before this is ever written.
+  message      String
+  metadata     Json?
+  // Set only when severity is ERROR/CRITICAL — links this occurrence to its
+  // aggregated SystemErrorGroup (see below). A WARNING/INFO/RECOVERED event
+  // is still recorded for history but doesn't need a group.
+  errorGroupId String?
+  // A fresh WGC-XXXXXX code generated by recordHealthEvent() itself (reusing
+  // errorNormalizer.ts's generateSupportReference()) — NOT necessarily the
+  // same code a client-side captureError() call showed a user for the same
+  // underlying incident, since the two are independent capture paths today
+  // (see src/instrumentation.ts's onRequestError for the one place Phase 2
+  // calls both for the same error). Still a real, usable reference for
+  // this specific recorded event.
+  wgcReference String?
+  // process.env.VERCEL_GIT_COMMIT_SHA at the moment this was recorded, so a
+  // recurring error can be correlated to the deployment that introduced or
+  // fixed it. Null outside a Vercel deployment (e.g. local dev).
+  release      String?
+  createdAt    DateTime @default(now())
+
+  errorGroup SystemErrorGroup? @relation(fields: [errorGroupId], references: [id])
+
+  @@index([service, createdAt])
+  @@index([status, createdAt])
+  @@index([merchantId, createdAt])
+  @@index([errorGroupId])
+}
+
+/// The WGC-owned equivalent of a "Sentry Issue" — an aggregation of
+/// SystemHealthEvent rows that represent the same underlying problem
+/// (same service + integration + route + normalized message), so the
+/// Errors page shows one row per distinct problem with an occurrence count
+/// instead of a firehose of individual rows. Exists and is populated
+/// independently of whether Sentry is connected at all.
+model SystemErrorGroup {
+  id          String @id @default(cuid())
+  // Stable hash of (service, integration, route, normalized message) —
+  // see buildErrorFingerprint() in healthEvents.ts. Unique so a repeat
+  // occurrence upserts the same row instead of creating a new one.
+  fingerprint String @unique
+
+  service     String
+  integration String?
+  route       String?
+  severity    String
+  // OPEN | RESOLVED | IGNORED — admin-manageable in a later phase; Phase 2
+  // only ever creates rows as OPEN.
+  status      String  @default("OPEN")
+  // The latest occurrence's safe message — shown in the Errors list.
+  message     String
+
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  occurrenceCount Int      @default(1)
+
+  // Populated once Sentry is connected and a real issue exists to link to
+  // (Phase 2 ships with this always null — no Sentry project is configured
+  // yet, and even once one is, wiring the actual issue URL back from a
+  // Sentry event is deliberately deferred rather than guessed at).
+  sentryIssueUrl String?
+  // Set once Phase 5's incident-detection logic groups this error into an
+  // incident — always null in Phase 2, no auto-detection exists yet.
+  incidentId     String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  incident SystemIncident?     @relation(fields: [incidentId], references: [id])
+  events   SystemHealthEvent[]
+
+  @@index([status, lastSeenAt])
+  @@index([service])
+  @@index([incidentId])
+}
+
+/// Platform-wide incidents. Phase 2 shipped this table with zero automatic
+/// writers; Phase 4's incidentEngine.ts is what actually groups
+/// SystemErrorGroups (and service-state conditions like a webhook backlog
+/// or a stale job) into an incident and flips status/severity as they
+/// evolve.
+///
+/// `fingerprint` identifies "this logical incident" (e.g. "Finix:degraded",
+/// "Background Jobs:reconcile") and is genuinely unique for the row's
+/// entire lifetime, including across a resolve-then-reopen cycle — see
+/// incidentEngine.ts's own doc comment for exactly how the reopen-vs-new-
+/// occurrence decision is made without needing a second row per
+/// fingerprint (which would need a partial unique index this project's
+/// `prisma db push` deploy flow can't express safely).
+model SystemIncident {
+  id String @id @default(cuid())
+  // @default(cuid()) exists ONLY so `prisma db push` can apply this new
+  // NOT NULL + UNIQUE column non-interactively against a table that already
+  // exists in production (Phase 2) — every row this app ever creates always
+  // sets a real fingerprint explicitly at create time (see incidentEngine.ts),
+  // so the generated default is never actually relied on by application code.
+  fingerprint String  @unique @default(cuid())
+  title       String
+  description String?
+  service     String
+  // INFO | WARNING | ERROR | CRITICAL
+  severity    String
+  // OPEN | INVESTIGATING | MONITORING | RESOLVED | IGNORED
+  status      String  @default("OPEN")
+
+  startedAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  lastSeenAt DateTime  @default(now())
+
+  occurrenceCount       Int @default(0)
+  affectedMerchantCount Int @default(0)
+  affectedUserCount     Int @default(0)
+
+  sentryIssueUrl String?
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  errorGroups SystemErrorGroup[]
+  alerts      SystemAlert[]
+
+  @@index([status, lastSeenAt])
+}
+
+// ─── Phase 4: Background Job Monitoring + Alerting ──────────────────────────
+
+/// One row per scheduled/background job run — the standardized layer every
+/// cron route in src/app/api/cron/** goes through via
+/// src/lib/monitoring/jobRunTracking.ts, instead of each job inventing its
+/// own tracking. "Last successful run" is deliberately NOT a stored field
+/// here (it's derived via a query — findFirst where jobName+status=SUCCEEDED
+/// order by completedAt desc) to avoid a second write path that could drift
+/// from the run history itself.
+model JobRun {
+  id       String  @id @default(cuid())
+  jobName  String
+  jobType  String
+  // Set only when a run is scoped to one merchant — most of these crons are
+  // platform-wide batch jobs with no single merchant, so this is null for
+  // the large majority of rows.
+  merchantId String?
+
+  // QUEUED | RUNNING | SUCCEEDED | PARTIALLY_FAILED | FAILED | RETRYING
+  status String @default("RUNNING")
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  processedCount Int?
+  successCount   Int?
+  failedCount    Int?
+  retryCount     Int @default(0)
+  attempt        Int @default(1)
+
+  lastErrorCode    String?
+  lastErrorMessage String?
+  requestId        String?
+  metadata         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobName, startedAt])
+  @@index([jobName, status])
+  @@index([status, startedAt])
+}
+
+/// Alert delivery history — one row per notification actually sent (or
+/// attempted) for an incident. Deliberately never written by the same
+/// recordHealthEvent()/SystemErrorGroup pipeline the rest of System Health
+/// uses — see incidentEngine.ts / alertEngine.ts's own doc comments for why
+/// an alert-delivery failure must never itself become a new health event
+/// (the recursive-alert-loop concern).
+model SystemAlert {
+  id         String @id @default(cuid())
+  incidentId String
+
+  // INFO | WARNING | ERROR | CRITICAL — the incident's severity AT THE TIME
+  // this alert was sent, not necessarily its current severity.
+  severity String
+  // DASHBOARD | EMAIL | SMS
+  channel String
+  // INITIAL | ESCALATION | REMINDER | RECOVERY
+  notificationType String
+
+  // WGC's own platform-admin contact (SUPPORT_EMAIL, or a configured alert
+  // phone number) — never a donor/merchant contact, so storing it verbatim
+  // is fine; still kept out of any donor-facing surface.
+  recipient String?
+
+  // PENDING | SENT | FAILED
+  deliveryStatus    String  @default("PENDING")
+  providerMessageId String?
+  failureReason     String?
+
+  sentAt    DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  incident SystemIncident @relation(fields: [incidentId], references: [id])
+
+  @@index([incidentId, sentAt])
+  @@index([channel, sentAt])
+}
+
+// =============================================================================
+// EVENTS / REGISTRATION
+//
+// A reusable, merchant-agnostic registration module — galas, golf outings,
+// dinners, conferences, retreats, free RSVPs, anything. An Event is NOT a
+// GivingLink and does not duplicate payment logic: it owns one dedicated,
+// auto-provisioned GivingLink (givingLinkId, plain string — this schema's
+// established cross-reference convention) and every paid registration or
+// optional donation is charged through the existing /api/g/[slug]/donate
+// route against that link, tagged with the EventRegistration id. A free
+// registration (total $0) never touches Finix and creates no Payment row.
+//
+// The payment itself is never stored here — EventRegistration.paymentId is
+// a plain reference to the ordinary Payment row, and the registration/
+// add-on/donation split is recorded on the registration so event revenue can
+// be reported without duplicating the transaction ledger.
+// =============================================================================
+
+model Event {
+  id       String @id @default(cuid())
+  churchId String
+  // Globally unique, human-readable public URL segment (/event/[slug]) —
+  // same convention as FundraisingCampaign.slug.
+  slug     String @unique
+
+  name          String
+  description   String?
+  coverImageUrl String?
+  // DRAFT | ACTIVE | INACTIVE | ARCHIVED. Only ACTIVE events accept
+  // registrations on their public page; DRAFT/INACTIVE/ARCHIVED all 404
+  // publicly, mirroring FundraisingCampaign's status gate.
+  status        String  @default("DRAFT")
+
+  startsAt        DateTime
+  endsAt          DateTime?
+  // IANA zone the merchant entered startsAt in — display only. startsAt is
+  // always stored as an absolute (UTC) instant.
+  timezone        String    @default("America/Chicago")
+  locationName    String?
+  locationAddress String?
+
+  registrationOpensAt  DateTime?
+  registrationClosesAt DateTime?
+
+  // Registration price. 0 = free RSVP (no payment step at all).
+  // PER_ATTENDEE charges priceCents x attendee count; PER_REGISTRATION
+  // charges priceCents once for the whole submission (a table, a team).
+  priceCents Int    @default(0)
+  priceMode  String @default("PER_ATTENDEE") // PER_ATTENDEE | PER_REGISTRATION
+
+  // Tax compliance: the value of what a registrant receives in exchange
+  // for the registration charge (a dinner, green fees), so only the
+  // remainder is recorded as a charitable contribution on the Payment's
+  // quid-pro-quo fields. Same unit as priceCents (per attendee for
+  // PER_ATTENDEE, once for PER_REGISTRATION). Null = the merchant hasn't
+  // said, so the full price is conservatively treated as benefit value —
+  // never over-reports a deductible amount. Optional donations are always
+  // fully contribution.
+  registrationFmvCents  Int?
+  allowOptionalDonation Boolean @default(false)
+  // Merchant-written label for the donation input ("Would you like to make
+  // an additional gift?") — null falls back to a generic default.
+  donationPrompt        String?
+
+  allowMultipleAttendees      Boolean @default(true)
+  maxAttendeesPerRegistration Int     @default(10)
+  attendeeEmailRequired       Boolean @default(false)
+  collectAttendeePhone        Boolean @default(false)
+  registrantPhoneRequired     Boolean @default(false)
+
+  // Generic "Team / Table / Company / Class" grouping — the merchant
+  // supplies the label; the platform never hardcodes what a group means.
+  allowGroups   Boolean @default(false)
+  groupLabel    String  @default("Team / Group Name")
+  groupRequired Boolean @default(false)
+
+  mailingAddressMode String @default("HIDDEN") // HIDDEN | OPTIONAL | REQUIRED
+
+  confirmationMessage String?
+
+  // Merchant-defined registration questions. Array of
+  // { id, label, type: TEXT|TEXTAREA|DROPDOWN|CHECKBOX|NUMBER, required,
+  //   options?: string[], appliesTo: "REGISTRATION"|"ATTENDEE" } — validated
+  // and normalized by src/lib/eventRegistration/customFields.ts, never trusted raw.
+  customFieldsJson   Json?
+  // { confirmation: {subject, body}, reminder: {enabled, daysBefore,
+  //   subject, body}, thankYou: {enabled, daysAfter, subject, body} } —
+  // merchant-customizable copy with {{merge fields}}; see
+  // src/lib/eventRegistration/emailTemplates.ts.
+  emailTemplatesJson Json?
+  // One-shot automation markers so the daily cron can never double-send.
+  reminderSentAt     DateTime?
+  thankYouSentAt     DateTime?
+
+  // The dedicated GivingLink payments for this event are charged through.
+  givingLinkId String?
+
+  createdByUserId String?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([givingLinkId])
+  @@index([churchId, status])
+  @@index([churchId, startsAt])
+}
+
+model EventAddOn {
+  id           String   @id @default(cuid())
+  churchId     String
+  eventId      String
+  name         String
+  description  String?
+  priceCents   Int
+  // Value of what the buyer receives for this add-on, per unit; null = the
+  // full price is treated as benefit value (nothing deductible). See
+  // Event.registrationFmvCents.
+  fmvCents     Int?
+  // Max quantity one registration may buy. 1 renders as a simple checkbox;
+  // >1 renders a quantity stepper.
+  maxQuantity  Int      @default(1)
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([churchId, eventId])
+}
+
+// One submission (a person, a table, a team). Attendees hang off it.
+model EventRegistration {
+  id       String @id @default(cuid())
+  churchId String
+  eventId  String
+
+  // Short, human-friendly reference shown on the confirmation page/email.
+  confirmationCode String  @unique
+  // Client-generated idempotency key so a retried/double-submitted form
+  // reuses the same registration instead of creating a second one.
+  clientKey        String?
+
+  // PENDING (created, not yet confirmed — a paid registration waiting on
+  // its charge, or a free one for the instant before confirmation) |
+  // CONFIRMED | CANCELED | PAYMENT_FAILED (a bank payment that was accepted
+  // as pending, then failed/returned — see eventRegistration/paymentOutcome).
+  // Pending registrations are excluded from counts,
+  // exports and audiences — they only become real once payment is accepted
+  // (or the total is $0).
+  status String @default("PENDING")
+
+  registrantFirstName String
+  registrantLastName  String
+  registrantEmail     String
+  registrantPhone     String?
+  // The registrant's Donor/contact row (resolved by email) — plain string.
+  donorId             String?
+
+  groupName           String?
+  customResponsesJson Json?
+
+  attendeeCount Int @default(1)
+
+  registrationAmountCents Int @default(0)
+  addOnsAmountCents       Int @default(0)
+  donationAmountCents     Int @default(0)
+  // Server-computed registration + add-ons + donation, before any
+  // donor-covered processing fee (that lives on the Payment row).
+  totalCents              Int @default(0)
+
+  // Plain reference to the Payment created by the existing donate flow —
+  // null for a free registration.
+  paymentId String?
+  paidAt    DateTime?
+
+  confirmationEmailSentAt DateTime?
+  internalNote            String?
+  confirmedAt             DateTime?
+  canceledAt              DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@unique([eventId, clientKey])
+  @@index([churchId, eventId, status])
+  @@index([churchId, donorId])
+}
+
+// First-class, individually queryable attendee. Deliberately NOT a JSON
+// blob on the registration: attendees are exported, checked in, filtered
+// and emailed one by one — including people who never paid anything.
+model EventAttendee {
+  id             String @id @default(cuid())
+  churchId       String
+  eventId        String
+  registrationId String
+
+  firstName       String
+  lastName        String
+  email           String?
+  normalizedEmail String?
+  phone           String?
+  // Linked to an existing Donor only when the attendee's email already
+  // matches one — attendees never create donor rows on their own.
+  donorId         String?
+
+  customResponsesJson Json?
+
+  checkedIn         Boolean   @default(false)
+  checkedInAt       DateTime?
+  checkedInByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, eventId])
+  @@index([registrationId])
+  @@index([churchId, normalizedEmail])
+}
+
+model EventRegistrationAddOn {
+  id             String   @id @default(cuid())
+  churchId       String
+  eventId        String
+  registrationId String
+  addOnId        String
+  // Snapshots — a later rename/reprice of the add-on never rewrites what
+  // this registration actually bought.
+  nameSnapshot   String
+  unitPriceCents Int
+  quantity       Int
+  lineTotalCents Int
+  createdAt      DateTime @default(now())
+
+  @@index([registrationId])
+  @@index([churchId, eventId])
 }

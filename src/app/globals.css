@@ -20,9 +20,31 @@
   --color-wgc-gray-50: #f9fafb;
   --color-wgc-gray-100: #f3f4f6;
   --color-wgc-gray-200: #e5e7eb;
-  --color-wgc-success: var(--color-wgc-gold-500);
+  /* Status colors — a real green/amber/red scale each, distinct from the
+     gold/navy brand palette above. wgc-success used to alias wgc-gold-500,
+     one shade off wgc-warning (#f59e0b) — the two read as nearly identical.
+     Scaled to match the light-bg/dark-text pattern the status banners
+     actually need (bg-*-50 fill, *-600 icon, *-800 text, *-600/700 CTA). */
+  --color-wgc-success-50: #f0fdf4;
+  --color-wgc-success-100: #dcfce7;
+  --color-wgc-success: #22c55e;
+  --color-wgc-success-600: #16a34a;
+  --color-wgc-success-700: #15803d;
+  --color-wgc-success-800: #166534;
+
+  --color-wgc-warning-50: #fffbeb;
+  --color-wgc-warning-100: #fef3c7;
   --color-wgc-warning: #f59e0b;
+  --color-wgc-warning-600: #d97706;
+  --color-wgc-warning-700: #b45309;
+  --color-wgc-warning-800: #92400e;
+
+  --color-wgc-error-50: #fef2f2;
+  --color-wgc-error-100: #fee2e2;
   --color-wgc-error: #ef4444;
+  --color-wgc-error-600: #dc2626;
+  --color-wgc-error-700: #b91c1c;
+  --color-wgc-error-800: #991b1b;
 
   --background-image-wgc-grad-gold: linear-gradient(135deg, #ca8a04 0%, #eab308 100%);
   --background-image-wgc-grad-navy: linear-gradient(135deg, #0f172a 0%, #010409 100%);

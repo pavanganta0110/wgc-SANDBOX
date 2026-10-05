@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { resolveWgcAdminBillingPermissions } from "@/lib/auth/billingAdminPermissions";
 import { logBillingAuditEvent } from "@/lib/billing/billingAudit";
 import { ensureSixMonthsFreePromotion } from "@/lib/billing/promotionAttribution";
@@ -11,13 +12,19 @@ import { ensureSixMonthsFreePromotion } from "@/lib/billing/promotionAttribution
  * Current clients receive no automatic promotion — this is the only path
  * that grants one, and it always records source ADMIN_APPROVED_CURRENT_CLIENT
  * (never overwriting the organization's original acquisition source).
- * Requires an internal reason, a customer-facing explanation, and is
- * gated on the designated-billing-administrator permission — not every
- * WGC admin can do this.
+ * Requires an internal reason, a customer-facing explanation, is gated on
+ * the designated-billing-administrator permission, and requires an
+ * MFA-verified session — not every WGC admin can do this, and revenue-
+ * impacting actions get the same defense-in-depth as money movement.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ churchId: string }> }) {
-  const session = await getAdminSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { permissionsJson: true } });
   const perms = resolveWgcAdminBillingPermissions(session.role, user?.permissionsJson);

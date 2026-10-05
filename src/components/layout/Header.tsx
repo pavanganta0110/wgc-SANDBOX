@@ -7,26 +7,41 @@ import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
 
-const NAV_LINKS = [
-  { name: "Home", href: "/" },
-  { name: "Partners", href: "/software-partners" },
+const PRODUCT_LINKS = [
+  { name: "Features", href: "/features" },
   { name: "Pricing", href: "/pricing" },
+  { name: "Compare", href: "/compare" },
+  { name: "Demo", href: "/demo" },
+  { name: "Integrations", href: "/integrations" },
+  { name: "Switch to WGC", href: "/switch" },
   { name: "Developers", href: "/developers" },
-  { name: "Demo", href: "/demo/donation" },
 ];
 
-const WHO_WE_SERVE_LINKS = [
-  { name: "Churches", href: "/for/churches" },
-  { name: "Christian Nonprofits", href: "/for/christian-nonprofits" },
-  { name: "Schools", href: "/for/schools" },
+const SOLUTIONS_LINKS = [
+  { name: "Nonprofits", href: "/for/christian-nonprofits" },
+  { name: "Churches & Ministries", href: "/for/churches" },
+  { name: "Schools & Booster Clubs", href: "/for/schools" },
+  { name: "Foundations", href: "/for/foundations" },
+  { name: "Associations & Memberships", href: "/for/associations" },
   { name: "Government & Public Sector", href: "/for/government" },
-  { name: "Nonprofits", href: "/for/nonprofits" },
+];
+
+const PARTNERS_LINKS = [
+  { name: "Software Platforms / ISVs", href: "/software-partners" },
+];
+
+type NavDropdown = { label: string; links: { name: string; href: string }[] };
+
+const DROPDOWNS: NavDropdown[] = [
+  { label: "Product", links: PRODUCT_LINKS },
+  { label: "Solutions", links: SOLUTIONS_LINKS },
+  { label: "Partners", links: PARTNERS_LINKS },
 ];
 
 export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [whoWeServeOpen, setWhoWeServeOpen] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -43,8 +58,8 @@ export default function Header() {
     <header
       className={cn(
         "sticky top-0 z-50 w-full transition-all duration-300 border-b",
-        scrolled 
-          ? "bg-white/80 backdrop-blur-md border-wgc-navy-100 shadow-sm py-2" 
+        scrolled
+          ? "bg-white/80 backdrop-blur-md border-wgc-navy-100 shadow-sm py-2"
           : "bg-white border-transparent py-4 md:py-6"
       )}
     >
@@ -78,76 +93,71 @@ export default function Header() {
                 Home
               </Link>
 
-              <div
-                className="relative"
-                onMouseEnter={() => setWhoWeServeOpen(true)}
-                onMouseLeave={() => setWhoWeServeOpen(false)}
-              >
-                <button
-                  type="button"
-                  onClick={() => setWhoWeServeOpen((v) => !v)}
-                  className={cn(
-                    "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
-                    WHO_WE_SERVE_LINKS.some((l) => l.href === pathname) ? "text-[#eab308]" : "text-[#010409]"
-                  )}
-                >
-                  Who We Serve
-                </button>
+              {DROPDOWNS.map((dropdown) => (
                 <div
-                  className={cn(
-                    "absolute left-0 top-full pt-4 transition-all duration-150",
-                    whoWeServeOpen ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-1"
-                  )}
+                  key={dropdown.label}
+                  className="relative"
+                  onMouseEnter={() => setOpenDropdown(dropdown.label)}
+                  onMouseLeave={() => setOpenDropdown(null)}
                 >
-                  <div className="w-64 rounded-2xl border border-wgc-navy-100 bg-white shadow-2xl p-2">
-                    {WHO_WE_SERVE_LINKS.map((link) => (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setWhoWeServeOpen(false)}
-                        className={cn(
-                          "block px-4 py-3 rounded-xl text-[12px] font-bold tracking-[0.05em] transition-all",
-                          pathname === link.href
-                            ? "bg-wgc-off text-[#eab308]"
-                            : "text-[#010409] hover:bg-wgc-off"
-                        )}
-                      >
-                        {link.name}
-                      </Link>
-                    ))}
+                  <button
+                    type="button"
+                    onClick={() => setOpenDropdown((v) => (v === dropdown.label ? null : dropdown.label))}
+                    className={cn(
+                      "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
+                      dropdown.links.some((l) => l.href === pathname) ? "text-[#eab308]" : "text-[#010409]"
+                    )}
+                  >
+                    {dropdown.label}
+                  </button>
+                  <div
+                    className={cn(
+                      "absolute left-0 top-full pt-4 transition-all duration-150",
+                      openDropdown === dropdown.label ? "opacity-100 visible translate-y-0" : "opacity-0 invisible -translate-y-1"
+                    )}
+                  >
+                    <div className="w-64 rounded-2xl border border-wgc-navy-100 bg-white shadow-2xl p-2">
+                      {dropdown.links.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          onClick={() => setOpenDropdown(null)}
+                          className={cn(
+                            "block px-4 py-3 rounded-xl text-[12px] font-bold tracking-[0.05em] transition-all",
+                            pathname === link.href
+                              ? "bg-wgc-off text-[#eab308]"
+                              : "text-[#010409] hover:bg-wgc-off"
+                          )}
+                        >
+                          {link.name}
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {NAV_LINKS.slice(1).map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={cn(
-                    "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
-                    pathname === link.href
-                      ? "text-[#eab308]"
-                      : "text-[#010409]"
-                  )}
-                >
-                  {link.name}
-                </Link>
               ))}
+
+              <Link
+                href="/resources"
+                className={cn(
+                  "text-[12px] tracking-[0.1em] font-bold transition-all hover:text-black",
+                  pathname.startsWith("/resources") ? "text-[#eab308]" : "text-[#010409]"
+                )}
+              >
+                Resources
+              </Link>
             </nav>
 
             {/* Desktop CTA */}
             <div className="flex items-center gap-6">
-              <Link href="/resources" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
-                Resources
-              </Link>
               <Link href="/contact" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Contact Sales
               </Link>
               <Link href="/merchant/login" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Merchant Login
               </Link>
-              <Link 
-                href="/start" 
+              <Link
+                href="/start"
                 className="metallic-gold px-10 py-4 text-[13px] font-bold rounded-2xl shadow-2xl transition-all tracking-wide"
               >
                 Get Started
@@ -157,8 +167,8 @@ export default function Header() {
 
           {/* Mobile menu button */}
           <div className="flex items-center md:hidden">
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               className="inline-flex items-center justify-center p-2 rounded-xl text-black hover:bg-gray-100 transition-all"
             >
@@ -172,72 +182,65 @@ export default function Header() {
       {/* Mobile menu */}
       <div className={cn(
         "lg:hidden absolute top-full left-0 w-full transition-all duration-300 ease-in-out bg-wgc-navy-950 shadow-2xl border-t border-white/5 overflow-hidden",
-        isMobileMenuOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+        isMobileMenuOpen ? "max-h-screen opacity-100 overflow-y-auto" : "max-h-0 opacity-0 pointer-events-none"
       )}>
         <div className="px-8 pt-8 pb-12 space-y-4">
+          {DROPDOWNS.map((dropdown) => (
+            <div className="mb-6" key={dropdown.label}>
+              <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">{dropdown.label}</span>
+              <div className="flex flex-col gap-4">
+                {dropdown.links.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={closeMenu}
+                    className={cn(
+                      "text-xl font-bold tracking-tight transition-all",
+                      pathname === link.href
+                        ? "text-[#eab308]"
+                        : "text-white hover:text-[#eab308]"
+                    )}
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
+
           <div className="mb-6">
-            <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">Who We Serve</span>
+            <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">Resources</span>
             <div className="flex flex-col gap-4">
-              {WHO_WE_SERVE_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={closeMenu}
-                  className={cn(
-                    "text-xl font-bold tracking-tight transition-all",
-                    pathname === link.href
-                      ? "text-[#eab308]"
-                      : "text-white hover:text-[#eab308]"
-                  )}
-                >
-                  {link.name}
-                </Link>
-              ))}
+              <Link
+                href="/resources"
+                onClick={closeMenu}
+                className={cn(
+                  "text-xl font-bold tracking-tight transition-all",
+                  pathname.startsWith("/resources") ? "text-[#eab308]" : "text-white hover:text-[#eab308]"
+                )}
+              >
+                Guides & Comparisons
+              </Link>
             </div>
           </div>
 
-          <div className="mb-6">
-            <span className="text-[10px] font-bold text-[#C9973A] uppercase tracking-[0.4em] block mb-6">Platform</span>
-            <div className="flex flex-col gap-4">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={closeMenu}
-                  className={cn(
-                    "text-xl font-bold tracking-tight transition-all",
-                    pathname === link.href 
-                      ? "text-[#eab308]" 
-                      : "text-white hover:text-[#eab308]"
-                  )}
-                >
-                  {link.name === "Pricing" ? "Fee Structure" : 
-                   link.name === "Home" ? "Home" :
-                   link.name === "Partners" ? "Partners" :
-                   link.name === "Developers" ? "Api Reference" :
-                   link.name}
-                </Link>
-              ))}
-            </div>
-          </div>
-          
           <div className="mt-8 pt-8 border-t border-white/5 flex flex-col gap-4">
-            <Link 
-              href="/contact" 
+            <Link
+              href="/contact"
               onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
             >
               Contact Sales
             </Link>
-            <Link 
-              href="/merchant/login" 
+            <Link
+              href="/merchant/login"
               onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
             >
               Merchant Login
             </Link>
-            <Link 
-              href="/start" 
+            <Link
+              href="/start"
               onClick={closeMenu}
               className="w-full flex items-center justify-center px-6 py-4 metallic-gold rounded-xl text-[12px] font-bold text-wgc-navy-950 shadow-lg tracking-wide transition-all active:scale-95"
             >

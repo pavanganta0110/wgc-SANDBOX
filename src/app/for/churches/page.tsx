@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { CreditCard, Repeat, ShieldCheck, LayoutDashboard, Landmark, Smartphone } from "lucide-react";
+import { CreditCard, Repeat, ShieldCheck, LayoutDashboard, Landmark, Smartphone, Heart, FileText, BarChart3, Undo2, Users, Plug, Mail, MessageSquare } from "lucide-react";
 import AudienceLandingPage, { type AudienceLandingContent } from "@/components/marketing/AudienceLandingPage";
 
 export const metadata: Metadata = {
-  title: "Church Online Giving Software | Tithe, Offering & Building Fund Payments",
-  description: "Take Sunday offerings, weekly tithes, and building-fund gifts online with low-cost ACH and card processing built for churches — text-to-give, recurring tithing, and a real-time giving dashboard.",
+  title: "Giving & Church Management Platform | Donor Management, Tithing & Reporting",
+  description: "More than online giving: donor management, recurring tithing, giving campaigns, invoicing, reporting, settlements, refunds, donor statements, team accounts with role-based permissions, and QuickBooks integration — all in one platform built for churches.",
   openGraph: {
     images: [{ url: "/og/verticals.png", width: 1200, height: 630 }],
-    title: "Church Online Giving Software | Tithe, Offering & Building Fund Payments",
-    description: "Take Sunday offerings, weekly tithes, and building-fund gifts online — text-to-give, recurring tithing, and a real-time giving dashboard.",
+    title: "Giving & Church Management Platform | Donor Management, Tithing & Reporting",
+    description: "Donor management, recurring tithing, giving campaigns, invoicing, reporting, settlements, refunds, donor statements, and team accounts — all in one platform.",
     url: "https://www.wgcpayments.com/for/churches",
   },
   alternates: { canonical: "/for/churches" },
@@ -16,9 +16,9 @@ export const metadata: Metadata = {
 
 const content: AudienceLandingContent = {
   eyebrow: "For Churches",
-  headline: "Tithing and offerings,",
-  headlineAccent: "made simple",
-  intro: "From Sunday morning offerings to building-fund campaigns, WGC Payments gives your church a giving platform members actually use — low-cost ACH, recurring tithing, and a dashboard your finance team can trust.",
+  headline: "Save time. Save money.",
+  headlineAccent: "Put more toward the mission.",
+  intro: "WGC brings tithing, donor management, recurring giving, giving campaigns, invoicing, reporting, payouts, refunds, and staff access into one platform — so your church spends less time piecing together tools and more time on ministry.",
   whoWeServeTitle: "Built for congregations of every size",
   whoWeServe: [
     "Single-campus and multi-site churches",
@@ -41,21 +41,41 @@ const content: AudienceLandingContent = {
     },
     {
       title: "Building fund & capital campaigns",
-      description: "Launch a dedicated giving page for a specific campaign, track it separately from general offerings, and see progress toward the goal in real time.",
+      description: "Launch a dedicated giving page for a specific campaign, email your congregation the link directly, and track progress toward the goal in real time.",
     },
   ],
-  featuresTitle: "Everything your ministry needs",
-  featuresSubtitle: "A complete giving ecosystem designed to facilitate generous giving without the headache of legacy processors.",
+  featuresTitle: "Everything your church needs — not just payments",
+  featuresSubtitle: "A complete giving and operations platform, so your staff isn't jumping between a processor, a spreadsheet, and separate reporting tools.",
   features: [
+    { icon: Heart, title: "Donor management", description: "A full donor record — giving history, contact info, and notes — for every member and guest who gives." },
     { icon: CreditCard, title: "Card and ACH giving", description: "Accept all major credit cards and low-cost ACH bank transfers directly from your congregation." },
     { icon: Repeat, title: "Recurring tithes & offerings", description: "Let members set up weekly, biweekly, or monthly recurring gifts in a few clicks." },
-    { icon: Smartphone, title: "Text-to-give & embeddable giving", description: "Drop a giving button or inline form directly into your church website or app — no redirect required." },
-    { icon: ShieldCheck, title: "Secure onboarding", description: "Our PCI Level 1 compliant onboarding process verifies your church's data securely and swiftly." },
-    { icon: LayoutDashboard, title: "Church giving dashboard", description: "Get direct access to your dedicated portal for complete transparency over every gift, fund, and donor." },
-    { icon: Landmark, title: "Payouts & deposits", description: "Track exactly when donations settle and land in your church's bank account, fund by fund." },
+    { icon: Mail, title: "Email giving campaigns", description: "Send your giving link straight to a donor list by email for a fund drive or appeal, with per-donor tracking." },
+    { icon: MessageSquare, title: "Text campaigns", description: "Send your giving link to a donor list by text message.", badge: "Coming Soon" },
+    { icon: Smartphone, title: "Embeddable giving pages", description: "Drop a giving button or inline form directly into your church website or app — no redirect required." },
+    { icon: FileText, title: "Invoicing", description: "Bill facility rentals, event fees, or school tuition and track payment status alongside your giving." },
+    { icon: BarChart3, title: "Reporting & analytics", description: "Real-time dashboards on giving trends, fund balances, and donor retention." },
+    { icon: Landmark, title: "Settlements & payouts", description: "Track exactly when donations settle and land in your church's bank account, fund by fund." },
+    { icon: Undo2, title: "Refunds & disputes", description: "Issue a refund or respond to a dispute directly from your dashboard." },
+    { icon: ShieldCheck, title: "Donor statements", description: "Auto-generated, tax-ready annual giving statements for every donor — no manual compiling each January." },
+    { icon: Users, title: "Team accounts & permissions", description: "Give your pastor, finance team, and volunteers their own logins — Owner, Admin, Fundraiser, or Viewer access." },
+    { icon: Plug, title: "QuickBooks integration", description: "Sync giving and transactions directly into QuickBooks, so your books stay current automatically." },
+    { icon: LayoutDashboard, title: "Church giving dashboard", description: "Complete transparency over every gift, fund, and donor in one place." },
+  ],
+  teamSpotlightTitle: "Give your staff and volunteers the right access",
+  teamSpotlightSubtitle: "Your pastor, finance staff, and volunteer fundraisers all need different levels of access. WGC gives each person their own login instead of one shared password floating around the church office.",
+  teamRoles: [
+    { role: "Owner", description: "Full control — billing, team management, and every feature." },
+    { role: "Admin", description: "Runs day-to-day operations: giving, donors, reports, and settings." },
+    { role: "Fundraiser", description: "Manages campaigns and donor outreach without access to sensitive settings." },
+    { role: "Viewer", description: "Read-only access for elders, board members, or auditors who just need visibility." },
   ],
   faqTitle: "Church giving, answered",
   faqs: [
+    {
+      question: "Is this just a payment processor for online giving?",
+      answer: "No. Alongside card and ACH giving, WGC includes donor management, recurring tithing, email giving campaigns, invoicing, reporting, settlements, refunds, donor statements, team accounts with role-based permissions, and QuickBooks integration — all in one dashboard.",
+    },
     {
       question: "Can donors set up recurring tithes without creating an account?",
       answer: "Yes. A donor enters their card or bank details once on your giving page and can choose a one-time or recurring gift — no login or app required.",
@@ -69,12 +89,16 @@ const content: AudienceLandingContent = {
       answer: "Yes. Create dedicated giving links per fund or campaign, and your dashboard reports break down totals by fund automatically.",
     },
     {
-      question: "Do you support ACH giving, not just cards?",
-      answer: "Yes — ACH bank transfers are supported at a lower cost than card processing, which matters most on large or recurring gifts.",
+      question: "Does WGC support different logins for staff and volunteers?",
+      answer: "Yes — Owner, Admin, Fundraiser, and Viewer roles let you give each person access scoped to what they actually need, instead of everyone sharing one login.",
+    },
+    {
+      question: "Can donors cover the processing fee so it doesn't cost our church anything?",
+      answer: "Yes — when a donor chooses to cover the fee, the processing cost to your church is $0.",
     },
   ],
-  ctaHeadline: "Ready to grow giving?",
-  ctaSubheadline: "Join the churches and ministries using our giving infrastructure to serve their congregations better.",
+  ctaHeadline: "Ready to give your staff their time back?",
+  ctaSubheadline: "Join the churches using WGC to run giving, donors, and operations from one place.",
 };
 
 export default function ChurchesLandingPage() {

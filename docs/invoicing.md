@@ -327,9 +327,12 @@ new): `NEXT_PUBLIC_FINIX_APPLICATION_ID`, `NEXT_PUBLIC_FINIX_ENV`,
 `NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID`, `GOOGLE_PAY_PRODUCTION_APPROVED`,
 `CRON_SECRET`.
 
-New, optional (SMS only — everything else works with zero new
-configuration): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
-`TWILIO_FROM_NUMBER`, `INVOICE_SMS_REMINDERS_ENABLED`.
+Invoice SMS reminders are currently hard-disabled at the code level
+(`src/lib/invoices/invoiceSms.ts`) — this is not an authentication message
+and there is no separate, Twilio-approved non-auth number/campaign for it
+to use yet. `INVOICE_SMS_REMINDERS_ENABLED` has no effect until that
+changes. Everything else in this doc works with zero SMS-related
+configuration.
 
 ## Testing
 

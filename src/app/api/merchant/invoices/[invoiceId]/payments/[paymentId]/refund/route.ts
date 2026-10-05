@@ -38,6 +38,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ invoice
     if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
     throw err;
   }
+  // Reauthentication gate — same pattern/window as the transfer refund
+  // route, bank-account changes, and change-password. A refund is a
+  // refund regardless of which ledger (Payment vs. InvoicePayment) it's
+  // recorded against.
+  const nowEpochSeconds = Math.floor(Date.now() / 1000);
+  if (!auth.authTime || nowEpochSeconds - auth.authTime > 600) {
+    return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+  }
 
   const { invoiceId, paymentId } = await params;
   const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, churchId: auth.churchId } });

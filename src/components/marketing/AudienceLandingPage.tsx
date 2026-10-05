@@ -10,6 +10,9 @@ export interface AudienceFeature {
   icon: LucideIcon;
   title: string;
   description: string;
+  /** Optional "Coming Soon" pill for a roadmap capability that isn't live
+   * yet — never set for something already shipped. */
+  badge?: string;
 }
 
 export interface AudienceUseCase {
@@ -17,9 +20,19 @@ export interface AudienceUseCase {
   description: string;
 }
 
+export interface AudienceCategory {
+  title: string;
+  items: string[];
+}
+
 export interface AudienceFAQ {
   question: string;
   answer: string;
+}
+
+export interface AudienceTeamRole {
+  role: string;
+  description: string;
 }
 
 export interface AudienceLandingContent {
@@ -29,12 +42,26 @@ export interface AudienceLandingContent {
   intro: string;
   whoWeServeTitle: string;
   whoWeServe: string[];
+  /** Optional grouped alternative to the flat `whoWeServe` list — when
+   * present, rendered as titled category cards (each with its own bullet
+   * list) instead of the single flat grid. Lets a broader audience page
+   * (e.g. Nonprofits, which covers several distinct sub-audiences like
+   * Missions) give each sub-audience its own clearly labeled section
+   * without every other audience page needing to adopt the same shape. */
+  whoWeServeCategories?: AudienceCategory[];
   useCasesTitle: string;
   useCasesSubtitle: string;
   useCases: AudienceUseCase[];
   featuresTitle: string;
   featuresSubtitle: string;
   features: AudienceFeature[];
+  /** Optional "Owner / Admin / Fundraiser / Viewer" team-accounts spotlight,
+   * rendered between Features and FAQ. Omit to skip the section entirely —
+   * lets pages that don't want it (or haven't been updated yet) render
+   * unchanged. */
+  teamSpotlightTitle?: string;
+  teamSpotlightSubtitle?: string;
+  teamRoles?: AudienceTeamRole[];
   faqTitle: string;
   faqs: AudienceFAQ[];
   ctaHeadline: string;
@@ -50,12 +77,16 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
     intro,
     whoWeServeTitle,
     whoWeServe,
+    whoWeServeCategories,
     useCasesTitle,
     useCasesSubtitle,
     useCases,
     featuresTitle,
     featuresSubtitle,
     features,
+    teamSpotlightTitle,
+    teamSpotlightSubtitle,
+    teamRoles,
     faqTitle,
     faqs,
     ctaHeadline,
@@ -111,7 +142,7 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
                   <Link href="/start" className="metallic-gold inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all shadow-2xl hover:-translate-y-1 tracking-wide">
                     Get Started
                   </Link>
-                  <Link href="/demo/donation" className="inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all border border-white/20 text-white hover:bg-white/10 tracking-wide">
+                  <Link href="/demo" className="inline-flex items-center justify-center px-10 py-5 text-[13px] font-bold rounded-2xl transition-all border border-white/20 text-white hover:bg-white/10 tracking-wide">
                     See a Live Demo
                   </Link>
                 </div>
@@ -127,14 +158,32 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
               <h2 className="text-2xl md:text-3xl font-bold text-wgc-navy-900 mb-10 text-center">
                 {whoWeServeTitle}
               </h2>
-              <div className="grid sm:grid-cols-2 gap-4">
-                {whoWeServe.map((item) => (
-                  <div key={item} className="flex items-start gap-3 p-4 rounded-xl bg-wgc-off border border-wgc-navy-50">
-                    <CheckCircle2 className="w-5 h-5 text-wgc-gold-500 shrink-0 mt-0.5" />
-                    <span className="text-wgc-navy-700 text-sm font-medium">{item}</span>
-                  </div>
-                ))}
-              </div>
+              {whoWeServeCategories ? (
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {whoWeServeCategories.map((category) => (
+                    <div key={category.title} className="p-6 rounded-2xl bg-wgc-off border border-wgc-navy-50">
+                      <h3 className="text-sm font-bold text-wgc-navy-900 uppercase tracking-wide mb-4">{category.title}</h3>
+                      <div className="space-y-2.5">
+                        {category.items.map((item) => (
+                          <div key={item} className="flex items-start gap-2.5">
+                            <CheckCircle2 className="w-4 h-4 text-wgc-gold-500 shrink-0 mt-0.5" />
+                            <span className="text-wgc-navy-700 text-sm font-medium">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {whoWeServe.map((item) => (
+                    <div key={item} className="flex items-start gap-3 p-4 rounded-xl bg-wgc-off border border-wgc-navy-50">
+                      <CheckCircle2 className="w-5 h-5 text-wgc-gold-500 shrink-0 mt-0.5" />
+                      <span className="text-wgc-navy-700 text-sm font-medium">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </ScrollFade>
           </div>
         </section>
@@ -170,12 +219,44 @@ export default function AudienceLandingPage({ content }: { content: AudienceLand
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {features.map((feature, idx) => (
                 <ScrollFade key={feature.title} delay={idx * 0.1}>
-                  <FeatureCard icon={feature.icon} title={feature.title} description={feature.description} />
+                  <FeatureCard icon={feature.icon} title={feature.title} description={feature.description} badge={feature.badge} />
                 </ScrollFade>
               ))}
             </div>
           </div>
         </section>
+
+        {/* TEAM & PERMISSIONS SPOTLIGHT */}
+        {teamRoles && teamRoles.length > 0 && (
+          <section className="py-24 bg-white border-t border-wgc-navy-50">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+              <ScrollFade>
+                <div className="grid lg:grid-cols-2 gap-16 items-center">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-wgc-navy-50 text-wgc-navy-600 text-[10px] font-bold tracking-[0.2em] uppercase mb-6 border border-wgc-navy-100 font-mono">
+                      Built for Real Teams
+                    </div>
+                    <h2 className="text-3xl md:text-5xl font-bold text-wgc-navy-950 mb-6 tracking-tight">
+                      {teamSpotlightTitle || "Stop sharing one login"}
+                    </h2>
+                    <p className="text-lg text-wgc-navy-500 leading-relaxed">
+                      {teamSpotlightSubtitle ||
+                        "Give every staff member and volunteer their own account, scoped to exactly what they need — instead of one shared password everyone knows."}
+                    </p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-5">
+                    {teamRoles.map((r) => (
+                      <div key={r.role} className="bg-wgc-off rounded-2xl border border-wgc-navy-100 p-6">
+                        <div className="text-[10px] font-black text-wgc-gold-600 uppercase tracking-widest mb-2 font-mono">{r.role}</div>
+                        <p className="text-sm font-medium text-wgc-navy-600 leading-relaxed">{r.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </ScrollFade>
+            </div>
+          </section>
+        )}
 
         {/* FAQ SECTION */}
         <section className="py-24 bg-white border-t border-wgc-navy-50">

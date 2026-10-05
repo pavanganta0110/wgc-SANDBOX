@@ -9,6 +9,7 @@ import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { validateFundAssignments, FundAssignmentError, loadAllAssignedFunds, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
+import { validateDefaultDonationSettings } from "@/lib/givingLinks/defaultDonationSettings";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -68,6 +69,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
+    defaultDonationType,
+    defaultRecurringAmountCents,
     allowedPaymentMethods,
     donorFieldSettings,
     collectMailingAddress,
@@ -147,6 +150,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  // The default donation type/amount must stay valid against the link's
+  // *resulting* configuration (e.g. turning recurring off, switching to a
+  // fixed price, or changing the suggested amounts can invalidate them), so
+  // whenever any input they depend on changes they're re-validated against
+  // the merged values and re-normalized — never against the request alone.
+  const defaultsRelevantKeys = [
+    defaultDonationType,
+    defaultRecurringAmountCents,
+    recurringEnabled,
+    amountType,
+    minAmountCents,
+    maxAmountCents,
+    suggestedAmountsCents,
+    allowCustomAmount,
+  ];
+  let validatedDefaults: { defaultDonationType: string; defaultRecurringAmountCents: number | null } | null = null;
+  if (defaultsRelevantKeys.some((v) => v !== undefined)) {
+    const effectiveAmountType = resolvedAmountType ?? (existing.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY");
+    const effectiveSuggested = suggestedAmountsCents !== undefined ? suggestedAmountsCents : existing.suggestedAmountsJson;
+    const defaultsResult = validateDefaultDonationSettings({
+      defaultDonationType: defaultDonationType !== undefined ? defaultDonationType : existing.defaultDonationType,
+      defaultRecurringAmountCents: defaultRecurringAmountCents !== undefined ? defaultRecurringAmountCents : existing.defaultRecurringAmountCents,
+      recurringEnabled: recurringEnabled !== undefined ? !!recurringEnabled : existing.recurringEnabled,
+      amountType: effectiveAmountType,
+      minAmountCents: effectiveAmountType === "VARIABLE" ? (minAmountCents !== undefined ? minAmountCents : existing.minAmountCents) : null,
+      maxAmountCents: effectiveAmountType === "VARIABLE" ? (maxAmountCents !== undefined ? maxAmountCents : existing.maxAmountCents) : null,
+      suggestedAmountsCents: Array.isArray(effectiveSuggested) ? (effectiveSuggested as number[]) : [2500, 5000, 10000, 25000],
+      allowCustomAmount: allowCustomAmount !== undefined ? !!allowCustomAmount : existing.allowCustomAmount,
+    });
+    if (!defaultsResult.ok) {
+      return NextResponse.json({ error: defaultsResult.error }, { status: 400 });
+    }
+    validatedDefaults = defaultsResult.value;
+  }
+
   const link = await prisma.givingLink.update({
     where: { id },
     data: {
@@ -168,6 +206,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(resolvedFundSelectionEnabled !== undefined ? { fundSelectionEnabled: resolvedFundSelectionEnabled } : {}),
       ...(recurringEnabled !== undefined ? { recurringEnabled } : {}),
       ...(allowedFrequencies !== undefined ? { allowedFrequenciesJson: allowedFrequencies } : {}),
+      ...(validatedDefaults ? { defaultDonationType: validatedDefaults.defaultDonationType, defaultRecurringAmountCents: validatedDefaults.defaultRecurringAmountCents } : {}),
       ...(allowedPaymentMethods !== undefined ? { allowedPaymentMethodsJson: allowedPaymentMethods } : {}),
       ...(donorFieldSettings !== undefined ? { donorFieldSettingsJson: donorFieldSettings } : {}),
       ...(typeof collectMailingAddress === "boolean" ? { collectMailingAddress } : {}),

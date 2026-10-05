@@ -41,15 +41,15 @@ beforeEach(() => {
 });
 
 describe("POST /api/webhooks/printful — secret verification", () => {
-  it("processes the webhook normally when no secret is configured (mock mode / before real credentials arrive)", async () => {
+  it("fails closed (401) when no secret is configured, rather than silently skipping verification — the mock simulator never goes through this HTTP route, so this can never block local/mock testing", async () => {
     const { getPrintfulWebhookSecret } = await import("@/lib/integrations/printful/config");
     vi.mocked(getPrintfulWebhookSecret).mockReturnValue(null);
 
     const { POST } = await load();
     const res = await POST(makeRequest("https://example.com/api/webhooks/printful", { type: "order_updated" }));
 
-    expect(res.status).toBe(200);
-    expect(mockRecordAndProcessWebhookEvent).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(401);
+    expect(mockRecordAndProcessWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("rejects with 401 when a secret is configured but the request has no key at all", async () => {

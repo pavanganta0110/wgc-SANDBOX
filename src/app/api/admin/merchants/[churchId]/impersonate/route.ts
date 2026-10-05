@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/auth/session";
+import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
+import { isAuthError } from "@/lib/auth/errors";
 import { startImpersonation } from "@/lib/auth/impersonation";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 
@@ -14,14 +15,25 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
  * If finer-grained control is wanted later, add a dedicated boolean
  * permission column rather than expanding this role split.
  *
+ * Requires an MFA-verified session (requireMfaVerifiedAdminSession) — not
+ * just the admin dashboard layout's redirect gate. A direct POST from a
+ * password-only or pre-enrollment session must fail here at the API level,
+ * since the layout gate only protects page navigation, not direct API
+ * calls. See requireAdminSession.ts for why this checks the CURRENT
+ * session's OTP-verification status rather than the account's mfaEnabled
+ * flag.
+ *
  * churchId is read only from the URL path param — never from the request
  * body — so there is no way for a client-supplied payload to target a
  * different organization than the one this route was actually called for.
  */
 export async function POST(req: Request, context: { params: Promise<{ churchId: string }> }) {
-  const session = await getAdminSession();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let session;
+  try {
+    session = await requireMfaVerifiedAdminSession();
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
   }
   if (session.role !== "wgc_super_admin") {
     return NextResponse.json({ error: "Only WGC super admins can view a merchant's dashboard." }, { status: 403 });

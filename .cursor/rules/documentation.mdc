@@ -1,0 +1,30 @@
+---
+description: Keep generated docs in sync with the code; consult them before large refactors
+alwaysApply: true
+---
+
+# Documentation maintenance rules
+
+This repo has a generated documentation set under `docs/` and `codebase-analysis-docs/`, plus a root `CLAUDE.md` context file. These are living documents, not a one-time snapshot — treat drift between docs and code as a bug.
+
+## Before a large refactor or cross-cutting change
+
+1. Read [`codebase-analysis-docs/CODEBASE_KNOWLEDGE.md`](../../codebase-analysis-docs/CODEBASE_KNOWLEDGE.md) — it documents the load-bearing architectural patterns (transactional outbox, reconciliation-never-creates-a-charge, idempotency-by-DB-constraint) and known gotchas.
+2. Read [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) for the relevant subsystem's design before changing it.
+3. Check [`docs/DATA_MODELS.md`](../../docs/DATA_MODELS.md) before adding/changing a Prisma model or a field with a non-obvious invariant.
+
+## When touching a core module
+
+Core modules: anything under `src/app/api/webhooks/`, `src/lib/jobs/`, `src/lib/reconciliation/`, `src/lib/finix/`, `src/lib/auth/`, or anything that creates/mutates a `Payment`, `InvoicePayment`, or `RefundRequest`.
+
+- If your change alters the *behavior* documented in [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md), [`docs/API.md`](../../docs/API.md), [`docs/DATA_MODELS.md`](../../docs/DATA_MODELS.md), or [`docs/AUTHENTICATION.md`](../../docs/AUTHENTICATION.md), update the relevant section in the same change — don't leave it for later.
+- If you're not sure whether a change is documentation-worthy, at minimum flag it in your response to the user rather than silently letting the docs go stale.
+- New environment variables must be added to [`docs/CONFIGURATION.md`](../../docs/CONFIGURATION.md).
+- New API routes worth documenting (i.e. not a thin CRUD wrapper already covered by the folder-level index in `docs/API.md`) should get an entry there.
+
+## Style for new documentation
+
+- Match the existing tone: direct, assumes a competent developer joining the project, explains *why* not just *what*.
+- Cross-link instead of duplicating — if a concept is already explained in another doc, link to it rather than re-explaining it.
+- Prefer updating an existing doc's section over creating a new file, unless the topic is genuinely a new cross-cutting concern (in which case, add it to the documentation map in root `CLAUDE.md` too).
+- Keep [`codebase-analysis-docs/CODEBASE_KNOWLEDGE.md`](../../codebase-analysis-docs/CODEBASE_KNOWLEDGE.md)'s "Documentation TODO" section current — remove items once addressed, add newly-discovered gaps.

@@ -103,10 +103,10 @@ describe("buildDonationReceiptPdfProps", () => {
     expect(props.donorEmail).toBe("jane@example.com");
   });
 
-  it("suppresses donor name/email when the donor is anonymous", async () => {
+  it("always shows the real donor name/email on the receipt itself, even when the donor has anonymousPreference set — 2026-09-07 fix: anonymousPreference means 'don't show my name publicly', it must never blank a donor's own name on their own private tax receipt", async () => {
     mockPrisma.donor.findUnique.mockResolvedValue({ id: "donor-1", name: "Jane Donor", email: "jane@example.com", anonymousPreference: true });
     const { buildDonationReceiptPdfProps } = await loadModule();
-    const { props, donorName } = await buildDonationReceiptPdfProps(payment, "church-1", {
+    const { props, donorName, donorEmail } = await buildDonationReceiptPdfProps(payment, "church-1", {
       receiptNumber: "TC-0001",
       paymentAmountCents: 5000,
       goodsServicesProvided: false,
@@ -115,8 +115,25 @@ describe("buildDonationReceiptPdfProps", () => {
       recordedContributionAmountCents: 5000,
       acknowledgmentText: "Thank you",
     });
-    expect(donorName).toBe("Anonymous Donor");
-    expect(props.donorEmail).toBeNull();
+    expect(donorName).toBe("Jane Donor");
+    expect(donorEmail).toBe("jane@example.com");
+    expect(props.donorEmail).toBe("jane@example.com");
+  });
+
+  it("same fix applies when it's the specific Payment (not the donor's standing profile) that's marked isAnonymous", async () => {
+    mockPrisma.donor.findUnique.mockResolvedValue({ id: "donor-1", name: "Jane Donor", email: "jane@example.com", anonymousPreference: false });
+    const { buildDonationReceiptPdfProps } = await loadModule();
+    const { donorName, donorEmail } = await buildDonationReceiptPdfProps({ ...payment, isAnonymous: true }, "church-1", {
+      receiptNumber: "TC-0001",
+      paymentAmountCents: 5000,
+      goodsServicesProvided: false,
+      goodsServicesDescription: null,
+      goodsServicesFairMarketValueCents: null,
+      recordedContributionAmountCents: 5000,
+      acknowledgmentText: "Thank you",
+    });
+    expect(donorName).toBe("Jane Donor");
+    expect(donorEmail).toBe("jane@example.com");
   });
 
   it("throws when the organization can't be found", async () => {

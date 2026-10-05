@@ -7,6 +7,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+import { emitEvent } from "@/lib/events/emitEvent";
 
 const ADDRESS_FIELD_NAMES = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"] as const;
 
@@ -155,6 +156,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ donorI
     },
     req,
   });
+
+  try {
+    await emitEvent({ type: "donor.updated", churchId: auth.churchId, data: { donorId: donor.id, changedFields } });
+  } catch (err) {
+    console.error("Failed to emit donor.updated event:", err);
+  }
 
   // Merge in the address fields applyDonorAddressUpdate already committed,
   // so the response reflects both in one consistent donor object.

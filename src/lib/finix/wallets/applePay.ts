@@ -61,9 +61,23 @@ export function isApplePayAvailable(): boolean {
     return false;
   }
 
-  const canMake = window.ApplePaySession!.canMakePayments();
-  apayLog("canMakePayments():", canMake);
-  return canMake;
+  try {
+    // Safari throws InvalidAccessError (not a rejected promise, a thrown
+    // exception) when called from an insecure origin — e.g. local dev over
+    // plain http://localhost, which Safari does NOT treat as a secure
+    // context for ApplePaySession the way it does for many other web APIs.
+    // Previously uncaught here, which crashed the whole component tree in
+    // dev (visible as a Next.js error overlay) purely from having Apple
+    // Pay available in the browser/OS, on a page that just isn't served
+    // over HTTPS yet — not a real unavailability, but must still resolve
+    // to "not available" since no session can actually be started.
+    const canMake = window.ApplePaySession!.canMakePayments();
+    apayLog("canMakePayments():", canMake);
+    return canMake;
+  } catch (err) {
+    apayLog("canMakePayments() threw — treating as not available:", err);
+    return false;
+  }
 }
 
 export interface ApplePayBillingContact {

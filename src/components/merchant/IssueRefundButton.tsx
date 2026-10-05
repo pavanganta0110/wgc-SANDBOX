@@ -32,6 +32,12 @@ export default function IssueRefundButton({
         body: JSON.stringify({ amountCents }),
       });
       const data = await res.json();
+      if (res.status === 403 && data.reauthRequired) {
+        toastApiError("Reauthentication required for sensitive changes. Redirecting...");
+        const redirectTo = encodeURIComponent(window.location.pathname);
+        router.push(`/merchant/login?reauth=true&redirectTo=${redirectTo}&reauthType=refund`);
+        return;
+      }
       if (!res.ok) {
         toastApiError(data);
         return;

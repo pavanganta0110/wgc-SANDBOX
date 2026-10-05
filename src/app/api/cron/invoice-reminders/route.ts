@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { sendDueInvoiceReminders } from "@/lib/invoices/invoiceReminders";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
+import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
 /**
  * Daily cron (see vercel.json) — sends every invoice reminder whose
@@ -22,6 +23,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await sendDueInvoiceReminders();
+  const result = await withJobRunTracking({ jobName: "invoice-reminders", jobType: "email" }, async () => {
+    const r = await sendDueInvoiceReminders();
+    return { processedCount: r.processed, successCount: r.sent, failedCount: r.failed, metadata: { skipped: r.skipped } };
+  });
   return NextResponse.json({ success: true, ...result });
 }

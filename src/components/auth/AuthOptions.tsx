@@ -44,6 +44,17 @@ function AuthOptionsInner({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [reauthHasPassword, setReauthHasPassword] = useState(true);
 
+  // MFA step — set once /api/merchant/login responds with mfaRequired,
+  // replacing the email/password form with a code-entry form until it's
+  // verified. Applies to both a normal login and a reauth attempt (both
+  // POST the same /api/merchant/login), which is intentional: a step-up
+  // reauth for a sensitive action should be at least as strong as the
+  // original login, not weaker.
+  const [mfaChallenge, setMfaChallenge] = useState<{ challengeId: string; maskedPhone: string } | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resending, setResending] = useState(false);
+
   // Error handling from URL
   useEffect(() => {
     const errorMsg = searchParams.get("error");
@@ -150,6 +161,13 @@ function AuthOptionsInner({
         throw new Error(data.error || "Authentication failed.");
       }
 
+      if (data.mfaRequired) {
+        setMfaChallenge({ challengeId: data.challengeId, maskedPhone: data.maskedPhone });
+        setResendCooldown(60);
+        setAuthLoading(null);
+        return;
+      }
+
       toast.success("Success!");
       // Redirect
       const finalDest = redirectTo || "/merchant/dashboard";
@@ -161,10 +179,126 @@ function AuthOptionsInner({
     }
   };
 
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge || authLoading) return;
+    setAuthLoading("email");
+    try {
+      const res = await fetch("/api/merchant/login/mfa-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: mfaChallenge.challengeId, code: mfaCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Verification failed.");
+
+      toast.success("Success!");
+      const finalDest = redirectTo || "/merchant/dashboard";
+      router.replace(finalDest);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Incorrect code");
+      setAuthLoading(null);
+    }
+  };
+
+  // Ticks the "Resend available in Ns" countdown client-side; the server
+  // is the actual source of truth for the cooldown (checkOtpSendLimits),
+  // this just keeps the button disabled so a resend isn't attempted (and
+  // rejected with a 429) before it's likely to succeed.
+  useEffect(() => {
+    if (!mfaChallenge || resendCooldown <= 0) return;
+    const timer = setInterval(() => setResendCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [mfaChallenge, resendCooldown]);
+
+  const handleResend = async () => {
+    if (!mfaChallenge || resending || resendCooldown > 0) return;
+    setResending(true);
+    try {
+      const res = await fetch("/api/merchant/login/mfa-resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ challengeId: mfaChallenge.challengeId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (typeof data.retryAfterSeconds === "number") setResendCooldown(data.retryAfterSeconds);
+        throw new Error(data.error || "Couldn't resend the code.");
+      }
+      setMfaChallenge({ challengeId: mfaChallenge.challengeId, maskedPhone: data.maskedPhone });
+      setResendCooldown(data.cooldownSeconds || 60);
+      toast.success("A new code is on its way.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't resend the code.");
+    } finally {
+      setResending(false);
+    }
+  };
+
   if (loadingConfig) {
     return (
       <div className="flex flex-col items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+      </div>
+    );
+  }
+
+  if (mfaChallenge) {
+    return (
+      <div className="w-full max-w-md mx-auto space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Enter your verification code</h1>
+          <p className="text-slate-600 text-sm">We texted a 6-digit code to {mfaChallenge.maskedPhone}.</p>
+        </div>
+        <form onSubmit={handleMfaSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+          <div>
+            <label className="block text-sm font-semibold mb-2">Verification Code</label>
+            <input
+              required
+              autoFocus
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={mfaCode}
+              onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+              className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308] text-center text-lg tracking-[0.3em]"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={!!authLoading || mfaCode.length !== 6}
+            className="w-full px-6 py-3 rounded-xl font-bold text-slate-900 metallic-gold shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {authLoading === "email" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
+          </button>
+          <div className="text-center text-xs text-slate-500">
+            Didn&apos;t receive a code?{" "}
+            {resendCooldown > 0 ? (
+              <span>Resend available in {resendCooldown}s</span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending}
+                className="font-semibold text-blue-600 hover:underline disabled:opacity-50"
+              >
+                {resending ? "Sending…" : "Resend code"}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMfaChallenge(null);
+              setMfaCode("");
+              setResendCooldown(0);
+            }}
+            className="w-full text-xs text-slate-500 hover:text-slate-900"
+          >
+            Back to login
+          </button>
+        </form>
       </div>
     );
   }

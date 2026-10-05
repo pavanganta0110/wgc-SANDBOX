@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { SMS_2FA_CONSENT_TEXT } from "@/lib/auth/smsConsentText";
 
 const inputClass = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400";
 
@@ -28,6 +29,25 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
   const [hasPassword, setHasPassword] = useState(false);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(true);
+  // True only when a WGC admin is viewing this church via "View as
+  // Merchant" — every field below intentionally comes back blank in that
+  // case (see auth-accounts/route.ts's comment), since this page shows a
+  // real person's own password/phone/MFA, and there is no single merchant
+  // user an impersonation session maps to.
+  const [isImpersonating, setIsImpersonating] = useState(false);
+
+  // MFA state
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaAvailable, setMfaAvailable] = useState(false);
+  const [maskedPhone, setMaskedPhone] = useState<string | null>(null);
+  const [mfaStep, setMfaStep] = useState<"idle" | "phone" | "code">("idle");
+  const [mfaPhone, setMfaPhone] = useState("");
+  const [mfaCodeInput, setMfaCodeInput] = useState("");
+  const [mfaBusy, setMfaBusy] = useState(false);
+  // Always starts unchecked — never pre-checked, never derived from an
+  // existing phone number on the account. A phone number alone is never
+  // consent (see enroll/route.ts's server-side gate on this same rule).
+  const [mfaConsent, setMfaConsent] = useState(false);
 
   const fetchAuthDetails = async () => {
     try {
@@ -37,11 +57,90 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
         setConnectedProviders(data.connectedProviders || []);
         setHasPassword(data.hasPassword || false);
         setRecentActivity(data.recentActivity || []);
+        setMfaEnabled(data.mfaEnabled || false);
+        setMfaAvailable(data.mfaAvailable || false);
+        setMaskedPhone(data.maskedPhone || null);
+        setIsImpersonating(data.impersonating === true);
       }
     } catch (err) {
       console.error("Failed to load auth accounts details", err);
     } finally {
       setLoadingDetails(false);
+    }
+  };
+
+  const startMfaEnrollment = () => {
+    setMfaPhone("");
+    setMfaConsent(false);
+    setMfaStep("phone");
+  };
+
+  const sendMfaCode = async () => {
+    if (!mfaConsent) {
+      toast.error("Please check the box agreeing to receive SMS verification codes.");
+      return;
+    }
+    setMfaBusy(true);
+    try {
+      const res = await fetch("/api/merchant/settings/security/mfa/enroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: mfaPhone, smsConsent: mfaConsent }),
+      });
+      const data = await res.json();
+      if (res.status === 403 && data.reauthRequired) {
+        toast.error("Reauthentication required for sensitive changes. Redirecting...");
+        router.push("/merchant/login?reauth=true&redirectTo=/merchant/settings/security&reauthType=mfa_enroll");
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || "Failed to send verification code");
+      toast.success("Code sent");
+      setMfaCodeInput("");
+      setMfaStep("code");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send verification code");
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const confirmMfaCode = async () => {
+    setMfaBusy(true);
+    try {
+      const res = await fetch("/api/merchant/settings/security/mfa/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: mfaCodeInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Incorrect code");
+      toast.success(mfaEnabled ? "Phone number updated" : "Two-factor authentication enabled");
+      setMfaStep("idle");
+      fetchAuthDetails();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Incorrect code");
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const disableMfa = async () => {
+    setMfaBusy(true);
+    try {
+      const res = await fetch("/api/merchant/settings/security/mfa/disable", { method: "POST" });
+      const data = await res.json();
+      if (res.status === 403 && data.reauthRequired) {
+        toast.error("Reauthentication required for sensitive changes. Redirecting...");
+        router.push("/merchant/login?reauth=true&redirectTo=/merchant/settings/security&reauthType=mfa_disable");
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || "Failed to disable two-factor authentication");
+      toast.success("Two-factor authentication disabled");
+      fetchAuthDetails();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to disable two-factor authentication");
+    } finally {
+      setMfaBusy(false);
     }
   };
 
@@ -72,11 +171,14 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
         return;
       }
       if (!res.ok) throw new Error(data.error || "Failed to change password");
-      toast.success("Password changed");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      fetchAuthDetails();
+      // A password change invalidates every session for this user,
+      // including this one (see the route's own comment) — staying on
+      // this page would just mean the next request here fails auth with
+      // no explanation. Same redirect used for the other reauth cases in
+      // this file, just proactive instead of reactive to a 403.
+      toast.success("Password changed. Please log in again.");
+      router.push("/merchant/login?reauth=true&redirectTo=/merchant/settings/security&reauthType=change_password");
+      return;
     } catch (err: any) {
       toast.error(err.message || "Failed to change password");
     } finally {
@@ -124,6 +226,15 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
     );
   }
 
+  if (isImpersonating) {
+    return (
+      <div className="max-w-2xl p-6 rounded-2xl border border-amber-200 bg-amber-50 text-sm text-amber-800">
+        Personal account security settings (password, two-factor authentication, connected login methods) belong to
+        an individual user&apos;s own account and aren&apos;t shown or editable while viewing this organization as an admin.
+      </div>
+    );
+  }
+
   const isGoogleConnected = connectedProviders.includes("google");
   const isAppleConnected = connectedProviders.includes("apple");
 
@@ -138,7 +249,13 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
           </div>
           <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
             <span>Multi-Factor Authentication:</span>
-            <StateBadge state="NOT_SUPPORTED" />
+            {!mfaAvailable ? (
+              <StateBadge state="NOT_SUPPORTED" />
+            ) : mfaEnabled ? (
+              <span className="text-green-600 font-medium">Enabled{maskedPhone ? ` (${maskedPhone})` : ""}</span>
+            ) : (
+              <span className="text-amber-600 font-medium">Not enabled</span>
+            )}
           </div>
         </div>
 
@@ -254,6 +371,132 @@ export default function SecuritySettingsForm({ email, lastLoginAt }: { email: st
           >
             {saving ? "Saving…" : "Change Password"}
           </button>
+        </div>
+      )}
+
+      {mfaAvailable && (
+        <div className="pt-6 border-t border-slate-100 max-w-md">
+          <p className="text-xs font-semibold text-slate-500 mb-3">Two-Factor Authentication</p>
+
+          {mfaEnabled && mfaStep === "idle" && (
+            <div>
+              <p className="text-sm text-slate-700 mb-3">
+                Enabled for <span className="font-medium">{maskedPhone}</span>. You&apos;ll be asked for a code sent by text every time you log in.
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={startMfaEnrollment}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-all"
+                >
+                  Change Number
+                </button>
+                <button
+                  onClick={disableMfa}
+                  disabled={mfaBusy}
+                  className="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-all disabled:opacity-50"
+                >
+                  {mfaBusy ? "Disabling…" : "Disable Two-Factor Authentication"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!mfaEnabled && mfaStep === "idle" && (
+            <div>
+              <p className="text-sm text-slate-500 mb-3">Not enabled. Add a phone number to require a text code at every login.</p>
+              <button
+                onClick={startMfaEnrollment}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold"
+              >
+                Set Up Two-Factor Authentication
+              </button>
+            </div>
+          )}
+
+          {mfaStep === "phone" && (
+            <div className="space-y-3">
+              {mfaEnabled && (
+                <p className="text-xs text-slate-500">
+                  Enter your new number below. Your current number stays active until the new one is verified.
+                </p>
+              )}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
+                  {mfaEnabled ? "New Mobile Phone Number" : "Mobile Phone Number"}
+                </label>
+                <input
+                  type="tel"
+                  placeholder="(555) 123-4567"
+                  className={inputClass}
+                  value={mfaPhone}
+                  onChange={(e) => setMfaPhone(e.target.value)}
+                />
+              </div>
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <input
+                  type="checkbox"
+                  id="mfa-sms-consent"
+                  checked={mfaConsent}
+                  onChange={(e) => setMfaConsent(e.target.checked)}
+                  className="mt-0.5 shrink-0"
+                />
+                <label htmlFor="mfa-sms-consent" className="text-xs text-slate-600 leading-relaxed">
+                  {SMS_2FA_CONSENT_TEXT}
+                </label>
+              </div>
+              <p className="text-xs text-slate-400">
+                <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  Privacy Policy
+                </a>{" "}
+                ·{" "}
+                <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                  Terms of Service
+                </a>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={sendMfaCode}
+                  disabled={mfaBusy || !mfaPhone || !mfaConsent}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {mfaBusy ? "Sending…" : mfaEnabled ? "Send Code to New Number" : "Enable SMS 2FA"}
+                </button>
+                <button onClick={() => setMfaStep("idle")} className="px-3 py-2 text-xs text-slate-500 hover:text-slate-900">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {mfaStep === "code" && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-500">Enter the 6-digit code we texted to your {mfaEnabled ? "new" : ""} number.</p>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Verification Code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="123456"
+                  className={inputClass}
+                  value={mfaCodeInput}
+                  onChange={(e) => setMfaCodeInput(e.target.value.replace(/\D/g, ""))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={confirmMfaCode}
+                  disabled={mfaBusy || mfaCodeInput.length !== 6}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50"
+                >
+                  {mfaBusy ? "Verifying…" : "Confirm"}
+                </button>
+                <button onClick={() => setMfaStep("idle")} className="px-3 py-2 text-xs text-slate-500 hover:text-slate-900">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

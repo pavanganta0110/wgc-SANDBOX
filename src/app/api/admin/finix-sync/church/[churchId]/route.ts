@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { runSyncJob } from "@/lib/finix/sync/runSyncJob";
+import { getAdminSession } from "@/lib/auth/session";
 
 /**
  * Runs merchant + transfers + settlements + disputes + fees + payouts sync
@@ -16,6 +17,9 @@ export async function POST(
   { params }: { params: Promise<{ churchId: string }> }
 ) {
   const { churchId } = await params;
+
+  const session = await getAdminSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const church = await prisma.church.findUnique({ where: { id: churchId } });

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
-import { sendWgcEmail, buildOnboardingStatusEmailContent } from "@/lib/email";
+import { sendWgcEmail, buildOnboardingStatusEmailContent, parseAdditionalRecipients } from "@/lib/email";
 
 // Account/credential emails: re-derived from the current User row by email
 // (`to`), since the original raw token was never persisted (only its
@@ -42,17 +42,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const log = await prisma.emailLog.findUnique({ where: { id } });
   if (!log) return NextResponse.json({ error: "Email log not found" }, { status: 404 });
 
+  // Optional "also send this to other people" list, same as the merchant
+  // resend route — a malformed/empty body just means no extra recipients.
+  let additionalRecipients: string[] = [];
+  try {
+    const body = await req.json();
+    additionalRecipients = parseAdditionalRecipients(body?.additionalRecipients);
+  } catch {
+    // No JSON body sent — resend with no extra recipients, as before.
+  }
+
   const isOnboardingStatusType = ONBOARDING_STATUS_TYPES.has(log.type) || log.type.startsWith("ADMIN_RESEND_");
 
   if (isOnboardingStatusType && log.onboardingApplicationId) {
     const app = await prisma.onboardingApplication.findUnique({ where: { id: log.onboardingApplicationId } });
     if (!app) return NextResponse.json({ error: "Application not found" }, { status: 404 });
 
+    let secureLink: string | undefined;
+    if (app.onboardingStatus === "MORE_INFORMATION_REQUIRED" || app.onboardingStatus === "ADDITIONAL_INFO_NEEDED") {
+      // A resend regenerates the secure token — the previous one may be
+      // expired or already invalidated by an earlier submission.
+      const rawToken = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      await prisma.onboardingApplication.update({
+        where: { id: app.id },
+        data: { updateTokenHash: tokenHash, updateTokenExpiresAt: expiresAt },
+      });
+      secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
+    }
+
     const { subject, title, badgeText, badgeColor, bodyHtml } = buildOnboardingStatusEmailContent(
       app.onboardingStatus,
-      app.organizationName
+      app.organizationName || app.legalBusinessName,
+      { requestedItems: app.updateRequestedItems, secureLink }
     );
-    const result = await sendWgcEmail({ to: app.contactEmail, subject, title, badgeText, badgeColor, bodyHtml });
+    const result = await sendWgcEmail({ to: app.contactEmail, cc: additionalRecipients, subject, title, badgeText, badgeColor, bodyHtml });
 
     const newLog = await prisma.emailLog.create({
       data: {
@@ -63,6 +89,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         status: result.success ? "SENT" : "FAILED",
         sentAt: result.success ? new Date() : null,
         error: result.success ? null : String(result.error ?? "unknown error"),
+        bodyHtml,
       },
     });
 
@@ -89,15 +116,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const link = `${appUrl}/merchant/set-password/${rawToken}`;
     const copy = ACCOUNT_LINK_TYPES[log.type];
 
+    const accountLinkBodyHtml = `<p>${copy.intro}</p>
+                 <p><a href="${link}">Set your password</a></p>
+                 <p>This link expires in 7 days.</p>`;
     const result = await sendWgcEmail({
       to: user.email,
+      cc: additionalRecipients,
       subject: copy.subject,
       title: copy.title,
       badgeText: "Action Required",
       badgeColor: "#0B5DBC",
-      bodyHtml: `<p>${copy.intro}</p>
-                 <p><a href="${link}">Set your password</a></p>
-                 <p>This link expires in 7 days.</p>`,
+      bodyHtml: accountLinkBodyHtml,
     });
 
     const newLog = await prisma.emailLog.create({
@@ -108,6 +137,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         status: result.success ? "SENT" : "FAILED",
         sentAt: result.success ? new Date() : null,
         error: result.success ? null : String(result.error ?? "unknown error"),
+        bodyHtml: accountLinkBodyHtml,
       },
     });
 

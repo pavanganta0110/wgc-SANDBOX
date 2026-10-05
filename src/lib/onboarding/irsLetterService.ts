@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
-import { sendWgcEmail } from "@/lib/email";
+import { sendWgcEmail, sendWgcAdminIrsLetterNotification } from "@/lib/email";
 import { uploadPrivateFile, createSignedDownloadUrl } from "@/lib/storage/supabaseStorage";
 import { validateIrsLetterFile, computeChecksum, buildIrsLetterStorageKey } from "@/lib/onboarding/irsLetterValidation";
 
@@ -88,6 +88,17 @@ export async function uploadIrsLetter(params: {
     badgeColor: "#0B5DBC",
     bodyHtml: `<p>Your IRS determination letter has been uploaded successfully.</p>`,
   }).catch((err) => console.error("Failed to send IRS letter upload confirmation email:", err));
+
+  await sendWgcAdminIrsLetterNotification({
+    organizationName: app.organizationName,
+    contactName: app.contactName,
+    contactEmail: app.contactEmail,
+    applicationId: app.id,
+    documentId: document.id,
+    originalFilename: document.originalFilename,
+    version: document.version,
+    uploadedByAdmin: Boolean(params.uploadedByUserId),
+  }).catch((err) => console.error("Failed to send IRS letter admin notification email:", err));
 
   return { documentId: document.id, version: document.version, status: document.status, originalFilename: document.originalFilename };
 }

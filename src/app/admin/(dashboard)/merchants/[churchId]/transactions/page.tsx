@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getAdminSession } from "@/lib/auth/session";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
@@ -63,6 +64,25 @@ export default async function MerchantTransactionsPage({
     : [];
   const paymentByTransfer = new Map(payments.filter(p => p.finixTransferId).map(p => [p.finixTransferId as string, p]));
 
+  // FinixFee.linkedToId matches a transfer's finixTransferId — same fee
+  // data the merchant's own Settlements > Fee Breakdown view reads (see
+  // settlementDetail.ts). A transfer can have more than one fee row (e.g.
+  // a percentage-based line and a separate fixed-fee line), so these are
+  // grouped and summed per transfer rather than assumed to be one-to-one.
+  const fees = transferIds.length
+    ? await prisma.finixFee.findMany({
+        where: { linkedToId: { in: transferIds }, churchId },
+        orderBy: { createdAtFinix: "desc" },
+      })
+    : [];
+  const feesByTransfer = new Map<string, typeof fees>();
+  for (const f of fees) {
+    if (!f.linkedToId) continue;
+    const list = feesByTransfer.get(f.linkedToId) ?? [];
+    list.push(f);
+    feesByTransfer.set(f.linkedToId, list);
+  }
+
   const refunds = await prisma.finixRefundOrReversal.findMany({
     where: { finixOriginalTransferId: { in: transferIds } },
   });
@@ -123,6 +143,7 @@ export default async function MerchantTransactionsPage({
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Donor</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Amount</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Method</th>
+                  <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fee</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Status</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Fund</th>
                   <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">Attributed User</th>
@@ -144,6 +165,8 @@ export default async function MerchantTransactionsPage({
                   // meaningful as a donor-facing "payment method" and was being
                   // shown here in place of the real classification.
                   const methodLabel = instrument?.cardBrand || (instrument?.bankLast4 ? "Bank Account (ACH)" : instrument?.paymentMethodType || "-");
+                  const transferFees = feesByTransfer.get(t.finixTransferId) ?? [];
+                  const totalFeeCents = transferFees.reduce((sum, f) => sum + (f.amountCents ?? 0), 0);
 
                   return (
                     <tr key={t.id}>
@@ -158,6 +181,23 @@ export default async function MerchantTransactionsPage({
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         {methodLabel}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                        <Link
+                          href={`/admin/merchants/${churchId}/transactions/${t.finixTransferId}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {transferFees.length > 0 ? (
+                            <>
+                              {formatCurrency(totalFeeCents, transferFees[0].currency || "USD")}
+                              {transferFees.length > 1 && (
+                                <span className="block text-xs text-gray-400">{transferFees.length} fee lines</span>
+                              )}
+                            </>
+                          ) : (
+                            "View breakdown"
+                          )}
+                        </Link>
                       </td>
                       <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                         <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${

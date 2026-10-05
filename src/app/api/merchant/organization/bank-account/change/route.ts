@@ -44,6 +44,14 @@ export async function POST(req: Request) {
   if (!permissions.canUpdateBankAccount) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  // Reauthentication gate — same pattern and window as
+  // settings/security/change-password/route.ts. Redirecting a merchant's
+  // future payouts is at least as sensitive as changing their own
+  // password; a stolen session cookie alone shouldn't be enough.
+  const now = Math.floor(Date.now() / 1000);
+  if (!auth.authTime || now - auth.authTime > 600) {
+    return NextResponse.json({ error: "Reauthentication required. Please log in again to verify your identity.", reauthRequired: true }, { status: 403 });
+  }
   await auditImpersonatedWrite(auth, req);
   // Team-access Checkpoint 4B: bank-account mutations are blocked while
   // viewing another user's scope.

@@ -2,10 +2,17 @@ export interface NotificationEventDef {
   key: string;
   label: string;
   description: string;
+  /** Overrides DEFAULT_NOTIFICATION_PREFERENCE.emailEnabled for this event
+   * only, when a specific event needs a different default than every other
+   * one (e.g. an unusually high-frequency event where opt-out, not opt-in,
+   * is still the right call — see resolveNotificationDefault). Every event
+   * below currently relies on the shared default rather than this. */
+  defaultEmailEnabled?: boolean;
 }
 
 /** Only events this codebase can actually detect and act on — no fabricated notification types. */
 export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
+  { key: "DONATION_RECEIVED", label: "Donation Received", description: "A donor completed a gift on one of your giving pages." },
   { key: "DISPUTE_OPENED", label: "New Dispute Opened", description: "A donor has disputed a payment and evidence may be required." },
   { key: "SUBSCRIPTION_PAYMENT_FAILED", label: "Recurring Payment Failed", description: "A scheduled recurring donation payment failed to process." },
   { key: "SETTLEMENT_FUNDED", label: "Settlement Funded", description: "Funds from a settlement batch have been deposited to your bank account." },
@@ -23,3 +30,17 @@ export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
 ];
 
 export const DEFAULT_NOTIFICATION_PREFERENCE = { inAppEnabled: true, emailEnabled: true, frequency: "IMMEDIATE" as const };
+
+/** Resolves the effective default preference for one event, applying its
+ * own defaultEmailEnabled override (if any) on top of the shared default.
+ * The one place this logic lives — every reader of NOTIFICATION_EVENTS
+ * (the settings page, its API route, notifyEvent's dispatch check) calls
+ * this instead of re-deriving the same fallback inline, so a future
+ * per-event override never has to be wired into three places by hand. */
+export function resolveNotificationDefault(event: Pick<NotificationEventDef, "defaultEmailEnabled">) {
+  return {
+    inAppEnabled: DEFAULT_NOTIFICATION_PREFERENCE.inAppEnabled,
+    emailEnabled: event.defaultEmailEnabled ?? DEFAULT_NOTIFICATION_PREFERENCE.emailEnabled,
+    frequency: DEFAULT_NOTIFICATION_PREFERENCE.frequency,
+  };
+}

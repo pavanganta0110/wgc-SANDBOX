@@ -11,6 +11,7 @@ import { classifySource, isExternalPaymentMethod } from "@/lib/donations/externa
 import { findPossibleDuplicateExternalDonation } from "@/lib/donations/checkExternalDonationDuplicate";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
 
 export async function GET(req: Request) {
   let auth;
@@ -97,6 +98,10 @@ export async function POST(req: Request) {
     goodsOrServicesProvided,
     goodsOrServicesDescription,
     goodsOrServicesValueCents,
+    pledgeId,
+    fundraisingCampaignId,
+    campaignTeamId,
+    campaignFundraiserId,
   } = body ?? {};
 
   if (typeof donationAmountCents !== "number" || donationAmountCents < 1) {
@@ -200,6 +205,59 @@ export async function POST(req: Request) {
 
   const source = classifySource(paymentMethod);
 
+  // Optional "fulfills a pledge" / "counts toward a fundraising campaign"
+  // attribution — see ExternalDonation.pledgeId/fundraisingCampaignId/
+  // campaignTeamId/campaignFundraiserId in schema.prisma. Resolved and
+  // validated up front so the create() below never writes an id that
+  // doesn't actually belong to this church (or, for team/fundraiser,
+  // doesn't belong to each other).
+  let resolvedPledgeId: string | null = null;
+  if (pledgeId) {
+    const pledge = await prisma.pledge.findFirst({ where: { id: pledgeId, churchId: auth.churchId } });
+    if (!pledge) return NextResponse.json({ error: "Pledge not found" }, { status: 404 });
+    if (pledge.status === "CANCELED") {
+      return NextResponse.json({ error: "Cannot link a donation to a canceled pledge" }, { status: 400 });
+    }
+    // Only enforced when the donation itself is attributed to a known
+    // donor — an anonymous/unmatched donation can still be manually tied
+    // to a specific pledge (e.g. a staff member recording a cash gift they
+    // know came from that pledger, entered before matching the donor
+    // record), same leniency the donor-matching flow itself allows.
+    if (donorId && pledge.donorId && pledge.donorId !== donorId) {
+      return NextResponse.json({ error: "This pledge belongs to a different donor" }, { status: 400 });
+    }
+    resolvedPledgeId = pledge.id;
+  }
+
+  let resolvedFundraisingCampaignId: string | null = null;
+  let resolvedCampaignTeamId: string | null = null;
+  let resolvedCampaignFundraiserId: string | null = null;
+  if (campaignFundraiserId) {
+    const fundraiser = await prisma.campaignFundraiser.findFirst({ where: { id: campaignFundraiserId, churchId: auth.churchId } });
+    if (!fundraiser) return NextResponse.json({ error: "Fundraiser not found" }, { status: 404 });
+    if (campaignTeamId && fundraiser.campaignTeamId !== campaignTeamId) {
+      return NextResponse.json({ error: "This fundraiser is not on the selected team" }, { status: 400 });
+    }
+    if (fundraisingCampaignId && fundraiser.fundraisingCampaignId !== fundraisingCampaignId) {
+      return NextResponse.json({ error: "This fundraiser is not on the selected campaign" }, { status: 400 });
+    }
+    resolvedCampaignFundraiserId = fundraiser.id;
+    resolvedCampaignTeamId = fundraiser.campaignTeamId;
+    resolvedFundraisingCampaignId = fundraiser.fundraisingCampaignId;
+  } else if (campaignTeamId) {
+    const team = await prisma.campaignTeam.findFirst({ where: { id: campaignTeamId, churchId: auth.churchId } });
+    if (!team) return NextResponse.json({ error: "Team not found" }, { status: 404 });
+    if (fundraisingCampaignId && team.fundraisingCampaignId !== fundraisingCampaignId) {
+      return NextResponse.json({ error: "This team is not on the selected campaign" }, { status: 400 });
+    }
+    resolvedCampaignTeamId = team.id;
+    resolvedFundraisingCampaignId = team.fundraisingCampaignId;
+  } else if (fundraisingCampaignId) {
+    const campaign = await prisma.fundraisingCampaign.findFirst({ where: { id: fundraisingCampaignId, churchId: auth.churchId } });
+    if (!campaign) return NextResponse.json({ error: "Fundraising campaign not found" }, { status: 404 });
+    resolvedFundraisingCampaignId = campaign.id;
+  }
+
   const duplicate = await findPossibleDuplicateExternalDonation({
     churchId: auth.churchId,
     donorId,
@@ -254,8 +312,22 @@ export async function POST(req: Request) {
       possibleDuplicate: Boolean(duplicate),
       duplicateOfExternalDonationId: duplicate?.id ?? null,
       createdByUserId: auth.userId,
+      pledgeId: resolvedPledgeId,
+      fundraisingCampaignId: resolvedFundraisingCampaignId,
+      campaignTeamId: resolvedCampaignTeamId,
+      campaignFundraiserId: resolvedCampaignFundraiserId,
     },
   });
+
+  // Rolls this donation into the pledge's fulfilledAmountCents/status —
+  // mirrors exactly what POST /api/merchant/pledges/[pledgeId]/fulfillments
+  // does for a donation linked after the fact; this just does it at
+  // creation time instead of requiring a separate follow-up step.
+  // Fundraising-campaign totals need no equivalent call: campaignTotals.ts
+  // sums tagged rows on read, nothing to roll up and cache.
+  if (resolvedPledgeId) {
+    await computePledgeFulfillment(resolvedPledgeId);
+  }
 
   await prisma.externalDonationAuditLog.create({
     data: {
@@ -278,7 +350,16 @@ export async function POST(req: Request) {
     action: "external_donation.created",
     entityType: "ExternalDonation",
     entityId: created.id,
-    metadata: { paymentMethod, donationAmountCents, source, possibleDuplicate: Boolean(duplicate) },
+    metadata: {
+      paymentMethod,
+      donationAmountCents,
+      source,
+      possibleDuplicate: Boolean(duplicate),
+      pledgeId: resolvedPledgeId,
+      fundraisingCampaignId: resolvedFundraisingCampaignId,
+      campaignTeamId: resolvedCampaignTeamId,
+      campaignFundraiserId: resolvedCampaignFundraiserId,
+    },
     req,
   });
 

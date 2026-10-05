@@ -75,6 +75,18 @@ export default async function GivingLinkOverviewTab({
           )}
           <Row label="Fund / Designation" value={link.fundName || "—"} />
           <Row label="Recurring Giving" value={link.recurringEnabled ? allowedFrequencies.map(titleCase).join(", ") : "Not enabled"} />
+          {link.recurringEnabled && (
+            <Row
+              label="Form Opens On"
+              value={
+                link.defaultDonationType === "RECURRING"
+                  ? link.defaultRecurringAmountCents != null
+                    ? `Recurring, ${formatCents(link.defaultRecurringAmountCents)} pre-selected`
+                    : "Recurring"
+                  : "One-Time"
+              }
+            />
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm divide-y divide-slate-100">

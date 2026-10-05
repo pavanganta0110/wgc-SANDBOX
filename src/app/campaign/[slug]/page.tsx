@@ -31,7 +31,7 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
 
         <div className="mb-6">
           <div className="flex items-baseline justify-between mb-2">
-            <p className="text-2xl font-bold text-slate-900">{formatCents(progress.totalFulfilledCents)}</p>
+            <p className="text-2xl font-bold text-slate-900">{formatCents(progress.totalRaisedCents)}</p>
             {progress.goalAmountCents != null && (
               <p className="text-sm text-slate-500">of {formatCents(progress.goalAmountCents)} goal</p>
             )}

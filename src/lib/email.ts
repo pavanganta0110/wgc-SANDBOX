@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { prisma } from '@/lib/prisma';
+import { recordResendTechnicalFailure } from '@/lib/monitoring/resendHealth';
 
 // Lazy — constructing Resend eagerly at module load time throws whenever
 // RESEND_API_KEY is unset/empty (confirmed: this crashes locally today),
@@ -22,6 +23,23 @@ interface WgcEmailOptions {
   badgeColor?: string; // e.g. "#C99A2E" or "#10B981"
   bodyHtml: string;
   attachments?: { filename: string; content: Buffer }[];
+  /** Extra recipients who get a copy alongside the primary `to` address —
+   * e.g. a donor's receipt also CC'd to a spouse or bookkeeper. Validated
+   * and capped by the caller (see resend routes); passed straight through
+   * to Resend's own `cc` field. */
+  cc?: string[];
+
+  /** Overrides the WGC Payments logo in the header — used for donor-facing
+   * emails sent on behalf of a specific church (Giving Campaigns), so the
+   * recipient sees their own church's branding rather than WGC's. Falls
+   * back to the WGC logo when unset, which is every other sender in this
+   * file (receipts, statements, invoices — those are legitimately "from
+   * WGC Payments" in a payment-processor sense). */
+  logoUrl?: string;
+  logoAlt?: string;
+  /** Overrides "WGC Payments Team" in the footer signature — same
+   * church-branding use case as logoUrl. */
+  senderName?: string;
 
   // When present, sendWgcEmail writes an OrgEmailLog row after the send
   // attempt (success or failure) — this is the ONLY place that decides
@@ -42,6 +60,10 @@ interface WgcEmailOptions {
       | "INVOICE"
       | "MERCHANDISE_ORDER"
       | "SUBSCRIPTION_SETUP_LINK"
+      | "MERCHANT_NOTIFICATION"
+      | "EVENT_CONFIRMATION"
+      | "EVENT_REMINDER"
+      | "EVENT_THANK_YOU"
       | "OTHER";
     relatedEntityType?: string | null;
     relatedEntityId?: string | null;
@@ -56,10 +78,48 @@ interface WgcEmailOptions {
   };
 }
 
+const MAX_ADDITIONAL_RECIPIENTS = 5;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Shared parsing for the "also send this to other people" input on receipt/
+ * email resends (merchant + admin Email Logs) — accepts a raw comma/
+ * semicolon/newline-separated string (as typed by a user) or an array
+ * (already-split), trims, lowercases, drops anything that isn't a
+ * plausible email address, de-dupes, and caps the count so a resend can
+ * never fan out to an unbounded list. Never throws — an all-invalid input
+ * just resolves to an empty list rather than blocking the primary send.
+ */
+export function parseAdditionalRecipients(raw: unknown): string[] {
+  const candidates: string[] = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(/[,;\n]/)
+      : [];
+
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const email = candidate.trim().toLowerCase();
+    if (!email || !EMAIL_PATTERN.test(email)) continue;
+    seen.add(email);
+    if (seen.size >= MAX_ADDITIONAL_RECIPIENTS) break;
+  }
+  return Array.from(seen);
+}
+
 const WGC_LOGO_URL = "https://www.wgcpayments.com/wgc-logo.png";
 
 export function generateWgcEmailHtml(options: WgcEmailOptions) {
-  const { title, previewText, bodyHtml, badgeText, badgeColor = "#0B5DBC" } = options;
+  const {
+    title,
+    previewText,
+    bodyHtml,
+    badgeText,
+    badgeColor = "#0B5DBC",
+    logoUrl = WGC_LOGO_URL,
+    logoAlt = "WGC Payments",
+    senderName = "WGC Payments Team",
+  } = options;
 
   return `
     <!DOCTYPE html>
@@ -79,7 +139,7 @@ export function generateWgcEmailHtml(options: WgcEmailOptions) {
               <!-- Header with Logo -->
               <tr>
                 <td style="padding: 20px 40px 30px 40px; text-align: center;">
-                  <img src="${WGC_LOGO_URL}" alt="WGC Payments" style="width: 220px; height: auto; max-width: 100%; display: block; margin: 0 auto; border: 0;" />
+                  <img src="${logoUrl}" alt="${logoAlt}" style="width: 220px; height: auto; max-width: 100%; display: block; margin: 0 auto; border: 0;" />
                 </td>
               </tr>
               
@@ -119,7 +179,7 @@ export function generateWgcEmailHtml(options: WgcEmailOptions) {
                 <td style="padding: 30px 40px; text-align: center; border-top: 1px solid #F0F4F8;">
                   <p style="margin: 0; color: #4A5568; font-size: 14px; line-height: 1.5;">
                     Thank you,<br/>
-                    <strong>WGC Payments Team</strong><br/>
+                    <strong>${senderName}</strong><br/>
                     <a href="mailto:support@wgcpayments.com" style="color: #0B5DBC; text-decoration: none;">support@wgcpayments.com</a>
                   </p>
                 </td>
@@ -138,6 +198,7 @@ export async function sendWgcEmail(options: WgcEmailOptions) {
   if (!process.env.RESEND_API_KEY) {
     console.warn("RESEND_API_KEY is not set. Email not sent.");
     const result: { success: boolean; data?: any; error?: any } = { success: false, error: "Missing API Key" };
+    recordResendTechnicalFailure({ error: { name: "missing_api_key", message: "RESEND_API_KEY is not configured" }, wasException: false, category: options.log?.category, churchId: options.log?.churchId });
     await writeOrgEmailLog(options, result);
     return result;
   }
@@ -161,7 +222,7 @@ ${cleanBody}
 Need help? Contact WGC Payments Support at support@wgcpayments.com
 
 Thank you,
-WGC Payments Team
+${options.senderName || "WGC Payments Team"}
 support@wgcpayments.com
   `.trim();
 
@@ -175,11 +236,19 @@ support@wgcpayments.com
       html,
       text,
       ...(options.attachments ? { attachments: options.attachments } : {}),
+      ...(options.cc && options.cc.length > 0 ? { cc: options.cc } : {}),
     });
 
     if (response.error) {
       console.error("Resend API returned error:", response.error);
       result = { success: false, error: response.error };
+      recordResendTechnicalFailure({
+        error: response.error,
+        wasException: false,
+        category: options.log?.category,
+        churchId: options.log?.churchId,
+        recipientDomain: options.to.split("@")[1],
+      });
     } else {
       console.log("WGC Email sent successfully:", response.data);
       result = { success: true, data: response.data };
@@ -187,6 +256,7 @@ support@wgcpayments.com
   } catch (error) {
     console.error("Failed to send WGC email:", error);
     result = { success: false, error };
+    recordResendTechnicalFailure({ error, wasException: true, category: options.log?.category, churchId: options.log?.churchId, recipientDomain: options.to.split("@")[1] });
   }
 
   await writeOrgEmailLog(options, result);
@@ -221,7 +291,26 @@ async function writeOrgEmailLog(options: WgcEmailOptions, result: { success: boo
   }
 }
 
-export function buildOnboardingStatusEmailContent(status: string | null, orgName: string) {
+/**
+ * Single source of truth for onboarding-status emails — every admin
+ * "resend" surface (merchant-applications page, email-logs page) builds
+ * its content through this function rather than keeping its own copy, so
+ * a fix here can't silently miss one of the call sites again (2026-09-04:
+ * two separate resend routes had each hand-rolled their own MORE_
+ * INFORMATION_REQUIRED template, and one still pointed merchants — who
+ * have no login at this onboarding stage — at a nonexistent dashboard
+ * with no actual requirement or way to submit one).
+ *
+ * MORE_INFORMATION_REQUIRED/ADDITIONAL_INFO_NEEDED needs a live secure
+ * token, which is a DB write — callers generate and persist that
+ * themselves (each resend should invalidate any prior link) and pass the
+ * resulting `requestedItems`/`secureLink` in.
+ */
+export function buildOnboardingStatusEmailContent(
+  status: string | null,
+  orgName: string | null,
+  opts?: { requestedItems?: string | null; secureLink?: string }
+) {
   const safeOrgName = orgName || "your organization";
 
   if (status === "APPROVED") {
@@ -235,13 +324,19 @@ export function buildOnboardingStatusEmailContent(status: string | null, orgName
     };
   }
   if (status === "MORE_INFORMATION_REQUIRED" || status === "ADDITIONAL_INFO_NEEDED") {
+    const requestedItemsStr = opts?.requestedItems || "Additional documentation is required to verify your business and identity.";
+    const actionHtml = opts?.secureLink
+      ? `<p>Please use the secure link below to submit the requested information.</p>
+         <p><a href="${opts.secureLink}">Submit Required Information</a></p>`
+      : `<p>Please contact WGC Payments Support so we can help you complete the required updates.</p>`;
     return {
       subject: "Additional information needed for your WGC Payments account",
       title: "Additional information is required",
       badgeText: "Action Required",
       badgeColor: "#F59E0B",
-      bodyHtml: `<p>We need a little more information to continue reviewing your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
-                  <p>Please log in to your merchant dashboard or contact WGC Payments Support so we can help you complete the required updates.</p>`,
+      bodyHtml: `<p>We need additional information to continue reviewing your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
+                  <p><strong>Requested items:</strong><br/>${requestedItemsStr}</p>
+                  ${actionHtml}`,
     };
   }
   if (status === "REJECTED") {
@@ -278,6 +373,10 @@ interface WgcAdminEmailOptions {
   actionNeeded: string;
   adminDashboardLink: string;
   customSubject?: string;
+  /** Links this alert to the OnboardingApplication in the admin Email Logs
+   * view, when the caller has one — omitted for alerts that aren't about a
+   * specific application (e.g. a generic system/orphaned-charge alert). */
+  onboardingApplicationId?: string;
 }
 
 export async function sendWgcAdminEmail(options: WgcAdminEmailOptions) {
@@ -292,7 +391,8 @@ export async function sendWgcAdminEmail(options: WgcAdminEmailOptions) {
     whatHappened,
     actionNeeded,
     adminDashboardLink,
-    customSubject
+    customSubject,
+    onboardingApplicationId,
   } = options;
 
   const adminEmail = process.env.SUPPORT_EMAIL || "support@wgcpayments.com";
@@ -317,14 +417,47 @@ export async function sendWgcAdminEmail(options: WgcAdminEmailOptions) {
     </div>
   `;
 
-  return await sendWgcEmail({
+  const subject = customSubject || `[WGC Admin] Merchant Status Update: ${merchantName} - ${newStatus}`;
+  const fullBodyHtml = bodyHtml + `<p><a href="${adminDashboardLink}">View in Admin Dashboard</a></p>`;
+
+  const result = await sendWgcEmail({
     to: adminEmail,
-    subject: customSubject || `[WGC Admin] Merchant Status Update: ${merchantName} - ${newStatus}`,
+    subject,
     title: "Merchant Application Update",
     badgeText: newStatus,
     badgeColor: statusBadgeColor,
-    bodyHtml: bodyHtml + `<p><a href="${adminDashboardLink}">View in Admin Dashboard</a></p>`,
+    bodyHtml: fullBodyHtml,
   });
+
+  // Previously unlogged anywhere (2026-09-05 report: "not seeing the
+  // emails that WGC admin got") — every one of these alerts (approval,
+  // rejection, more-info-required, webhook failures, orphaned-charge
+  // escalations) went out via Resend with zero record in the admin Email
+  // Logs page, which only ever reads EmailLog. Logged the same
+  // unconditional success-or-failure way as the DASHBOARD_ACCESS send in
+  // provisionChurchAccount.ts. Prefixed with WGC_ADMIN_ so it's never
+  // confused in the type filter with the merchant-facing email of the
+  // same underlying event (sendWebhookEmail logs its own separate row for
+  // that, to the merchant's address, under the bare status name).
+  try {
+    await prisma.emailLog.create({
+      data: {
+        onboardingApplicationId: onboardingApplicationId ?? null,
+        type: `WGC_ADMIN_${newStatus}`,
+        to: adminEmail,
+        subject,
+        status: result.success ? "SENT" : "ERROR",
+        sentAt: result.success ? new Date() : null,
+        error: result.success ? null : String(result.error ?? "unknown error"),
+        bodyHtml: fullBodyHtml,
+      },
+    });
+  } catch (err) {
+    // Logging must never break the actual send/return path.
+    console.error("Failed to write EmailLog for WGC admin alert:", err);
+  }
+
+  return result;
 }
 
 export interface WgcAdminOnboardingNotificationOptions {
