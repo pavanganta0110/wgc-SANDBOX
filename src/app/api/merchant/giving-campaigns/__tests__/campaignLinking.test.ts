@@ -24,6 +24,8 @@ vi.mock("@/lib/prisma", () => ({
     campaignFundraiser: { findFirst: (...args: unknown[]) => mockCampaignFundraiserFindFirst(...args) },
     pledgeCampaign: { findFirst: (...args: unknown[]) => mockPledgeCampaignFindFirst(...args) },
     donor: { findMany: (...args: unknown[]) => mockDonorFindMany(...args) },
+    // Nobody in these tests has unsubscribed.
+    emailOptOut: { findMany: () => Promise.resolve([]) },
     givingCampaign: { create: (...args: unknown[]) => mockGivingCampaignCreate(...args) },
     givingCampaignRecipient: { createMany: (...args: unknown[]) => mockRecipientCreateMany(...args) },
   },

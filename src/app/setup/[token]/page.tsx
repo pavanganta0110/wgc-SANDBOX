@@ -3,6 +3,8 @@ import { hashSetupLinkToken } from "@/lib/subscriptions/setupLinkToken";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { formatCents } from "@/lib/format";
 import SetupLinkForm from "@/components/giving/SetupLinkForm";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
+import PoweredByWgc from "@/components/merchant/PoweredByWgc";
 
 function ErrorScreen({ title, message }: { title: string; message: string }) {
   return (
@@ -32,13 +34,7 @@ export default async function SetupLinkPage({ params }: { params: Promise<{ toke
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4">
       <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <div className="flex items-center gap-3 mb-6">
-          {church?.logoUrl && <img src={church.logoUrl} alt="" className="w-10 h-10 rounded-lg object-contain" />}
-          <div>
-            <p className="text-xs text-slate-400">{isPaymentUpdate ? "Payment Method Update" : "Recurring Donation Setup"}</p>
-            <h1 className="text-lg font-bold text-slate-900">{church?.name || "Organization"}</h1>
-          </div>
-        </div>
+        <OrganizationBrandHeader logoUrl={church?.logoUrl ?? null} organizationName={church?.name || "Organization"} kind={isPaymentUpdate ? "Payment Method Update" : "Recurring Donation Setup"} />
 
         <div className="bg-slate-50 rounded-xl p-4 mb-6 space-y-1.5 text-sm">
           <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-bold text-slate-900">{formatCents(link.amountCents)}</span></div>
@@ -62,6 +58,7 @@ export default async function SetupLinkPage({ params }: { params: Promise<{ toke
         <p className="text-xs text-slate-400 mt-6">
           You may cancel this recurring donation at any time by contacting {church?.name || "the organization"} directly. Your payment information is processed securely and is never stored by WGC in raw form.
         </p>
+        <PoweredByWgc />
       </div>
     </div>
   );

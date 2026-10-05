@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
+import CampaignSeriesControls from "@/components/merchant/CampaignSeriesControls";
 
 export default async function GivingCampaignsPage() {
   const session = await getSession();
@@ -74,13 +75,22 @@ export default async function GivingCampaignsPage() {
                       <Link href={`/merchant/giving-campaigns/${c.id}`} className="font-medium text-slate-900 hover:underline">
                         {c.name}
                       </Link>
+                      {c.parentCampaignId && <p className="text-xs text-slate-400 mt-0.5">Monthly send</p>}
+                      {c.status === "SCHEDULED" && (
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <p className="text-xs text-slate-500">
+                            {c.repeatPausedAt ? "Paused" : c.nextRunAt ? `Repeats monthly · next send ${c.nextRunAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` : "Repeats monthly"}
+                          </p>
+                          {permissions.canSendStatements && <CampaignSeriesControls id={c.id} paused={Boolean(c.repeatPausedAt)} />}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-slate-500">{c.channel === "TEXT" ? "Text" : "Email"}</td>
                     <td className="px-6 py-3">
                       <StateBadge state={c.status} />
                     </td>
-                    <td className="px-6 py-3 text-right text-slate-600">{total}</td>
-                    <td className="px-6 py-3 text-right font-semibold text-slate-900">{paid}</td>
+                    <td className="px-6 py-3 text-right text-slate-600">{c.status === "SCHEDULED" ? "—" : total}</td>
+                    <td className="px-6 py-3 text-right font-semibold text-slate-900">{c.status === "SCHEDULED" ? "—" : paid}</td>
                     <td className="px-6 py-3 text-slate-500">{formatDateTime(c.createdAt)}</td>
                   </tr>
                 );

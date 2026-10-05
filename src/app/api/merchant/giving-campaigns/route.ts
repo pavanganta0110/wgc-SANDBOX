@@ -5,6 +5,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAudienceSource, resolveCampaignAudience } from "@/lib/giving/campaignAudience";
+import { firstRunAt } from "@/lib/giving/campaignSeries";
 import { generateCampaignTrackingToken } from "@/lib/giving/campaignTemplate";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { isSmsConfigured } from "@/lib/sms/sendText";
@@ -92,6 +93,26 @@ export async function POST(req: Request) {
   // other source is resolved server-side from this church's own data.
   const audienceBody = body.audience && typeof body.audience === "object" ? body.audience : {};
   const audienceSource = isAudienceSource(audienceBody.source) ? audienceBody.source : "SELECTED";
+  // Optional "send automatically every month" — email only, and only for an
+  // audience RULE (all donors, a giving page, an event…), never a hand-picked
+  // list, so each month reaches whoever matches that month.
+  const scheduleBody = body.schedule && typeof body.schedule === "object" ? body.schedule : null;
+  let schedule: { runAt: Date; dayOfMonth: number; endsAt: Date | null } | null = null;
+  if (scheduleBody) {
+    if (scheduleBody.repeat !== "MONTHLY") return NextResponse.json({ error: "Only monthly repeats are supported." }, { status: 400 });
+    if (channel !== "EMAIL") return NextResponse.json({ error: "Repeating campaigns can only be sent by email." }, { status: 400 });
+    if (audienceSource === "SELECTED") return NextResponse.json({ error: "Choose an audience such as All donors for a repeating campaign — a hand-picked list can't repeat." }, { status: 400 });
+    const first = typeof scheduleBody.startsOn === "string" ? firstRunAt(scheduleBody.startsOn) : null;
+    if (!first) return NextResponse.json({ error: "Choose the date of the first send." }, { status: 400 });
+    if (first.runAt.getTime() < Date.now() - 24 * 60 * 60 * 1000) return NextResponse.json({ error: "The first send can't be in the past." }, { status: 400 });
+    let endsAt: Date | null = null;
+    if (typeof scheduleBody.endsOn === "string" && scheduleBody.endsOn) {
+      const end = firstRunAt(scheduleBody.endsOn);
+      if (!end || end.runAt < first.runAt) return NextResponse.json({ error: "The end date must be after the first send." }, { status: 400 });
+      endsAt = end.runAt;
+    }
+    schedule = { runAt: first.runAt, dayOfMonth: first.dayOfMonth, endsAt };
+  }
 
   if (channel === "EMAIL" && (!emailSubject || !emailBodyTemplate)) {
     return NextResponse.json({ error: "A subject and message are required." }, { status: 400 });
@@ -201,7 +222,7 @@ export async function POST(req: Request) {
   }
   const donors = audience.recipients;
 
-  if (donors.length === 0) {
+  if (donors.length === 0 && !schedule) {
     return NextResponse.json(
       {
         error:
@@ -229,8 +250,38 @@ export async function POST(req: Request) {
       campaignTeamId: resolvedCampaignTeamId,
       campaignFundraiserId: resolvedCampaignFundraiserId,
       pledgeCampaignId: resolvedPledgeCampaignId,
+      ...(schedule
+        ? {
+            status: "SCHEDULED",
+            repeatInterval: "MONTHLY",
+            repeatDayOfMonth: schedule.dayOfMonth,
+            nextRunAt: schedule.runAt,
+            repeatEndsAt: schedule.endsAt,
+            audienceJson: {
+              source: audienceSource,
+              givingLinkId: typeof audienceBody.givingLinkId === "string" ? audienceBody.givingLinkId : undefined,
+              eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : undefined,
+              eventScope: typeof audienceBody.eventScope === "string" ? audienceBody.eventScope : undefined,
+            },
+          }
+        : {}),
     },
   });
+
+  if (schedule) {
+    await logDashboardAction({
+      churchId: auth.churchId,
+      actorUserId: auth.userId,
+      actorEmail: auth.email,
+      actorRole: auth.rawRole,
+      action: "giving_campaign.scheduled",
+      entityType: "GivingCampaign",
+      entityId: campaign.id,
+      metadata: { name, audienceSource, firstRun: schedule.runAt.toISOString(), endsAt: schedule.endsAt?.toISOString() ?? null },
+      req,
+    });
+    return NextResponse.json({ campaign, scheduled: true, nextRunAt: schedule.runAt.toISOString(), currentAudienceCount: donors.length }, { status: 201 });
+  }
 
   await prisma.givingCampaignRecipient.createMany({
     data: donors.map((d) => ({

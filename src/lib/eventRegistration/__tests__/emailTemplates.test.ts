@@ -82,3 +82,24 @@ describe("template storage", () => {
     expect(validateEmailTemplates({ reminder: { daysBefore: 5 } }).ok).toBe(true);
   });
 });
+
+describe("photos in event emails", () => {
+  it("turns [photo: https://…] into an image, keeping the rest of the message", () => {
+    const html = bodyToHtml("Thanks for coming!\n\n[photo: https://cdn.example.com/a.jpg]\n\nSee you next year.", ctx);
+    expect(html).toContain('<img src="https://cdn.example.com/a.jpg"');
+    expect(html).toContain("Thanks for coming!");
+    expect(html).toContain("See you next year.");
+  });
+
+  it("works in HTML messages too", () => {
+    expect(bodyToHtml("<p>Photos:</p>[photo: https://cdn.example.com/b.png]", ctx)).toContain('<img src="https://cdn.example.com/b.png"');
+  });
+
+  it("only accepts https links and never lets a link break out of the attribute", () => {
+    expect(bodyToHtml("[photo: http://insecure.example/a.jpg]", ctx)).not.toContain("<img");
+    expect(bodyToHtml("[photo: javascript:alert(1)]", ctx)).not.toContain("<img");
+    const evil = bodyToHtml('[photo: https://x.example/a.jpg" onerror="alert(1)]', ctx);
+    expect(evil).not.toContain("<img");
+    expect(evil).not.toMatch(/<[^>]*onerror=/); // stays inert, escaped text — never inside a tag
+  });
+});

@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { loadPublicFundraiserBySlug, describeUnavailableCampaign } from "@/lib/campaigns/loadPublicCampaignData";
 import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
-import OrganizationLogo from "@/components/merchant/OrganizationLogo";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
 import ProgressBar from "@/components/campaigns/ProgressBar";
 import RecentGiftsList from "@/components/campaigns/RecentGiftsList";
 import CampaignPreviewBanner from "@/components/campaigns/CampaignPreviewBanner";
@@ -58,7 +58,7 @@ export default async function PublicFundraiserPage({ params }: { params: Promise
       <div className="min-h-screen py-12 px-4 bg-slate-50">
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 mb-6">
-          <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode="main" />
+          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="Fundraiser Page" />
           <p className="text-xs text-center text-wgc-gold-600 font-bold uppercase tracking-widest mb-2">
             <Link href={`/c/${campaign.slug}`} className="hover:underline">{campaign.name}</Link>
           </p>

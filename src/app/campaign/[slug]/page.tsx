@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
-import OrganizationLogo from "@/components/merchant/OrganizationLogo";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
 import PublicPledgeForm from "@/components/giving/PublicPledgeForm";
 import { computeCampaignProgress } from "@/lib/pledges/pledgeFulfillment";
 
@@ -22,9 +22,9 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
   return (
     <div className="min-h-screen py-12 px-4 bg-slate-50">
       <div className="max-w-md mx-auto bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-        <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode="main" />
+        <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="Pledge Campaign" />
         <h1 className="text-lg font-bold text-center text-slate-900 mb-1">{campaign.name}</h1>
-        <p className="text-sm text-center text-slate-500 mb-6">{church.name}</p>
+        <div className="mb-6" />
         {campaign.description && (
           <p className="text-sm text-center text-slate-600 mb-6">{campaign.description}</p>
         )}

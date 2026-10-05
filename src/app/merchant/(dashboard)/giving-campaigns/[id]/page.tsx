@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
+import CampaignSeriesControls from "@/components/merchant/CampaignSeriesControls";
 
 export default async function GivingCampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -28,6 +29,7 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
   const clickedCount = recipients.filter((r) => r.clickedAt).length;
   const sentCount = recipients.filter((r) => r.sendStatus === "SENT").length;
   const failedCount = recipients.filter((r) => r.sendStatus === "FAILED").length;
+  const unsubscribedCount = recipients.filter((r) => r.sendStatus === "SKIPPED").length;
 
   return (
     <div>
@@ -48,6 +50,20 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
         </div>
       </div>
 
+      {campaign.status === "SCHEDULED" && (
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-blue-900">
+            Repeats every month.{" "}
+            {campaign.repeatPausedAt
+              ? "Paused — nothing will send until you resume."
+              : campaign.nextRunAt
+              ? `Next send ${campaign.nextRunAt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}, to everyone who matches the audience that day.`
+              : ""}
+          </p>
+          <CampaignSeriesControls id={campaign.id} paused={Boolean(campaign.repeatPausedAt)} />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <p className="text-xs text-slate-500">Sent</p>
@@ -64,6 +80,7 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
           <p className="text-xs text-slate-500">Failed</p>
           <p className="text-2xl font-bold text-red-600">{failedCount}</p>
+          {unsubscribedCount > 0 && <p className="text-xs text-slate-400 mt-0.5">{unsubscribedCount} unsubscribed — not sent</p>}
         </div>
       </div>
 
@@ -87,6 +104,10 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
                 <td className="px-6 py-3">
                   {r.sendStatus === "SENT" ? (
                     <span className="text-slate-600">{r.sentAt ? formatDateTime(r.sentAt) : "Sent"}</span>
+                  ) : r.sendStatus === "SKIPPED" ? (
+                    <span className="text-slate-500" title={r.sendError || undefined}>
+                      Unsubscribed
+                    </span>
                   ) : r.sendStatus === "FAILED" ? (
                     <span className="text-red-600" title={r.sendError || undefined}>
                       Failed

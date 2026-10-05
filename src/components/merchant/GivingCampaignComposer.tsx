@@ -28,7 +28,7 @@ type Channel = "EMAIL" | "TEXT";
 type TieMode = "NONE" | "FUNDRAISING" | "PLEDGE";
 // Who receives it: hand-picked donors (the original flow) or an audience the
 // server resolves from this organization's own records.
-type AudienceSource = "SELECTED" | "ALL_DONORS" | "GIVING_PAGE" | "EVENT" | "IMPORTED_CONTACTS";
+type AudienceSource = "SELECTED" | "ALL_DONORS" | "GIVING_PAGE" | "EVENT" | "IMPORTED_CONTACTS" | "NOT_GIVEN";
 
 const MERGE_FIELDS = [
   { token: "{{firstName}}", label: "Donor first name" },
@@ -64,6 +64,10 @@ export default function GivingCampaignComposer() {
   const [audienceLinkId, setAudienceLinkId] = useState("");
   const [audienceEventId, setAudienceEventId] = useState("");
   const [audienceEventScope, setAudienceEventScope] = useState("ALL_ATTENDEES");
+  // "Send now" vs "repeat every month" (email + a rule-based audience only).
+  const [repeatMonthly, setRepeatMonthly] = useState(false);
+  const [startsOn, setStartsOn] = useState(() => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [endsOn, setEndsOn] = useState("");
   const [events, setEvents] = useState<{ id: string; name: string }[] | null>(null);
   // The last answer from the audience-count endpoint, tagged with the request it answers so a stale answer is never shown for a changed selection.
   const [audienceResult, setAudienceResult] = useState<{ key: string; value: { count: number; sample: string[] } | { error: string } } | null>(null);
@@ -213,8 +217,11 @@ export default function GivingCampaignComposer() {
     audienceSource === "SELECTED" ||
     audienceSource === "ALL_DONORS" ||
     audienceSource === "IMPORTED_CONTACTS" ||
+    audienceSource === "NOT_GIVEN" ||
     (audienceSource === "GIVING_PAGE" && Boolean(audienceLinkId)) ||
     (audienceSource === "EVENT" && Boolean(audienceEventId));
+
+  const repeatingNow = repeatMonthly && channel === "EMAIL" && audienceSource !== "SELECTED";
 
   const audienceKey = JSON.stringify([audienceSource, audienceLinkId, audienceEventId, audienceEventScope, channel]);
   const audiencePreview = audienceSource !== "SELECTED" && audienceReady && audienceResult?.key === audienceKey ? audienceResult.value : null;
@@ -295,7 +302,8 @@ export default function GivingCampaignComposer() {
     const messageReady = channel === "TEXT" ? textBodyTemplate.trim() : emailSubject.trim() && emailBodyTemplate.trim();
     const destinationReady =
       tieMode === "FUNDRAISING" ? Boolean(selectedCampaignId) : tieMode === "PLEDGE" ? Boolean(selectedPledgeCampaignId) : Boolean(givingLinkId);
-    const recipientsReady = audienceSource === "SELECTED" ? selectedDonors.length > 0 : audienceReady && audiencePreview !== null && "count" in audiencePreview && audiencePreview.count > 0;
+    const repeating = repeatMonthly && channel === "EMAIL" && audienceSource !== "SELECTED";
+    const recipientsReady = audienceSource === "SELECTED" ? selectedDonors.length > 0 : repeating ? audienceReady : audienceReady && audiencePreview !== null && "count" in audiencePreview && audiencePreview.count > 0;
     if (!name.trim() || !destinationReady || !messageReady || !recipientsReady) {
       const destinationLabel = tieMode === "NONE" ? "giving link" : tieMode === "FUNDRAISING" ? "fundraising campaign" : "pledge campaign";
       toast.error(
@@ -328,10 +336,19 @@ export default function GivingCampaignComposer() {
             eventId: audienceSource === "EVENT" ? audienceEventId : undefined,
             eventScope: audienceSource === "EVENT" ? audienceEventScope : undefined,
           },
+          schedule: repeating ? { repeat: "MONTHLY", startsOn, endsOn: endsOn || undefined } : undefined,
         }),
       });
       const createData = await createRes.json();
       if (!createRes.ok) throw new Error(createData.error || "Failed to create campaign");
+
+      // A repeating campaign is only scheduled here — the monthly runs send
+      // themselves, so there's nothing to drive from the browser.
+      if (createData.scheduled) {
+        toast.success("Scheduled — it will send every month");
+        router.push("/merchant/giving-campaigns");
+        return;
+      }
 
       const campaignId = createData.campaign.id;
       const total = createData.recipientCount;
@@ -552,6 +569,7 @@ export default function GivingCampaignComposer() {
             <option value="GIVING_PAGE">Donors from one giving page</option>
             {events && channel === "EMAIL" && <option value="EVENT">Event attendees</option>}
             <option value="IMPORTED_CONTACTS">Imported contacts</option>
+            <option value="NOT_GIVEN">People who haven&apos;t given yet</option>
           </select>
           {audienceSource === "GIVING_PAGE" && (
             <select aria-label="Giving page" value={audienceLinkId} onChange={(e) => setAudienceLinkId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white">
@@ -591,6 +609,34 @@ export default function GivingCampaignComposer() {
                 </>
               )}
             </div>
+          )}
+          {audienceSource !== "SELECTED" && channel === "EMAIL" && (
+            <fieldset className="mt-4 space-y-3">
+              <legend className="block text-xs font-semibold text-slate-500 mb-1">When to send</legend>
+              <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="radio" name="send-timing" checked={!repeatMonthly} onChange={() => setRepeatMonthly(false)} /> Send now
+              </label>
+              <label className="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+                <input type="radio" name="send-timing" className="mt-1" checked={repeatMonthly} onChange={() => setRepeatMonthly(true)} />
+                <span>
+                  Send automatically every month
+                  <span className="block text-xs text-slate-500">Each month goes to whoever matches this audience that day — new donors are included, and anyone who unsubscribed is skipped.</span>
+                </span>
+              </label>
+              {repeatMonthly && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-6">
+                  <div>
+                    <label htmlFor="series-start" className="block text-xs font-semibold text-slate-500 mb-1">First send</label>
+                    <input id="series-start" type="date" value={startsOn} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setStartsOn(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="series-end" className="block text-xs font-semibold text-slate-500 mb-1">Stop after (optional)</label>
+                    <input id="series-end" type="date" value={endsOn} min={startsOn} onChange={(e) => setEndsOn(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm" />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-slate-500">Then the same day each month (the 28th at the latest). You can pause or stop it any time from the campaigns list.</p>
+                </div>
+              )}
+            </fieldset>
           )}
           {audienceSource === "SELECTED" && (
             <>
@@ -734,7 +780,9 @@ export default function GivingCampaignComposer() {
           className="w-full px-4 py-3 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50"
         >
           {submitting
-            ? "Sending…"
+            ? repeatingNow ? "Scheduling…" : "Sending…"
+            : repeatingNow
+            ? "Schedule monthly campaign"
             : audienceSource === "SELECTED"
             ? `Send to ${selectedDonors.length || 0} Donor${selectedDonors.length === 1 ? "" : "s"}`
             : audiencePreview && "count" in audiencePreview

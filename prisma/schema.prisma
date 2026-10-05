@@ -4883,15 +4883,49 @@ model GivingCampaign {
   campaignFundraiserId  String?
   pledgeCampaignId      String?
 
-  status          String    @default("DRAFT") // DRAFT | SENDING | SENT | FAILED
+  status          String    @default("DRAFT") // DRAFT | SENDING | SENT | FAILED | SCHEDULED (a repeating series' template — never sent itself)
   createdByUserId String?
   createdAt       DateTime  @default(now())
   sentAt          DateTime?
+
+  // Repeating ("every month") campaigns. The series is one SCHEDULED row
+  // holding the message and the audience RULE (audienceJson — never a fixed
+  // recipient list, so each send reaches whoever matches that month); every
+  // send is its own ordinary campaign row pointing back via
+  // parentCampaignId, so each month has its own recipients, tracking and
+  // history. nextRunAt is claimed in the database before a run starts, so
+  // overlapping cron runs can't send the same month twice.
+  repeatInterval   String? // MONTHLY
+  repeatDayOfMonth Int? // 1-28
+  nextRunAt        DateTime?
+  repeatEndsAt     DateTime?
+  repeatPausedAt   DateTime?
+  lastRunAt        DateTime?
+  audienceJson     Json?
+  parentCampaignId String?
 
   // Recipients are looked up by campaignId (plain string, not a Prisma
   // relation), matching this schema's established cross-reference
   // convention elsewhere — see GivingCampaignRecipient below.
   @@index([churchId, createdAt])
+  @@index([repeatInterval, nextRunAt])
+  @@index([parentCampaignId])
+}
+
+// Email addresses that asked (via the link in a campaign email) to stop
+// receiving a church's bulk email. Per church: opting out of one
+// organization never affects another's. Checked when an audience is built
+// and again at send time, so an unsubscribe landing mid-send still holds.
+model EmailOptOut {
+  id              String   @id @default(cuid())
+  churchId        String
+  normalizedEmail String
+  source          String   @default("UNSUBSCRIBE_LINK")
+  campaignId      String?
+  createdAt       DateTime @default(now())
+
+  @@unique([churchId, normalizedEmail])
+  @@index([churchId])
 }
 
 // One row per donor targeted by a campaign. trackingToken is what makes

@@ -72,6 +72,15 @@ export const JOB_CONFIGS: Record<string, JobConfig> = {
     critical: false,
     retrySafe: true, // claim-before-send markers make a re-run a no-op for anything already sent
   },
+  "scheduled-campaigns": {
+    jobName: "scheduled-campaigns",
+    jobType: "email",
+    label: "Monthly Giving Campaigns",
+    expectedIntervalMs: DAY,
+    staleAfterMs: DAY + 6 * HOUR,
+    critical: false,
+    retrySafe: true, // each monthly run is claimed in the database first, so a re-run can't double-send
+  },
   "reconcile-subscriptions": {
     jobName: "reconcile-subscriptions",
     jobType: "billing",

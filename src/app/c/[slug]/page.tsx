@@ -6,7 +6,7 @@ import { loadPublicCampaignBySlug, describeUnavailableCampaign } from "@/lib/cam
 import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
 import { getFundraiserLeaderboard, getTeamLeaderboard } from "@/lib/campaigns/campaignTotals";
 import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
-import OrganizationLogo from "@/components/merchant/OrganizationLogo";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
 import ProgressBar from "@/components/campaigns/ProgressBar";
 import RecentGiftsList from "@/components/campaigns/RecentGiftsList";
 import CampaignPreviewBanner from "@/components/campaigns/CampaignPreviewBanner";
@@ -69,9 +69,9 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
             <img src={campaign.imageUrl} alt={campaign.name} className="w-full h-48 object-cover" />
           )}
           <div className="p-8">
-          <OrganizationLogo logoUrl={church.logoUrl} churchName={church.name} mode={campaign.imageUrl ? "embed" : "main"} />
+          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="Fundraising Campaign" compact={Boolean(campaign.imageUrl)} />
           <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{campaign.name}</h1>
-          <p className="text-sm text-center text-slate-500 mb-6">{church.name}</p>
+          <div className="mb-6" />
           {campaign.description && <p className="text-sm text-center text-slate-600 mb-6">{campaign.description}</p>}
 
           <ProgressBar raisedCents={raisedCents} goalAmountCents={campaign.goalAmountCents} donorCount={donorCount} />

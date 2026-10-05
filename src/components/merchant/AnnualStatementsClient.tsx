@@ -327,6 +327,12 @@ export default function AnnualStatementsClient() {
         >
           Download {year} giving totals (CSV)
         </a>
+        <a
+          href={`/api/merchant/donors/annual-statements/year-totals?year=${year}&format=xlsx`}
+          className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Download {year} giving totals (Excel)
+        </a>
         {printMeta && printMeta.statements > 0 ? (
           Array.from({ length: printMeta.parts }, (_, i) => (
             <a

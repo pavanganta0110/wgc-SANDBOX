@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { isValidEmail, normalizeEmail } from "@/lib/donors/donorContact";
+import { loadOptedOutEmails } from "@/lib/giving/emailOptOut";
 import { isEventAudienceScope, loadEventAudience, type EventAudienceScope } from "@/lib/eventRegistration/audience";
 
 /**
@@ -7,19 +8,26 @@ import { isEventAudienceScope, loadEventAudience, type EventAudienceScope } from
  * composer sends to hand-picked donors (SELECTED); this adds audiences that
  * are resolved server-side from the church's own data:
  *
- *  - ALL_DONORS         every active donor with the needed contact info
+ *  - ALL_DONORS         everyone who has actually given (a successful payment
+ *                       or a recorded external gift) with the needed contact info
  *  - GIVING_PAGE        donors who completed a payment through one giving page
  *  - EVENT              an event's attendees/registrants (email only) — read
  *                       from registration rows, so people who registered free
  *                       and never paid are included
  *  - IMPORTED_CONTACTS  contacts added by CSV import (no donation required)
+ *  - NOT_GIVEN          everyone on file with an email who has never given:
+ *                       no successful payment and no recorded external gift
+ *                       (event registrants, imported contacts, newsletter
+ *                       sign-ups, prospects)
  *
  * Every query is filtered by churchId, and every referenced id (giving page,
  * event) is re-verified to belong to that church. Recipients are
- * de-duplicated by normalized email (or phone for texts).
+ * de-duplicated by normalized email (or phone for texts). Addresses that
+ * unsubscribed from this church's bulk email are always left out of email
+ * audiences.
  */
 
-export const AUDIENCE_SOURCES = ["SELECTED", "ALL_DONORS", "GIVING_PAGE", "EVENT", "IMPORTED_CONTACTS"] as const;
+export const AUDIENCE_SOURCES = ["SELECTED", "ALL_DONORS", "GIVING_PAGE", "EVENT", "IMPORTED_CONTACTS", "NOT_GIVEN"] as const;
 export type AudienceSource = (typeof AUDIENCE_SOURCES)[number];
 
 export function isAudienceSource(v: unknown): v is AudienceSource {
@@ -70,7 +78,7 @@ function dedupe(rows: DonorRow[], channel: "EMAIL" | "TEXT"): AudienceRecipient[
   return out;
 }
 
-export async function resolveCampaignAudience(churchId: string, req: AudienceRequest, channel: "EMAIL" | "TEXT"): Promise<AudienceResult> {
+async function resolveRawAudience(churchId: string, req: AudienceRequest, channel: "EMAIL" | "TEXT"): Promise<AudienceResult> {
   const contactFilter = channel === "TEXT" ? { normalizedPhone: { not: null } } : { email: { not: null } };
 
   switch (req.source) {
@@ -82,22 +90,18 @@ export async function resolveCampaignAudience(churchId: string, req: AudienceReq
     }
 
     case "ALL_DONORS": {
-      // "Donor" = someone created by a payment/subscription/external gift
-      // (no contactSource), or an imported/event contact who has since
-      // actually paid.
-      const base = await prisma.donor.findMany({ where: { churchId, ...activeDonor, contactSource: null, ...contactFilter }, select: donorSelect, take: MAX_AUDIENCE });
-      const payers = await prisma.payment.findMany({
-        where: { churchId, status: "SUCCEEDED", donorId: { not: null } },
-        distinct: ["donorId"],
-        select: { donorId: true },
-        take: MAX_AUDIENCE,
-      });
-      const baseIds = new Set(base.map((d) => d.id));
-      const extraIds = payers.map((p) => p.donorId as string).filter((id) => !baseIds.has(id));
-      const extra = extraIds.length
-        ? await prisma.donor.findMany({ where: { churchId, ...activeDonor, id: { in: extraIds }, ...contactFilter }, select: donorSelect })
-        : [];
-      return { ok: true, recipients: dedupe([...base, ...extra], channel) };
+      // "Donor" = someone who has actually given: a successful online
+      // payment or a recorded external gift (check, cash…). Someone who only
+      // started a checkout, was added by hand, imported or registered for an
+      // event is NOT_GIVEN until they do — so these two audiences split
+      // everyone on file cleanly with no overlap.
+      const [payers, externalGivers] = await Promise.all([
+        prisma.payment.findMany({ where: { churchId, status: "SUCCEEDED", donorId: { not: null } }, distinct: ["donorId"], select: { donorId: true }, take: MAX_AUDIENCE }),
+        prisma.externalDonation.findMany({ where: { churchId, donorId: { not: null } }, distinct: ["donorId"], select: { donorId: true }, take: MAX_AUDIENCE }),
+      ]);
+      const ids = [...new Set([...payers, ...externalGivers].map((p) => p.donorId as string))];
+      const rows = ids.length ? await prisma.donor.findMany({ where: { churchId, ...activeDonor, id: { in: ids }, ...contactFilter }, select: donorSelect }) : [];
+      return { ok: true, recipients: dedupe(rows, channel) };
     }
 
     case "GIVING_PAGE": {
@@ -121,6 +125,16 @@ export async function resolveCampaignAudience(churchId: string, req: AudienceReq
       return { ok: true, recipients: dedupe(rows, channel) };
     }
 
+    case "NOT_GIVEN": {
+      const [payers, externalGivers] = await Promise.all([
+        prisma.payment.findMany({ where: { churchId, status: "SUCCEEDED", donorId: { not: null } }, distinct: ["donorId"], select: { donorId: true } }),
+        prisma.externalDonation.findMany({ where: { churchId, donorId: { not: null } }, distinct: ["donorId"], select: { donorId: true } }),
+      ]);
+      const gave = new Set([...payers, ...externalGivers].map((p) => p.donorId as string));
+      const rows = await prisma.donor.findMany({ where: { churchId, ...activeDonor, ...contactFilter }, select: donorSelect, take: MAX_AUDIENCE });
+      return { ok: true, recipients: dedupe(rows.filter((d) => !gave.has(d.id)), channel) };
+    }
+
     case "EVENT": {
       if (channel === "TEXT") return { ok: false, status: 400, error: "Event audiences can only be emailed." };
       if (!req.eventId) return { ok: false, status: 400, error: "Choose an event." };
@@ -134,4 +148,13 @@ export async function resolveCampaignAudience(churchId: string, req: AudienceReq
       };
     }
   }
+}
+
+/** The audience for a campaign: resolved from this church's own data, minus anyone who unsubscribed (email only). */
+export async function resolveCampaignAudience(churchId: string, req: AudienceRequest, channel: "EMAIL" | "TEXT"): Promise<AudienceResult> {
+  const result = await resolveRawAudience(churchId, req, channel);
+  if (!result.ok || channel !== "EMAIL") return result;
+  const optedOut = await loadOptedOutEmails(churchId, result.recipients.map((r) => r.email));
+  if (optedOut.size === 0) return result;
+  return { ok: true, recipients: result.recipients.filter((r) => !(r.email && optedOut.has(normalizeEmail(r.email) ?? ""))) };
 }

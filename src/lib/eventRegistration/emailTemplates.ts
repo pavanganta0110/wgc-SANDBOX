@@ -167,16 +167,32 @@ export function sanitizeEmailHtml(html: string): string {
     .replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1="#"');
 }
 
+/**
+ * Photos in event emails: a merchant adds "[photo: https://…]" on its own
+ * line (the Emails tab's Add photo button inserts it). Only https images are
+ * turned into <img> tags, after the rest of the text has been rendered and
+ * escaped, so a photo link can never smuggle markup in.
+ */
+const PHOTO_TOKEN = /\[photo:\s*(https:\/\/[^\s\]<>"']+)\s*\]/gi;
+function renderPhotos(html: string): string {
+  return html.replace(
+    PHOTO_TOKEN,
+    (_m, url: string) => `<img src="${url}" alt="" style="display:block;max-width:100%;height:auto;border-radius:8px;margin:8px 0;" />`
+  );
+}
+
 const HTML_TAG = /<\/?[a-z][\s\S]*?>/i;
 
 /** Plain text becomes escaped paragraphs/line breaks; text containing HTML is sanitized and kept as HTML. */
 export function bodyToHtml(body: string, ctx: EventEmailContext): string {
   if (HTML_TAG.test(body)) {
-    return sanitizeEmailHtml(renderEventTemplate(body, ctx, { html: true }));
+    return renderPhotos(sanitizeEmailHtml(renderEventTemplate(body, ctx, { html: true })));
   }
   const rendered = renderEventTemplate(body, ctx, { html: true });
-  return rendered
-    .split(/\n{2,}/)
-    .map((para) => `<p style="margin: 0 0 16px 0;">${para.replace(/\n/g, "<br/>")}</p>`)
-    .join("");
+  return renderPhotos(
+    rendered
+      .split(/\n{2,}/)
+      .map((para) => `<p style="margin: 0 0 16px 0;">${para.replace(/\n/g, "<br/>")}</p>`)
+      .join("")
+  );
 }

@@ -20,9 +20,11 @@ interface OrganizationBrandHeaderProps {
   kind: string;
   nameColor?: string;
   kindColor?: string;
+  /** Smaller logo, for frames and pages that already lead with a cover image. */
+  compact?: boolean;
 }
 
-export default function OrganizationBrandHeader({ logoUrl, organizationName, kind, nameColor = "#0f172a", kindColor = "#64748b" }: OrganizationBrandHeaderProps) {
+export default function OrganizationBrandHeader({ logoUrl, organizationName, kind, nameColor = "#0f172a", kindColor = "#64748b", compact = false }: OrganizationBrandHeaderProps) {
   const [hasError, setHasError] = useState(false);
   const showLogo = Boolean(logoUrl) && logoUrl !== WGC_FALLBACK_LOGO && !hasError;
 
@@ -35,7 +37,7 @@ export default function OrganizationBrandHeader({ logoUrl, organizationName, kin
           alt={`${organizationName} logo`}
           onError={() => setHasError(true)}
           className="mb-3"
-          style={{ width: "auto", height: "auto", maxWidth: "min(280px, 80%)", maxHeight: "104px", objectFit: "contain" }}
+          style={{ width: "auto", height: "auto", maxWidth: compact ? "min(200px, 70%)" : "min(280px, 80%)", maxHeight: compact ? "72px" : "104px", objectFit: "contain" }}
         />
       )}
       <p className="text-lg font-bold leading-tight" style={{ color: nameColor }}>
