@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { checkAdminAuthRateLimit } from "@/lib/auth/adminAuthRateLimit";
+import { isAdminMfaEnforced } from "@/lib/auth/adminMfaPolicy";
 import { completeAdminLogin } from "@/lib/auth/completeAdminLogin";
 import { generateMfaCode, generateMfaChallengeId, maskPhone, MFA_CODE_TTL_MINUTES } from "@/lib/auth/mfaCode";
 import { sendAuthSms } from "@/lib/sms/authSmsSender";
@@ -53,6 +54,14 @@ export async function POST(req: Request) {
     // below), but src/app/admin/(dashboard)/layout.tsx blocks all
     // dashboard functionality until they do — a safe rollout, not a
     // permanent lockout of existing admins.
+    // Sandbox/staging only (never live — see adminMfaPolicy.ts): with
+    // enforcement switched off, a correct password completes the login and
+    // the session counts as verified, since no SMS provider is configured.
+    if (!isAdminMfaEnforced()) {
+      await completeAdminLogin(user, ip, userAgent, true);
+      return NextResponse.json({ success: true });
+    }
+
     if (user.mfaEnabled) {
       if (!user.phone) {
         console.error(`Admin MFA enabled with no phone on file for user ${user.id}`);
