@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import MerchandiseGivingExperience from "@/components/giving/MerchandiseGivingExperience";
-import OrganizationLogo from "@/components/merchant/OrganizationLogo";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
+import PoweredByWgc from "@/components/merchant/PoweredByWgc";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
 import { recordGivingLinkShareOpened } from "@/lib/givingLinks/recordShareOpened";
 
@@ -54,7 +55,7 @@ export default async function GivingLinkPublicPage({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branding.campaignImageUrl} alt="" className="w-full h-32 object-cover rounded-xl mb-6" />
         )}
-        <OrganizationLogo logoUrl={logoUrl} churchName={church.name} mode="main" />
+        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind="Secure Giving" nameColor={light.headingColor} kindColor={light.bodyTextColor} />
         <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
           {link.publicTitle}
         </h1>
@@ -117,29 +118,7 @@ export default async function GivingLinkPublicPage({
           />
         )}
 
-        {(() => {
-          const wgcUrl = (() => {
-            const url = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
-            if (url.includes("vercel.app") || url.includes("localhost") || url.includes("sandbox")) {
-              return "https://www.wgcpayments.com";
-            }
-            return url;
-          })();
-          return (
-            branding.showPoweredByWgc !== false && (
-              <div className="text-center mt-6">
-                <a
-                  href={wgcUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  Powered by WGC
-                </a>
-              </div>
-            )
-          );
-        })()}
+        {branding.showPoweredByWgc !== false && <PoweredByWgc />}
       </div>
     </div>
   );

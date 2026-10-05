@@ -12,10 +12,18 @@ export const HEADER_ALIASES: Record<string, keyof ImportRowInput> = {
   "phone number": "phone",
   "address line 1": "addressLine1",
   address: "addressLine1",
+  "address 1": "addressLine1",
+  street: "addressLine1",
+  "street address": "addressLine1",
   "address line 2": "addressLine2",
+  "address 2": "addressLine2",
+  apt: "addressLine2",
+  suite: "addressLine2",
   city: "city",
   state: "state",
   "postal code": "postalCode",
+  postal: "postalCode",
+  zipcode: "postalCode",
   zip: "postalCode",
   "zip code": "postalCode",
   country: "country",
@@ -26,6 +34,17 @@ export const HEADER_ALIASES: Record<string, keyof ImportRowInput> = {
   "address confirmed date": "addressConfirmedDate",
   "address confirmed": "addressConfirmedDate",
 };
+
+/**
+ * Contact-style spreadsheets split the name across two columns. These feed
+ * `name` (joined) rather than being fields of their own, so every consumer
+ * of ImportRowInput — including Migration Center's remappable importer —
+ * keeps working unchanged.
+ */
+const FIRST_NAME_HEADERS = new Set(["first name", "firstname", "first_name", "given name", "first"]);
+const LAST_NAME_HEADERS = new Set(["last name", "lastname", "last_name", "surname", "family name", "last"]);
+/** Free-text "where did this contact come from / anything to remember" column. */
+const NOTE_HEADERS = new Set(["notes", "note", "source", "comments", "comment", "contact source", "source/notes", "source / notes"]);
 
 export interface ImportRowInput {
   name: string | null;
@@ -40,6 +59,8 @@ export interface ImportRowInput {
   companyName: string | null;
   addressSource: string | null;
   addressConfirmedDate: string | null;
+  /** Optional free text from a Source/Notes column; saved as a donor note on newly created contacts only. */
+  notes?: string | null;
 }
 
 export interface ImportRowResult {
@@ -133,11 +154,26 @@ export function mapCsvRow(headers: string[], row: string[]): ImportRowInput {
     addressSource: null,
     addressConfirmedDate: null,
   };
+  let firstName: string | null = null;
+  let lastName: string | null = null;
+  const notes: string[] = [];
   headers.forEach((rawHeader, i) => {
-    const key = HEADER_ALIASES[rawHeader.trim().toLowerCase()];
+    const header = rawHeader.trim().toLowerCase();
+    if (FIRST_NAME_HEADERS.has(header)) firstName = clean(row[i], 100);
+    else if (LAST_NAME_HEADERS.has(header)) lastName = clean(row[i], 100);
+    else if (NOTE_HEADERS.has(header)) {
+      const note = clean(row[i], 500);
+      if (note) notes.push(note);
+    }
+    const key = HEADER_ALIASES[header];
     if (!key) return;
     input[key] = clean(row[i], key === "email" ? 320 : key === "phone" ? 30 : 200);
   });
+  // An explicit full-name column always wins over First/Last.
+  if (!input.name && (firstName || lastName)) {
+    input.name = [firstName, lastName].filter(Boolean).join(" ").slice(0, 200);
+  }
+  if (notes.length > 0) input.notes = notes.join(" — ").slice(0, 1000);
   return input;
 }
 
@@ -145,7 +181,10 @@ const VALID_IMPORT_ADDRESS_SOURCES = new Set(["CRM_IMPORT", "CSV_IMPORT", "EXIST
 
 export function validateImportRowInput(input: ImportRowInput): string[] {
   const errors: string[] = [];
-  if (!input.name && !input.companyName) errors.push("Missing donor name");
+  // An email is enough to identify a contact (a mailing-list or guest-list
+  // export often has no name column filled in). Without an email, a phone
+  // number alone is not enough — a nameless phone row can't be told apart.
+  if (!input.name && !input.companyName && !input.email) errors.push("Missing donor name");
   if (input.email && !isValidEmail(input.email)) errors.push("Invalid email");
   if (input.phone && !isValidPhone(input.phone)) errors.push("Invalid phone number");
   if (!input.email && !input.phone) errors.push("At least one of email or phone is required");

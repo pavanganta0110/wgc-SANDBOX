@@ -10,6 +10,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/event-emails",
+      "schedule": "30 14 * * *"
+    },
+    {
       "path": "/api/cron/reconcile-subscriptions",
       "schedule": "0 15 * * *"
     },

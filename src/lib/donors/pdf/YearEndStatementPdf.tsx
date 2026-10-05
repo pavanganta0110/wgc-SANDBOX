@@ -84,110 +84,128 @@ export interface StatementPdfProps {
   generatedAt: Date;
 }
 
+/** One donor's statement as a <Page>. Used on its own (single PDF) and repeated inside CombinedStatementsPdf (one print run for the whole year). */
+export function YearEndStatementPage(props: StatementPdfProps) {
+  return (
+    <Page size="LETTER" style={styles.page}>
+      <View style={styles.header}>
+        {props.organizationLogoUrl && <Image src={props.organizationLogoUrl} style={styles.logo} />}
+        <View>
+          <Text style={styles.orgName}>{props.organizationName}</Text>
+          {props.organizationAddress && <Text style={{ color: "#64748b" }}>{props.organizationAddress}</Text>}
+          <Text style={{ color: "#64748b" }}>
+            {[props.organizationEmail, props.organizationPhone, props.organizationWebsite].filter(Boolean).join(" · ")}
+          </Text>
+          {props.organizationTaxId && <Text style={{ color: "#94a3b8", fontSize: 8 }}>Tax ID: {props.organizationTaxId}</Text>}
+          <Text style={styles.title}>Year-End Donation Statement — {props.taxYear}</Text>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Donor</Text>
+        <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{props.donorName}</Text></View>
+        {props.donorEmail && <View style={styles.row}><Text style={styles.label}>Email</Text><Text style={styles.value}>{props.donorEmail}</Text></View>}
+        {props.donorAddress && <View style={styles.row}><Text style={styles.label}>Mailing Address</Text><Text style={styles.value}>{props.donorAddress}</Text></View>}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Donation Summary</Text>
+        <View style={styles.row}><Text style={styles.label}>Number of Donations</Text><Text style={styles.value}>{props.donationCount}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>Gross Donated</Text><Text style={styles.value}>{formatCents(props.grossDonatedCents)}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>Refunded</Text><Text style={styles.value}>{formatCents(props.refundedAmountCents)}</Text></View>
+        <View style={styles.row}><Text style={styles.label}>ACH Returned</Text><Text style={styles.value}>{formatCents(props.returnedAmountCents)}</Text></View>
+        {props.showDonorCoveredFees && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Donor-Covered Transaction Costs</Text>
+            <Text style={styles.value}>{formatCents(props.lines.reduce((s, l) => s + l.donorCoveredFeeCents, 0))}</Text>
+          </View>
+        )}
+        {props.totalGoodsServicesValueCents > 0 && (
+          <>
+            <View style={styles.row}><Text style={styles.label}>Total Goods/Services Value</Text><Text style={styles.value}>{formatCents(props.totalGoodsServicesValueCents)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>Total Recorded Contribution Amount</Text><Text style={styles.value}>{formatCents(props.totalRecordedContributionAmountCents)}</Text></View>
+          </>
+        )}
+        <View style={styles.row}><Text style={styles.label}>Recorded Annual Total</Text><Text style={styles.value}>{formatCents(props.recordedTotalCents)}</Text></View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Donation History</Text>
+        <View style={styles.table}>
+          <View style={styles.tableHeaderRow} fixed>
+            <Text style={styles.colDate}>Date</Text>
+            <Text style={styles.colRef}>Reference</Text>
+            <Text style={styles.colFund}>Fund</Text>
+            <Text style={styles.colGross}>Gross</Text>
+            <Text style={styles.colAdj}>Adjustments</Text>
+            <Text style={styles.colFinal}>Recorded</Text>
+          </View>
+          {props.lines.map((line, i) => (
+            <View style={styles.tableRow} key={i} wrap={false}>
+              <Text style={styles.colDate}>{formatDate(line.donationDate)}</Text>
+              <Text style={styles.colRef}>{line.reference}</Text>
+              <Text style={styles.colFund}>{line.fundName || "—"}</Text>
+              <Text style={styles.colGross}>{formatCents(line.grossAmountCents)}</Text>
+              <Text style={styles.colAdj}>
+                {line.refundedAmountCents + line.returnedAmountCents > 0
+                  ? `-${formatCents(line.refundedAmountCents + line.returnedAmountCents)}`
+                  : "—"}
+              </Text>
+              <Text style={styles.colFinal}>{formatCents(line.finalRecordedAmountCents)}</Text>
+            </View>
+          ))}
+          {props.lines.map((line, i) =>
+            line.goodsServicesProvided ? (
+              <View key={`gs-${i}`} style={{ paddingHorizontal: 4, paddingBottom: 4, fontSize: 8, color: "#64748b" }} wrap={false}>
+                <Text>
+                  {formatDate(line.donationDate)} — Goods/services: {line.goodsServicesDescription} (FMV {formatCents(line.goodsServicesFairMarketValueCents ?? 0)}) — Recorded contribution:{" "}
+                  {formatCents(line.recordedContributionAmountCents)}
+                </Text>
+              </View>
+            ) : null,
+          )}
+        </View>
+      </View>
+
+      {props.thankYouMessage && <Text style={{ marginTop: 8 }}>{props.thankYouMessage}</Text>}
+
+      <Text style={styles.acknowledgment}>{props.acknowledgmentText}</Text>
+
+      {(props.signatureName || props.signatureImageUrl) && (
+        <View style={styles.signatureBlock}>
+          {props.signatureImageUrl && <Image src={props.signatureImageUrl} style={styles.signatureImage} />}
+          <View style={styles.signatureLine}>
+            {props.signatureName && <Text>{props.signatureName}</Text>}
+            {props.signatureTitle && <Text style={{ color: "#64748b" }}>{props.signatureTitle}</Text>}
+          </View>
+        </View>
+      )}
+
+      <Text style={styles.disclaimer}>{props.disclaimer}</Text>
+
+      <Text style={styles.footer} fixed>
+        Generated {formatDate(props.generatedAt)}
+      </Text>
+      <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
+    </Page>
+  );
+}
+
 export function YearEndStatementPdf(props: StatementPdfProps) {
   return (
     <Document>
-      <Page size="LETTER" style={styles.page}>
-        <View style={styles.header}>
-          {props.organizationLogoUrl && <Image src={props.organizationLogoUrl} style={styles.logo} />}
-          <View>
-            <Text style={styles.orgName}>{props.organizationName}</Text>
-            {props.organizationAddress && <Text style={{ color: "#64748b" }}>{props.organizationAddress}</Text>}
-            <Text style={{ color: "#64748b" }}>
-              {[props.organizationEmail, props.organizationPhone, props.organizationWebsite].filter(Boolean).join(" · ")}
-            </Text>
-            {props.organizationTaxId && <Text style={{ color: "#94a3b8", fontSize: 8 }}>Tax ID: {props.organizationTaxId}</Text>}
-            <Text style={styles.title}>Year-End Donation Statement — {props.taxYear}</Text>
-          </View>
-        </View>
+      <YearEndStatementPage {...props} />
+    </Document>
+  );
+}
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donor</Text>
-          <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{props.donorName}</Text></View>
-          {props.donorEmail && <View style={styles.row}><Text style={styles.label}>Email</Text><Text style={styles.value}>{props.donorEmail}</Text></View>}
-          {props.donorAddress && <View style={styles.row}><Text style={styles.label}>Mailing Address</Text><Text style={styles.value}>{props.donorAddress}</Text></View>}
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation Summary</Text>
-          <View style={styles.row}><Text style={styles.label}>Number of Donations</Text><Text style={styles.value}>{props.donationCount}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Gross Donated</Text><Text style={styles.value}>{formatCents(props.grossDonatedCents)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Refunded</Text><Text style={styles.value}>{formatCents(props.refundedAmountCents)}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>ACH Returned</Text><Text style={styles.value}>{formatCents(props.returnedAmountCents)}</Text></View>
-          {props.showDonorCoveredFees && (
-            <View style={styles.row}>
-              <Text style={styles.label}>Donor-Covered Transaction Costs</Text>
-              <Text style={styles.value}>{formatCents(props.lines.reduce((s, l) => s + l.donorCoveredFeeCents, 0))}</Text>
-            </View>
-          )}
-          {props.totalGoodsServicesValueCents > 0 && (
-            <>
-              <View style={styles.row}><Text style={styles.label}>Total Goods/Services Value</Text><Text style={styles.value}>{formatCents(props.totalGoodsServicesValueCents)}</Text></View>
-              <View style={styles.row}><Text style={styles.label}>Total Recorded Contribution Amount</Text><Text style={styles.value}>{formatCents(props.totalRecordedContributionAmountCents)}</Text></View>
-            </>
-          )}
-          <View style={styles.row}><Text style={styles.label}>Recorded Annual Total</Text><Text style={styles.value}>{formatCents(props.recordedTotalCents)}</Text></View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation History</Text>
-          <View style={styles.table}>
-            <View style={styles.tableHeaderRow} fixed>
-              <Text style={styles.colDate}>Date</Text>
-              <Text style={styles.colRef}>Reference</Text>
-              <Text style={styles.colFund}>Fund</Text>
-              <Text style={styles.colGross}>Gross</Text>
-              <Text style={styles.colAdj}>Adjustments</Text>
-              <Text style={styles.colFinal}>Recorded</Text>
-            </View>
-            {props.lines.map((line, i) => (
-              <View style={styles.tableRow} key={i} wrap={false}>
-                <Text style={styles.colDate}>{formatDate(line.donationDate)}</Text>
-                <Text style={styles.colRef}>{line.reference}</Text>
-                <Text style={styles.colFund}>{line.fundName || "—"}</Text>
-                <Text style={styles.colGross}>{formatCents(line.grossAmountCents)}</Text>
-                <Text style={styles.colAdj}>
-                  {line.refundedAmountCents + line.returnedAmountCents > 0
-                    ? `-${formatCents(line.refundedAmountCents + line.returnedAmountCents)}`
-                    : "—"}
-                </Text>
-                <Text style={styles.colFinal}>{formatCents(line.finalRecordedAmountCents)}</Text>
-              </View>
-            ))}
-            {props.lines.map((line, i) =>
-              line.goodsServicesProvided ? (
-                <View key={`gs-${i}`} style={{ paddingHorizontal: 4, paddingBottom: 4, fontSize: 8, color: "#64748b" }} wrap={false}>
-                  <Text>
-                    {formatDate(line.donationDate)} — Goods/services: {line.goodsServicesDescription} (FMV {formatCents(line.goodsServicesFairMarketValueCents ?? 0)}) — Recorded contribution:{" "}
-                    {formatCents(line.recordedContributionAmountCents)}
-                  </Text>
-                </View>
-              ) : null,
-            )}
-          </View>
-        </View>
-
-        {props.thankYouMessage && <Text style={{ marginTop: 8 }}>{props.thankYouMessage}</Text>}
-
-        <Text style={styles.acknowledgment}>{props.acknowledgmentText}</Text>
-
-        {(props.signatureName || props.signatureImageUrl) && (
-          <View style={styles.signatureBlock}>
-            {props.signatureImageUrl && <Image src={props.signatureImageUrl} style={styles.signatureImage} />}
-            <View style={styles.signatureLine}>
-              {props.signatureName && <Text>{props.signatureName}</Text>}
-              {props.signatureTitle && <Text style={{ color: "#64748b" }}>{props.signatureTitle}</Text>}
-            </View>
-          </View>
-        )}
-
-        <Text style={styles.disclaimer}>{props.disclaimer}</Text>
-
-        <Text style={styles.footer} fixed>
-          Generated {formatDate(props.generatedAt)}
-        </Text>
-        <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
-      </Page>
+/** Every donor's statement in one document, each starting on its own page — for a single print-and-mail run. */
+export function CombinedStatementsPdf(statements: StatementPdfProps[]) {
+  return (
+    <Document>
+      {statements.map((props, i) => (
+        <YearEndStatementPage key={i} {...props} />
+      ))}
     </Document>
   );
 }

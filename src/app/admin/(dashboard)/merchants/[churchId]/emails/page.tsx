@@ -12,6 +12,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   INVOICE: "Invoice",
   MERCHANDISE_ORDER: "Merchandise Order",
   SUBSCRIPTION_SETUP_LINK: "Subscription Setup Link",
+  EVENT_CONFIRMATION: "Event Confirmation",
+  EVENT_REMINDER: "Event Reminder",
+  EVENT_THANK_YOU: "Event Thank You",
   OTHER: "Other",
 };
 

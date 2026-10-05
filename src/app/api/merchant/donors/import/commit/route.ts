@@ -73,7 +73,16 @@ export async function POST(req: Request) {
         companyName: row.input.companyName,
         addressSource: row.input.addressSource || (row.input.addressLine1 ? "CSV_IMPORT" : null),
         addressConfirmedDate: row.input.addressConfirmedDate,
+        // Contact-only rows (no donation, ever) are tagged so "Imported
+        // contacts" can be targeted in email campaigns. Written only when
+        // this import creates the donor — never on an existing match.
+        contactSource: "CSV_IMPORT",
       });
+      if (result.created && row.input.notes) {
+        await prisma.donorNote.create({
+          data: { donorId: result.id, churchId: auth.churchId, body: `Imported contact — ${row.input.notes}`, createdByUserId: auth.userId, createdByEmail: auth.email },
+        });
+      }
       if (result.created) created += 1;
       else if (result.updated) updated += 1;
       else reused += 1;

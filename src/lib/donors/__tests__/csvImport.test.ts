@@ -50,22 +50,13 @@ describe("mapCsvRow", () => {
 });
 
 describe("validateImportRowInput", () => {
-  it("requires a name or company", () => {
-    const errors = validateImportRowInput({
-      name: null,
-      email: "a@example.com",
-      phone: null,
-      addressLine1: null,
-      addressLine2: null,
-      city: null,
-      state: null,
-      postalCode: null,
-      country: null,
-      companyName: null,
-      addressSource: null,
-      addressConfirmedDate: null,
-    });
-    expect(errors).toContain("Missing donor name");
+  it("requires a name or company unless the row has an email", () => {
+    const blank = {
+      name: null, email: null, phone: "(555) 555-0123", addressLine1: null, addressLine2: null, city: null, state: null,
+      postalCode: null, country: null, companyName: null, addressSource: null, addressConfirmedDate: null,
+    };
+    expect(validateImportRowInput(blank)).toContain("Missing donor name");
+    expect(validateImportRowInput({ ...blank, email: "a@example.com", phone: null })).not.toContain("Missing donor name");
   });
 
   it("requires at least one of email or phone", () => {

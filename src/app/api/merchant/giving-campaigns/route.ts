@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
+import { hasPermission } from "@/lib/auth/permissions";
+import { isAudienceSource, resolveCampaignAudience } from "@/lib/giving/campaignAudience";
 import { generateCampaignTrackingToken } from "@/lib/giving/campaignTemplate";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { isSmsConfigured } from "@/lib/sms/sendText";
@@ -86,6 +88,10 @@ export async function POST(req: Request) {
   const emailBodyTemplate = typeof body.emailBodyTemplate === "string" ? body.emailBodyTemplate : "";
   const textBodyTemplate = typeof body.textBodyTemplate === "string" ? body.textBodyTemplate.trim() : "";
   const donorIds: string[] = Array.isArray(body.donorIds) ? body.donorIds.filter((id: unknown) => typeof id === "string") : [];
+  // Who receives it. Omitted = the original hand-picked donorIds flow; every
+  // other source is resolved server-side from this church's own data.
+  const audienceBody = body.audience && typeof body.audience === "object" ? body.audience : {};
+  const audienceSource = isAudienceSource(audienceBody.source) ? audienceBody.source : "SELECTED";
 
   if (channel === "EMAIL" && (!emailSubject || !emailBodyTemplate)) {
     return NextResponse.json({ error: "A subject and message are required." }, { status: 400 });
@@ -102,8 +108,11 @@ export async function POST(req: Request) {
   if (!name) {
     return NextResponse.json({ error: "Name is required." }, { status: 400 });
   }
-  if (donorIds.length === 0) {
+  if (audienceSource === "SELECTED" && donorIds.length === 0) {
     return NextResponse.json({ error: "Select at least one donor." }, { status: 400 });
+  }
+  if (audienceSource === "EVENT" && !hasPermission(auth, "canViewEvents")) {
+    return NextResponse.json({ error: "You don't have permission to message event attendees." }, { status: 403 });
   }
   if ((fundraisingCampaignId || campaignTeamId || campaignFundraiserId) && pledgeCampaignId) {
     return NextResponse.json({ error: "Choose either a fundraising campaign or a pledge campaign, not both." }, { status: 400 });
@@ -176,20 +185,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Giving link not found." }, { status: 404 });
   }
 
-  const donors =
-    channel === "TEXT"
-      ? await prisma.donor.findMany({
-          where: { id: { in: donorIds }, churchId: auth.churchId, normalizedPhone: { not: null } },
-          select: { id: true, name: true, normalizedPhone: true },
-        })
-      : await prisma.donor.findMany({
-          where: { id: { in: donorIds }, churchId: auth.churchId, email: { not: null } },
-          select: { id: true, name: true, email: true },
-        });
+  const audience = await resolveCampaignAudience(
+    auth.churchId,
+    {
+      source: audienceSource,
+      donorIds,
+      givingLinkId: typeof audienceBody.givingLinkId === "string" ? audienceBody.givingLinkId : undefined,
+      eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : undefined,
+      eventScope: typeof audienceBody.eventScope === "string" ? audienceBody.eventScope : undefined,
+    },
+    channel === "TEXT" ? "TEXT" : "EMAIL"
+  );
+  if (!audience.ok) {
+    return NextResponse.json({ error: audience.error }, { status: audience.status });
+  }
+  const donors = audience.recipients;
 
   if (donors.length === 0) {
     return NextResponse.json(
-      { error: channel === "TEXT" ? "None of the selected donors have a valid phone number on file." : "None of the selected donors have an email address on file." },
+      {
+        error:
+          audienceSource === "SELECTED"
+            ? channel === "TEXT"
+              ? "None of the selected donors have a valid phone number on file."
+              : "None of the selected donors have an email address on file."
+            : "No one in this audience can be reached on this channel.",
+      },
       { status: 400 }
     );
   }
@@ -212,24 +233,15 @@ export async function POST(req: Request) {
   });
 
   await prisma.givingCampaignRecipient.createMany({
-    data:
-      channel === "TEXT"
-        ? (donors as { id: string; name: string | null; normalizedPhone: string | null }[]).map((d) => ({
-            campaignId: campaign.id,
-            churchId: auth.churchId,
-            donorId: d.id,
-            trackingToken: generateCampaignTrackingToken(),
-            recipientPhone: d.normalizedPhone,
-            recipientName: d.name,
-          }))
-        : (donors as { id: string; name: string | null; email: string | null }[]).map((d) => ({
-            campaignId: campaign.id,
-            churchId: auth.churchId,
-            donorId: d.id,
-            trackingToken: generateCampaignTrackingToken(),
-            recipientEmail: d.email,
-            recipientName: d.name,
-          })),
+    data: donors.map((d) => ({
+      campaignId: campaign.id,
+      churchId: auth.churchId,
+      donorId: d.donorId,
+      trackingToken: generateCampaignTrackingToken(),
+      recipientEmail: channel === "TEXT" ? null : d.email,
+      recipientPhone: channel === "TEXT" ? d.phone : null,
+      recipientName: d.name,
+    })),
   });
 
   await logDashboardAction({
@@ -244,7 +256,8 @@ export async function POST(req: Request) {
       name,
       givingLinkId: link.id,
       channel,
-      requestedCount: donorIds.length,
+      audienceSource,
+      requestedCount: audienceSource === "SELECTED" ? donorIds.length : donors.length,
       recipientCount: donors.length,
       fundraisingCampaignId: resolvedFundraisingCampaignId,
       campaignTeamId: resolvedCampaignTeamId,
@@ -254,5 +267,5 @@ export async function POST(req: Request) {
     req,
   });
 
-  return NextResponse.json({ campaign, recipientCount: donors.length, skippedCount: donorIds.length - donors.length }, { status: 201 });
+  return NextResponse.json({ campaign, recipientCount: donors.length, skippedCount: audienceSource === "SELECTED" ? donorIds.length - donors.length : 0 }, { status: 201 });
 }

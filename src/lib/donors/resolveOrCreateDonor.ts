@@ -38,6 +38,8 @@ export interface DonorResolutionInput {
    * confirmed by the source system, if known. Never set from format
    * validation alone. */
   addressConfirmedDate?: string | null;
+  /** How a NEW donor row first entered the audience when it wasn't a payment (CSV_IMPORT | EVENT). Written only when this call creates the row — never overwrites an existing donor's value. */
+  contactSource?: string | null;
 }
 
 /**
@@ -113,6 +115,7 @@ export async function resolveOrCreateDonor(input: DonorResolutionInput): Promise
         postalCode: input.postalCode || null,
         country: input.country || null,
         companyName: input.companyName || null,
+        contactSource: input.contactSource || null,
         ...(input.addressLine1
           ? {
               addressSource: input.addressSource || null,

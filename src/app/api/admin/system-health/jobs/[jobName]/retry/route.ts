@@ -31,6 +31,7 @@ const RETRIGGERABLE_JOB_PATHS: Record<string, string> = {
   reconcile: "/api/cron/reconcile",
   "reconcile-subscriptions": "/api/cron/reconcile-subscriptions",
   "invoice-reminders": "/api/cron/invoice-reminders",
+  "event-emails": "/api/cron/event-emails",
   "promo-shortfall-check": "/api/cron/promo-shortfall-check",
   "sms-addon-overage-check": "/api/cron/sms-addon-overage-check",
   "resync-transfer-fees": "/api/cron/resync-transfer-fees",

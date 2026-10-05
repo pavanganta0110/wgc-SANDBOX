@@ -69,6 +69,23 @@ export default function AnnualStatementsClient() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [nameInput, setNameInput] = useState("");
   const [job, setJob] = useState<BulkJob | null>(null);
+  // How many generated statements have a mailing address — drives the
+  // combined-PDF download buttons (large years download in numbered parts).
+  const [printMeta, setPrintMeta] = useState<{ statements: number; parts: number } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/merchant/donors/annual-statements/combined-pdf?year=${year}&meta=1`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setPrintMeta(data ? { statements: data.statements, parts: data.parts } : null);
+      })
+      .catch(() => !cancelled && setPrintMeta(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [year, summary?.statementsGenerated, busy]);
+
 
   const load = async () => {
     setLoading(true);
@@ -301,6 +318,28 @@ export default function AnnualStatementsClient() {
         <button onClick={sendSelected} disabled={busy || selected.size === 0} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
           Send to Selected
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 mb-4" aria-label="Print and export">
+        <a
+          href={`/api/merchant/donors/annual-statements/year-totals?year=${year}`}
+          className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Download {year} giving totals (CSV)
+        </a>
+        {printMeta && printMeta.statements > 0 ? (
+          Array.from({ length: printMeta.parts }, (_, i) => (
+            <a
+              key={i}
+              href={`/api/merchant/donors/annual-statements/combined-pdf?year=${year}&part=${i + 1}`}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {printMeta.parts > 1 ? `Print-ready PDF — part ${i + 1} of ${printMeta.parts}` : `Print-ready PDF of all ${printMeta.statements} statements`}
+            </a>
+          ))
+        ) : (
+          <span className="text-xs text-slate-400">Generate statements to download a print-ready PDF for mailing.</span>
+        )}
       </div>
 
       {job && (

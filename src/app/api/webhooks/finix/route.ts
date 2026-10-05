@@ -1,3 +1,4 @@
+import { syncEventRegistrationWithPayment } from "@/lib/eventRegistration/paymentOutcome";
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import crypto from "crypto";
@@ -384,6 +385,12 @@ export async function syncFinixDataFromWebhookEvent(
           where: { finixTransferId: data.id },
           data: { status: newStatus },
         });
+
+        try {
+          await syncEventRegistrationWithPayment(priorPayment.churchId, priorPayment.id, newStatus);
+        } catch (err) {
+          console.error("Failed to sync event registration with payment outcome:", err);
+        }
 
         if (newStatus === "SUCCEEDED" || newStatus === "FAILED") {
           try {
@@ -782,6 +789,12 @@ export async function syncFinixDataFromWebhookEvent(
           where: { finixTransferId: originalTransferId },
           data: { status: "RETURNED" },
         });
+        try {
+          const returnedPayment = await prisma.payment.findFirst({ where: { finixTransferId: originalTransferId }, select: { id: true, churchId: true } });
+          if (returnedPayment) await syncEventRegistrationWithPayment(returnedPayment.churchId, returnedPayment.id, "RETURNED");
+        } catch (err) {
+          console.error("Failed to sync event registration with bank return:", err);
+        }
 
         const wasSucceeded = (priorReturn?.state || "").toUpperCase() === "SUCCEEDED";
         const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";

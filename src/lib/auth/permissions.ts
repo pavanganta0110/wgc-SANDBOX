@@ -81,6 +81,10 @@ export const OVERRIDABLE_PERMISSION_KEYS: readonly PermissionKey[] = [
   "canManageWebhooks",
   "canManageApiKeys",
   "canManageMigrations",
+  "canViewEvents",
+  "canManageEvents",
+  "canManageEventAttendees",
+  "canExportEvents",
 ];
 
 /**
@@ -198,6 +202,10 @@ export function resolveEffectivePermissions(
       canManageWebhooks: false,
       canManageApiKeys: false,
       canManageMigrations: false,
+      canViewEvents: false,
+      canManageEvents: false,
+      canManageEventAttendees: false,
+      canExportEvents: false,
     };
   }
 

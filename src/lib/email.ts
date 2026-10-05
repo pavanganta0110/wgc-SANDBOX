@@ -61,6 +61,9 @@ interface WgcEmailOptions {
       | "MERCHANDISE_ORDER"
       | "SUBSCRIPTION_SETUP_LINK"
       | "MERCHANT_NOTIFICATION"
+      | "EVENT_CONFIRMATION"
+      | "EVENT_REMINDER"
+      | "EVENT_THANK_YOU"
       | "OTHER";
     relatedEntityType?: string | null;
     relatedEntityId?: string | null;

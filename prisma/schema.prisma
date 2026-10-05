@@ -801,6 +801,13 @@ model Donor {
   // attached to it, so nothing here is ever hard-deleted.
   mergedIntoDonorId      String?
   mergedAt               DateTime?
+  // How this contact first entered the audience, when it wasn't a payment:
+  // CSV_IMPORT (contact-only import — no donation required) | EVENT
+  // (registered for an event without necessarily ever giving). Null for
+  // every donor created by a payment/subscription/external donation — this
+  // is purely so an email audience can target "imported contacts" without
+  // faking a donation to create the row. Never overwritten once set.
+  contactSource          String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -5829,4 +5836,239 @@ model SystemAlert {
 
   @@index([incidentId, sentAt])
   @@index([channel, sentAt])
+}
+
+// =============================================================================
+// EVENTS / REGISTRATION
+//
+// A reusable, merchant-agnostic registration module — galas, golf outings,
+// dinners, conferences, retreats, free RSVPs, anything. An Event is NOT a
+// GivingLink and does not duplicate payment logic: it owns one dedicated,
+// auto-provisioned GivingLink (givingLinkId, plain string — this schema's
+// established cross-reference convention) and every paid registration or
+// optional donation is charged through the existing /api/g/[slug]/donate
+// route against that link, tagged with the EventRegistration id. A free
+// registration (total $0) never touches Finix and creates no Payment row.
+//
+// The payment itself is never stored here — EventRegistration.paymentId is
+// a plain reference to the ordinary Payment row, and the registration/
+// add-on/donation split is recorded on the registration so event revenue can
+// be reported without duplicating the transaction ledger.
+// =============================================================================
+
+model Event {
+  id       String @id @default(cuid())
+  churchId String
+  // Globally unique, human-readable public URL segment (/event/[slug]) —
+  // same convention as FundraisingCampaign.slug.
+  slug     String @unique
+
+  name          String
+  description   String?
+  coverImageUrl String?
+  // DRAFT | ACTIVE | INACTIVE | ARCHIVED. Only ACTIVE events accept
+  // registrations on their public page; DRAFT/INACTIVE/ARCHIVED all 404
+  // publicly, mirroring FundraisingCampaign's status gate.
+  status        String  @default("DRAFT")
+
+  startsAt        DateTime
+  endsAt          DateTime?
+  // IANA zone the merchant entered startsAt in — display only. startsAt is
+  // always stored as an absolute (UTC) instant.
+  timezone        String    @default("America/Chicago")
+  locationName    String?
+  locationAddress String?
+
+  registrationOpensAt  DateTime?
+  registrationClosesAt DateTime?
+
+  // Registration price. 0 = free RSVP (no payment step at all).
+  // PER_ATTENDEE charges priceCents x attendee count; PER_REGISTRATION
+  // charges priceCents once for the whole submission (a table, a team).
+  priceCents Int    @default(0)
+  priceMode  String @default("PER_ATTENDEE") // PER_ATTENDEE | PER_REGISTRATION
+
+  // Tax compliance: the value of what a registrant receives in exchange
+  // for the registration charge (a dinner, green fees), so only the
+  // remainder is recorded as a charitable contribution on the Payment's
+  // quid-pro-quo fields. Same unit as priceCents (per attendee for
+  // PER_ATTENDEE, once for PER_REGISTRATION). Null = the merchant hasn't
+  // said, so the full price is conservatively treated as benefit value —
+  // never over-reports a deductible amount. Optional donations are always
+  // fully contribution.
+  registrationFmvCents  Int?
+  allowOptionalDonation Boolean @default(false)
+  // Merchant-written label for the donation input ("Would you like to make
+  // an additional gift?") — null falls back to a generic default.
+  donationPrompt        String?
+
+  allowMultipleAttendees      Boolean @default(true)
+  maxAttendeesPerRegistration Int     @default(10)
+  attendeeEmailRequired       Boolean @default(false)
+  collectAttendeePhone        Boolean @default(false)
+  registrantPhoneRequired     Boolean @default(false)
+
+  // Generic "Team / Table / Company / Class" grouping — the merchant
+  // supplies the label; the platform never hardcodes what a group means.
+  allowGroups   Boolean @default(false)
+  groupLabel    String  @default("Team / Group Name")
+  groupRequired Boolean @default(false)
+
+  mailingAddressMode String @default("HIDDEN") // HIDDEN | OPTIONAL | REQUIRED
+
+  confirmationMessage String?
+
+  // Merchant-defined registration questions. Array of
+  // { id, label, type: TEXT|TEXTAREA|DROPDOWN|CHECKBOX|NUMBER, required,
+  //   options?: string[], appliesTo: "REGISTRATION"|"ATTENDEE" } — validated
+  // and normalized by src/lib/eventRegistration/customFields.ts, never trusted raw.
+  customFieldsJson   Json?
+  // { confirmation: {subject, body}, reminder: {enabled, daysBefore,
+  //   subject, body}, thankYou: {enabled, daysAfter, subject, body} } —
+  // merchant-customizable copy with {{merge fields}}; see
+  // src/lib/eventRegistration/emailTemplates.ts.
+  emailTemplatesJson Json?
+  // One-shot automation markers so the daily cron can never double-send.
+  reminderSentAt     DateTime?
+  thankYouSentAt     DateTime?
+
+  // The dedicated GivingLink payments for this event are charged through.
+  givingLinkId String?
+
+  createdByUserId String?
+  archivedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([givingLinkId])
+  @@index([churchId, status])
+  @@index([churchId, startsAt])
+}
+
+model EventAddOn {
+  id           String   @id @default(cuid())
+  churchId     String
+  eventId      String
+  name         String
+  description  String?
+  priceCents   Int
+  // Value of what the buyer receives for this add-on, per unit; null = the
+  // full price is treated as benefit value (nothing deductible). See
+  // Event.registrationFmvCents.
+  fmvCents     Int?
+  // Max quantity one registration may buy. 1 renders as a simple checkbox;
+  // >1 renders a quantity stepper.
+  maxQuantity  Int      @default(1)
+  isActive     Boolean  @default(true)
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([churchId, eventId])
+}
+
+// One submission (a person, a table, a team). Attendees hang off it.
+model EventRegistration {
+  id       String @id @default(cuid())
+  churchId String
+  eventId  String
+
+  // Short, human-friendly reference shown on the confirmation page/email.
+  confirmationCode String  @unique
+  // Client-generated idempotency key so a retried/double-submitted form
+  // reuses the same registration instead of creating a second one.
+  clientKey        String?
+
+  // PENDING (created, not yet confirmed — a paid registration waiting on
+  // its charge, or a free one for the instant before confirmation) |
+  // CONFIRMED | CANCELED | PAYMENT_FAILED (a bank payment that was accepted
+  // as pending, then failed/returned — see eventRegistration/paymentOutcome).
+  // Pending registrations are excluded from counts,
+  // exports and audiences — they only become real once payment is accepted
+  // (or the total is $0).
+  status String @default("PENDING")
+
+  registrantFirstName String
+  registrantLastName  String
+  registrantEmail     String
+  registrantPhone     String?
+  // The registrant's Donor/contact row (resolved by email) — plain string.
+  donorId             String?
+
+  groupName           String?
+  customResponsesJson Json?
+
+  attendeeCount Int @default(1)
+
+  registrationAmountCents Int @default(0)
+  addOnsAmountCents       Int @default(0)
+  donationAmountCents     Int @default(0)
+  // Server-computed registration + add-ons + donation, before any
+  // donor-covered processing fee (that lives on the Payment row).
+  totalCents              Int @default(0)
+
+  // Plain reference to the Payment created by the existing donate flow —
+  // null for a free registration.
+  paymentId String?
+  paidAt    DateTime?
+
+  confirmationEmailSentAt DateTime?
+  internalNote            String?
+  confirmedAt             DateTime?
+  canceledAt              DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@unique([eventId, clientKey])
+  @@index([churchId, eventId, status])
+  @@index([churchId, donorId])
+}
+
+// First-class, individually queryable attendee. Deliberately NOT a JSON
+// blob on the registration: attendees are exported, checked in, filtered
+// and emailed one by one — including people who never paid anything.
+model EventAttendee {
+  id             String @id @default(cuid())
+  churchId       String
+  eventId        String
+  registrationId String
+
+  firstName       String
+  lastName        String
+  email           String?
+  normalizedEmail String?
+  phone           String?
+  // Linked to an existing Donor only when the attendee's email already
+  // matches one — attendees never create donor rows on their own.
+  donorId         String?
+
+  customResponsesJson Json?
+
+  checkedIn         Boolean   @default(false)
+  checkedInAt       DateTime?
+  checkedInByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([churchId, eventId])
+  @@index([registrationId])
+  @@index([churchId, normalizedEmail])
+}
+
+model EventRegistrationAddOn {
+  id             String   @id @default(cuid())
+  churchId       String
+  eventId        String
+  registrationId String
+  addOnId        String
+  // Snapshots — a later rename/reprice of the add-on never rewrites what
+  // this registration actually bought.
+  nameSnapshot   String
+  unitPriceCents Int
+  quantity       Int
+  lineTotalCents Int
+  createdAt      DateTime @default(now())
+
+  @@index([registrationId])
+  @@index([churchId, eventId])
 }

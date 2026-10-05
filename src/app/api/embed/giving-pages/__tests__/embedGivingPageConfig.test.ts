@@ -4,6 +4,8 @@ const mockPrisma = {
   givingLink: { findUnique: vi.fn() },
   church: { findUnique: vi.fn() },
   churchPricing: { findUnique: vi.fn() },
+  // Event checkout links aren't embeddable; none of these links belong to an event.
+  event: { findFirst: vi.fn().mockResolvedValue(null) },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 

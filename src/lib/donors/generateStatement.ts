@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { computeYearEndStatement } from "@/lib/donors/yearEndStatements";
-import { YearEndStatementPdf } from "@/lib/donors/pdf/YearEndStatementPdf";
+import { YearEndStatementPdf, CombinedStatementsPdf, type StatementPdfProps } from "@/lib/donors/pdf/YearEndStatementPdf";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
@@ -124,8 +124,8 @@ export async function generateYearEndStatement(
   return { statementId: statement.id, version, status, missingFields };
 }
 
-/** Renders the PDF for an already-generated statement — pure function of its own immutable snapshot + lines, never re-reads live donor/org data. */
-export async function renderStatementPdf(statementId: string, churchId: string): Promise<Buffer> {
+/** Everything the PDF shows for an already-generated statement — a pure function of its own immutable snapshot + lines, never re-reads live donor/org data. */
+export async function buildStatementPdfProps(statementId: string, churchId: string): Promise<StatementPdfProps> {
   const statement = await prisma.annualDonationStatement.findFirst({ where: { id: statementId, churchId } });
   if (!statement) throw new Error("Statement not found");
 
@@ -157,57 +157,70 @@ export async function renderStatementPdf(statementId: string, churchId: string):
   const totalGoodsServicesValueCents = lines.reduce((s, l) => s + (l.goodsServicesFairMarketValueCents ?? 0), 0);
   const totalRecordedContributionAmountCents = lines.reduce((s, l) => s + (l.recordedContributionAmountCents ?? l.eligibleAmountCents), 0);
 
-  const buffer = await renderToBuffer(
-    YearEndStatementPdf({
-      organizationName: statement.organizationNameSnapshot || church?.name || "Organization",
-      organizationLogoUrl: church?.logoUrl ?? null,
-      organizationAddress: orgAddress?.formatted ?? null,
-      organizationEmail: church?.primaryContactEmail ?? null,
-      organizationPhone: church?.phone ?? null,
-      organizationWebsite: settings.organizationWebsite,
-      organizationTaxId: settings.organizationTaxId,
-      donorName: statement.donorNameSnapshot || "Donor",
-      donorEmail: statement.donorEmailSnapshot,
-      donorAddress,
-      taxYear: statement.taxYear,
-      donationCount: statement.donationCount,
-      grossDonatedCents: statement.grossDonatedCents,
-      refundedAmountCents: statement.refundedAmountCents,
-      returnedAmountCents: statement.returnedAmountCents,
-      recordedTotalCents: statement.eligibleAmountCents,
-      showDonorCoveredFees: settings.showDonorCoveredFees,
-      totalGoodsServicesValueCents,
-      totalRecordedContributionAmountCents,
-      lines: lines.map((l) => ({
-        donationDate: l.donationDate!,
-        // Invoice-sourced lines append the invoice number onto the same
-        // reference column used for the transaction ID everywhere else —
-        // "preserve the invoice number and transaction ID for
-        // reconciliation" without a separate PDF column for what's a rare
-        // line type on most statements.
-        reference: l.invoiceNumberSnapshot ? `${l.reference || ""} (Invoice ${l.invoiceNumberSnapshot})`.trim() : l.reference || "",
-        fundName: l.fundOrCampaignName,
-        grossAmountCents: l.grossAmountCents,
-        donorCoveredFeeCents: l.donorCoveredFeeCents,
-        refundedAmountCents: l.refundedAmountCents,
-        returnedAmountCents: l.returnedAmountCents,
-        finalRecordedAmountCents: l.eligibleAmountCents,
-        paymentMethodLabel: l.paymentMethodLabel || "",
-        goodsServicesProvided: l.goodsServicesProvided,
-        goodsServicesDescription: l.goodsServicesDescription,
-        goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,
-        recordedContributionAmountCents: l.recordedContributionAmountCents ?? l.eligibleAmountCents,
-      })),
-      thankYouMessage: settings.thankYouMessage,
-      acknowledgmentText,
-      disclaimer: settings.disclaimer,
-      signatureName: settings.signatureName,
-      signatureTitle: settings.signatureTitle,
-      signatureImageUrl: settings.signatureImageUrl,
-      generatedAt: statement.generatedAt || statement.createdAt,
-    }),
-  );
+  return {
+    organizationName: statement.organizationNameSnapshot || church?.name || "Organization",
+    organizationLogoUrl: church?.logoUrl ?? null,
+    organizationAddress: orgAddress?.formatted ?? null,
+    organizationEmail: church?.primaryContactEmail ?? null,
+    organizationPhone: church?.phone ?? null,
+    organizationWebsite: settings.organizationWebsite,
+    organizationTaxId: settings.organizationTaxId,
+    donorName: statement.donorNameSnapshot || "Donor",
+    donorEmail: statement.donorEmailSnapshot,
+    donorAddress,
+    taxYear: statement.taxYear,
+    donationCount: statement.donationCount,
+    grossDonatedCents: statement.grossDonatedCents,
+    refundedAmountCents: statement.refundedAmountCents,
+    returnedAmountCents: statement.returnedAmountCents,
+    recordedTotalCents: statement.eligibleAmountCents,
+    showDonorCoveredFees: settings.showDonorCoveredFees,
+    totalGoodsServicesValueCents,
+    totalRecordedContributionAmountCents,
+    lines: lines.map((l) => ({
+      donationDate: l.donationDate!,
+      // Invoice-sourced lines append the invoice number onto the same
+      // reference column used for the transaction ID everywhere else —
+      // "preserve the invoice number and transaction ID for
+      // reconciliation" without a separate PDF column for what's a rare
+      // line type on most statements.
+      reference: l.invoiceNumberSnapshot ? `${l.reference || ""} (Invoice ${l.invoiceNumberSnapshot})`.trim() : l.reference || "",
+      fundName: l.fundOrCampaignName,
+      grossAmountCents: l.grossAmountCents,
+      donorCoveredFeeCents: l.donorCoveredFeeCents,
+      refundedAmountCents: l.refundedAmountCents,
+      returnedAmountCents: l.returnedAmountCents,
+      finalRecordedAmountCents: l.eligibleAmountCents,
+      paymentMethodLabel: l.paymentMethodLabel || "",
+      goodsServicesProvided: l.goodsServicesProvided,
+      goodsServicesDescription: l.goodsServicesDescription,
+      goodsServicesFairMarketValueCents: l.goodsServicesFairMarketValueCents,
+      recordedContributionAmountCents: l.recordedContributionAmountCents ?? l.eligibleAmountCents,
+    })),
+    thankYouMessage: settings.thankYouMessage,
+    acknowledgmentText,
+    disclaimer: settings.disclaimer,
+    signatureName: settings.signatureName,
+    signatureTitle: settings.signatureTitle,
+    signatureImageUrl: settings.signatureImageUrl,
+    generatedAt: statement.generatedAt || statement.createdAt,
+  };
+}
 
+/** Renders the PDF for an already-generated statement. */
+export async function renderStatementPdf(statementId: string, churchId: string): Promise<Buffer> {
+  const props = await buildStatementPdfProps(statementId, churchId);
+  const buffer = await renderToBuffer(YearEndStatementPdf(props));
+  return buffer as unknown as Buffer;
+}
+
+/** One PDF holding many donors' statements back to back. Every id is re-verified against `churchId` by buildStatementPdfProps. */
+export async function renderCombinedStatementsPdf(statementIds: string[], churchId: string): Promise<Buffer> {
+  const all: StatementPdfProps[] = [];
+  for (const id of statementIds) {
+    all.push(await buildStatementPdfProps(id, churchId));
+  }
+  const buffer = await renderToBuffer(CombinedStatementsPdf(all));
   return buffer as unknown as Buffer;
 }
 

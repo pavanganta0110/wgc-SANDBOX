@@ -182,7 +182,16 @@ export type PermissionKey =
   // it's higher blast-radius than either single-purpose importer it builds
   // on (canImportExternalDonations, and the donor importer which has no
   // gate of its own today).
-  | "canManageMigrations";
+  | "canManageMigrations"
+  // Events / Registration — canViewEvents gates seeing events, registrations
+  // and attendees; canManageEvents gates creating/editing/archiving an
+  // event, its add-ons/fields/email templates, and sending event emails;
+  // canManageEventAttendees gates check-in toggles; canExportEvents gates
+  // the attendee/registration CSV (attendee names/emails are PII).
+  | "canViewEvents"
+  | "canManageEvents"
+  | "canManageEventAttendees"
+  | "canExportEvents";
 
 export type PermissionMatrix = Record<PermissionKey, boolean>;
 
@@ -257,6 +266,10 @@ const ALL_FALSE: PermissionMatrix = {
   canManageWebhooks: false,
   canManageApiKeys: false,
   canManageMigrations: false,
+  canViewEvents: false,
+  canManageEvents: false,
+  canManageEventAttendees: false,
+  canExportEvents: false,
 };
 
 /** Base permission matrix per normalized role, per the approved Checkpoint 2 spec. */
@@ -334,6 +347,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canManageWebhooks: true,
     canManageApiKeys: true,
     canManageMigrations: true,
+    canViewEvents: true,
+    canManageEvents: true,
+    canManageEventAttendees: true,
+    canExportEvents: true,
   },
   admin: {
     ...ALL_FALSE,
@@ -389,6 +406,10 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canCreateFundraisingCampaign: true,
     canEditFundraisingCampaign: true,
     canManageCampaignRoster: true,
+    canViewEvents: true,
+    canManageEvents: true,
+    canManageEventAttendees: true,
+    canExportEvents: true,
     canManageWebhooks: true,
     // canManageApiKeys: false by default, override-able — an API key grants
     // broad programmatic read/write access to the organization's data, same

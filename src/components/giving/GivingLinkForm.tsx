@@ -94,6 +94,7 @@ export default function GivingLinkForm({
   fundSelectionEnabled = false,
   assignedFunds = [],
   pledgeId,
+  eventMode,
   onFormError,
   onResult,
 }: {
@@ -136,6 +137,30 @@ export default function GivingLinkForm({
   assignedFunds?: AssignedActiveFund[];
   /** Optional campaign pledge this donation should be tagged against — passed straight through to /donate as pledgeId, server-validated there. */
   pledgeId?: string;
+  /**
+   * Event registration checkout (src/components/events/EventRegistrationForm.tsx).
+   * When set, the amount is dictated by the parent (the server-computed
+   * registration total) instead of chosen here, the recurring/amount/fund
+   * sections are hidden, and the donate request is tagged with the
+   * registration it pays for. beforeCharge runs after local validation and
+   * before any tokenization/charge — it creates (or refreshes) the PENDING
+   * registration server-side and returns its id; returning null aborts the
+   * submit. The success/pending screens are left to the parent. Entirely
+   * inert when omitted, which is every ordinary giving page.
+   */
+  eventMode?: {
+    totalCents: number;
+    phoneRequired: boolean;
+    /** Event-side checks (required answers, attendee names) that must pass before any wallet sheet opens. Returns a message to show, or null when fine. */
+    validate?: () => string | null;
+    beforeCharge: (registrant: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      mailingAddress: Record<string, string | undefined> | undefined;
+    }) => Promise<{ registrationId: string } | null>;
+  };
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
@@ -322,9 +347,12 @@ export default function GivingLinkForm({
   const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const phoneDigitCount = (value: string) => value.replace(/\D/g, "").length;
 
-  const donorInfoValid = Boolean(
-    firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneDigitCount(phone) >= 10
-  );
+  // Event registrations make the registrant's phone optional unless the
+  // event requires it — a typed-but-short number is still rejected.
+  const phoneOk = eventMode
+    ? phoneDigitCount(phone) >= 10 || (phone.trim() === "" && !eventMode.phoneRequired)
+    : phoneDigitCount(phone) >= 10;
+  const donorInfoValid = Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneOk);
 
   // addressRequired is declared above, alongside mailingAddressPayload.
   const mailingAddressValid =
@@ -347,7 +375,7 @@ export default function GivingLinkForm({
       emailRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    if (phoneDigitCount(phone) < 10) {
+    if (!phoneOk) {
       phoneRef.current?.focus();
       phoneRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -385,8 +413,9 @@ export default function GivingLinkForm({
   // happens to be selected — kept separate from the card/bank form's own
   // paymentMethod-driven totalCents/feeCoveredCents declared further below.
   const extraAmountCents = extraAmount ? Math.round(parseFloat(extraAmount) * 100) || 0 : 0;
-  const effectiveAmountCents =
-    amountType === "FIXED"
+  const effectiveAmountCents = eventMode
+    ? eventMode.totalCents
+    : amountType === "FIXED"
       ? (fixedAmountCents ?? 0)
       : amountType === "FIXED_QUANTITY"
         ? (fixedAmountCents ?? 0) * quantity + extraAmountCents
@@ -409,6 +438,24 @@ export default function GivingLinkForm({
   ): Promise<{ success: boolean }> => {
     setWalletSubmitting(true);
     try {
+      // Event registration: the wallet has authorized, but nothing has been
+      // charged yet — create/refresh the PENDING registration now so the
+      // charge below can be tied to it. If that fails, nothing is charged.
+      let eventRegistrationId: string | undefined;
+      if (eventMode) {
+        const registration = await eventMode.beforeCharge({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim() || walletResult.billingContact.email || "",
+          phone: phone.trim(),
+          mailingAddress: mailingAddressPayload,
+        });
+        if (!registration) {
+          setWalletProcessing(null);
+          return { success: false };
+        }
+        eventRegistrationId = registration.registrationId;
+      }
       walletLog(`${method}: requesting fraud session for merchant`, finixMerchantId);
       // getFraudSessionId has no internal timeout — on a slow mobile
       // connection (or if cdn.sift.com is blocked/slow) it can hang
@@ -435,6 +482,7 @@ export default function GivingLinkForm({
           clientAttemptId: attemptId,
           fundId: selectedFundId || undefined,
           pledgeId: pledgeId || undefined,
+          eventRegistrationId,
           // Donor Information is now required and collected before any
           // wallet button is reachable (see donorInfoValid gating below),
           // so the entered fields — not the wallet's own billing contact,
@@ -544,6 +592,11 @@ export default function GivingLinkForm({
       toast.error("Please enter an amount of at least $1.00");
       return;
     }
+    const eventProblem = eventMode?.validate?.();
+    if (eventProblem) {
+      toast.error(eventProblem);
+      return;
+    }
     if (walletProcessing !== null) return;
     setWalletProcessing("apple_pay");
     beginApplePaySession({
@@ -608,6 +661,11 @@ export default function GivingLinkForm({
     }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
+      return;
+    }
+    const eventProblem = eventMode?.validate?.();
+    if (eventProblem) {
+      toast.error(eventProblem);
       return;
     }
     if (!googlePayGatewayMerchantId) return;
@@ -745,7 +803,7 @@ export default function GivingLinkForm({
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
     };
-    createGooglePayButton(config, () => handleGooglePayClickRef.current())
+    createGooglePayButton(config, () => handleGooglePayClickRef.current(), eventMode ? "pay" : "donate")
       .then((button) => {
         if (cancelled || !googlePayButtonRef.current) {
           walletLog("Google Pay: button created but discarded (cancelled or ref gone)");
@@ -871,6 +929,26 @@ export default function GivingLinkForm({
     setResult({ step: "processing" });
 
     try {
+      // Event registration: create/refresh the PENDING registration (and
+      // learn its id) before touching the card, so a validation problem on
+      // the event side never costs the registrant a tokenization attempt.
+      let eventRegistrationId: string | undefined;
+      if (eventMode) {
+        const registration = await eventMode.beforeCharge({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          mailingAddress: mailingAddressPayload,
+        });
+        if (!registration) {
+          setSubmitting(false);
+          setResult({ step: "form" });
+          return;
+        }
+        eventRegistrationId = registration.registrationId;
+      }
+
       // For ACH/bank payments, Finix.Auth callback never fires — skip it.
       // The backend already omits fraud_session_id for bank transfers.
       const fraudSessionId = paymentMethod === "bank" ? "" : await getFraudSessionId(finixMerchantId);
@@ -912,6 +990,7 @@ export default function GivingLinkForm({
               clientAttemptId: attemptId,
               fundId: selectedFundId || undefined,
               pledgeId: pledgeId || undefined,
+              eventRegistrationId,
               donor: {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
@@ -984,6 +1063,11 @@ export default function GivingLinkForm({
       toast.error("Could not start a secure session. Please refresh and try again.");
     }
   };
+
+  // Event registrations show their own confirmation (it needs the
+  // confirmation code, attendee list, and event details) — the parent reads
+  // the result through onResult.
+  if (eventMode && (result.step === "success" || result.step === "pending")) return null;
 
   if (result.step === "success") {
     return (
@@ -1064,7 +1148,7 @@ export default function GivingLinkForm({
       <div className="text-center space-y-4 py-4">
         <AlertCircle className="w-12 h-12 mx-auto text-red-500" />
         <h2 className="text-lg font-bold" style={{ color: light.headingColor }}>
-          Donation Was Not Completed
+          {eventMode ? "Payment Was Not Completed" : "Donation Was Not Completed"}
         </h2>
         <p className="text-sm text-red-600">{result.error}</p>
         <button
@@ -1101,7 +1185,7 @@ export default function GivingLinkForm({
           <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
         </div>
       )}
-      {recurringEnabled && (
+      {recurringEnabled && !eventMode && (
         <div className="flex rounded-xl border p-1" style={{ borderColor: light.borderColor }}>
           <button
             onClick={() => setIsRecurring(false)}
@@ -1138,6 +1222,16 @@ export default function GivingLinkForm({
         </div>
       )}
 
+      {eventMode ? (
+        <div>
+          <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
+            Amount due
+          </label>
+          <p className="text-2xl font-bold" style={{ color: light.headingColor }}>
+            {formatCents(eventMode.totalCents)}
+          </p>
+        </div>
+      ) : (
       <div>
         <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
           Amount
@@ -1229,6 +1323,7 @@ export default function GivingLinkForm({
           </>
         )}
       </div>
+      )}
 
       {fundSelectionEnabled && assignedFunds.length > 0 && (
         <div>
@@ -1262,7 +1357,7 @@ export default function GivingLinkForm({
           number), so this was previously uncollectable for wallet gifts. */}
       <div>
         <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
-          Donor Information
+          {eventMode ? "Registrant Information" : "Donor Information"}
         </h3>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
@@ -1334,15 +1429,15 @@ export default function GivingLinkForm({
         </div>
         <div>
           <label htmlFor="donor-phone" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
-            Phone <span aria-hidden="true">*</span>
+            Phone {(!eventMode || eventMode.phoneRequired) && <span aria-hidden="true">*</span>}
           </label>
           <input
             id="donor-phone"
             ref={phoneRef}
             type="tel"
-            required
-            aria-required="true"
-            placeholder="Phone"
+            required={!eventMode || eventMode.phoneRequired}
+            aria-required={!eventMode || eventMode.phoneRequired}
+            placeholder={eventMode && !eventMode.phoneRequired ? "Phone (optional)" : "Phone"}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
@@ -1480,7 +1575,7 @@ export default function GivingLinkForm({
             style={{ borderColor: light.borderColor }}
           />
         )}
-        {isFieldVisible("anonymousDonation") && (
+        {!eventMode && isFieldVisible("anonymousDonation") && (
           <label className="flex items-center gap-2 text-sm mt-3" style={{ color: light.bodyTextColor }}>
             <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
             Give anonymously
@@ -1493,7 +1588,7 @@ export default function GivingLinkForm({
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
             I&apos;ll cover the {formatCents(feeCoveredCents)} transaction cost so my full{" "}
-            {formatCents(effectiveAmountCents)} gift goes to {churchName}.
+            {formatCents(effectiveAmountCents)} {eventMode ? "goes" : "gift goes"} to {churchName}.
           </span>
         </label>
       )}
@@ -1560,14 +1655,14 @@ export default function GivingLinkForm({
                       <apple-pay-button
                         ref={applePayButtonRef}
                         buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
-                        type="donate"
+                        type={eventMode ? "plain" : "donate"}
                         locale="en-US"
                         style={{ width: "100%", height: "44px", display: "block" }}
                       />
                     </>
                   )}
                   {walletProcessing === "apple_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
                   )}
                 </div>
               )}
@@ -1592,7 +1687,7 @@ export default function GivingLinkForm({
                     <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
                   )}
                   {walletProcessing === "google_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>Processing donation…</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
                   )}
                 </div>
               )}
@@ -1644,7 +1739,13 @@ export default function GivingLinkForm({
         className="w-full py-3 rounded-xl font-bold disabled:opacity-50"
         style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}
       >
-        {submitting ? "Processing donation…" : `Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`}
+        {submitting
+          ? eventMode
+            ? "Processing registration…"
+            : "Processing donation…"
+          : eventMode
+            ? `Pay ${formatCents(totalCents)} & Register`
+            : `Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`}
       </button>
     </div>
   );

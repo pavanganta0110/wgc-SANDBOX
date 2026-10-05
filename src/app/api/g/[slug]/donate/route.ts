@@ -24,6 +24,9 @@ import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
 import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
+import { finalizeEventRegistration } from "@/lib/eventRegistration/registrationService";
+import { gateEventPayment, type EventPaymentContext } from "@/lib/eventRegistration/paymentGate";
+import { isEventGivingLink } from "@/lib/eventRegistration/eventGivingLink";
 import crypto from "crypto";
 
 /**
@@ -98,6 +101,7 @@ async function handleDonate(req: Request, slug: string) {
       clientAttemptId,
       fundId: submittedFundId,
       pledgeId: submittedPledgeId,
+      eventRegistrationId: submittedEventRegistrationId,
     } = body;
 
     const isWallet = paymentMethod === "apple_pay" || paymentMethod === "google_pay";
@@ -183,6 +187,35 @@ async function handleDonate(req: Request, slug: string) {
         select: { id: true },
       });
       resolvedPledgeId = pledge?.id ?? null;
+    }
+
+    // Event registration payment: a registration is created server-side
+    // (with its own server-computed total) BEFORE any charge, and this
+    // route only ever charges exactly that total against that event's own
+    // dedicated giving link — the client's amount is checked against the
+    // registration, never trusted on its own. Anything that doesn't line
+    // up is rejected before Finix is touched. A normal giving-link
+    // donation never sends eventRegistrationId and skips this entirely.
+    let eventCtx: EventPaymentContext | null = null;
+    if (typeof submittedEventRegistrationId === "string" && submittedEventRegistrationId) {
+      const gate = await gateEventPayment({
+        registrationId: submittedEventRegistrationId,
+        churchId: church.id,
+        givingLinkId: link.id,
+        clientAttemptId,
+        isRecurring,
+        donationAmountCents,
+      });
+      if (!gate.ok) {
+        if ("duplicate" in gate) {
+          return NextResponse.json({ success: true, transferId: gate.duplicate.transferId, state: gate.duplicate.state, duplicate: true });
+        }
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: gate.message, retryable: gate.retryable }, { status: gate.status });
+      }
+      eventCtx = gate.ctx;
+    } else if (await isEventGivingLink(church.id, link.id)) {
+      // An event's checkout link can't take a plain gift — there'd be no registration for it.
+      return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "This payment link is not available.", retryable: false }, { status: 404 });
     }
 
     // Amount rules
@@ -790,6 +823,7 @@ async function handleDonate(req: Request, slug: string) {
         fee_percentage_bps: String(feeStrategy.percentageBasisPoints),
         fee_fixed_cents: String(feeStrategy.fixedFeeCents),
         fee_calculation_version: FEE_CALCULATION_VERSION,
+        ...(eventCtx ? { event_registration_id: eventCtx.registrationId } : {}),
       },
     };
 
@@ -874,6 +908,18 @@ async function handleDonate(req: Request, slug: string) {
         fundId: resolvedFund.fundId,
         fundName: resolvedFund.fundName || link.fundName || null,
         pledgeId: resolvedPledgeId,
+        // Quid-pro-quo disclosure for the part of an event registration
+        // that buys something (a dinner, green fees, an add-on): the
+        // existing receipt/annual-statement code already reads these, so
+        // only the genuine contribution portion is ever recorded as a gift.
+        ...(eventCtx && eventCtx.benefitValueCents > 0
+          ? {
+              goodsServicesProvided: true,
+              goodsServicesDescription: `Event registration: ${eventCtx.eventName}`.slice(0, 200),
+              goodsServicesFairMarketValueCents: Math.min(eventCtx.benefitValueCents, donationAmountCents),
+              recordedContributionAmountCents: Math.max(0, donationAmountCents - eventCtx.benefitValueCents),
+            }
+          : {}),
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
         note: fieldSettings.donorNote !== "HIDDEN" ? donor.note?.trim() || null : null,
       },
@@ -900,6 +946,25 @@ async function handleDonate(req: Request, slug: string) {
         await computePledgeFulfillment(resolvedPledgeId);
       } catch (err) {
         console.error("Failed to update pledge fulfillment:", err);
+      }
+    }
+
+    // Confirm the registration once the charge is accepted (SUCCEEDED, or
+    // PENDING for ACH). A declined charge leaves it PENDING so the
+    // registrant can retry with another card. Never allowed to turn an
+    // already-completed payment into an error response.
+    if (eventCtx) {
+      const transferState = (transfer.state || "").toUpperCase();
+      if (transferState === "SUCCEEDED" || transferState === "PENDING") {
+        try {
+          await finalizeEventRegistration(eventCtx.registrationId, {
+            donorId: donorRecord.id,
+            paymentId: newPayment.id,
+            paidAt: transferState === "SUCCEEDED" ? new Date() : null,
+          });
+        } catch (err) {
+          console.error("Failed to finalize event registration:", err);
+        }
       }
     }
 

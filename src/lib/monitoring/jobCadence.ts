@@ -63,6 +63,15 @@ export const JOB_CONFIGS: Record<string, JobConfig> = {
     critical: false,
     retrySafe: true, // email delivery only — an explicit "safe" example in the design doc
   },
+  "event-emails": {
+    jobName: "event-emails",
+    jobType: "email",
+    label: "Event Reminder & Thank-you Emails",
+    expectedIntervalMs: DAY,
+    staleAfterMs: DAY + 6 * HOUR,
+    critical: false,
+    retrySafe: true, // claim-before-send markers make a re-run a no-op for anything already sent
+  },
   "reconcile-subscriptions": {
     jobName: "reconcile-subscriptions",
     jobType: "billing",

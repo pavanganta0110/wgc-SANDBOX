@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { Loader2, X, Search, Mail, MessageSquare, Lock } from "lucide-react";
+import { EVENT_AUDIENCE_SCOPES, EVENT_AUDIENCE_SCOPE_LABELS } from "@/lib/eventRegistration/audience";
 
 interface GivingLinkOption {
   id: string;
@@ -25,6 +26,9 @@ type Channel = "EMAIL" | "TEXT";
 // (see the comment on GivingCampaign.givingLinkId in schema.prisma for why
 // that can never be an independent choice once one of these is picked).
 type TieMode = "NONE" | "FUNDRAISING" | "PLEDGE";
+// Who receives it: hand-picked donors (the original flow) or an audience the
+// server resolves from this organization's own records.
+type AudienceSource = "SELECTED" | "ALL_DONORS" | "GIVING_PAGE" | "EVENT" | "IMPORTED_CONTACTS";
 
 const MERGE_FIELDS = [
   { token: "{{firstName}}", label: "Donor first name" },
@@ -56,6 +60,13 @@ export default function GivingCampaignComposer() {
   const [emailBodyTemplate, setEmailBodyTemplate] = useState(DEFAULT_EMAIL_BODY);
   const [textBodyTemplate, setTextBodyTemplate] = useState(DEFAULT_TEXT_BODY);
 
+  const [audienceSource, setAudienceSource] = useState<AudienceSource>("SELECTED");
+  const [audienceLinkId, setAudienceLinkId] = useState("");
+  const [audienceEventId, setAudienceEventId] = useState("");
+  const [audienceEventScope, setAudienceEventScope] = useState("ALL_ATTENDEES");
+  const [events, setEvents] = useState<{ id: string; name: string }[] | null>(null);
+  // The last answer from the audience-count endpoint, tagged with the request it answers so a stale answer is never shown for a changed selection.
+  const [audienceResult, setAudienceResult] = useState<{ key: string; value: { count: number; sample: string[] } | { error: string } } | null>(null);
   const [donorQuery, setDonorQuery] = useState("");
   const [donorResults, setDonorResults] = useState<DonorOption[]>([]);
   const [donorListTruncated, setDonorListTruncated] = useState(false);
@@ -190,6 +201,46 @@ export default function GivingCampaignComposer() {
     return () => clearTimeout(timeout);
   }, [channel, emailSubject, emailBodyTemplate, textBodyTemplate]);
 
+  // Events are optional (permission-gated): a failed load just hides the option.
+  useEffect(() => {
+    fetch("/api/merchant/events")
+      .then((res) => (res.ok ? res.json() : { events: null }))
+      .then((data) => setEvents(Array.isArray(data.events) ? data.events.map((e: { id: string; name: string }) => ({ id: e.id, name: e.name })) : null))
+      .catch(() => setEvents(null));
+  }, []);
+
+  const audienceReady =
+    audienceSource === "SELECTED" ||
+    audienceSource === "ALL_DONORS" ||
+    audienceSource === "IMPORTED_CONTACTS" ||
+    (audienceSource === "GIVING_PAGE" && Boolean(audienceLinkId)) ||
+    (audienceSource === "EVENT" && Boolean(audienceEventId));
+
+  const audienceKey = JSON.stringify([audienceSource, audienceLinkId, audienceEventId, audienceEventScope, channel]);
+  const audiencePreview = audienceSource !== "SELECTED" && audienceReady && audienceResult?.key === audienceKey ? audienceResult.value : null;
+
+  useEffect(() => {
+    if (audienceSource === "SELECTED" || !audienceReady) return;
+    let cancelled = false;
+    fetch("/api/merchant/giving-campaigns/audience", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel,
+        audience: { source: audienceSource, givingLinkId: audienceLinkId || undefined, eventId: audienceEventId || undefined, eventScope: audienceEventScope },
+      }),
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (cancelled) return;
+        setAudienceResult({ key: audienceKey, value: res.ok ? { count: data.count, sample: data.sample } : { error: data.error || "Couldn't load this audience." } });
+      })
+      .catch(() => !cancelled && setAudienceResult({ key: audienceKey, value: { error: "Couldn't load this audience." } }));
+    return () => {
+      cancelled = true;
+    };
+  }, [audienceSource, audienceReady, audienceLinkId, audienceEventId, audienceEventScope, channel, audienceKey]);
+
   const switchChannel = (next: Channel) => {
     if (next === channel) return;
     if (next === "TEXT" && smsAddonActive === false) {
@@ -197,6 +248,7 @@ export default function GivingCampaignComposer() {
       return;
     }
     setChannel(next);
+    if (next === "TEXT" && audienceSource === "EVENT") setAudienceSource("SELECTED");
     // A donor valid for one channel (has an email) may not be valid for the
     // other (no phone on file, or vice versa) — clearing avoids silently
     // dropping them at send time with no explanation.
@@ -243,7 +295,8 @@ export default function GivingCampaignComposer() {
     const messageReady = channel === "TEXT" ? textBodyTemplate.trim() : emailSubject.trim() && emailBodyTemplate.trim();
     const destinationReady =
       tieMode === "FUNDRAISING" ? Boolean(selectedCampaignId) : tieMode === "PLEDGE" ? Boolean(selectedPledgeCampaignId) : Boolean(givingLinkId);
-    if (!name.trim() || !destinationReady || !messageReady || selectedDonors.length === 0) {
+    const recipientsReady = audienceSource === "SELECTED" ? selectedDonors.length > 0 : audienceReady && audiencePreview !== null && "count" in audiencePreview && audiencePreview.count > 0;
+    if (!name.trim() || !destinationReady || !messageReady || !recipientsReady) {
       const destinationLabel = tieMode === "NONE" ? "giving link" : tieMode === "FUNDRAISING" ? "fundraising campaign" : "pledge campaign";
       toast.error(
         channel === "TEXT"
@@ -268,7 +321,13 @@ export default function GivingCampaignComposer() {
           emailSubject,
           emailBodyTemplate,
           textBodyTemplate,
-          donorIds: selectedDonors.map((d) => d.id),
+          donorIds: audienceSource === "SELECTED" ? selectedDonors.map((d) => d.id) : undefined,
+          audience: {
+            source: audienceSource,
+            givingLinkId: audienceSource === "GIVING_PAGE" ? audienceLinkId : undefined,
+            eventId: audienceSource === "EVENT" ? audienceEventId : undefined,
+            eventScope: audienceSource === "EVENT" ? audienceEventScope : undefined,
+          },
         }),
       });
       const createData = await createRes.json();
@@ -481,6 +540,60 @@ export default function GivingCampaignComposer() {
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
           <h3 className="text-sm font-bold text-slate-900 mb-1">Recipients</h3>
+          <label htmlFor="audience-source" className="block text-xs font-semibold text-slate-500 mb-1">Send to</label>
+          <select
+            id="audience-source"
+            value={audienceSource}
+            onChange={(e) => setAudienceSource(e.target.value as AudienceSource)}
+            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white"
+          >
+            <option value="SELECTED">Specific donors (choose below)</option>
+            <option value="ALL_DONORS">All donors</option>
+            <option value="GIVING_PAGE">Donors from one giving page</option>
+            {events && channel === "EMAIL" && <option value="EVENT">Event attendees</option>}
+            <option value="IMPORTED_CONTACTS">Imported contacts</option>
+          </select>
+          {audienceSource === "GIVING_PAGE" && (
+            <select aria-label="Giving page" value={audienceLinkId} onChange={(e) => setAudienceLinkId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white">
+              <option value="">Choose a giving page…</option>
+              {links.map((l) => (
+                <option key={l.id} value={l.id}>{l.internalName || l.publicTitle}</option>
+              ))}
+            </select>
+          )}
+          {audienceSource === "EVENT" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <select aria-label="Event" value={audienceEventId} onChange={(e) => setAudienceEventId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
+                <option value="">Choose an event…</option>
+                {events?.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name}</option>
+                ))}
+              </select>
+              <select aria-label="Event audience" value={audienceEventScope} onChange={(e) => setAudienceEventScope(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
+                {EVENT_AUDIENCE_SCOPES.map((sc) => (
+                  <option key={sc} value={sc}>{EVENT_AUDIENCE_SCOPE_LABELS[sc]}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {audienceSource !== "SELECTED" && (
+            <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-3 text-sm text-slate-700" aria-live="polite">
+              {!audienceReady ? (
+                "Choose an option above to see who will receive this."
+              ) : audiencePreview === null ? (
+                "Counting recipients…"
+              ) : "error" in audiencePreview ? (
+                <span className="text-red-600">{audiencePreview.error}</span>
+              ) : (
+                <>
+                  <strong>{audiencePreview.count}</strong> {audiencePreview.count === 1 ? "person" : "people"} will receive this
+                  {audiencePreview.sample.length > 0 && <span className="block text-xs text-slate-500 mt-1">Including {audiencePreview.sample.join(", ")}{audiencePreview.count > audiencePreview.sample.length ? "…" : ""}</span>}
+                </>
+              )}
+            </div>
+          )}
+          {audienceSource === "SELECTED" && (
+            <>
           <p className="text-xs text-slate-500 mb-3">
             {channel === "TEXT" ? "Only donors with a phone number on file can be added." : "Only donors with an email on file can be added."}
           </p>
@@ -559,6 +672,8 @@ export default function GivingCampaignComposer() {
             </div>
           )}
           <p className="text-xs text-slate-500 mt-3">{selectedDonors.length} donor{selectedDonors.length === 1 ? "" : "s"} selected</p>
+            </>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
@@ -618,7 +733,13 @@ export default function GivingCampaignComposer() {
           disabled={submitting}
           className="w-full px-4 py-3 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50"
         >
-          {submitting ? "Sending…" : `Send to ${selectedDonors.length || 0} Donor${selectedDonors.length === 1 ? "" : "s"}`}
+          {submitting
+            ? "Sending…"
+            : audienceSource === "SELECTED"
+            ? `Send to ${selectedDonors.length || 0} Donor${selectedDonors.length === 1 ? "" : "s"}`
+            : audiencePreview && "count" in audiencePreview
+            ? `Send to ${audiencePreview.count} ${audiencePreview.count === 1 ? "Person" : "People"}`
+            : "Send"}
         </button>
       </div>
 
