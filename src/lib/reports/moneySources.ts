@@ -201,6 +201,8 @@ export interface SourceTransaction {
   kind: MoneySourceKindOrOther;
   entityId: string | null;
   transferId: string;
+  /** EventRegistration behind this payment, when it is an event payment. */
+  registrationId: string | null;
   amountCents: number;
   createdAt: Date | null;
   donorId: string | null;
@@ -213,6 +215,7 @@ interface RawTxRow {
   kind: string;
   entity_id: string | null;
   transfer_id: string;
+  reg_id: string | null;
   amount: bigint | number;
   created_at: Date | null;
   donor_id: string | null;
@@ -226,7 +229,7 @@ interface RawTxRow {
 export function buildSourceTransactionsQuery(params: SourceQueryParams): Prisma.Sql {
   return Prisma.sql`
     ${buildClassifiedCte(params)}
-    SELECT kind, entity_id, transfer_id, amount, created_at, donor_id, donor_name, is_anonymous
+    SELECT kind, entity_id, transfer_id, reg_id, amount, created_at, donor_id, donor_name, is_anonymous
     FROM (
       SELECT
         c.*,
@@ -244,6 +247,7 @@ export async function fetchSourceTransactions(params: SourceQueryParams): Promis
     kind: r.kind as MoneySourceKindOrOther,
     entityId: r.entity_id,
     transferId: r.transfer_id,
+    registrationId: r.reg_id,
     amountCents: Number(r.amount ?? 0),
     createdAt: r.created_at,
     donorId: r.donor_id,
@@ -285,7 +289,22 @@ export interface GivingPageRow extends MoneyRowBase {
   averageGiftCents: number;
 }
 
+export interface EventAttendeeInfo {
+  id: string;
+  eventId: string;
+  registrationId: string;
+  name: string;
+  /** Who bought the ticket, when that is a different person. */
+  registrantName: string;
+  /** CARD = processed online/door card; CASH | CHECK = offline door sale. */
+  paidVia: "CARD" | "CASH" | "CHECK";
+  checkedIn: boolean;
+}
+
 export interface EventRow extends MoneyRowBase {
+  /** Named attendees of the registrations behind this row's payments, plus
+   * offline door sales in range. Capped by the per-row payment list. */
+  attendeeList: EventAttendeeInfo[];
   registrations: number;
   attendees: number;
   /** Door cash/check — never part of amountCents or any processed total. */
@@ -361,8 +380,13 @@ function section<T extends MoneyRowBase>(rows: T[], distinctDonors: number): Mon
 export function assembleWhereMoneyCameFrom(
   groups: SourceGroupRow[],
   cat: EntityCatalogs,
-  transactions: SourceTransaction[] = []
+  transactions: SourceTransaction[] = [],
+  attendees: EventAttendeeInfo[] = []
 ): WhereMoneyCameFrom {
+  const attendeesFor = (eventId: string) =>
+    attendees
+      .filter((a) => a.eventId === eventId)
+      .sort((a, b) => a.name.localeCompare(b.name));
   const txFor = (kind: MoneySourceKindOrOther, entityId: string | null) =>
     transactions.filter((t) => t.kind === kind && t.entityId === entityId);
   const knownEntity = (kind: MoneySourceKind, id: string) =>
@@ -429,6 +453,7 @@ export function assembleWhereMoneyCameFrom(
           href: `/merchant/events/${ev.id}`,
           registrations: g.registrations,
           attendees: g.attendees,
+          attendeeList: attendeesFor(ev.id),
           offlineCents: off?.cents ?? 0,
           offlineRegistrations: off?.registrations ?? 0,
         });
@@ -485,6 +510,7 @@ export function assembleWhereMoneyCameFrom(
       transactions: [],
       registrations: 0,
       attendees: 0,
+      attendeeList: attendeesFor(ev.id),
       offlineCents: off.cents,
       offlineRegistrations: off.registrations,
     });
@@ -509,6 +535,57 @@ export function assembleWhereMoneyCameFrom(
       pledgesSection.totalCents +
       otherCents,
   };
+}
+
+
+/**
+ * Named attendees for the event rows: guests of the registrations behind the
+ * listed processed payments, plus guests of door cash/check sales in range
+ * (those have no payment row). Bounded by the per-row payment cap.
+ */
+export async function fetchEventAttendees(params: {
+  churchId: string;
+  processedRegistrationIds: string[];
+  rangeFilter?: { gte: Date; lte?: Date };
+  attributedUserId?: string;
+}): Promise<EventAttendeeInfo[]> {
+  const { churchId, processedRegistrationIds, rangeFilter, attributedUserId } = params;
+  const registrations = await prisma.eventRegistration.findMany({
+    where: {
+      churchId,
+      status: "CONFIRMED",
+      OR: [
+        ...(processedRegistrationIds.length ? [{ id: { in: processedRegistrationIds } }] : []),
+        {
+          paymentMethod: { in: ["CASH", "CHECK"] },
+          soldAtDoor: true,
+          ...(rangeFilter ? { confirmedAt: rangeFilter } : {}),
+          ...(attributedUserId ? { soldByUserId: attributedUserId } : {}),
+        },
+      ],
+    },
+    select: { id: true, eventId: true, registrantFirstName: true, registrantLastName: true, paymentMethod: true },
+    take: 1000,
+  });
+  if (registrations.length === 0) return [];
+  const byId = new Map(registrations.map((r) => [r.id, r]));
+  const rows = await prisma.eventAttendee.findMany({
+    where: { churchId, registrationId: { in: registrations.map((r) => r.id) } },
+    select: { id: true, registrationId: true, firstName: true, lastName: true, checkedIn: true },
+  });
+  return rows.map((a) => {
+    const reg = byId.get(a.registrationId)!;
+    const method = reg.paymentMethod === "CASH" || reg.paymentMethod === "CHECK" ? reg.paymentMethod : "CARD";
+    return {
+      id: a.id,
+      eventId: reg.eventId,
+      registrationId: a.registrationId,
+      name: `${a.firstName} ${a.lastName}`.trim(),
+      registrantName: `${reg.registrantFirstName} ${reg.registrantLastName}`.trim(),
+      paidVia: method,
+      checkedIn: a.checkedIn,
+    };
+  });
 }
 
 // ---------------------------------------------------------------- DB entry
@@ -588,6 +665,15 @@ export async function getWhereMoneyCameFrom(
     }),
   ]);
 
+  const attendees = await fetchEventAttendees({
+    churchId,
+    processedRegistrationIds: transactions
+      .filter((t) => t.kind === "EVENT" && t.registrationId)
+      .map((t) => t.registrationId as string),
+    rangeFilter,
+    attributedUserId,
+  });
+
   const payersByCampaign = new Map(payerAgg.map((r) => [r.pledgeCampaignId, r._count._all]));
   const pledgeStats = new Map(
     pledgeAgg.map((r) => [
@@ -611,5 +697,5 @@ export async function getWhereMoneyCameFrom(
       offline.map((r) => [r.eventId, { cents: r._sum.totalCents ?? 0, registrations: r._count._all }])
     ),
     pledgeStats,
-  }, transactions);
+  }, transactions, attendees);
 }

@@ -7,7 +7,8 @@ const mockPrisma = vi.hoisted(() => ({
   campaignTeam: { findMany: vi.fn() },
   campaignFundraiser: { findMany: vi.fn() },
   pledgeCampaign: { findMany: vi.fn() },
-  eventRegistration: { groupBy: vi.fn() },
+  eventRegistration: { groupBy: vi.fn(), findMany: vi.fn() },
+  eventAttendee: { findMany: vi.fn() },
   pledge: { groupBy: vi.fn() },
   externalDonation: { groupBy: vi.fn() },
   $queryRaw: vi.fn(),
@@ -20,6 +21,8 @@ import {
   buildSourceTransactionsQuery,
   TRANSACTIONS_PER_ROW,
   type SourceTransaction,
+  type EventAttendeeInfo,
+  fetchEventAttendees,
   assembleWhereMoneyCameFrom,
   getWhereMoneyCameFrom,
   type SourceGroupRow,
@@ -268,6 +271,8 @@ describe("getWhereMoneyCameFrom", () => {
     mockPrisma.givingLink.groupBy.mockResolvedValue([]);
     mockPrisma.externalDonation.groupBy.mockResolvedValue([]);
     mockPrisma.eventRegistration.groupBy.mockResolvedValue([]);
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([]);
+    mockPrisma.eventAttendee.findMany.mockResolvedValue([]);
     mockPrisma.pledge.groupBy.mockResolvedValue([]);
     mockPrisma.$queryRaw.mockResolvedValue([
       { kind: "PAGE", entity_id: "L1", amount: BigInt(4200), payments: BigInt(2), donors: BigInt(2), registrations: BigInt(0), attendees: BigInt(0), is_rollup: false },
@@ -321,6 +326,7 @@ describe("who paid (per-row transactions)", () => {
     kind: "PAGE",
     entityId: "L1",
     transferId: "t1",
+    registrationId: null,
     amountCents: 1000,
     createdAt: new Date("2026-09-10T12:00:00Z"),
     donorId: "d1",
@@ -376,5 +382,69 @@ describe("who paid (per-row transactions)", () => {
     const q = buildSourceTransactionsQuery({ churchId: "c", attributedUserId: "user_3", linkAssignments: new Map() });
     expect(q.sql).toContain('p."attributedUserId" =');
     expect(q.values).toContain("user_3");
+  });
+});
+
+describe("event attendees", () => {
+  const att = (over: Partial<EventAttendeeInfo>): EventAttendeeInfo => ({
+    id: "a1",
+    eventId: "E1",
+    registrationId: "R1",
+    name: "Zed Zane",
+    registrantName: "Amy Buyer",
+    paidVia: "CARD",
+    checkedIn: false,
+    ...over,
+  });
+  const cat = emptyCatalogs({ events: [{ id: "E1", name: "Gala" }, { id: "E2", name: "Other" }] });
+  const g = [
+    group({ kind: "EVENT", entityId: "E1", amountCents: 500, payments: 1, donors: 1 }),
+    group({ kind: "EVENT", entityId: "E2", amountCents: 100, payments: 1, donors: 1 }),
+  ];
+
+  it("lists attendees under their own event only, sorted by name", () => {
+    const r = assembleWhereMoneyCameFrom(g, cat, [], [
+      att({ id: "a2", name: "Mia Moss" }),
+      att({ id: "a1", name: "Abe Ames" }),
+      att({ id: "a3", eventId: "E2", name: "Other Person" }),
+    ]);
+    expect(r.events.rows.find((e) => e.id === "E1")!.attendeeList.map((a) => a.name)).toEqual(["Abe Ames", "Mia Moss"]);
+    expect(r.events.rows.find((e) => e.id === "E2")!.attendeeList.map((a) => a.name)).toEqual(["Other Person"]);
+  });
+
+  it("defaults to an empty attendee list", () => {
+    const r = assembleWhereMoneyCameFrom(g, cat);
+    expect(r.events.rows.every((e) => e.attendeeList.length === 0)).toBe(true);
+  });
+
+  it("fetchEventAttendees scopes by church, confirmed status, and the team user's own door sales", async () => {
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([
+      { id: "R1", eventId: "E1", registrantFirstName: "Amy", registrantLastName: "Buyer", paymentMethod: null },
+      { id: "R2", eventId: "E1", registrantFirstName: "Cal", registrantLastName: "Door", paymentMethod: "CASH" },
+    ]);
+    mockPrisma.eventAttendee.findMany.mockResolvedValue([
+      { id: "a1", registrationId: "R1", firstName: "Zed", lastName: "Zane", checkedIn: true },
+      { id: "a2", registrationId: "R2", firstName: "Cal", lastName: "Door", checkedIn: false },
+    ]);
+    const out = await fetchEventAttendees({
+      churchId: "church_1",
+      processedRegistrationIds: ["R1"],
+      rangeFilter: { gte: new Date("2026-09-01") },
+      attributedUserId: "user_4",
+    });
+    const where = mockPrisma.eventRegistration.findMany.mock.calls[0][0].where;
+    expect(where.churchId).toBe("church_1");
+    expect(where.status).toBe("CONFIRMED");
+    expect(JSON.stringify(where.OR)).toContain("user_4");
+    expect(mockPrisma.eventAttendee.findMany.mock.calls[0][0].where.churchId).toBe("church_1");
+    expect(out.find((a) => a.id === "a1")).toMatchObject({ paidVia: "CARD", checkedIn: true, registrantName: "Amy Buyer" });
+    expect(out.find((a) => a.id === "a2")!.paidVia).toBe("CASH");
+  });
+
+  it("returns nothing (and skips the attendee query) when there are no registrations", async () => {
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([]);
+    mockPrisma.eventAttendee.findMany.mockClear();
+    expect(await fetchEventAttendees({ churchId: "c", processedRegistrationIds: [] })).toEqual([]);
+    expect(mockPrisma.eventAttendee.findMany).not.toHaveBeenCalled();
   });
 });

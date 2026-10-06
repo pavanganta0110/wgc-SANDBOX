@@ -2,7 +2,7 @@ import Link from "next/link";
 import { formatCents } from "@/lib/format";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import ExpandableTableRow from "@/components/merchant/ExpandableTableRow";
-import { TRANSACTIONS_PER_ROW, type WhereMoneyCameFrom, type MoneyRowBase, type SourceTransaction } from "@/lib/reports/moneySources";
+import { TRANSACTIONS_PER_ROW, type WhereMoneyCameFrom, type MoneyRowBase, type SourceTransaction, type EventAttendeeInfo } from "@/lib/reports/moneySources";
 
 /**
  * "Where your donations came from" — Transaction Insights, Payments tab.
@@ -162,6 +162,50 @@ function WhoPaid({ transactions, total, label }: { transactions: SourceTransacti
   );
 }
 
+/** Named guests for an event: who is attending, who bought the ticket, how it was paid. */
+function Attendees({ attendees }: { attendees: EventAttendeeInfo[] }) {
+  if (attendees.length === 0) return null;
+  return (
+    <div className="mt-5">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+        Attendees <span className="font-normal normal-case text-slate-400">({attendees.length})</span>
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className={th}>Attendee</th>
+              <th className={th}>Ticket bought by</th>
+              <th className={th}>Paid</th>
+              <th className={th}>Checked in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {attendees.map((a) => (
+              <tr key={a.id} className="border-t border-slate-50">
+                <td className="px-4 py-2 text-sm font-medium text-slate-900">{a.name}</td>
+                <td className="px-4 py-2 text-sm text-slate-500">
+                  {a.registrantName.toLowerCase() === a.name.toLowerCase() ? "Self" : a.registrantName}
+                </td>
+                <td className="px-4 py-2 text-sm text-slate-500">
+                  {a.paidVia === "CARD" ? "Online / card" : a.paidVia === "CASH" ? "Cash at door" : "Check at door"}
+                </td>
+                <td className="px-4 py-2 text-sm">
+                  {a.checkedIn ? (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Yes</span>
+                  ) : (
+                    <span className="text-slate-400">No</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function pct(n: number | null) {
   return n == null ? "—" : `${Math.round(n)}%`;
 }
@@ -248,7 +292,12 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
             </thead>
             <tbody>
               {events.rows.map((r) => (
-                <ExpandableTableRow key={r.id} label={r.name} colSpan={7} detail={<WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />}>
+                <ExpandableTableRow key={r.id} label={r.name} colSpan={7} detail={
+                    <>
+                      <WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />
+                      <Attendees attendees={r.attendeeList} />
+                    </>
+                  }>
                   <NameCell row={r} color="bg-violet-500" />
                   <td className={`${td} text-right font-semibold text-slate-900`}>{formatCents(r.amountCents)}</td>
                   <td className={`${td} text-right`}>{r.registrations}</td>
