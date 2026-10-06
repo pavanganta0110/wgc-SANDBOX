@@ -93,12 +93,16 @@ interface RawGroupRow {
   is_rollup: boolean;
 }
 
-export function buildSourceGroupsQuery(params: {
+interface SourceQueryParams {
   churchId: string;
   dateFilter?: { gte: Date; lte?: Date };
   attributedUserId?: string;
   linkAssignments: Map<string, LinkAssignment>;
-}): Prisma.Sql {
+}
+
+/** The shared `WITH map, base, classified` prefix — one definition of "which
+ * transfers count" and "which section owns them" for every query below. */
+function buildClassifiedCte(params: SourceQueryParams): Prisma.Sql {
   const { churchId, dateFilter, attributedUserId, linkAssignments } = params;
   const mapJson = JSON.stringify(
     Array.from(linkAssignments, ([linkId, a]) => ({ link_id: linkId, kind: a.kind, entity_id: a.entityId }))
@@ -123,10 +127,17 @@ export function buildSourceGroupsQuery(params: {
         pl."pledgeCampaignId" AS pledge_campaign_id,
         r."eventId" AS reg_event_id,
         r.id AS reg_id,
-        r."attendeeCount" AS attendees
+        r."attendeeCount" AS attendees,
+        t."finixTransferId" AS transfer_id,
+        t."createdAtFinix" AS created_at,
+        p."donorId" AS donor_id,
+        d.name AS donor_name,
+        COALESCE(p."isAnonymous", false) AS is_anonymous
       FROM "FinixTransfer" t
       LEFT JOIN "Payment" p
         ON p."finixTransferId" = t."finixTransferId" AND p."churchId" = t."churchId"
+      LEFT JOIN "Donor" d
+        ON d.id = p."donorId" AND d."churchId" = t."churchId"
       LEFT JOIN "Pledge" pl
         ON pl.id = p."pledgeId" AND pl."churchId" = t."churchId"
       LEFT JOIN LATERAL (
@@ -164,6 +175,12 @@ export function buildSourceGroupsQuery(params: {
       FROM base b
       LEFT JOIN map m ON m.link_id = b.link_id
     )
+  `;
+}
+
+export function buildSourceGroupsQuery(params: SourceQueryParams): Prisma.Sql {
+  return Prisma.sql`
+    ${buildClassifiedCte(params)}
     SELECT
       kind,
       entity_id,
@@ -178,12 +195,64 @@ export function buildSourceGroupsQuery(params: {
   `;
 }
 
-export async function fetchSourceGroups(params: {
-  churchId: string;
-  dateFilter?: { gte: Date; lte?: Date };
-  attributedUserId?: string;
-  linkAssignments: Map<string, LinkAssignment>;
-}): Promise<SourceGroupRow[]> {
+export const TRANSACTIONS_PER_ROW = 50;
+
+export interface SourceTransaction {
+  kind: MoneySourceKindOrOther;
+  entityId: string | null;
+  transferId: string;
+  amountCents: number;
+  createdAt: Date | null;
+  donorId: string | null;
+  /** null = guest with no matched donor record. */
+  donorName: string | null;
+  isAnonymous: boolean;
+}
+
+interface RawTxRow {
+  kind: string;
+  entity_id: string | null;
+  transfer_id: string;
+  amount: bigint | number;
+  created_at: Date | null;
+  donor_id: string | null;
+  donor_name: string | null;
+  is_anonymous: boolean;
+}
+
+/** Latest TRANSACTIONS_PER_ROW payments per section row (window function, so
+ * the database trims it — never every payment). Same base set and
+ * classification as the group totals. */
+export function buildSourceTransactionsQuery(params: SourceQueryParams): Prisma.Sql {
+  return Prisma.sql`
+    ${buildClassifiedCte(params)}
+    SELECT kind, entity_id, transfer_id, amount, created_at, donor_id, donor_name, is_anonymous
+    FROM (
+      SELECT
+        c.*,
+        ROW_NUMBER() OVER (PARTITION BY c.kind, c.entity_id ORDER BY c.created_at DESC NULLS LAST, c.transfer_id) AS rn
+      FROM classified c
+    ) ranked
+    WHERE rn <= ${TRANSACTIONS_PER_ROW}
+    ORDER BY created_at DESC NULLS LAST
+  `;
+}
+
+export async function fetchSourceTransactions(params: SourceQueryParams): Promise<SourceTransaction[]> {
+  const rows = await prisma.$queryRaw<RawTxRow[]>(buildSourceTransactionsQuery(params));
+  return rows.map((r) => ({
+    kind: r.kind as MoneySourceKindOrOther,
+    entityId: r.entity_id,
+    transferId: r.transfer_id,
+    amountCents: Number(r.amount ?? 0),
+    createdAt: r.created_at,
+    donorId: r.donor_id,
+    donorName: r.donor_name,
+    isAnonymous: Boolean(r.is_anonymous),
+  }));
+}
+
+export async function fetchSourceGroups(params: SourceQueryParams): Promise<SourceGroupRow[]> {
   const rows = await prisma.$queryRaw<RawGroupRow[]>(buildSourceGroupsQuery(params));
   return rows.map((r) => ({
     kind: r.kind as MoneySourceKindOrOther,
@@ -208,6 +277,8 @@ export interface MoneyRowBase {
   payments: number;
   /** Share of this section's total, 0–100, for the inline bar. */
   sharePercent: number;
+  /** Who paid: the latest TRANSACTIONS_PER_ROW payments, newest first. */
+  transactions: SourceTransaction[];
 }
 
 export interface GivingPageRow extends MoneyRowBase {
@@ -252,7 +323,7 @@ export interface WhereMoneyCameFrom {
   events: MoneySection<EventRow> & { offlineCents: number };
   campaigns: MoneySection<CampaignRow>;
   pledges: MoneySection<PledgeRow>;
-  other: { totalCents: number; payments: number };
+  other: { totalCents: number; payments: number; transactions: SourceTransaction[] };
   /** Sum of every section + other. Equals the summary's total volume. */
   totalCents: number;
 }
@@ -287,7 +358,18 @@ function section<T extends MoneyRowBase>(rows: T[], distinctDonors: number): Mon
 }
 
 /** Pure assembly of SQL groups + catalogs into the page model. */
-export function assembleWhereMoneyCameFrom(groups: SourceGroupRow[], cat: EntityCatalogs): WhereMoneyCameFrom {
+export function assembleWhereMoneyCameFrom(
+  groups: SourceGroupRow[],
+  cat: EntityCatalogs,
+  transactions: SourceTransaction[] = []
+): WhereMoneyCameFrom {
+  const txFor = (kind: MoneySourceKindOrOther, entityId: string | null) =>
+    transactions.filter((t) => t.kind === kind && t.entityId === entityId);
+  const knownEntity = (kind: MoneySourceKind, id: string) =>
+    (kind === "PAGE" && cat.givingLinks.some((l) => l.id === id)) ||
+    (kind === "EVENT" && cat.events.some((e) => e.id === id)) ||
+    (kind === "CAMPAIGN" && cat.campaigns.some((c) => c.id === id)) ||
+    (kind === "PLEDGE" && cat.pledgeCampaigns.some((p) => p.id === id));
   const linkById = new Map(cat.givingLinks.map((l) => [l.id, l]));
   const eventById = new Map(cat.events.map((e) => [e.id, e]));
   const campaignById = new Map(cat.campaigns.map((c) => [c.id, c]));
@@ -306,11 +388,22 @@ export function assembleWhereMoneyCameFrom(groups: SourceGroupRow[], cat: Entity
     otherPayments += g.payments;
   };
 
+  // Unattributed = genuinely unlinked payments plus any whose entity we
+  // couldn't name, so the "who paid" list matches the folded-in total.
+  const otherTransactions = transactions
+    .filter((t) => t.kind === "OTHER" || !t.entityId || !knownEntity(t.kind, t.entityId))
+    .slice(0, TRANSACTIONS_PER_ROW);
   const rollupDonors = (kind: MoneySourceKind) => groups.find((g) => g.rollup && g.kind === kind)?.donors ?? 0;
 
   for (const g of groups) {
     if (g.rollup) continue;
-    const base = { amountCents: g.amountCents, donors: g.donors, payments: g.payments, sharePercent: 0 };
+    const base = {
+      amountCents: g.amountCents,
+      donors: g.donors,
+      payments: g.payments,
+      sharePercent: 0,
+      transactions: txFor(g.kind, g.entityId),
+    };
     if (g.kind === "OTHER" || !g.entityId) {
       orphan(g);
     } else if (g.kind === "PAGE") {
@@ -389,6 +482,7 @@ export function assembleWhereMoneyCameFrom(groups: SourceGroupRow[], cat: Entity
       donors: 0,
       payments: 0,
       sharePercent: 0,
+      transactions: [],
       registrations: 0,
       attendees: 0,
       offlineCents: off.cents,
@@ -407,7 +501,7 @@ export function assembleWhereMoneyCameFrom(groups: SourceGroupRow[], cat: Entity
     events: { ...eventsSection, offlineCents },
     campaigns: campaignsSection,
     pledges: pledgesSection,
-    other: { totalCents: otherCents, payments: otherPayments },
+    other: { totalCents: otherCents, payments: otherPayments, transactions: otherTransactions },
     totalCents:
       givingPages.totalCents +
       eventsSection.totalCents +
@@ -455,8 +549,9 @@ export async function getWhereMoneyCameFrom(
 
   const rangeFilter = dateFilter ? { gte: dateFilter.gte, ...(dateFilter.lte ? { lte: dateFilter.lte } : {}) } : undefined;
 
-  const [groups, lifetimeRaised, offline, pledgeAgg, payerAgg] = await Promise.all([
+  const [groups, transactions, lifetimeRaised, offline, pledgeAgg, payerAgg] = await Promise.all([
     fetchSourceGroups({ churchId, dateFilter, attributedUserId, linkAssignments }),
+    fetchSourceTransactions({ churchId, dateFilter, attributedUserId, linkAssignments }),
     getCampaignsRaisedCentsBatch(
       churchId,
       campaigns.map((c) => c.id)
@@ -516,5 +611,5 @@ export async function getWhereMoneyCameFrom(
       offline.map((r) => [r.eventId, { cents: r._sum.totalCents ?? 0, registrations: r._count._all }])
     ),
     pledgeStats,
-  });
+  }, transactions);
 }

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { formatCents } from "@/lib/format";
-import type { WhereMoneyCameFrom, MoneyRowBase } from "@/lib/reports/moneySources";
+import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
+import ExpandableTableRow from "@/components/merchant/ExpandableTableRow";
+import { TRANSACTIONS_PER_ROW, type WhereMoneyCameFrom, type MoneyRowBase, type SourceTransaction } from "@/lib/reports/moneySources";
 
 /**
- * "Where your money came from" — Transaction Insights, Payments tab.
+ * "Where your donations came from" — Transaction Insights, Payments tab.
  * Server component: pure presentation of getWhereMoneyCameFrom's result.
  * Amounts are gross processed volume (same basis as the summary cards).
  */
@@ -93,6 +95,73 @@ function NameCell({ row, color }: { row: MoneyRowBase; color: string }) {
   );
 }
 
+function donorLabel(t: SourceTransaction) {
+  return t.donorName || "Guest donor";
+}
+
+/** Who paid: the latest payments behind one row, newest first. */
+function WhoPaid({ transactions, total, label }: { transactions: SourceTransaction[]; total: number; label: string }) {
+  if (transactions.length === 0) {
+    return <p className="text-sm text-slate-400">No processed payments to show for {label}.</p>;
+  }
+  return (
+    <div>
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Who paid</p>
+      <div className="overflow-x-auto rounded-xl border border-slate-100 bg-white">
+        <table className="w-full text-left">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className={th}>Donor</th>
+              <th className={th}>Date</th>
+              <th className={`${th} text-right`}>Amount</th>
+              <th className={th} />
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((t) => (
+              <tr key={t.transferId} className="border-t border-slate-50">
+                <td className="px-4 py-2 text-sm text-slate-900">
+                  {t.donorId ? (
+                    <Link href={`/merchant/donors/${t.donorId}`} className="hover:underline">
+                      {donorLabel(t)}
+                    </Link>
+                  ) : (
+                    <span className="text-slate-500">{donorLabel(t)}</span>
+                  )}
+                  {t.isAnonymous && (
+                    <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                      Gave anonymously
+                    </span>
+                  )}
+                </td>
+                <td className={`px-4 py-2 text-sm text-slate-500 whitespace-nowrap ${num}`}>
+                  {t.createdAt ? formatDateTimeCDT(t.createdAt) : "—"}
+                </td>
+                <td className={`px-4 py-2 text-sm font-semibold text-slate-900 text-right ${num}`}>
+                  {formatCents(t.amountCents)}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <Link
+                    href={`/merchant/transactions/payments?id=${encodeURIComponent(t.transferId)}`}
+                    className="text-xs font-semibold text-blue-600 hover:underline whitespace-nowrap"
+                  >
+                    Details
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {total > transactions.length && (
+        <p className="mt-2 text-xs text-slate-400">
+          Showing the latest {transactions.length} of {total} payments (up to {TRANSACTIONS_PER_ROW} per row).
+        </p>
+      )}
+    </div>
+  );
+}
+
 function pct(n: number | null) {
   return n == null ? "—" : `${Math.round(n)}%`;
 }
@@ -104,8 +173,8 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-bold text-slate-900">
-          Where your money came from{" "}
-          <span className="font-normal text-slate-400">gross processed volume, before refunds</span>
+          Where your donations came from{" "}
+          <span className="font-normal text-slate-400">gross processed donations, before refunds</span>
         </p>
         <p className={`text-sm text-slate-500 ${num}`}>
           Total <span className="font-bold text-slate-900">{formatCents(totalCents)}</span>
@@ -129,7 +198,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
           <table className="w-full text-left">
             <thead className="bg-slate-50">
               <tr>
-                <th className={th}>Page</th>
+                <th className="w-6" /><th className={th}>Page</th>
                 <th className={`${th} text-right`}>Raised</th>
                 <th className={`${th} text-right`}>Donors</th>
                 <th className={`${th} text-right`}>Gifts</th>
@@ -139,14 +208,14 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
             </thead>
             <tbody>
               {givingPages.rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-50">
+                <ExpandableTableRow key={r.id} label={r.name} colSpan={6} detail={<WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />}>
                   <NameCell row={r} color="bg-blue-500" />
                   <td className={`${td} text-right font-semibold text-slate-900`}>{formatCents(r.amountCents)}</td>
                   <td className={`${td} text-right`}>{r.donors}</td>
                   <td className={`${td} text-right`}>{r.payments}</td>
                   <td className={`${td} text-right`}>{formatCents(r.averageGiftCents)}</td>
                   <td className="px-4 py-3 text-right"><ViewLink href={r.href} label={r.name} /></td>
-                </tr>
+                </ExpandableTableRow>
               ))}
             </tbody>
           </table>
@@ -158,7 +227,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
         totalCents={events.totalCents}
         subtitle={
           events.offlineCents > 0
-            ? `Plus ${formatCents(events.offlineCents)} door cash/check — offline, not included in processed volume`
+            ? `Plus ${formatCents(events.offlineCents)} door cash/check — offline, not included in processed totals`
             : undefined
         }
         emptyText="No events in this date range"
@@ -168,7 +237,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
           <table className="w-full text-left">
             <thead className="bg-slate-50">
               <tr>
-                <th className={th}>Event</th>
+                <th className="w-6" /><th className={th}>Event</th>
                 <th className={`${th} text-right`}>Revenue</th>
                 <th className={`${th} text-right`}>Paid registrations</th>
                 <th className={`${th} text-right`}>Attendees</th>
@@ -179,7 +248,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
             </thead>
             <tbody>
               {events.rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-50">
+                <ExpandableTableRow key={r.id} label={r.name} colSpan={7} detail={<WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />}>
                   <NameCell row={r} color="bg-violet-500" />
                   <td className={`${td} text-right font-semibold text-slate-900`}>{formatCents(r.amountCents)}</td>
                   <td className={`${td} text-right`}>{r.registrations}</td>
@@ -189,7 +258,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
                     {r.offlineCents > 0 ? `${formatCents(r.offlineCents)} (${r.offlineRegistrations})` : "—"}
                   </td>
                   <td className="px-4 py-3 text-right"><ViewLink href={r.href} label={r.name} /></td>
-                </tr>
+                </ExpandableTableRow>
               ))}
             </tbody>
           </table>
@@ -207,7 +276,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
           <table className="w-full text-left">
             <thead className="bg-slate-50">
               <tr>
-                <th className={th}>Campaign</th>
+                <th className="w-6" /><th className={th}>Campaign</th>
                 <th className={`${th} text-right`}>Raised (range)</th>
                 <th className={`${th} text-right`}>Donors</th>
                 <th className={`${th} text-right`}>Goal</th>
@@ -218,7 +287,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
             </thead>
             <tbody>
               {campaigns.rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-50">
+                <ExpandableTableRow key={r.id} label={r.name} colSpan={8} detail={<WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />}>
                   <NameCell row={r} color="bg-emerald-500" />
                   <td className={`${td} text-right font-semibold text-slate-900`}>{formatCents(r.amountCents)}</td>
                   <td className={`${td} text-right`}>{r.donors}</td>
@@ -226,7 +295,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
                   <td className={`${td} text-right`}>{formatCents(r.lifetimeRaisedCents)}</td>
                   <td className={`${td} text-right`}>{pct(r.percentOfGoal)}</td>
                   <td className="px-4 py-3 text-right"><ViewLink href={r.href} label={r.name} /></td>
-                </tr>
+                </ExpandableTableRow>
               ))}
             </tbody>
           </table>
@@ -244,7 +313,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
           <table className="w-full text-left">
             <thead className="bg-slate-50">
               <tr>
-                <th className={th}>Pledge campaign</th>
+                <th className="w-6" /><th className={th}>Pledge campaign</th>
                 <th className={`${th} text-right`}>Paid (range)</th>
                 <th className={`${th} text-right`}>Pledged</th>
                 <th className={`${th} text-right`}>Fulfilled</th>
@@ -256,7 +325,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
             </thead>
             <tbody>
               {pledges.rows.map((r) => (
-                <tr key={r.id} className="border-t border-slate-50">
+                <ExpandableTableRow key={r.id} label={r.name} colSpan={8} detail={<WhoPaid transactions={r.transactions} total={r.payments} label={r.name} />}>
                   <NameCell row={r} color="bg-amber-500" />
                   <td className={`${td} text-right font-semibold text-slate-900`}>{formatCents(r.amountCents)}</td>
                   <td className={`${td} text-right`}>{formatCents(r.pledgedCents)}</td>
@@ -265,7 +334,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
                   <td className={`${td} text-right`}>{r.payersCount}</td>
                   <td className={`${td} text-right`}>{pct(r.fulfilledPercent)}</td>
                   <td className="px-4 py-3 text-right"><ViewLink href={r.href} label={r.name} /></td>
-                </tr>
+                </ExpandableTableRow>
               ))}
             </tbody>
           </table>
@@ -273,20 +342,25 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
       </SectionShell>
 
       {(other.payments > 0 || other.totalCents > 0) && (
-        <div className="flex items-center justify-between rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-5 py-3">
-          <p className="text-sm text-slate-600">
-            Unattributed / other
-            <span className="block text-xs text-slate-400">
-              Take a Payment, invoices and anything not tied to a page, event, campaign or pledge
-            </span>
-          </p>
-          <p className={`text-sm font-semibold text-slate-900 text-right ${num}`}>
-            {formatCents(other.totalCents)}
-            <span className="block text-xs font-normal text-slate-400">
-              {other.payments} payment{other.payments === 1 ? "" : "s"}
-            </span>
-          </p>
-        </div>
+        <details className="group rounded-2xl border border-dashed border-slate-200 bg-slate-50">
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-3">
+            <p className="text-sm text-slate-600">
+              Unattributed / other
+              <span className="block text-xs text-slate-400">
+                Take a Payment, invoices and anything not tied to a page, event, campaign or pledge — click to see who paid
+              </span>
+            </p>
+            <p className={`text-sm font-semibold text-slate-900 text-right ${num}`}>
+              {formatCents(other.totalCents)}
+              <span className="block text-xs font-normal text-slate-400">
+                {other.payments} payment{other.payments === 1 ? "" : "s"}
+              </span>
+            </p>
+          </summary>
+          <div className="px-5 pb-4">
+            <WhoPaid transactions={other.transactions} total={other.payments} label="unattributed payments" />
+          </div>
+        </details>
       )}
     </div>
   );

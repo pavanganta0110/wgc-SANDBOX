@@ -17,6 +17,9 @@ vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 import {
   buildLinkAssignments,
   buildSourceGroupsQuery,
+  buildSourceTransactionsQuery,
+  TRANSACTIONS_PER_ROW,
+  type SourceTransaction,
   assembleWhereMoneyCameFrom,
   getWhereMoneyCameFrom,
   type SourceGroupRow,
@@ -167,7 +170,7 @@ describe("assembleWhereMoneyCameFrom", () => {
     const summaryTotal = groups.filter((g) => !g.rollup).reduce((s, g) => s + g.amountCents, 0);
     expect(r.totalCents).toBe(summaryTotal);
     expect(r.givingPages.totalCents + r.events.totalCents + r.campaigns.totalCents + r.pledges.totalCents + r.other.totalCents).toBe(summaryTotal);
-    expect(r.other).toEqual({ totalCents: 1_500, payments: 3 });
+    expect(r.other).toEqual({ totalCents: 1_500, payments: 3, transactions: [] });
   });
 
   it("does not double count: rollup rows never add to totals", () => {
@@ -310,5 +313,68 @@ describe("getCampaignsRaisedCentsBatch — matches getCampaignRaisedCents formul
     const m = await getCampaignsRaisedCentsBatch("church_1", []);
     expect(m.size).toBe(0);
     expect(mockPrisma.givingLink.groupBy).not.toHaveBeenCalled();
+  });
+});
+
+describe("who paid (per-row transactions)", () => {
+  const tx = (over: Partial<SourceTransaction>): SourceTransaction => ({
+    kind: "PAGE",
+    entityId: "L1",
+    transferId: "t1",
+    amountCents: 1000,
+    createdAt: new Date("2026-09-10T12:00:00Z"),
+    donorId: "d1",
+    donorName: "Pat Giver",
+    isAnonymous: false,
+    ...over,
+  });
+  const cat = emptyCatalogs({
+    givingLinks: [{ id: "L1", internalName: "a", publicTitle: "A" }],
+    events: [{ id: "E1", name: "Gala" }],
+  });
+
+  it("attaches each payment to its own row only", () => {
+    const r = assembleWhereMoneyCameFrom(
+      [
+        group({ kind: "PAGE", entityId: "L1", amountCents: 1000, payments: 1, donors: 1 }),
+        group({ kind: "EVENT", entityId: "E1", amountCents: 500, payments: 1, donors: 1 }),
+      ],
+      cat,
+      [tx({}), tx({ kind: "EVENT", entityId: "E1", transferId: "t2", donorName: "Ev Buyer" })]
+    );
+    expect(r.givingPages.rows[0].transactions.map((t) => t.donorName)).toEqual(["Pat Giver"]);
+    expect(r.events.rows[0].transactions.map((t) => t.donorName)).toEqual(["Ev Buyer"]);
+  });
+
+  it("puts unlinked and unknown-entity payments in the unattributed list", () => {
+    const r = assembleWhereMoneyCameFrom(
+      [group({ kind: "OTHER", entityId: null, amountCents: 700, payments: 1 })],
+      cat,
+      [
+        tx({ kind: "OTHER", entityId: null, transferId: "t3", donorName: null, donorId: null }),
+        tx({ kind: "EVENT", entityId: "GONE", transferId: "t4" }),
+        tx({ transferId: "t5" }),
+      ]
+    );
+    expect(r.other.transactions.map((t) => t.transferId).sort()).toEqual(["t3", "t4"]);
+  });
+
+  it("defaults to no transactions", () => {
+    const r = assembleWhereMoneyCameFrom([group({ kind: "PAGE", entityId: "L1", amountCents: 1, payments: 1 })], cat);
+    expect(r.givingPages.rows[0].transactions).toEqual([]);
+  });
+
+  it("caps per row inside SQL with a window function and uses the same success filter", () => {
+    const q = buildSourceTransactionsQuery({ churchId: "church_1", linkAssignments: new Map() });
+    expect(q.sql).toContain("ROW_NUMBER() OVER (PARTITION BY c.kind, c.entity_id");
+    expect(q.sql).toContain("UPPER(t.state) = 'SUCCEEDED'");
+    expect(q.sql).toContain('d."churchId" = t."churchId"');
+    expect(q.values).toEqual(expect.arrayContaining(["church_1", TRANSACTIONS_PER_ROW]));
+  });
+
+  it("applies team scope to the transaction list too", () => {
+    const q = buildSourceTransactionsQuery({ churchId: "c", attributedUserId: "user_3", linkAssignments: new Map() });
+    expect(q.sql).toContain('p."attributedUserId" =');
+    expect(q.values).toContain("user_3");
   });
 });
