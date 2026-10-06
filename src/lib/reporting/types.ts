@@ -263,10 +263,21 @@ export interface ReportKpis {
   newDonors: number;
   returningDonors: number;
   recurringDonors: number;
+  /** Gave in the previous year but not (yet) in the selected period. */
   lapsedDonors: number;
   averageGiftCents: number;
+  /** Net giving for the selected period (YTD for the current year, the full year otherwise). */
   ytdGivingCents: number;
   previousYearGivingCents: number;
   lifetimeGivingCents: number;
-  donorRetentionRatePercent: number;
+  /** Share of last year's donors who gave again in the selected period, 0-100. Null when there was no prior-year giving to measure against. */
+  donorRetentionRatePercent: number | null;
+  /** Donors who gave in the previous year (the retention base). */
+  priorYearDonors: number;
+  /** Donors with at least one gift in the selected period. */
+  givingDonors: number;
+  giftCount: number;
+  /** Net giving for the comparison span (same period last year, or the prior year in full). */
+  comparisonGivingCents: number;
+  comparisonAverageGiftCents: number;
 }
