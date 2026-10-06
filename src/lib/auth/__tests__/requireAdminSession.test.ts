@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockGetAdminSession = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getAdminSession: () => mockGetAdminSession() }));
@@ -22,6 +22,12 @@ function session(overrides: Partial<{ role: "wgc_admin" | "wgc_super_admin"; mfa
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Sandbox repo: two-factor is opt-in, so these tests turn it on explicitly.
+  process.env.ADMIN_MFA_ENFORCEMENT = "on";
+});
+
+afterEach(() => {
+  delete process.env.ADMIN_MFA_ENFORCEMENT;
 });
 
 describe("requireMfaVerifiedAdminSession", () => {

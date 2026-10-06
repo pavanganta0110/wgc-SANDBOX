@@ -9,25 +9,28 @@ afterEach(() => {
   }
 });
 
-describe("isAdminMfaEnforced", () => {
-  it("is on by default", () => {
+// Sandbox repository only: no SMS provider, so admin two-factor is opt-in.
+describe("isAdminMfaEnforced (sandbox)", () => {
+  it("is off by default, whatever the Finix environment says", () => {
     delete process.env.ADMIN_MFA_ENFORCEMENT;
-    expect(isAdminMfaEnforced()).toBe(true);
-  });
-
-  it("only an exact 'off' on a non-live deployment turns it off", () => {
-    process.env.NEXT_PUBLIC_FINIX_ENV = "sandbox";
-    process.env.ADMIN_MFA_ENFORCEMENT = "off";
-    expect(isAdminMfaEnforced()).toBe(false);
-    for (const v of ["OFF", "false", "0", "", "disabled"]) {
-      process.env.ADMIN_MFA_ENFORCEMENT = v;
-      expect(isAdminMfaEnforced()).toBe(true);
+    for (const env of [undefined, "sandbox", "live"]) {
+      if (env === undefined) delete process.env.NEXT_PUBLIC_FINIX_ENV;
+      else process.env.NEXT_PUBLIC_FINIX_ENV = env;
+      expect(isAdminMfaEnforced()).toBe(false);
     }
   });
 
-  it("cannot be turned off on a live deployment", () => {
-    process.env.NEXT_PUBLIC_FINIX_ENV = "live";
+  it("an old 'off' value keeps it off", () => {
     process.env.ADMIN_MFA_ENFORCEMENT = "off";
+    expect(isAdminMfaEnforced()).toBe(false);
+  });
+
+  it("turns on only with an exact 'on'", () => {
+    process.env.ADMIN_MFA_ENFORCEMENT = "on";
     expect(isAdminMfaEnforced()).toBe(true);
+    for (const v of ["ON", "true", "1", ""]) {
+      process.env.ADMIN_MFA_ENFORCEMENT = v;
+      expect(isAdminMfaEnforced()).toBe(false);
+    }
   });
 });
