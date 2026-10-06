@@ -13,6 +13,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { ReportingOverviewModel } from "./types";
+import PageHeader from "../ui/PageHeader";
 import KpiTile from "./KpiTile";
 import DeltaPill from "./DeltaPill";
 import Sparkline from "./Sparkline";
@@ -66,40 +67,38 @@ export default function ReportingOverview({
   return (
     <div className="space-y-8">
       {/* Hero */}
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <h3 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-            Reporting
-          </h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Donor analytics, giving reports, and exports.
-          </p>
-          <p className="mt-4 flex max-w-2xl items-start gap-2 rounded-xl bg-indigo-50/70 px-3.5 py-2.5 text-sm font-medium text-indigo-950">
-            <Sparkles
-              className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500"
-              aria-hidden
+      <PageHeader
+        current="Overview"
+        title="Reporting"
+        subtitle="Donor analytics, giving reports, and exports."
+        actions={
+          <>
+            <YearSelect
+              year={year}
+              options={model.yearOptions}
+              currentYear={currentYear}
             />
-            <span>{model.headline}</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <YearSelect
-            year={year}
-            options={model.yearOptions}
-            currentYear={currentYear}
+            {model.canExport && <ExportButton model={model} />}
+            {canCreateReports && (
+              <Link
+                href="/merchant/reporting/donors"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm outline-none transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 motion-reduce:transition-none"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                Create report
+              </Link>
+            )}
+          </>
+        }
+      >
+        <p className="mt-4 flex max-w-2xl items-start gap-2 rounded-xl bg-indigo-50/70 px-3.5 py-2.5 text-sm font-medium text-indigo-950">
+          <Sparkles
+            className="mt-0.5 h-4 w-4 shrink-0 text-indigo-500"
+            aria-hidden
           />
-          {model.canExport && <ExportButton model={model} />}
-          {canCreateReports && (
-            <Link
-              href="/merchant/reporting/donors"
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm outline-none transition hover:bg-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 motion-reduce:transition-none"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              Create report
-            </Link>
-          )}
-        </div>
-      </header>
+          <span>{model.headline}</span>
+        </p>
+      </PageHeader>
 
       {/* Giving */}
       <section aria-label="Giving">
@@ -115,6 +114,7 @@ export default function ReportingOverview({
             size="lg"
             className="col-span-2 sm:col-span-3 lg:col-span-6"
             label={givingLabel}
+            href="/merchant/reporting/annual"
             value={formatCents(k.ytdGivingCents)}
             icon={<DollarSign className="h-5 w-5" />}
             tip={`Money given ${model.isCurrentYear ? "so far this year" : `in ${year}`}, after refunds and returned payments.`}
@@ -138,6 +138,7 @@ export default function ReportingOverview({
           <KpiTile
             className="lg:col-span-2 sm:col-span-1"
             label="Last year"
+            href="/merchant/reporting/annual"
             value={formatCents(k.previousYearGivingCents)}
             icon={<Clock className={icon} />}
             tip={`Net giving for all of ${year - 1}.`}
@@ -146,6 +147,7 @@ export default function ReportingOverview({
           <KpiTile
             className="lg:col-span-2 sm:col-span-1"
             label="Lifetime"
+            href="/merchant/reporting/donors"
             value={formatCents(k.lifetimeGivingCents)}
             icon={<Wallet className={icon} />}
             tip="Everything your donors have given since you started, after refunds."
@@ -154,6 +156,7 @@ export default function ReportingOverview({
           <KpiTile
             className="col-span-2 sm:col-span-1 lg:col-span-2"
             label="Average gift"
+            href="/merchant/reporting/donors"
             value={formatCents(k.averageGiftCents)}
             icon={<Receipt className={icon} />}
             tip="Net giving divided by the number of gifts in this period."
@@ -183,6 +186,7 @@ export default function ReportingOverview({
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           <KpiTile
             label="Total donors"
+            href="/merchant/donors"
             value={k.totalDonors.toLocaleString("en-US")}
             icon={<Users className={icon} />}
             tip="Everyone on your donor list."
@@ -190,6 +194,7 @@ export default function ReportingOverview({
           />
           <KpiTile
             label="New"
+            href="/merchant/reporting/donors"
             value={k.newDonors.toLocaleString("en-US")}
             icon={<UserPlus className={icon} />}
             tip={`Donors whose very first gift was in ${year}.`}
@@ -197,6 +202,7 @@ export default function ReportingOverview({
           />
           <KpiTile
             label="Returning"
+            href="/merchant/reporting/donors"
             value={k.returningDonors.toLocaleString("en-US")}
             icon={<UserCheck className={icon} />}
             tip={`Donors who gave in ${year} and had already given before ${year}.`}
@@ -204,6 +210,7 @@ export default function ReportingOverview({
           />
           <KpiTile
             label="Recurring"
+            href="/merchant/reporting/recurring"
             value={k.recurringDonors.toLocaleString("en-US")}
             icon={<Repeat className={icon} />}
             tip={`Donors who gave through a recurring plan in ${year}.`}
@@ -211,6 +218,7 @@ export default function ReportingOverview({
           />
           <KpiTile
             label="Lapsed"
+            href="/merchant/reporting/lapsed"
             value={k.lapsedDonors.toLocaleString("en-US")}
             icon={<UserMinus className={icon} />}
             tip={`Gave in ${year - 1} but haven't given yet in ${year}.`}

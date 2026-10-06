@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Repeat, UserMinus } from "lucide-react";
 import Card, { EmptyNote } from "./Card";
 import Tip from "./Tip";
@@ -123,7 +124,10 @@ export default function DonorMixDonut({
       )}
 
       <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
-        <div className="flex items-center gap-2.5">
+        <Link
+          href="/merchant/reporting/recurring"
+          className="group -m-1 flex items-center gap-2.5 rounded-xl p-1 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 motion-reduce:transition-none"
+        >
           <span
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600"
             aria-hidden
@@ -142,8 +146,11 @@ export default function DonorMixDonut({
               />
             </div>
           </div>
-        </div>
-        <div className="flex items-center gap-2.5">
+        </Link>
+        <Link
+          href="/merchant/reporting/lapsed"
+          className="group -m-1 flex items-center gap-2.5 rounded-xl p-1 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-indigo-500 motion-reduce:transition-none"
+        >
           <span
             className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700"
             aria-hidden
@@ -162,7 +169,7 @@ export default function DonorMixDonut({
               />
             </div>
           </div>
-        </div>
+        </Link>
       </div>
     </Card>
   );

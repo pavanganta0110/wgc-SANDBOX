@@ -15,12 +15,19 @@ export default async function AnnualGivingReportPage() {
   if (!hasPermission(auth, "canViewDonors")) redirect("/merchant/dashboard");
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-bold text-slate-900">Annual Giving Report</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Select a year to see every donor's total giving for that calendar year. Uses the same eligibility rules as Annual Statements, so totals never conflict.</p>
-      </div>
-      <ReportExplorer reportType="ANNUAL" fixedDateRange={{ key: "year", year: new Date().getFullYear() }} canManageSavedReports={hasPermission(auth, "canManageSavedReports")} canExportReports={hasPermission(auth, "canExportReports")} />
+    <div className="min-w-0">
+      <ReportExplorer
+        reportType="ANNUAL"
+        fixedDateRange={{ key: "year", year: new Date().getFullYear() }}
+        canManageSavedReports={hasPermission(auth, "canManageSavedReports")}
+        canExportReports={hasPermission(auth, "canExportReports")}
+        header={{
+          current: "Annual Giving",
+          title: "Annual Giving Report",
+          subtitle:
+            "Every donor's total giving for a calendar year. Uses the same rules as Annual Statements, so totals never conflict.",
+        }}
+      />
     </div>
   );
 }

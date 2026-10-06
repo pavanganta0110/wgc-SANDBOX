@@ -27,7 +27,10 @@ export default async function DonorReportPage({
   const sp = await searchParams;
   const leaderboardRange = parseLeaderboardRange(sp.leaderboardRange);
   const preset = RANGE_PRESETS.find((p) => p.key === leaderboardRange);
-  const { from: rangeFrom, to: rangeTo } = preset?.compute() ?? { from: new Date(), to: new Date() };
+  const { from: rangeFrom, to: rangeTo } = preset?.compute() ?? {
+    from: new Date(),
+    to: new Date(),
+  };
   const fromDate = rangeFrom ?? new Date();
   const toDate = rangeTo ?? new Date();
 
@@ -36,7 +39,8 @@ export default async function DonorReportPage({
   // sees a leaderboard of only their own attributed donors, not the whole
   // organization's.
   const viewScope = await resolveViewScope(auth);
-  const scopedDonorIds = (await resolveScopedDonorIds(auth, viewScope)) ?? undefined;
+  const scopedDonorIds =
+    (await resolveScopedDonorIds(auth, viewScope)) ?? undefined;
 
   const topDonors = await loadTopDonors(
     auth.churchId,
@@ -47,14 +51,26 @@ export default async function DonorReportPage({
   );
 
   return (
-    <div className="space-y-4">
-      <DonorLeaderboardCard rows={topDonors.rows} range={leaderboardRange} fromDate={fromDate} toDate={toDate} />
-
-      <div>
-        <h3 className="text-sm font-bold text-slate-900">Donor Report</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Filter, customize, and export donor giving data across every source.</p>
-      </div>
-      <ReportExplorer reportType="DONORS" canManageSavedReports={hasPermission(auth, "canManageSavedReports")} canExportReports={hasPermission(auth, "canExportReports")} />
+    <div className="min-w-0">
+      <ReportExplorer
+        reportType="DONORS"
+        canManageSavedReports={hasPermission(auth, "canManageSavedReports")}
+        canExportReports={hasPermission(auth, "canExportReports")}
+        header={{
+          current: "Donor Report",
+          title: "Donor Report",
+          subtitle:
+            "Filter, customize and export donor giving data across every source.",
+        }}
+        afterHeader={
+          <DonorLeaderboardCard
+            rows={topDonors.rows}
+            range={leaderboardRange}
+            fromDate={fromDate}
+            toDate={toDate}
+          />
+        }
+      />
     </div>
   );
 }

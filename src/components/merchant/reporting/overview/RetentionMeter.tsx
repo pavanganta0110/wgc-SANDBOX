@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -143,6 +144,14 @@ export default function RetentionMeter({
                 </>
               )}
             </p>
+            {lapsed > 0 && (
+              <Link
+                href="/merchant/reporting/lapsed"
+                className="mt-2 inline-flex items-center gap-1 rounded text-sm font-semibold text-indigo-700 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                See who hasn&apos;t given again <span aria-hidden>→</span>
+              </Link>
+            )}
             <div className="mt-4 max-w-md">
               <div
                 className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full"
