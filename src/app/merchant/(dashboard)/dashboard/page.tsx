@@ -1,10 +1,47 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import BarChart from "@/components/merchant/BarChart";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
-import TrendFilter from "@/components/merchant/TrendFilter";
 import CustomizeSummaryPanel from "@/components/merchant/CustomizeSummaryPanel";
-import { computeSummaryMetrics, DEFAULT_METRICS, METRIC_LABELS } from "@/lib/reports/summaryMetrics";
+import { Suspense, type ReactNode } from "react";
+import {
+  DollarSign,
+  Receipt,
+  ShieldAlert,
+  Undo2,
+  Hash,
+  Percent,
+  ShieldCheck,
+  Landmark,
+  Activity,
+  XCircle,
+} from "lucide-react";
+import {
+  computeSummaryMetrics,
+  computeSummaryNumbers,
+  computeMetricDelta,
+  DEFAULT_METRICS,
+  METRIC_LABELS,
+  METRIC_META,
+} from "@/lib/reports/summaryMetrics";
+import {
+  aggregateWindows,
+  previousWindow,
+  splitWindow,
+  getAttentionCounts,
+  buildAttentionItems,
+  describeAuthRate,
+} from "@/lib/reports/dashboardHome";
+import { getSourceTotals } from "@/lib/reports/moneySources";
+import { resolveScopedTransferIds } from "@/lib/reports/insightsData";
+import { prisma } from "@/lib/prisma";
+import KpiCard from "@/components/merchant/dashboard/KpiCard";
+import AttentionStrip from "@/components/merchant/dashboard/AttentionStrip";
+import VolumeAreaChart from "@/components/merchant/dashboard/VolumeAreaChart";
+import MiniBarChart from "@/components/merchant/dashboard/MiniBarChart";
+import TrendToggle from "@/components/merchant/dashboard/TrendToggle";
+import AuthRateMeter from "@/components/merchant/dashboard/AuthRateMeter";
+import SourcesCard from "@/components/merchant/dashboard/SourcesCard";
+import QuickActions from "@/components/merchant/dashboard/QuickActions";
+import { CardSkeleton } from "@/components/merchant/dashboard/Skeletons";
 import {
   aggregateTransfers,
   aggregateDisputes,
@@ -16,12 +53,11 @@ import {
   getDepositTrend,
   type TrendBucket,
 } from "@/lib/reports/dashboardAggregates";
-import { resolveDateRange } from "@/lib/dateRangePresets";
-import QuickLinksPanel from "@/components/merchant/QuickLinksPanel";
+import { resolveDateRange, rangeLabel } from "@/lib/dateRangePresets";
 import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildFinixTransferScope, buildRefundScope } from "@/lib/auth/scopes";
+import { buildFinixTransferScope, buildRefundScope, resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
 const CENTRAL_TIME_ZONE = "America/Chicago";
@@ -91,6 +127,72 @@ function computeTrendBuckets(trend: string): TrendBucket[] {
   return buckets;
 }
 
+const METRIC_ICONS: Record<string, ReactNode> = {
+  totalTransactionVolume: <DollarSign className="h-4 w-4" />,
+  avgTransactionAmount: <Receipt className="h-4 w-4" />,
+  totalDisputeVolume: <ShieldAlert className="h-4 w-4" />,
+  totalRefundVolume: <Undo2 className="h-4 w-4" />,
+  totalTransactionCount: <Hash className="h-4 w-4" />,
+  totalDisputeCount: <ShieldAlert className="h-4 w-4" />,
+  activeDisputeCount: <ShieldAlert className="h-4 w-4" />,
+  disputeRate: <Percent className="h-4 w-4" />,
+  successfulRefundCount: <Undo2 className="h-4 w-4" />,
+  successfulRefundVolume: <Undo2 className="h-4 w-4" />,
+  failedRefundCount: <XCircle className="h-4 w-4" />,
+  failedRefundVolume: <XCircle className="h-4 w-4" />,
+  authorizationRate: <ShieldCheck className="h-4 w-4" />,
+  authorizationRequestCount: <Activity className="h-4 w-4" />,
+  authorizationRequestVolume: <Activity className="h-4 w-4" />,
+  voidedAuthorizationCount: <XCircle className="h-4 w-4" />,
+  voidedAuthorizationVolume: <XCircle className="h-4 w-4" />,
+  totalDeposits: <Landmark className="h-4 w-4" />,
+};
+
+const TREND_CAPTION: Record<string, string> = {
+  daily: "Last 14 days",
+  weekly: "Last 6 weeks",
+  monthly: "Last 6 months",
+};
+
+const SPARKLINE_BUCKETS = 12;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function greetingFor(date: Date): string {
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: CENTRAL_TIME_ZONE }).format(date)
+  );
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+}
+
+function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={`wgc-fade-in rounded-2xl border border-slate-200/70 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-6 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+async function SourcesSection({
+  churchId,
+  dateFilter,
+  attributedUserId,
+  insightsHref,
+}: {
+  churchId: string;
+  dateFilter: { gte: Date; lte?: Date } | undefined;
+  attributedUserId?: string;
+  insightsHref: string;
+}) {
+  const totals = await getSourceTotals(churchId, dateFilter, attributedUserId);
+  return (
+    <Card>
+      <SourcesCard totals={totals} insightsHref={insightsHref} />
+    </Card>
+  );
+}
+
 export default async function MerchantDashboardPage({
   searchParams,
 }: {
@@ -112,9 +214,9 @@ export default async function MerchantDashboardPage({
     metrics: metricsParam,
   } = await searchParams;
   const trend = trendParam && TREND_CONFIG[trendParam] ? trendParam : "weekly";
-  const selectedMetrics = metricsParam
-    ? metricsParam.split(",").filter((key) => METRIC_LABELS[key])
-    : DEFAULT_METRICS;
+  const selectedMetrics = (
+    metricsParam ? metricsParam.split(",").filter((key) => METRIC_LABELS[key]) : DEFAULT_METRICS
+  ).slice(0, 8);
   const { from: startDate, to: endDate } = resolveDateRange(rangeParam, fromParam, toParam);
   const dateFilter =
     startDate && endDate ? { gte: startDate, lte: endDate } : startDate ? { gte: startDate } : undefined;
@@ -125,12 +227,20 @@ export default async function MerchantDashboardPage({
   // settlements/deposits have no reliable per-user attribution (per the
   // established CP4C policy) and stay organization-wide regardless of scope.
   const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
   const [transferScope, refundScope] = await Promise.all([
     buildFinixTransferScope(auth, viewScope),
     buildRefundScope(auth, viewScope),
   ]);
 
   const orgScopeWithDate = { churchId, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) };
+
+  // Previous period: the equal-length window right before the selected one.
+  // Only exists for a bounded range ("all time" has nothing to compare to).
+  const now = new Date();
+  const currentEnd = endDate ?? now;
+  const prior = startDate ? previousWindow(startDate, new Date(currentEnd.getTime() + 1)) : null;
+  const priorFilter = prior ? { gte: prior.start, lt: prior.end } : undefined;
 
   const [transfers, disputes, refunds, authorizations, deposits] = await Promise.all([
     aggregateTransfers({ ...transferScope, ...(dateFilter ? { createdAtFinix: dateFilter } : {}) }),
@@ -140,111 +250,186 @@ export default async function MerchantDashboardPage({
     aggregateDeposits(orgScopeWithDate),
   ]);
 
-  const metricValues = computeSummaryMetrics({ transfers, disputes, refunds, authorizations, deposits });
-  const row1Metrics = selectedMetrics.slice(0, 4);
-  const row2Metrics = selectedMetrics.slice(4, 8);
-
   const trendBuckets = computeTrendBuckets(trend);
-  
-  const [volumeSums, settlementSums, depositSums] = await Promise.all([
+  const sparkWindows = splitWindow(
+    startDate ?? new Date(now.getTime() - SPARKLINE_BUCKETS * 7 * DAY_MS),
+    new Date(currentEnd.getTime() + 1),
+    SPARKLINE_BUCKETS
+  );
+
+  const [
+    previous,
+    sparkBuckets,
+    volumeSums,
+    settlementSums,
+    depositSums,
+    attentionCounts,
+    church,
+    pricing,
+  ] = await Promise.all([
+    priorFilter
+      ? Promise.all([
+          aggregateTransfers({ ...transferScope, createdAtFinix: priorFilter }),
+          aggregateDisputes({ churchId, createdAtFinix: priorFilter }),
+          aggregateRefunds({ ...refundScope, createdAtFinix: priorFilter }),
+          aggregateAuthorizations({ churchId, createdAtFinix: priorFilter }),
+          aggregateDeposits({ churchId, createdAtFinix: priorFilter }),
+        ])
+      : Promise.resolve(null),
+    aggregateWindows({ churchId, attributedUserId: scopedUserId, windows: sparkWindows }),
     getTransferVolumeTrend(transferScope, trendBuckets),
     getSettlementTrend({ churchId }, trendBuckets),
     getDepositTrend({ churchId }, trendBuckets),
+    resolveScopedTransferIds(churchId, scopedUserId).then((scopedTransferIds) =>
+      getAttentionCounts({
+        churchId,
+        dateFilter,
+        transferScope,
+        failedRefundCount: refunds.failedCount,
+        scopedTransferIds,
+      })
+    ),
+    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, finixMerchantId: true } }),
+    prisma.churchPricing.findUnique({ where: { churchId } }),
   ]);
+
+  const currentInputs = { transfers, disputes, refunds, authorizations, deposits };
+  const metricValues = computeSummaryMetrics(currentInputs);
+  const metricNumbers = computeSummaryNumbers(currentInputs);
+  const previousNumbers = previous
+    ? computeSummaryNumbers({
+        transfers: previous[0],
+        disputes: previous[1],
+        refunds: previous[2],
+        authorizations: previous[3],
+        deposits: previous[4],
+      })
+    : null;
+
+  // Sparklines only where there is real per-bucket data to draw.
+  const sparkFor: Record<string, number[]> = {
+    totalTransactionVolume: sparkBuckets.map((b) => b.volumeCents),
+    avgTransactionAmount: sparkBuckets.map((b) => (b.count > 0 ? b.volumeCents / b.count : 0)),
+  };
+
   const volumeTrend = trendBuckets.map((b, i) => ({ label: b.label, value: volumeSums[i] }));
   const settlementTrend = trendBuckets.map((b, i) => ({ label: b.label, value: settlementSums[i] }));
   const depositTrend = trendBuckets.map((b, i) => ({ label: b.label, value: depositSums[i] }));
 
-  const lastUpdated = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
+  const attentionItems = buildAttentionItems(attentionCounts);
+  const authMeter = describeAuthRate(authorizations.succeededCount, authorizations.totalCount);
+
+  const todayLabel = now.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: CENTRAL_TIME_ZONE,
   });
+  const lastUpdated = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: CENTRAL_TIME_ZONE });
+  const periodLabel = rangeLabel(rangeParam, fromParam, toParam);
+  const granularity = trend === "daily" ? "Daily" : trend === "monthly" ? "Monthly" : "Weekly";
+
+  const insightsParams = new URLSearchParams({ tab: "payments" });
+  if (rangeParam) insightsParams.set("range", rangeParam);
+  if (fromParam) insightsParams.set("from", fromParam);
+  if (toParam) insightsParams.set("to", toParam);
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Welcome</h1>
-        <p className="text-sm text-slate-500">This page last updated at {lastUpdated}</p>
-      </div>
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-slate-500">{todayLabel}</p>
+          <h1 className="mt-1 text-[26px] font-bold leading-tight tracking-tight text-slate-900 sm:text-[30px]">
+            {greetingFor(now)}, {church?.name || "welcome back"}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Showing {periodLabel.toLowerCase()}. Updated at {lastUpdated}.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <CustomizeSummaryPanel />
+          <DateRangePicker />
+        </div>
+      </header>
 
-      <div className="flex gap-6 items-start">
-        <div className="flex-grow min-w-0 space-y-8">
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Summary</p>
-          <div className="flex items-center gap-2">
-            <CustomizeSummaryPanel />
-            <DateRangePicker />
+      <section aria-labelledby="summary-heading" className="space-y-4">
+        <h2 id="summary-heading" className="sr-only">
+          Summary
+        </h2>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {selectedMetrics.map((key) => {
+            const meta = METRIC_META[key];
+            return (
+              <KpiCard
+                key={key}
+                label={METRIC_LABELS[key]}
+                value={metricValues[key]}
+                icon={METRIC_ICONS[key]}
+                delta={computeMetricDelta(
+                  meta.kind,
+                  meta.polarity,
+                  metricNumbers[key],
+                  previousNumbers ? previousNumbers[key] : null
+                )}
+                spark={sparkFor[key]}
+                comparedTo="vs previous period"
+              />
+            );
+          })}
+        </div>
+      </section>
+
+      <AttentionStrip items={attentionItems} />
+
+      <Card>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Donation volume</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{TREND_CAPTION[trend]}, successful payments</p>
           </div>
+          <TrendToggle />
         </div>
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {row1Metrics.map((key) => (
-            <div key={key} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                {METRIC_LABELS[key]}
-              </p>
-              <p className="text-2xl font-bold text-slate-900">{metricValues[key]}</p>
-            </div>
-          ))}
-        </div>
-        {row2Metrics.length > 0 && (
-          <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
-            {row2Metrics.map((key) => (
-              <div key={key} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                  {METRIC_LABELS[key]}
-                </p>
-                <p className="text-2xl font-bold text-slate-900">{metricValues[key]}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        <VolumeAreaChart data={volumeTrend} title="Donation volume" />
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <h2 className="text-sm font-semibold text-slate-900">Settlement volume</h2>
+          <p className="mb-4 mt-0.5 text-xs text-slate-500">{granularity}</p>
+          <MiniBarChart data={settlementTrend} title="Settlement volume" emptyText="No settlements in this period" />
+        </Card>
+        <Card>
+          <h2 className="text-sm font-semibold text-slate-900">Merchant deposits</h2>
+          <p className="mb-4 mt-0.5 text-xs text-slate-500">{granularity}</p>
+          <MiniBarChart data={depositTrend} title="Merchant deposits" emptyText="No deposits in this period" />
+        </Card>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Trends</p>
-          <TrendFilter />
-        </div>
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <h3 className="text-sm font-bold text-slate-900 mb-4">Total Transaction Volume and Count</h3>
-          <BarChart data={volumeTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Total Transaction Volume and Count" />
-        </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <h2 className="mb-5 text-sm font-semibold text-slate-900">Authorization rate</h2>
+          <AuthRateMeter meter={authMeter} />
+        </Card>
+        <Suspense fallback={<CardSkeleton height={220} />}>
+          <SourcesSection
+            churchId={churchId}
+            dateFilter={dateFilter}
+            attributedUserId={scopedUserId}
+            insightsHref={`/merchant/insights?${insightsParams.toString()}`}
+          />
+        </Suspense>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-4">Authorization Rate</h3>
-        {authorizations.totalCount === 0 ? (
-          <div className="flex items-center justify-center h-24 text-sm text-slate-400">
-            No results yet
-          </div>
-        ) : (
-          <div className="flex items-center gap-6">
-            <p className="text-3xl font-bold text-slate-900">
-              {((authorizations.succeededCount / authorizations.totalCount) * 100).toFixed(1)}%
-            </p>
-            <p className="text-sm text-slate-500">
-              {authorizations.succeededCount} of {authorizations.totalCount} authorizations approved
-            </p>
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-4">Settlement Volume (Weekly)</h3>
-        <BarChart data={settlementTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Settlement Volume (Weekly)" />
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-4">Merchant Deposits (Weekly)</h3>
-        <BarChart data={depositTrend} formatValue={(n) => `$${n.toFixed(0)}`} title="Merchant Deposits (Weekly)" />
-      </div>
-        </div>
-
-        <div className="w-80 shrink-0 hidden lg:block">
-          <QuickLinksPanel />
-        </div>
-      </div>
+      <QuickActions
+        finixMerchantId={church?.finixMerchantId || ""}
+        churchName={church?.name || ""}
+        pricing={{
+          cardPercentageFee: pricing?.cardPercentageFee ?? null,
+          cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null,
+          achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
+        }}
+      />
     </div>
   );
 }

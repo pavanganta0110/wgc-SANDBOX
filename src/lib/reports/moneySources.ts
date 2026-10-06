@@ -755,3 +755,51 @@ export async function getWhereMoneyCameFrom(
     pledgeStats,
   }, transactions, attendees);
 }
+
+export interface SourceTotals {
+  givingPages: { totalCents: number; donors: number };
+  events: { totalCents: number; donors: number };
+  campaigns: { totalCents: number; donors: number };
+  pledges: { totalCents: number; donors: number };
+  otherCents: number;
+  totalCents: number;
+}
+
+/** Pure: the per-section rollups out of the SQL groups. */
+export function totalsFromGroups(groups: SourceGroupRow[]): SourceTotals {
+  const roll = (kind: MoneySourceKindOrOther) => groups.find((g) => g.rollup && g.kind === kind);
+  const pick = (kind: MoneySourceKind) => ({ totalCents: roll(kind)?.amountCents ?? 0, donors: roll(kind)?.donors ?? 0 });
+  const t = {
+    givingPages: pick("PAGE"),
+    events: pick("EVENT"),
+    campaigns: pick("CAMPAIGN"),
+    pledges: pick("PLEDGE"),
+    otherCents: roll("OTHER")?.amountCents ?? 0,
+  };
+  return {
+    ...t,
+    totalCents:
+      t.givingPages.totalCents + t.events.totalCents + t.campaigns.totalCents + t.pledges.totalCents + t.otherCents,
+  };
+}
+
+/** Section totals only — no row lists, attendees or per-campaign stats — for
+ * the dashboard's mini-summary. Same SQL classification as the Insights
+ * section, so the numbers match it for the same range. */
+export async function getSourceTotals(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  attributedUserId?: string
+): Promise<SourceTotals> {
+  const [links, events, campaigns, teams, fundraisers, pledgeCampaigns] = await Promise.all([
+    prisma.givingLink.findMany({ where: { churchId }, select: { id: true, fundraisingCampaignId: true } }),
+    prisma.event.findMany({ where: { churchId }, select: { id: true, givingLinkId: true } }),
+    prisma.fundraisingCampaign.findMany({ where: { churchId }, select: { id: true, givingLinkId: true } }),
+    prisma.campaignTeam.findMany({ where: { churchId }, select: { fundraisingCampaignId: true, givingLinkId: true } }),
+    prisma.campaignFundraiser.findMany({ where: { churchId }, select: { fundraisingCampaignId: true, givingLinkId: true } }),
+    prisma.pledgeCampaign.findMany({ where: { churchId }, select: { id: true, givingLinkId: true } }),
+  ]);
+  const linkAssignments = buildLinkAssignments({ links, events, campaigns, teams, fundraisers, pledgeCampaigns });
+  const groups = await fetchSourceGroups({ churchId, dateFilter, attributedUserId, linkAssignments });
+  return totalsFromGroups(groups);
+}

@@ -148,3 +148,14 @@ textarea:not(:placeholder-shown):invalid:focus {
   border-color: var(--color-wgc-error) !important;
   box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
 }
+
+/* Dashboard home: a calm fade-in for charts and cards. Off when the user
+   asks for reduced motion. */
+@keyframes wgc-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.wgc-fade-in { animation: wgc-fade-in 360ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .wgc-fade-in { animation: none; }
+}
