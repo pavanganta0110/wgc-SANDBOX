@@ -375,6 +375,13 @@ describe("door sales", () => {
     expect(store.attendees.every((a) => a.checkedIn)).toBe(true);
   });
 
+  it("doesn't require each guest's own email at the door, but still does online", async () => {
+    store.event = paidEvent({ attendeeEmailRequired: true });
+    const guests = input({ attendees: [{ firstName: "Pat", lastName: "Lee", customResponses: { shirt: "M" } }, { firstName: "Jo", lastName: "Lee", customResponses: { shirt: "S" } }] });
+    expect((await submitEventRegistration("spring", guests, NOW)).ok).toBe(false);
+    expect((await submitEventRegistration("spring", guests, DURING, { ...DOOR, paymentMethod: "CASH" })).ok).toBe(true);
+  });
+
   it("does not check in an ordinary online registration", async () => {
     await submitEventRegistration("spring", input(), NOW);
     expect(store.attendees.every((a) => !a.checkedIn)).toBe(true);

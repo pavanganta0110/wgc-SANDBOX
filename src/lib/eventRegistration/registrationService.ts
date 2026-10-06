@@ -134,7 +134,9 @@ export async function submitEventRegistration(slug: string, input: RegistrationI
     if (!firstName || !lastName) return fail(400, `${label}: first and last name are required.`);
 
     const email = typeof a?.email === "string" ? a.email.trim() : "";
-    if (!email && event.attendeeEmailRequired) return fail(400, `${label}: an email address is required.`);
+    // At the door, one person pays for the group and every ticket goes to the
+    // buyer's email — guests don't need their own address.
+    if (!email && event.attendeeEmailRequired && !door) return fail(400, `${label}: an email address is required.`);
     if (email && !isValidEmail(email)) return fail(400, `${label}: please enter a valid email address.`);
 
     let phone: string | null = null;
