@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, ExternalLink } from "lucide-react";
+import { Copy, ExternalLink, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import { formatCents } from "@/lib/format";
 import { inputClass, readApiError, secondaryButton } from "@/components/events/merchant/api";
@@ -95,6 +95,11 @@ export default function EventDetailClient({
           <p className="text-sm text-slate-500">Status: {event.status}</p>
         </div>
         <div className="mt-3 sm:mt-0 flex flex-wrap gap-2">
+          {canManage && (
+            <button type="button" onClick={() => setTab("Settings")} className={secondaryButton}>
+              <Pencil className="w-4 h-4 mr-1.5" aria-hidden="true" /> Edit event
+            </button>
+          )}
           <button type="button" onClick={copyLink} className={secondaryButton}>
             <Copy className="w-4 h-4 mr-1.5" aria-hidden="true" /> Copy link
           </button>
