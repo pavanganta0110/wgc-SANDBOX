@@ -25,10 +25,10 @@ type Channel = "EMAIL" | "TEXT";
 // What this email is actually about — drives which GivingLink gets used
 // (see the comment on GivingCampaign.givingLinkId in schema.prisma for why
 // that can never be an independent choice once one of these is picked).
-type TieMode = "NONE" | "FUNDRAISING" | "PLEDGE";
+type TieMode = "NONE" | "FUNDRAISING" | "PLEDGE" | "EVENT";
 // Who receives it: hand-picked donors (the original flow) or an audience the
 // server resolves from this organization's own records.
-type AudienceSource = "SELECTED" | "ALL_DONORS" | "GIVING_PAGE" | "EVENT" | "IMPORTED_CONTACTS" | "NOT_GIVEN";
+type AudienceSource = "SELECTED" | "ALL_DONORS" | "GIVING_PAGE" | "EVENT" | "IMPORTED_CONTACTS" | "NOT_GIVEN" | "NOT_REGISTERED";
 
 const MERGE_FIELDS = [
   { token: "{{firstName}}", label: "Donor first name" },
@@ -38,6 +38,17 @@ const MERGE_FIELDS = [
 
 const DEFAULT_EMAIL_BODY =
   "Hi {{firstName}},\n\n{{orgName}} would be grateful for your support. You can give securely here:\n{{link}}\n\nThank you!";
+// An event invitation reads nothing like a giving ask, so tying the email to an
+// event swaps in invitation wording (only if the merchant hasn't changed the text yet).
+const EVENT_MERGE_FIELDS = [
+  { token: "{{eventName}}", label: "The event's name" },
+  { token: "{{eventDate}}", label: "The event date" },
+  { token: "{{eventTime}}", label: "The event start time" },
+  { token: "{{eventLocation}}", label: "Where it's held" },
+];
+const DEFAULT_EVENT_SUBJECT = "You're invited: {{eventName}}";
+const DEFAULT_EVENT_BODY =
+  "Hi {{firstName}},\n\n{{orgName}} would love to see you at {{eventName}} on {{eventDate}} at {{eventTime}}, at {{eventLocation}}.\n\nSave your spot here:\n{{link}}\n\nWe hope to see you there!";
 const DEFAULT_TEXT_BODY = "Hi {{firstName}}, {{orgName}} would be grateful for your support. Give securely here: {{link}}";
 
 export default function GivingCampaignComposer() {
@@ -55,6 +66,8 @@ export default function GivingCampaignComposer() {
   const [selectedFundraiserId, setSelectedFundraiserId] = useState("");
   const [pledgeCampaigns, setPledgeCampaigns] = useState<{ id: string; name: string }[] | null>(null);
   const [selectedPledgeCampaignId, setSelectedPledgeCampaignId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState("");
+  const [notRegisteredBase, setNotRegisteredBase] = useState<"EVERYONE" | "DONORS">("EVERYONE");
   const [name, setName] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBodyTemplate, setEmailBodyTemplate] = useState(DEFAULT_EMAIL_BODY);
@@ -187,7 +200,7 @@ export default function GivingCampaignComposer() {
       fetch("/api/merchant/giving-campaigns/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, emailSubject, emailBodyTemplate, textBodyTemplate }),
+        body: JSON.stringify({ channel, emailSubject, emailBodyTemplate, textBodyTemplate, eventId: tieMode === "EVENT" ? selectedEventId || undefined : undefined }),
       })
         .then((res) => res.json())
         .then((data) =>
@@ -203,7 +216,7 @@ export default function GivingCampaignComposer() {
         .catch(() => {});
     }, 300);
     return () => clearTimeout(timeout);
-  }, [channel, emailSubject, emailBodyTemplate, textBodyTemplate]);
+  }, [channel, emailSubject, emailBodyTemplate, textBodyTemplate, tieMode, selectedEventId]);
 
   // Events are optional (permission-gated): a failed load just hides the option.
   useEffect(() => {
@@ -218,12 +231,13 @@ export default function GivingCampaignComposer() {
     audienceSource === "ALL_DONORS" ||
     audienceSource === "IMPORTED_CONTACTS" ||
     audienceSource === "NOT_GIVEN" ||
+    (audienceSource === "NOT_REGISTERED" && Boolean(selectedEventId)) ||
     (audienceSource === "GIVING_PAGE" && Boolean(audienceLinkId)) ||
     (audienceSource === "EVENT" && Boolean(audienceEventId));
 
   const repeatingNow = repeatMonthly && channel === "EMAIL" && audienceSource !== "SELECTED";
 
-  const audienceKey = JSON.stringify([audienceSource, audienceLinkId, audienceEventId, audienceEventScope, channel]);
+  const audienceKey = JSON.stringify([audienceSource, audienceLinkId, audienceEventId, audienceEventScope, channel, selectedEventId, notRegisteredBase]);
   const audiencePreview = audienceSource !== "SELECTED" && audienceReady && audienceResult?.key === audienceKey ? audienceResult.value : null;
 
   useEffect(() => {
@@ -234,7 +248,13 @@ export default function GivingCampaignComposer() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         channel,
-        audience: { source: audienceSource, givingLinkId: audienceLinkId || undefined, eventId: audienceEventId || undefined, eventScope: audienceEventScope },
+        audience: {
+          source: audienceSource,
+          givingLinkId: audienceLinkId || undefined,
+          eventId: audienceSource === "NOT_REGISTERED" ? selectedEventId || undefined : audienceEventId || undefined,
+          eventScope: audienceEventScope,
+          base: notRegisteredBase,
+        },
       }),
     })
       .then(async (res) => {
@@ -246,7 +266,7 @@ export default function GivingCampaignComposer() {
     return () => {
       cancelled = true;
     };
-  }, [audienceSource, audienceReady, audienceLinkId, audienceEventId, audienceEventScope, channel, audienceKey]);
+  }, [audienceSource, audienceReady, audienceLinkId, audienceEventId, audienceEventScope, channel, audienceKey, selectedEventId, notRegisteredBase]);
 
   const switchChannel = (next: Channel) => {
     if (next === channel) return;
@@ -255,7 +275,8 @@ export default function GivingCampaignComposer() {
       return;
     }
     setChannel(next);
-    if (next === "TEXT" && audienceSource === "EVENT") setAudienceSource("SELECTED");
+    if (next === "TEXT" && (audienceSource === "EVENT" || audienceSource === "NOT_REGISTERED")) setAudienceSource("SELECTED");
+    if (next === "TEXT" && tieMode === "EVENT") chooseTieMode("NONE");
     // A donor valid for one channel (has an email) may not be valid for the
     // other (no phone on file, or vice versa) — clearing avoids silently
     // dropping them at send time with no explanation.
@@ -298,14 +319,31 @@ export default function GivingCampaignComposer() {
     }
   };
 
+  // Switching what the email is about swaps the starter wording — but only if
+  // the merchant hasn't already rewritten it.
+  const chooseTieMode = (mode: TieMode) => {
+    if (mode === tieMode) return;
+    if (mode === "EVENT") {
+      if (!emailSubject.trim() || emailSubject === DEFAULT_EVENT_SUBJECT) setEmailSubject(DEFAULT_EVENT_SUBJECT);
+      if (emailBodyTemplate === DEFAULT_EMAIL_BODY) setEmailBodyTemplate(DEFAULT_EVENT_BODY);
+      // The natural audience for an invitation is everyone who hasn't signed up yet.
+      if (audienceSource === "SELECTED") setAudienceSource("NOT_REGISTERED");
+    } else if (tieMode === "EVENT") {
+      if (emailBodyTemplate === DEFAULT_EVENT_BODY) setEmailBodyTemplate(DEFAULT_EMAIL_BODY);
+      if (emailSubject === DEFAULT_EVENT_SUBJECT) setEmailSubject("");
+      if (audienceSource === "NOT_REGISTERED") setAudienceSource("SELECTED");
+    }
+    setTieMode(mode);
+  };
+
   const createAndSend = async () => {
     const messageReady = channel === "TEXT" ? textBodyTemplate.trim() : emailSubject.trim() && emailBodyTemplate.trim();
     const destinationReady =
-      tieMode === "FUNDRAISING" ? Boolean(selectedCampaignId) : tieMode === "PLEDGE" ? Boolean(selectedPledgeCampaignId) : Boolean(givingLinkId);
+      tieMode === "FUNDRAISING" ? Boolean(selectedCampaignId) : tieMode === "PLEDGE" ? Boolean(selectedPledgeCampaignId) : tieMode === "EVENT" ? Boolean(selectedEventId) : Boolean(givingLinkId);
     const repeating = repeatMonthly && channel === "EMAIL" && audienceSource !== "SELECTED";
     const recipientsReady = audienceSource === "SELECTED" ? selectedDonors.length > 0 : repeating ? audienceReady : audienceReady && audiencePreview !== null && "count" in audiencePreview && audiencePreview.count > 0;
     if (!name.trim() || !destinationReady || !messageReady || !recipientsReady) {
-      const destinationLabel = tieMode === "NONE" ? "giving link" : tieMode === "FUNDRAISING" ? "fundraising campaign" : "pledge campaign";
+      const destinationLabel = tieMode === "NONE" ? "giving link" : tieMode === "FUNDRAISING" ? "fundraising campaign" : tieMode === "EVENT" ? "event" : "pledge campaign";
       toast.error(
         channel === "TEXT"
           ? `Fill in a name, ${destinationLabel}, message, and at least one donor.`
@@ -325,6 +363,7 @@ export default function GivingCampaignComposer() {
           campaignTeamId: tieMode === "FUNDRAISING" ? selectedTeamId || undefined : undefined,
           campaignFundraiserId: tieMode === "FUNDRAISING" ? selectedFundraiserId || undefined : undefined,
           pledgeCampaignId: tieMode === "PLEDGE" ? selectedPledgeCampaignId : undefined,
+          eventId: tieMode === "EVENT" ? selectedEventId : undefined,
           channel,
           emailSubject,
           emailBodyTemplate,
@@ -333,8 +372,9 @@ export default function GivingCampaignComposer() {
           audience: {
             source: audienceSource,
             givingLinkId: audienceSource === "GIVING_PAGE" ? audienceLinkId : undefined,
-            eventId: audienceSource === "EVENT" ? audienceEventId : undefined,
+            eventId: audienceSource === "EVENT" ? audienceEventId : audienceSource === "NOT_REGISTERED" ? selectedEventId : undefined,
             eventScope: audienceSource === "EVENT" ? audienceEventScope : undefined,
+            base: audienceSource === "NOT_REGISTERED" ? notRegisteredBase : undefined,
           },
           schedule: repeating ? { repeat: "MONTHLY", startsOn, endsOn: endsOn || undefined } : undefined,
         }),
@@ -443,16 +483,16 @@ export default function GivingCampaignComposer() {
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tie this email to</label>
               <div className="flex gap-2 mb-2">
-                {(["NONE", "FUNDRAISING", "PLEDGE"] as TieMode[]).map((mode) => (
+                {((events && channel === "EMAIL" ? ["NONE", "FUNDRAISING", "PLEDGE", "EVENT"] : ["NONE", "FUNDRAISING", "PLEDGE"]) as TieMode[]).map((mode) => (
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setTieMode(mode)}
+                    onClick={() => chooseTieMode(mode)}
                     className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-colors ${
                       tieMode === mode ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    {mode === "NONE" ? "Just a giving link" : mode === "FUNDRAISING" ? "Fundraising campaign" : "Pledge campaign"}
+                    {mode === "NONE" ? "Just a giving link" : mode === "FUNDRAISING" ? "Fundraising campaign" : mode === "PLEDGE" ? "Pledge campaign" : "Event invitation"}
                   </button>
                 ))}
               </div>
@@ -530,6 +570,27 @@ export default function GivingCampaignComposer() {
                 </div>
               )}
 
+              {tieMode === "EVENT" && (
+                <div className="space-y-2">
+                  <select
+                    aria-label="Event"
+                    value={selectedEventId}
+                    onChange={(e) => setSelectedEventId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">Select an event…</option>
+                    {events?.map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        {ev.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-500">
+                    The link in this email goes to the event&apos;s registration page — not a giving link — so nobody is confused about what they&apos;re being asked to do. Pick &ldquo;People not registered for this event&rdquo; below to invite only those who haven&apos;t signed up.
+                  </p>
+                </div>
+              )}
+
               {tieMode === "PLEDGE" && (
                 <div className="space-y-2">
                   <select
@@ -570,6 +631,7 @@ export default function GivingCampaignComposer() {
             {events && channel === "EMAIL" && <option value="EVENT">Event attendees</option>}
             <option value="IMPORTED_CONTACTS">Imported contacts</option>
             <option value="NOT_GIVEN">People who haven&apos;t given yet</option>
+            {tieMode === "EVENT" && <option value="NOT_REGISTERED">People not registered for this event</option>}
           </select>
           {audienceSource === "GIVING_PAGE" && (
             <select aria-label="Giving page" value={audienceLinkId} onChange={(e) => setAudienceLinkId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white">
@@ -591,6 +653,15 @@ export default function GivingCampaignComposer() {
                 {EVENT_AUDIENCE_SCOPES.map((sc) => (
                   <option key={sc} value={sc}>{EVENT_AUDIENCE_SCOPE_LABELS[sc]}</option>
                 ))}
+              </select>
+            </div>
+          )}
+          {audienceSource === "NOT_REGISTERED" && (
+            <div className="mb-3">
+              <label htmlFor="not-registered-base" className="block text-xs font-semibold text-slate-500 mb-1">Invite</label>
+              <select id="not-registered-base" value={notRegisteredBase} onChange={(e) => setNotRegisteredBase(e.target.value as "EVERYONE" | "DONORS")} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
+                <option value="EVERYONE">Everyone on file who isn&apos;t registered (donors, imported contacts, newsletter list)</option>
+                <option value="DONORS">Only donors who haven&apos;t registered</option>
               </select>
             </div>
           )}
@@ -739,7 +810,7 @@ export default function GivingCampaignComposer() {
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-semibold text-slate-500">{channel === "TEXT" ? "Text Message" : "Body"}</label>
                 <div className="flex gap-1">
-                  {MERGE_FIELDS.map((f) => (
+                  {[...MERGE_FIELDS, ...(tieMode === "EVENT" ? EVENT_MERGE_FIELDS : [])].map((f) => (
                     <button
                       key={f.token}
                       type="button"

@@ -150,3 +150,38 @@ describe("unsubscribed addresses", () => {
     expect(optOutFindMany).not.toHaveBeenCalled();
   });
 });
+
+describe("NOT_REGISTERED (event invitations)", () => {
+  const registered = [
+    { normalizedEmail: "reg@x.com", donorId: "1" },
+    { normalizedEmail: "guest@x.com", donorId: null },
+  ];
+
+  it("is everyone on file minus registrants (matched by donor or email), by default", async () => {
+    eventFindFirst.mockResolvedValue({ id: "ev1" });
+    loadEventAudience.mockResolvedValue(registered);
+    donorFindMany.mockResolvedValue([donor("1", "reg@x.com"), donor("2", "Guest@x.com"), donor("3", "new@x.com")]);
+    const r = await resolveCampaignAudience("churchA", { source: "NOT_REGISTERED", eventId: "ev1" }, "EMAIL");
+    expect(r.ok && r.recipients.map((x) => x.donorId)).toEqual(["3"]);
+    expect(eventFindFirst.mock.calls[0][0].where).toMatchObject({ id: "ev1", churchId: "churchA" });
+    expect(donorFindMany.mock.calls[0][0].where).toMatchObject({ churchId: "churchA" });
+  });
+
+  it("can start from donors only", async () => {
+    eventFindFirst.mockResolvedValue({ id: "ev1" });
+    loadEventAudience.mockResolvedValue(registered);
+    paymentFindMany.mockResolvedValue([{ donorId: "1" }, { donorId: "3" }]);
+    donorFindMany.mockResolvedValue([donor("1", "reg@x.com"), donor("3", "new@x.com")]);
+    const r = await resolveCampaignAudience("churchA", { source: "NOT_REGISTERED", eventId: "ev1", base: "DONORS" }, "EMAIL");
+    expect(r.ok && r.recipients.map((x) => x.donorId)).toEqual(["3"]);
+    expect(paymentFindMany.mock.calls[0][0].where).toMatchObject({ churchId: "churchA", status: "SUCCEEDED" });
+  });
+
+  it("needs an event, refuses another church's event, and can't be texted", async () => {
+    expect((await resolveCampaignAudience("churchA", { source: "NOT_REGISTERED" }, "EMAIL")).ok).toBe(false);
+    eventFindFirst.mockResolvedValue(null);
+    const r = await resolveCampaignAudience("churchA", { source: "NOT_REGISTERED", eventId: "other" }, "EMAIL");
+    expect(r).toMatchObject({ ok: false, status: 404 });
+    expect((await resolveCampaignAudience("churchA", { source: "NOT_REGISTERED", eventId: "ev1" }, "TEXT")).ok).toBe(false);
+  });
+});

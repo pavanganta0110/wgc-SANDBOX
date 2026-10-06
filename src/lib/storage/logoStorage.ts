@@ -47,3 +47,21 @@ export async function uploadPublicLogo(storageKey: string, fileData: Blob | File
 export async function uploadPublicCampaignImage(storageKey: string, fileData: Blob | File | Buffer, contentType: string): Promise<string> {
   return uploadPublicFile(storageKey, fileData, contentType);
 }
+
+/**
+ * A one-time upload target so a browser can send a LARGE file (a video)
+ * straight to storage — serverless request bodies are capped at a few MB, far
+ * below a short video. The signed URL carries its own token (valid for two
+ * hours, for exactly this one path); the permanent public URL is returned
+ * alongside it for saving once the upload finishes.
+ */
+export async function createPublicUploadTarget(storageKey: string): Promise<{ uploadUrl: string; publicUrl: string }> {
+  const supabase = getClient();
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(storageKey);
+  if (error || !data?.signedUrl) {
+    throw new Error(`Couldn't prepare the upload: ${error?.message ?? "no upload URL returned"}`);
+  }
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(storageKey);
+  if (!pub?.publicUrl) throw new Error("Failed to generate public URL for the uploaded file");
+  return { uploadUrl: data.signedUrl, publicUrl: pub.publicUrl };
+}

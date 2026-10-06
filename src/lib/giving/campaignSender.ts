@@ -3,6 +3,7 @@ import { renderCampaignTemplate } from "@/lib/giving/campaignTemplate";
 import { sendWgcEmail } from "@/lib/email";
 import { sendText } from "@/lib/sms/sendText";
 import { isEmailOptedOut } from "@/lib/giving/emailOptOut";
+import { loadCampaignEventVars } from "@/lib/giving/campaignEventVars";
 import { escapeHtml } from "@/lib/eventRegistration/emailTemplates";
 
 /**
@@ -45,6 +46,8 @@ export async function sendCampaignChunk(params: { campaignId: string; churchId: 
   const senderName = church?.statementSenderName || churchName;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com";
 
+  const eventVars = campaign.eventId ? await loadCampaignEventVars(churchId, campaign.eventId) : null;
+
   const pending = await prisma.givingCampaignRecipient.findMany({
     where: { campaignId: campaign.id, churchId, sendStatus: "PENDING" },
     take: SEND_CHUNK_SIZE,
@@ -61,6 +64,7 @@ export async function sendCampaignChunk(params: { campaignId: string; churchId: 
       firstName: recipient.recipientName?.split(" ")[0] || "there",
       churchName,
       link: `${appUrl}/gc/${recipient.trackingToken}`,
+      ...(eventVars ? { eventName: eventVars.eventName, eventDate: eventVars.eventDate, eventTime: eventVars.eventTime, eventLocation: eventVars.eventLocation } : {}),
     };
 
     let result: { success: boolean; error?: string };

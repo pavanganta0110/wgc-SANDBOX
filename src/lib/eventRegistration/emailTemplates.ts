@@ -174,7 +174,14 @@ export function sanitizeEmailHtml(html: string): string {
  * escaped, so a photo link can never smuggle markup in.
  */
 const PHOTO_TOKEN = /\[photo:\s*(https:\/\/[^\s\]<>"']+)\s*\]/gi;
+const VIDEO_TOKEN = /\[video:\s*(https:\/\/[^\s\]<>"']+)\s*\]/gi;
 function renderPhotos(html: string): string {
+  // Email can't play video, so a video is a clear "Watch" button to its page.
+  html = html.replace(
+    VIDEO_TOKEN,
+    (_m, url: string) =>
+      `<p style="margin:12px 0;"><a href="${url}" style="display:inline-block;background:#0f172a;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 18px;border-radius:8px;">&#9654; Watch the video</a></p>`
+  );
   return html.replace(
     PHOTO_TOKEN,
     (_m, url: string) => `<img src="${url}" alt="" style="display:block;max-width:100%;height:auto;border-radius:8px;margin:8px 0;" />`

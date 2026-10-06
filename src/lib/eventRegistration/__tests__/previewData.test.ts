@@ -6,7 +6,7 @@ const blank: PreviewFormValues = {
   name: "", description: "", coverImageUrl: "", timezone: "America/Chicago", startsAtLocal: "", locationName: "", locationAddress: "",
   priceMode: "PER_ATTENDEE", allowOptionalDonation: false, donationPrompt: "", allowMultipleAttendees: true, maxAttendeesPerRegistration: 10,
   attendeeEmailRequired: false, collectAttendeePhone: false, registrantPhoneRequired: false, allowGroups: false, groupLabel: "", groupRequired: false,
-  mailingAddressMode: "HIDDEN", confirmationMessage: "", customFields: [],
+  mailingAddressMode: "HIDDEN", confirmationMessage: "", confirmationImageUrl: "", confirmationVideoUrl: "", headerText: "", allowRecurringDonation: false, customFields: [],
 };
 
 describe("buildPreviewEvent (live preview of an unfinished event)", () => {
@@ -85,5 +85,14 @@ describe("appOrigin / publicEventUrl", () => {
     expect(appOrigin()).toBe("https://www.wgcpayments.com");
     process.env.NEXT_PUBLIC_APP_URL = "not a url";
     expect(appOrigin()).toBe("https://www.wgcpayments.com");
+  });
+});
+
+describe("thank-you media, header line and monthly gift in the preview", () => {
+  it("mirrors the photo, video and header line, and only offers a monthly gift when donations are on", () => {
+    const e = buildPreviewEvent({ ...blank, confirmationImageUrl: " https://cdn.example/a.jpg ", confirmationVideoUrl: "https://youtu.be/abc", headerText: "Join us!", allowOptionalDonation: true, allowRecurringDonation: true }, 0);
+    expect(e).toMatchObject({ confirmationImageUrl: "https://cdn.example/a.jpg", confirmationVideoUrl: "https://youtu.be/abc", headerText: "Join us!", allowRecurringDonation: true });
+    expect(buildPreviewEvent({ ...blank, allowOptionalDonation: false, allowRecurringDonation: true }, 0).allowRecurringDonation).toBe(false);
+    expect(buildPreviewEvent(blank, 0)).toMatchObject({ confirmationImageUrl: null, confirmationVideoUrl: null, headerText: null });
   });
 });

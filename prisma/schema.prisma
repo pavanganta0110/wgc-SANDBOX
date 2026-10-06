@@ -4882,6 +4882,8 @@ model GivingCampaign {
   campaignTeamId        String?
   campaignFundraiserId  String?
   pledgeCampaignId      String?
+  // An invitation to an Event: {{link}} goes to the event page, not a giving link.
+  eventId               String?
 
   status          String    @default("DRAFT") // DRAFT | SENDING | SENT | FAILED | SCHEDULED (a repeating series' template — never sent itself)
   createdByUserId String?
@@ -4910,6 +4912,7 @@ model GivingCampaign {
   @@index([churchId, createdAt])
   @@index([repeatInterval, nextRunAt])
   @@index([parentCampaignId])
+  @@index([eventId])
 }
 
 // Email addresses that asked (via the link in a campaign email) to stop
@@ -5970,6 +5973,29 @@ model Event {
   mailingAddressMode String @default("HIDDEN") // HIDDEN | OPTIONAL | REQUIRED
 
   confirmationMessage String?
+  // Photo / video shown on the confirmation ("thank you") screen after
+  // someone registers. A video is a pasted link (YouTube, Vimeo, ...) or an
+  // uploaded mp4/webm; resolveThankYouVideoEmbed is the only thing that ever
+  // turns it into something embedded.
+  confirmationImageUrl String?
+  confirmationVideoUrl String?
+
+  // Page presentation the merchant controls after creating the event.
+  // hostName: the organization name shown in the page header (defaults to
+  // the church's own name); headerText: an optional line under the header
+  // (a tagline or welcome); paymentMethodsJson: which payment methods the
+  // checkout offers (CARD | BANK | APPLE_PAY | GOOGLE_PAY) — null = all.
+  hostName           String?
+  headerText         String?
+  paymentMethodsJson Json?
+
+  // Lets a registrant make their additional donation a monthly gift. The
+  // recurring part is set up on a second, ordinary (recurring-enabled)
+  // giving link dedicated to this event; the registration itself is still a
+  // single one-time charge.
+  allowRecurringDonation Boolean @default(false)
+  donationGivingLinkId   String?
+  publishedAt            DateTime?
 
   // Merchant-defined registration questions. Array of
   // { id, label, type: TEXT|TEXTAREA|DROPDOWN|CHECKBOX|NUMBER, required,

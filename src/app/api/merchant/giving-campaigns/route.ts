@@ -84,6 +84,7 @@ export async function POST(req: Request) {
   const campaignTeamId = typeof body.campaignTeamId === "string" ? body.campaignTeamId : "";
   const campaignFundraiserId = typeof body.campaignFundraiserId === "string" ? body.campaignFundraiserId : "";
   const pledgeCampaignId = typeof body.pledgeCampaignId === "string" ? body.pledgeCampaignId : "";
+  const requestedEventId = typeof body.eventId === "string" ? body.eventId : "";
   const channel = typeof body.channel === "string" && CHANNELS.has(body.channel) ? body.channel : "EMAIL";
   const emailSubject = typeof body.emailSubject === "string" ? body.emailSubject.trim() : "";
   const emailBodyTemplate = typeof body.emailBodyTemplate === "string" ? body.emailBodyTemplate : "";
@@ -132,8 +133,11 @@ export async function POST(req: Request) {
   if (audienceSource === "SELECTED" && donorIds.length === 0) {
     return NextResponse.json({ error: "Select at least one donor." }, { status: 400 });
   }
-  if (audienceSource === "EVENT" && !hasPermission(auth, "canViewEvents")) {
+  if ((audienceSource === "EVENT" || audienceSource === "NOT_REGISTERED" || requestedEventId) && !hasPermission(auth, "canViewEvents")) {
     return NextResponse.json({ error: "You don't have permission to message event attendees." }, { status: 403 });
+  }
+  if (requestedEventId && (fundraisingCampaignId || campaignTeamId || campaignFundraiserId || pledgeCampaignId)) {
+    return NextResponse.json({ error: "Choose one thing to tie this email to: an event, a fundraising campaign, or a pledge campaign." }, { status: 400 });
   }
   if ((fundraisingCampaignId || campaignTeamId || campaignFundraiserId) && pledgeCampaignId) {
     return NextResponse.json({ error: "Choose either a fundraising campaign or a pledge campaign, not both." }, { status: 400 });
@@ -151,7 +155,18 @@ export async function POST(req: Request) {
   let resolvedCampaignFundraiserId: string | null = null;
   let resolvedPledgeCampaignId: string | null = null;
 
-  if (campaignFundraiserId) {
+  let resolvedEventId: string | null = null;
+  if (requestedEventId) {
+    const event = await prisma.event.findFirst({ where: { id: requestedEventId, churchId: auth.churchId, archivedAt: null }, select: { id: true, givingLinkId: true } });
+    if (!event) return NextResponse.json({ error: "Event not found." }, { status: 404 });
+    if (channel !== "EMAIL") return NextResponse.json({ error: "Event invitations can only be emailed." }, { status: 400 });
+    if (!event.givingLinkId) return NextResponse.json({ error: "This event isn't ready yet — open it and save it once first." }, { status: 400 });
+    // The campaign row needs a giving link; an event invitation never links
+    // to it (its {{link}} goes to the event page), but the event's own is the
+    // honest value and keeps this tied to the right organization.
+    resolvedEventId = event.id;
+    resolvedGivingLinkId = event.givingLinkId;
+  } else if (campaignFundraiserId) {
     const fundraiser = await prisma.campaignFundraiser.findFirst({ where: { id: campaignFundraiserId, churchId: auth.churchId } });
     if (!fundraiser) return NextResponse.json({ error: "Fundraiser not found." }, { status: 404 });
     if (campaignTeamId && fundraiser.campaignTeamId !== campaignTeamId) {
@@ -212,8 +227,9 @@ export async function POST(req: Request) {
       source: audienceSource,
       donorIds,
       givingLinkId: typeof audienceBody.givingLinkId === "string" ? audienceBody.givingLinkId : undefined,
-      eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : undefined,
+      eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : resolvedEventId ?? undefined,
       eventScope: typeof audienceBody.eventScope === "string" ? audienceBody.eventScope : undefined,
+      base: audienceBody.base === "DONORS" ? "DONORS" : "EVERYONE",
     },
     channel === "TEXT" ? "TEXT" : "EMAIL"
   );
@@ -250,6 +266,7 @@ export async function POST(req: Request) {
       campaignTeamId: resolvedCampaignTeamId,
       campaignFundraiserId: resolvedCampaignFundraiserId,
       pledgeCampaignId: resolvedPledgeCampaignId,
+      eventId: resolvedEventId,
       ...(schedule
         ? {
             status: "SCHEDULED",
@@ -260,8 +277,9 @@ export async function POST(req: Request) {
             audienceJson: {
               source: audienceSource,
               givingLinkId: typeof audienceBody.givingLinkId === "string" ? audienceBody.givingLinkId : undefined,
-              eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : undefined,
+              eventId: typeof audienceBody.eventId === "string" ? audienceBody.eventId : resolvedEventId ?? undefined,
               eventScope: typeof audienceBody.eventScope === "string" ? audienceBody.eventScope : undefined,
+              base: audienceBody.base === "DONORS" ? "DONORS" : "EVERYONE",
             },
           }
         : {}),

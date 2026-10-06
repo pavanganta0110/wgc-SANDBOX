@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { CheckCircle, Plus, Trash2, Loader2 } from "lucide-react";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import { formatCents } from "@/lib/format";
+import { resolveThankYouVideoEmbed } from "@/lib/givingLinks/types";
 import { computeRegistrationTotals } from "@/lib/eventRegistration/pricing";
 import type { PublicEventData } from "@/lib/eventRegistration/loadPublicEvent";
 import type { CustomFieldDefinition, CustomFieldResponses } from "@/lib/eventRegistration/customFields";
@@ -22,6 +23,10 @@ import type { CustomFieldDefinition, CustomFieldResponses } from "@/lib/eventReg
 type Props = Pick<PublicEventData, "event" | "addOns" | "organization" | "checkout" | "light"> & {
   /** Merchant-side preview (event editor): fully interactive so add-ons, attendees and questions can be tried, but nothing is submitted, charged or saved. */
   previewMode?: boolean;
+  /** Editor preview only: show the thank-you screen instead of the form. */
+  previewConfirmation?: boolean;
+  /** The event's monthly-gift page, when it offers a recurring additional donation. */
+  monthlyGiftSlug?: string | null;
 };
 
 interface AttendeeDraft {
@@ -46,6 +51,8 @@ interface Confirmation {
   paid: boolean;
   pendingBank: boolean;
   email: string;
+  /** A monthly gift the registrant asked for — set up on the gift page after registering. */
+  monthlyCents: number;
 }
 
 const inputClass = "w-full px-3 py-2 rounded-lg border text-sm outline-none bg-white";
@@ -121,7 +128,7 @@ function FieldInput({
   );
 }
 
-export default function EventRegistrationForm({ event, addOns, organization, checkout, light, previewMode = false }: Props) {
+export default function EventRegistrationForm({ event, addOns, organization, checkout, light, previewMode = false, previewConfirmation = false, monthlyGiftSlug = null }: Props) {
   const [clientKey] = useState(newClientKey);
   const nextKey = useRef(1);
 
@@ -132,6 +139,7 @@ export default function EventRegistrationForm({ event, addOns, organization, che
   const [regResponses, setRegResponses] = useState<CustomFieldResponses>({});
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [donation, setDonation] = useState("");
+  const [monthly, setMonthly] = useState(false);
 
   // Free-path registrant (the paid path collects these inside GivingLinkForm).
   const [first, setFirst] = useState("");
@@ -179,7 +187,12 @@ export default function EventRegistrationForm({ event, addOns, organization, che
   const maxAttendees = event.allowMultipleAttendees ? event.maxAttendeesPerRegistration : 1;
   const attendeeCount = (selfAttending ? 1 : 0) + others.length;
 
-  const donationCents = event.allowOptionalDonation ? dollarsToCents(donation) : 0;
+  const donationEntered = event.allowOptionalDonation ? dollarsToCents(donation) : 0;
+  const canGoMonthly = event.allowRecurringDonation && Boolean(monthlyGiftSlug);
+  // A monthly gift is set up separately afterwards, so it is NOT part of this
+  // registration's charge — only a one-time donation is.
+  const monthlyCents = canGoMonthly && monthly ? donationEntered : 0;
+  const donationCents = monthlyCents > 0 ? 0 : donationEntered;
   const selections = Object.entries(quantities)
     .filter(([, q]) => q > 0)
     .map(([addOnId, quantity]) => ({ addOnId, quantity }));
@@ -278,7 +291,7 @@ export default function EventRegistrationForm({ event, addOns, organization, che
         phone: phone.trim(),
         address: event.mailingAddressMode !== "HIDDEN" ? address : undefined,
       });
-      setConfirmation({ code: data.confirmationCode, paid: false, pendingBank: false, email: email.trim() });
+      setConfirmation({ code: data.confirmationCode, paid: false, pendingBank: false, email: email.trim(), monthlyCents });
     } catch (err) {
       reportError(err instanceof Error ? err.message : "We couldn't complete your registration. Please try again.");
     } finally {
@@ -306,17 +319,40 @@ export default function EventRegistrationForm({ event, addOns, organization, che
     }
   }
 
-  if (confirmation) {
+  const shownConfirmation: Confirmation | null =
+    confirmation ?? (previewMode && previewConfirmation ? { code: "SAMPLE12", paid: false, pendingBank: false, email: "you@example.com", monthlyCents: canGoMonthly && monthly ? monthlyCents : 0 } : null);
+
+  if (shownConfirmation) {
+    const video = event.confirmationVideoUrl ? resolveThankYouVideoEmbed(event.confirmationVideoUrl) : null;
     return (
       <div className="text-center py-4" role="status">
         <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-600" aria-hidden="true" />
         <h2 className="text-xl font-bold mb-2" style={{ color: light.headingColor }}>
-          {confirmation.pendingBank ? "Registration received" : "You're registered!"}
+          {shownConfirmation.pendingBank ? "Registration received" : "You're registered!"}
         </h2>
         <p className="text-sm mb-4 whitespace-pre-line" style={{ color: light.bodyTextColor }}>
           {event.confirmationMessage?.trim() || "Thank you for registering. We look forward to seeing you."}
         </p>
-        {confirmation.pendingBank && (
+        {event.confirmationImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={event.confirmationImageUrl} alt="" className="w-full max-h-80 object-cover rounded-xl mb-4" />
+        )}
+        {video && (
+          <div className="mb-4 rounded-xl overflow-hidden bg-black" style={{ aspectRatio: video.aspect.replace("/", " / ") }}>
+            {video.kind === "video" ? (
+              <video src={video.src} controls playsInline preload="metadata" className="w-full h-full" />
+            ) : (
+              <iframe
+                src={video.src.replace(/autoplay=1/, "autoplay=0")}
+                title="Thank-you video"
+                className="w-full h-full border-0"
+                allow="encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+              />
+            )}
+          </div>
+        )}
+        {shownConfirmation.pendingBank && (
           <p className="text-sm mb-4" style={{ color: light.bodyTextColor }}>
             Your bank payment is processing. We&apos;ll confirm by email once it clears.
           </p>
@@ -326,12 +362,31 @@ export default function EventRegistrationForm({ event, addOns, organization, che
             Confirmation code
           </p>
           <p className="text-2xl font-bold tracking-widest" style={{ color: light.headingColor }}>
-            {confirmation.code}
+            {shownConfirmation.code}
           </p>
         </div>
         <p className="text-xs mt-4" style={{ color: light.bodyTextColor }}>
-          A confirmation email is on its way to {confirmation.email}.
+          A confirmation email is on its way to {shownConfirmation.email}.
         </p>
+        {shownConfirmation.monthlyCents > 0 && monthlyGiftSlug && (
+          <div className="mt-6 rounded-xl border p-4 text-left" style={{ borderColor }}>
+            <p className="font-semibold text-sm mb-1" style={{ color: light.headingColor }}>
+              One more step for your monthly gift
+            </p>
+            <p className="text-sm mb-3" style={{ color: light.bodyTextColor }}>
+              Your registration is complete. Finish setting up your {formatCents(shownConfirmation.monthlyCents)}/month gift to {organization.name} — it takes a minute and is a separate, secure payment.
+            </p>
+            <a
+              href={previewMode ? undefined : `/g/${encodeURIComponent(monthlyGiftSlug)}?give=monthly&amount=${shownConfirmation.monthlyCents}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center py-2.5 rounded-lg font-semibold text-sm"
+              style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}
+            >
+              Set up my {formatCents(shownConfirmation.monthlyCents)}/month gift
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -542,6 +597,15 @@ export default function EventRegistrationForm({ event, addOns, organization, che
             </span>
             <input id="event-donation" inputMode="decimal" className={`${inputClass} pl-7`} style={{ borderColor }} placeholder="0.00" value={donation} onChange={(e) => setDonation(e.target.value)} />
           </div>
+          {canGoMonthly && (
+            <label htmlFor="event-donation-monthly" className="flex items-start gap-2 text-sm mt-2 cursor-pointer">
+              <input id="event-donation-monthly" type="checkbox" className="mt-0.5" checked={monthly} onChange={(e) => setMonthly(e.target.checked)} />
+              <span>
+                Make this a monthly gift
+                <span className="block text-xs opacity-80">You&apos;ll finish setting up the monthly gift right after you register — it isn&apos;t part of today&apos;s total.</span>
+              </span>
+            </label>
+          )}
         </section>
       )}
 
@@ -566,6 +630,12 @@ export default function EventRegistrationForm({ event, addOns, organization, che
                 <span>{formatCents(l.lineTotalCents)}</span>
               </div>
             ))}
+            {monthlyCents > 0 && (
+              <div className="flex justify-between">
+                <span>Monthly gift (set up after registering)</span>
+                <span>{formatCents(monthlyCents)}/mo</span>
+              </div>
+            )}
             {pricing.totals.donationAmountCents > 0 && (
               <div className="flex justify-between">
                 <span>Additional gift</span>
@@ -650,7 +720,7 @@ export default function EventRegistrationForm({ event, addOns, organization, che
             }}
             onResult={(r) => {
               if ((r.step === "success" || r.step === "pending") && pendingCode.current) {
-                setConfirmation({ code: pendingCode.current.code, paid: true, pendingBank: r.step === "pending", email: pendingCode.current.email });
+                setConfirmation({ code: pendingCode.current.code, paid: true, pendingBank: r.step === "pending", email: pendingCode.current.email, monthlyCents });
               }
             }}
           />

@@ -97,7 +97,7 @@ export default function EmailsTab({
     <div className="max-w-3xl space-y-6">
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <p className="text-sm font-bold text-slate-900 mb-1">Merge fields</p>
-        <p className="text-xs text-slate-500 mb-2">Type these into any subject or message — they&apos;re filled in for each recipient. To add pictures (like event photos), use <strong>Add photo</strong> under a message, or type <code className="rounded bg-slate-100 px-1">[photo: https://…]</code> on its own line.</p>
+        <p className="text-xs text-slate-500 mb-2">Type these into any subject or message — they&apos;re filled in for each recipient. To add pictures (like event photos), use <strong>Add photo</strong> under a message, or type <code className="rounded bg-slate-100 px-1">[photo: https://…]</code> on its own line. For a video, type <code className="rounded bg-slate-100 px-1">[video: https://…]</code> — it shows as a Watch button.</p>
         <div className="flex flex-wrap gap-1.5">
           {EVENT_MERGE_FIELDS.map((f) => (
             <code key={f.token} title={f.label} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700">{f.token}</code>

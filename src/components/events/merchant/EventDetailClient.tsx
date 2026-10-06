@@ -39,8 +39,10 @@ export default function EventDetailClient({
   canManageAttendees,
   canExport,
   organization,
+  justCreated,
 }: {
   organization: { name: string; logoUrl: string | null };
+  justCreated?: "draft" | "published";
   eventId: string;
   canManage: boolean;
   canManageAttendees: boolean;
@@ -97,10 +99,27 @@ export default function EventDetailClient({
             <Copy className="w-4 h-4 mr-1.5" aria-hidden="true" /> Copy link
           </button>
           <a href={event.publicUrl} target="_blank" rel="noopener noreferrer" className={secondaryButton}>
-            <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden="true" /> View page
+            <ExternalLink className="w-4 h-4 mr-1.5" aria-hidden="true" /> {event.status === "ACTIVE" ? "View page" : "Preview page"}
           </a>
         </div>
       </div>
+
+      {event.status !== "ACTIVE" && (
+        <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-3">
+          <p>
+            {justCreated === "draft" ? "Your event is saved as a draft. " : ""}
+            <strong>This event isn&apos;t published yet</strong>, so the public link shows &ldquo;not found&rdquo; to everyone but your signed-in team. Use <em>View page</em> to preview it, then publish when you&apos;re ready.
+          </p>
+          {canManage && (
+            <button type="button" onClick={() => setTab("Settings")} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500">
+              Edit &amp; publish
+            </button>
+          )}
+        </div>
+      )}
+      {justCreated === "published" && event.status === "ACTIVE" && (
+        <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">Your event is published and accepting registrations.</div>
+      )}
 
       <div role="tablist" aria-label="Event sections" className="flex gap-1 border-b border-slate-200 mb-6 overflow-x-auto">
         {TABS.map((t) => (

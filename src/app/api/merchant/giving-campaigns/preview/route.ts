@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { renderCampaignTemplate } from "@/lib/giving/campaignTemplate";
+import { loadCampaignEventVars } from "@/lib/giving/campaignEventVars";
 
 /**
  * Stateless preview — takes raw subject/body text directly (not a saved
@@ -32,7 +33,11 @@ export async function POST(req: Request) {
     select: { name: true, logoUrl: true, primaryColor: true, statementSenderName: true },
   });
 
+  // A campaign tied to an event previews with that event's real name, date and place.
+  const eventVars = typeof body.eventId === "string" && body.eventId ? await loadCampaignEventVars(auth.churchId, body.eventId) : null;
+
   const vars = {
+    ...(eventVars ? { eventName: eventVars.eventName, eventDate: eventVars.eventDate, eventTime: eventVars.eventTime, eventLocation: eventVars.eventLocation } : {}),
     firstName: "Jordan",
     churchName: church?.name || "Your Organization",
     link: `${process.env.NEXT_PUBLIC_APP_URL || "https://wgcpayments.com"}/gc/preview-token`,

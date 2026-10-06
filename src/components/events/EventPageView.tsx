@@ -22,15 +22,29 @@ export interface EventPageViewProps {
   preview?: boolean;
   /** Rendered inside an iframe on another website: no full-page height or outer chrome. */
   embed?: boolean;
+  /** Staff-only banner shown above a Draft/Inactive event that isn't public yet. */
+  previewBanner?: { eventId: string };
+  /** Editor preview: show the thank-you screen instead of the form. */
+  previewConfirmation?: boolean;
+  monthlyGiftSlug?: string | null;
   /** Replaces the registration form (e.g. the embed's "Register & pay" button for events that take payment). */
   formOverride?: React.ReactNode;
 }
 
-export default function EventPageView({ event, addOns, organization, checkout, light, closedMessage, showPoweredByWgc, preview = false, embed = false, formOverride }: EventPageViewProps) {
+export default function EventPageView({ event, addOns, organization, checkout, light, closedMessage, showPoweredByWgc, preview = false, embed = false, formOverride, previewBanner, previewConfirmation = false, monthlyGiftSlug = null }: EventPageViewProps) {
   const priceLabel =
     event.priceCents > 0 ? `${formatCents(event.priceCents)} ${event.priceMode === "PER_ATTENDEE" ? "per person" : "per registration"}` : "Free";
 
   return (
+    <>
+    {previewBanner && (
+      <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-sm text-center py-2 px-4">
+        <strong>Preview only — this event isn&apos;t published yet.</strong> Only your signed-in team can see this page; the form below doesn&apos;t submit.{" "}
+        <a href={`/merchant/events/${previewBanner.eventId}`} className="underline font-semibold">
+          Go to the event to publish it
+        </a>
+      </div>
+    )}
     <div className={preview || embed ? "py-4 px-2" : "min-h-screen py-10 px-4"} style={{ backgroundColor: light.pageBackground }}>
       <div className="max-w-xl mx-auto rounded-2xl shadow-sm border p-6 sm:p-8" style={{ borderColor: light.borderColor, backgroundColor: light.headerBackground }}>
         <OrganizationBrandHeader
@@ -40,6 +54,11 @@ export default function EventPageView({ event, addOns, organization, checkout, l
           nameColor={light.headingColor}
           kindColor={light.bodyTextColor}
         />
+        {event.headerText && (
+          <p className="text-sm text-center -mt-3 mb-6" style={{ color: light.bodyTextColor }}>
+            {event.headerText}
+          </p>
+        )}
 
         {event.coverImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -92,11 +111,12 @@ export default function EventPageView({ event, addOns, organization, checkout, l
         ) : formOverride ? (
           formOverride
         ) : (
-          <EventRegistrationForm event={event} addOns={addOns} organization={organization} checkout={checkout} light={light} previewMode={preview} />
+          <EventRegistrationForm event={event} addOns={addOns} organization={organization} checkout={checkout} light={light} previewMode={preview} previewConfirmation={previewConfirmation} monthlyGiftSlug={monthlyGiftSlug} />
         )}
 
         {showPoweredByWgc && <PoweredByWgc />}
       </div>
     </div>
+    </>
   );
 }

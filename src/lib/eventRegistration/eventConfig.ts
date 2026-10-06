@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { isValidTimeZone, zonedLocalToUtc } from "@/lib/eventRegistration/timezone";
 import { validateCustomFieldDefinitions, type CustomFieldDefinition } from "@/lib/eventRegistration/customFields";
+import { resolveThankYouVideoEmbed } from "@/lib/givingLinks/types";
 
 export const EVENT_STATUSES = ["DRAFT", "ACTIVE", "INACTIVE", "ARCHIVED"] as const;
 export type EventStatus = (typeof EVENT_STATUSES)[number];
@@ -8,6 +9,16 @@ export type EventStatus = (typeof EVENT_STATUSES)[number];
 export const PRICE_MODES = ["PER_ATTENDEE", "PER_REGISTRATION"] as const;
 export const ADDRESS_MODES = ["HIDDEN", "OPTIONAL", "REQUIRED"] as const;
 export type AddressMode = (typeof ADDRESS_MODES)[number];
+
+export const EVENT_PAYMENT_METHODS = ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"] as const;
+export type EventPaymentMethod = (typeof EVENT_PAYMENT_METHODS)[number];
+
+/** Stored selection → the methods the checkout offers. Null / empty / junk = all four (the default). */
+export function parseEventPaymentMethods(json: unknown): EventPaymentMethod[] {
+  if (!Array.isArray(json)) return [...EVENT_PAYMENT_METHODS];
+  const valid = EVENT_PAYMENT_METHODS.filter((m) => json.includes(m));
+  return valid.length > 0 ? valid : [...EVENT_PAYMENT_METHODS];
+}
 
 export const MAX_ATTENDEES_CEILING = 50;
 const MAX_PRICE_CENTS = 100_000_000;
@@ -105,6 +116,12 @@ export interface EventSettingsData {
   groupRequired: boolean;
   mailingAddressMode: AddressMode;
   confirmationMessage: string | null;
+  confirmationImageUrl: string | null;
+  confirmationVideoUrl: string | null;
+  hostName: string | null;
+  headerText: string | null;
+  paymentMethods: EventPaymentMethod[];
+  allowRecurringDonation: boolean;
   customFields: CustomFieldDefinition[];
 }
 
@@ -187,6 +204,17 @@ export function validateEventSettings(input: Record<string, unknown>): EventSett
   const coverImageUrl = str(input.coverImageUrl, 500);
   if (coverImageUrl && !isSafeImageUrl(coverImageUrl)) return { ok: false, error: "The cover image must be an https:// URL or an uploaded image." };
 
+  const confirmationImageUrl = str(input.confirmationImageUrl, 500);
+  if (confirmationImageUrl && !isSafeImageUrl(confirmationImageUrl)) return { ok: false, error: "The thank-you photo must be an https:// image or an uploaded image." };
+  const confirmationVideoUrl = str(input.confirmationVideoUrl, 500);
+  if (confirmationVideoUrl && !resolveThankYouVideoEmbed(confirmationVideoUrl)) {
+    return { ok: false, error: "That video link isn't supported. Use a YouTube, Vimeo, TikTok, Instagram or Facebook link, a direct .mp4/.webm link, or upload a video." };
+  }
+
+  const rawMethods = Array.isArray(input.paymentMethods) ? input.paymentMethods : null;
+  const paymentMethods = rawMethods ? EVENT_PAYMENT_METHODS.filter((m) => rawMethods.includes(m)) : [...EVENT_PAYMENT_METHODS];
+  if (rawMethods && paymentMethods.length === 0) return { ok: false, error: "Choose at least one way for people to pay." };
+
   const status = (EVENT_STATUSES as readonly string[]).includes(String(input.status)) ? (String(input.status) as EventStatus) : "DRAFT";
 
   const fields = validateCustomFieldDefinitions(input.customFields);
@@ -221,6 +249,12 @@ export function validateEventSettings(input: Record<string, unknown>): EventSett
       groupRequired: Boolean(input.allowGroups) && Boolean(input.groupRequired),
       mailingAddressMode,
       confirmationMessage: str(input.confirmationMessage, 3000),
+      confirmationImageUrl,
+      confirmationVideoUrl,
+      hostName: str(input.hostName, 120),
+      headerText: str(input.headerText, 200),
+      paymentMethods,
+      allowRecurringDonation: Boolean(input.allowOptionalDonation) && Boolean(input.allowRecurringDonation),
       customFields: fields.fields,
     },
   };

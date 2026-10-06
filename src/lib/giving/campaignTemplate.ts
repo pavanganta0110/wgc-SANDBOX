@@ -7,6 +7,11 @@ export interface CampaignTemplateVars {
   firstName: string;
   churchName: string;
   link: string;
+  /** Only filled for a campaign tied to an Event; otherwise these tokens are left as typed. */
+  eventName?: string;
+  eventDate?: string;
+  eventTime?: string;
+  eventLocation?: string;
 }
 
 // {{orgName}} is the current, composer-facing merge field — "church" reads
@@ -16,7 +21,7 @@ export interface CampaignTemplateVars {
 // typed into its saved emailBodyTemplate/textBodyTemplate/emailSubject
 // must keep rendering correctly, not start showing the raw, unreplaced
 // token once this ships.
-const MERGE_FIELD_PATTERN = /\{\{\s*(firstName|orgName|churchName|link)\s*\}\}/g;
+const MERGE_FIELD_PATTERN = /\{\{\s*(firstName|orgName|churchName|link|eventName|eventDate|eventTime|eventLocation)\s*\}\}/g;
 
 /** Replaces {{firstName}}/{{orgName}}/{{link}} (and the legacy
  * {{churchName}} alias) in a template — used both for the live preview
@@ -24,9 +29,12 @@ const MERGE_FIELD_PATTERN = /\{\{\s*(firstName|orgName|churchName|link)\s*\}\}/g
  * send, so preview and send can never drift apart by using two different
  * rendering implementations. */
 export function renderCampaignTemplate(template: string, vars: CampaignTemplateVars): string {
-  return template.replace(MERGE_FIELD_PATTERN, (_match, field: string) =>
-    field === "orgName" ? vars.churchName : vars[field as keyof CampaignTemplateVars]
-  );
+  return template.replace(MERGE_FIELD_PATTERN, (match, field: string) => {
+    const value = field === "orgName" ? vars.churchName : vars[field as keyof CampaignTemplateVars];
+    // An event field in a campaign that isn't tied to an event stays visible
+    // as typed, so the mistake is noticed in the preview instead of sending a blank.
+    return value === undefined ? match : value;
+  });
 }
 
 /** Opaque per-recipient tracking token — same random-hex pattern as every

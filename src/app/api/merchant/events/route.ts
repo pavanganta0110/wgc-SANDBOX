@@ -6,7 +6,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { guardEventsRoute } from "@/lib/eventRegistration/merchantGuard";
 import { loadEventStats } from "@/lib/eventRegistration/eventStats";
 import { validateEventSettings, validateAddOns, publicEventUrl } from "@/lib/eventRegistration/eventConfig";
-import { provisionEventGivingLink } from "@/lib/eventRegistration/eventGivingLink";
+import { provisionEventGivingLink, provisionEventDonationLink } from "@/lib/eventRegistration/eventGivingLink";
 import { generateEventSlug } from "@/lib/eventRegistration/eventSlug";
 
 export async function GET() {
@@ -49,14 +49,17 @@ export async function POST(req: Request) {
   const addOns = validateAddOns((body as Record<string, unknown>).addOns);
   if (!addOns.ok) return validationError(addOns.error);
 
-  const { customFields, ...data } = settings.data;
+  const { customFields, paymentMethods, ...data } = settings.data;
   const slug = await generateEventSlug(data.name);
 
   const givingLinkId = await provisionEventGivingLink({
     churchId: auth.churchId,
     ownerUserId: auth.userId,
-    event: { name: data.name, status: data.status, mailingAddressMode: data.mailingAddressMode, registrantPhoneRequired: data.registrantPhoneRequired },
+    event: { name: data.name, status: data.status, mailingAddressMode: data.mailingAddressMode, registrantPhoneRequired: data.registrantPhoneRequired, paymentMethods },
   });
+  const donationGivingLinkId = data.allowRecurringDonation
+    ? await provisionEventDonationLink({ churchId: auth.churchId, ownerUserId: auth.userId, event: { name: data.name, status: data.status, hostName: data.hostName, enabled: true } })
+    : null;
 
   let event;
   try {
@@ -66,7 +69,10 @@ export async function POST(req: Request) {
         churchId: auth.churchId,
         slug,
         customFieldsJson: customFields as unknown as Prisma.InputJsonValue,
+        paymentMethodsJson: paymentMethods,
         givingLinkId,
+        donationGivingLinkId,
+        ...(data.status === "ACTIVE" ? { publishedAt: new Date() } : {}),
         createdByUserId: auth.userId,
       },
     });
@@ -87,7 +93,7 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     // Don't leave a live, orphaned dedicated link behind a failed create.
-    await prisma.givingLink.updateMany({ where: { id: givingLinkId, churchId: auth.churchId }, data: { status: "ARCHIVED" } }).catch(() => undefined);
+    await prisma.givingLink.updateMany({ where: { id: { in: [givingLinkId, donationGivingLinkId].filter((id): id is string => Boolean(id)) }, churchId: auth.churchId }, data: { status: "ARCHIVED" } }).catch(() => undefined);
     throw err;
   }
 

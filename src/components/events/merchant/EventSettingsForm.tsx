@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Plus, Trash2, Upload, Film, Eye } from "lucide-react";
 import { EVENT_TIMEZONES } from "@/lib/eventRegistration/timezone";
 import EventPageView from "@/components/events/EventPageView";
 import { DEFAULT_LIGHT_BRANDING } from "@/lib/givingLinks/types";
@@ -38,6 +38,12 @@ export interface EventFormValues {
   groupRequired: boolean;
   mailingAddressMode: string;
   confirmationMessage: string;
+  confirmationImageUrl: string;
+  confirmationVideoUrl: string;
+  hostName: string;
+  headerText: string;
+  paymentMethods: string[];
+  allowRecurringDonation: boolean;
   customFields: CustomFieldDefinition[];
 }
 
@@ -78,6 +84,12 @@ export const EMPTY_EVENT: EventFormValues = {
   groupRequired: false,
   mailingAddressMode: "HIDDEN",
   confirmationMessage: "",
+  confirmationImageUrl: "",
+  confirmationVideoUrl: "",
+  hostName: "",
+  headerText: "",
+  paymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
+  allowRecurringDonation: false,
   customFields: [],
 };
 
@@ -136,6 +148,60 @@ export default function EventSettingsForm({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const thanksImageRef = useRef<HTMLInputElement>(null);
+  const thanksVideoRef = useRef<HTMLInputElement>(null);
+  const [uploadingMedia, setUploadingMedia] = useState<"image" | "video" | null>(null);
+  const [videoProgress, setVideoProgress] = useState<number | null>(null);
+  const [showThankYou, setShowThankYou] = useState(false);
+
+  async function uploadThankYouImage(file: File) {
+    setUploadingMedia("image");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/merchant/events/image-upload", { method: "POST", body });
+      if (!res.ok) return void toast.error(await readApiError(res, "Couldn't upload that photo."));
+      set("confirmationImageUrl", (await res.json()).imageUrl);
+      toast.success("Photo added");
+    } finally {
+      setUploadingMedia(null);
+      if (thanksImageRef.current) thanksImageRef.current.value = "";
+    }
+  }
+
+  /** Videos are far bigger than a server request can carry, so the browser sends them straight to storage using a one-time upload link. */
+  async function uploadThankYouVideo(file: File) {
+    setUploadingMedia("video");
+    setVideoProgress(0);
+    try {
+      const sign = await fetch("/api/merchant/events/video-upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: file.type, size: file.size }),
+      });
+      if (!sign.ok) return void toast.error(await readApiError(sign, "Couldn't prepare that upload."));
+      const { uploadUrl, publicUrl } = await sign.json();
+      await new Promise<void>((resolve, reject) => {
+        const form = new FormData();
+        form.append("cacheControl", "3600");
+        form.append("", file);
+        const xhr = new XMLHttpRequest();
+        xhr.open("PUT", uploadUrl);
+        xhr.upload.onprogress = (e) => e.lengthComputable && setVideoProgress(Math.round((e.loaded / e.total) * 100));
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status}).`)));
+        xhr.onerror = () => reject(new Error("The upload was interrupted."));
+        xhr.send(form);
+      });
+      set("confirmationVideoUrl", publicUrl);
+      toast.success("Video uploaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? `${err.message} You can also paste a YouTube or Vimeo link.` : "Couldn't upload that video. You can also paste a YouTube or Vimeo link.");
+    } finally {
+      setUploadingMedia(null);
+      setVideoProgress(null);
+      if (thanksVideoRef.current) thanksVideoRef.current.value = "";
+    }
+  }
 
   async function uploadCover(file: File) {
     setUploading(true);
@@ -165,13 +231,14 @@ export default function EventSettingsForm({
   const previewEvent = useMemo(() => buildPreviewEvent(v, dollarsToCents(price) ?? 0), [v, price]);
   const previewAddOns = useMemo(() => buildPreviewAddOns(addOns), [addOns]);
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
+  /** Saves the event. `status` lets the Publish / Unpublish buttons save and change visibility in one step. */
+  async function submit(status?: string) {
     setError(null);
     setSaving(true);
     try {
       const payload = {
         ...v,
+        ...(status ? { status } : {}),
         priceCents: dollarsToCents(price) ?? 0,
         registrationFmvCents: dollarsToCents(fmv),
         addOns,
@@ -187,18 +254,28 @@ export default function EventSettingsForm({
         toast.error(message);
         return;
       }
-      toast.success(eventId ? "Event saved" : "Event created");
+      const finalStatus = status ?? v.status;
+      if (status) set("status", status);
+      toast.success(eventId ? (finalStatus === "ACTIVE" && v.status !== "ACTIVE" ? "Event published" : "Event saved") : finalStatus === "ACTIVE" ? "Event created and published" : "Event created as a draft");
       if (eventId) {
         onSaved?.();
         router.refresh();
       } else {
         const data = await res.json();
-        router.push(`/merchant/events/${data.event.id}`);
+        router.push(`/merchant/events/${data.event.id}?created=${finalStatus === "ACTIVE" ? "published" : "draft"}`);
       }
     } finally {
       setSaving(false);
     }
   }
+
+  function save(e: React.FormEvent) {
+    e.preventDefault();
+    void submit();
+  }
+
+  const isLive = v.status === "ACTIVE";
+  const hostDisplayName = v.hostName.trim() || organization.name;
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(380px,470px)] lg:gap-8 lg:items-start">
@@ -247,6 +324,18 @@ export default function EventSettingsForm({
             <option value="ACTIVE">Active — accepting registrations</option>
             <option value="INACTIVE">Inactive — registration paused</option>
           </select>
+        </div>
+      </Section>
+
+      <Section title="Page header" hint="What appears at the top of your event page, above the event name.">
+        <div>
+          <label htmlFor="ev-host" className={labelClass}>Organization name shown</label>
+          <input id="ev-host" className={inputClass} value={v.hostName} placeholder={organization.name} onChange={(e) => set("hostName", e.target.value)} maxLength={120} />
+          <p className="text-xs text-slate-500 mt-1">Leave blank to use {organization.name}. Your logo is added automatically when you have one.</p>
+        </div>
+        <div>
+          <label htmlFor="ev-header" className={labelClass}>Header line (optional)</label>
+          <input id="ev-header" className={inputClass} value={v.headerText} placeholder="e.g. Join us for an evening to support our students" onChange={(e) => set("headerText", e.target.value)} maxLength={200} />
         </div>
       </Section>
 
@@ -319,6 +408,35 @@ export default function EventSettingsForm({
             <input id="ev-donprompt" className={inputClass} value={v.donationPrompt} placeholder="Would you like to make an additional gift?" onChange={(e) => set("donationPrompt", e.target.value)} maxLength={200} />
           </div>
         )}
+        {v.allowOptionalDonation && (
+          <Check
+            id="ev-recurring"
+            label="Let people make that gift monthly"
+            checked={v.allowRecurringDonation}
+            onChange={(x) => set("allowRecurringDonation", x)}
+            hint="They register and pay today's total as usual, then finish setting up the monthly gift on a secure recurring-giving page. The monthly part is never mixed into the registration charge."
+          />
+        )}
+      </Section>
+
+      <Section title="Ways to pay" hint="Which payment options the checkout offers. Apple Pay and Google Pay only appear when your organization has them turned on. Free events don't show any payment options.">
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            ["CARD", "Credit / debit card"],
+            ["BANK", "Bank account (ACH)"],
+            ["APPLE_PAY", "Apple Pay"],
+            ["GOOGLE_PAY", "Google Pay"],
+          ].map(([key, label]) => (
+            <Check
+              key={key}
+              id={`ev-pay-${key}`}
+              label={label}
+              checked={v.paymentMethods.includes(key)}
+              onChange={(on) => set("paymentMethods", on ? [...v.paymentMethods, key] : v.paymentMethods.filter((m) => m !== key))}
+            />
+          ))}
+        </div>
+        {v.paymentMethods.length === 0 && <p className="text-xs text-red-600">Choose at least one way to pay.</p>}
       </Section>
 
       <Section title="Add-ons" hint="Optional paid extras registrants can add — e.g. a sponsorship, a raffle ticket, extra meals.">
@@ -450,11 +568,64 @@ export default function EventSettingsForm({
         </button>
       </Section>
 
-      <Section title="After registration">
+      <Section title="Thank-you screen" hint="Shown right after someone registers. Add a photo or a video if you like.">
         <div>
-          <label htmlFor="ev-confirm" className={labelClass}>Confirmation message</label>
-          <textarea id="ev-confirm" rows={3} className={inputClass} value={v.confirmationMessage} onChange={(e) => set("confirmationMessage", e.target.value)} maxLength={3000} placeholder="Shown on the confirmation screen after registering." />
-          <p className="text-xs text-slate-500 mt-1">The confirmation, reminder and thank-you emails are edited in the Emails tab.</p>
+          <label htmlFor="ev-confirm" className={labelClass}>Message</label>
+          <textarea id="ev-confirm" rows={3} className={inputClass} value={v.confirmationMessage} onChange={(e) => set("confirmationMessage", e.target.value)} maxLength={3000} placeholder="Thank you for registering! We can't wait to see you." />
+        </div>
+
+        <div>
+          <p className={labelClass}>Photo (optional)</p>
+          {v.confirmationImageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={v.confirmationImageUrl} alt="Thank-you photo" className="mb-2 max-h-40 rounded-lg border border-slate-200 object-cover" />
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={thanksImageRef}
+              id="ev-thanks-image"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadThankYouImage(f);
+              }}
+            />
+            <label htmlFor="ev-thanks-image" className={`${secondaryButton} cursor-pointer`}>
+              <Upload className="w-4 h-4 mr-1.5" aria-hidden="true" /> {uploadingMedia === "image" ? "Uploading…" : v.confirmationImageUrl ? "Replace photo" : "Upload photo"}
+            </label>
+            {v.confirmationImageUrl && (
+              <button type="button" onClick={() => set("confirmationImageUrl", "")} className="text-xs text-red-600">Remove</button>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <p className={labelClass}>Video (optional)</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <input
+              ref={thanksVideoRef}
+              id="ev-thanks-video-file"
+              type="file"
+              accept="video/mp4,video/webm"
+              className="sr-only"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadThankYouVideo(f);
+              }}
+            />
+            <label htmlFor="ev-thanks-video-file" className={`${secondaryButton} cursor-pointer`}>
+              <Film className="w-4 h-4 mr-1.5" aria-hidden="true" />
+              {uploadingMedia === "video" ? `Uploading… ${videoProgress ?? 0}%` : v.confirmationVideoUrl ? "Replace video" : "Upload video"}
+            </label>
+            {v.confirmationVideoUrl && (
+              <button type="button" onClick={() => set("confirmationVideoUrl", "")} className="text-xs text-red-600">Remove</button>
+            )}
+          </div>
+          <label htmlFor="ev-thanks-video" className="sr-only">Video link</label>
+          <input id="ev-thanks-video" className={inputClass} placeholder="…or paste a YouTube, Vimeo, TikTok or video link" value={v.confirmationVideoUrl} onChange={(e) => set("confirmationVideoUrl", e.target.value)} />
+          <p className="text-xs text-slate-500 mt-1">Upload an MP4 or WebM up to 150 MB, or paste a link. The confirmation, reminder and thank-you emails are edited in the Emails tab.</p>
         </div>
       </Section>
 
@@ -463,10 +634,20 @@ export default function EventSettingsForm({
           {error}
         </p>
       )}
-      <div className="flex justify-end">
-        <button type="submit" disabled={saving} className={primaryButton}>
-          {saving ? "Saving…" : eventId ? "Save changes" : "Create event"}
+      <div className="flex flex-wrap items-center justify-end gap-3 sticky bottom-0 bg-slate-50/90 backdrop-blur py-3 -mx-1 px-1">
+        {eventId && isLive && (
+          <button type="button" disabled={saving} onClick={() => void submit("INACTIVE")} className={secondaryButton}>
+            Unpublish
+          </button>
+        )}
+        <button type="submit" disabled={saving || v.paymentMethods.length === 0} className={isLive ? primaryButton : secondaryButton}>
+          {saving ? "Saving…" : eventId ? (isLive ? "Save changes" : "Save draft") : "Create as draft"}
         </button>
+        {!isLive && (
+          <button type="button" disabled={saving || v.paymentMethods.length === 0} onClick={() => void submit("ACTIVE")} className={primaryButton}>
+            {eventId ? "Publish event" : "Create & publish"}
+          </button>
+        )}
       </div>
     </form>
 
@@ -475,22 +656,29 @@ export default function EventSettingsForm({
         <h3 className="text-sm font-bold text-slate-900">Live preview</h3>
         <p className="text-xs text-slate-500">What registrants will see — updates as you type</p>
       </div>
+      <div className="mb-2" role="group" aria-label="Preview screen">
+        <button type="button" aria-pressed={showThankYou} onClick={() => setShowThankYou((x) => !x)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600">
+          <Eye className="w-3.5 h-3.5" aria-hidden="true" /> {showThankYou ? "Back to the registration form" : "Preview the thank-you screen"}
+        </button>
+      </div>
       <div className="rounded-2xl border border-slate-200 overflow-hidden shadow-sm lg:max-h-[calc(100vh-6rem)] overflow-y-auto bg-white">
         <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 border-b border-slate-200" aria-hidden="true">
           <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
           <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
           <span className="w-2.5 h-2.5 rounded-full bg-slate-300" />
-          <span className="ml-2 text-[11px] text-slate-500 truncate">{organization.name} · Event Registration</span>
+          <span className="ml-2 text-[11px] text-slate-500 truncate">{hostDisplayName} · Event Registration</span>
         </div>
         <EventPageView
           preview
           event={previewEvent}
           addOns={previewAddOns}
-          organization={{ name: organization.name, logoUrl: organization.logoUrl, finixMerchantId: null }}
+          organization={{ name: hostDisplayName, logoUrl: organization.logoUrl, finixMerchantId: null }}
           checkout={null}
           light={DEFAULT_LIGHT_BRANDING}
           closedMessage={null}
           showPoweredByWgc
+          previewConfirmation={showThankYou}
+          monthlyGiftSlug={v.allowOptionalDonation && v.allowRecurringDonation ? "preview" : null}
         />
       </div>
       <p className="text-xs text-slate-500 mt-2">Try it out — nothing here is submitted, saved or charged.</p>

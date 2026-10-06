@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getRegistrationState, validateEventSettings, validateAddOns, generateConfirmationCode } from "@/lib/eventRegistration/eventConfig";
+import { getRegistrationState, parseEventPaymentMethods, validateEventSettings, validateAddOns, generateConfirmationCode } from "@/lib/eventRegistration/eventConfig";
 import { zonedLocalToUtc, utcToZonedLocal, formatEventDate, formatEventTime } from "@/lib/eventRegistration/timezone";
 import { slugifyEventName } from "@/lib/eventRegistration/eventSlug";
 
@@ -97,5 +97,48 @@ describe("helpers", () => {
     expect(slugifyEventName("Spring Gala 2026!")).toBe("spring-gala-2026");
     expect(slugifyEventName("Café Día")).toBe("cafe-dia");
     expect(slugifyEventName("!!!")).toBe("event");
+  });
+});
+
+describe("round 4 settings: payment methods, thank-you media, monthly gift", () => {
+  const ok = (extra: Record<string, unknown>) => {
+    const r = validateEventSettings({ ...base, ...extra });
+    if (!r.ok) throw new Error(r.error);
+    return r.data;
+  };
+
+  it("defaults to all four ways to pay, and treats junk stored values the same way", () => {
+    expect(ok({}).paymentMethods).toEqual(["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"]);
+    for (const junk of [null, undefined, "CARD", [], ["BITCOIN"]]) expect(parseEventPaymentMethods(junk)).toEqual(["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"]);
+    expect(parseEventPaymentMethods(["BANK", "CARD", "BITCOIN"])).toEqual(["CARD", "BANK"]);
+  });
+
+  it("keeps a chosen subset and refuses an empty choice", () => {
+    expect(ok({ paymentMethods: ["CARD"] }).paymentMethods).toEqual(["CARD"]);
+    const r = validateEventSettings({ ...base, paymentMethods: ["BITCOIN"] });
+    expect(r.ok).toBe(false);
+  });
+
+  it("only allows a monthly gift when the optional donation is on", () => {
+    expect(ok({ allowOptionalDonation: true, allowRecurringDonation: true }).allowRecurringDonation).toBe(true);
+    expect(ok({ allowOptionalDonation: false, allowRecurringDonation: true }).allowRecurringDonation).toBe(false);
+  });
+
+  it("accepts supported thank-you video links and rejects others", () => {
+    expect(ok({ confirmationVideoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }).confirmationVideoUrl).toContain("youtube");
+    expect(ok({ confirmationVideoUrl: "https://cdn.example.com/clip.mp4" }).confirmationVideoUrl).toBe("https://cdn.example.com/clip.mp4");
+    expect(validateEventSettings({ ...base, confirmationVideoUrl: "https://example.com/page" }).ok).toBe(false);
+    expect(validateEventSettings({ ...base, confirmationVideoUrl: "javascript:alert(1)" }).ok).toBe(false);
+  });
+
+  it("rejects an unsafe thank-you photo URL", () => {
+    expect(validateEventSettings({ ...base, confirmationImageUrl: "http://insecure.example/a.jpg" }).ok).toBe(false);
+    expect(validateEventSettings({ ...base, confirmationImageUrl: "javascript:alert(1)" }).ok).toBe(false);
+  });
+
+  it("passes the organization name and header line through", () => {
+    const d = ok({ hostName: "Riverbend", headerText: "Join us" });
+    expect(d.hostName).toBe("Riverbend");
+    expect(d.headerText).toBe("Join us");
   });
 });

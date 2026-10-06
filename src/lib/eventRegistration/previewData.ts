@@ -32,6 +32,10 @@ export interface PreviewFormValues {
   groupRequired: boolean;
   mailingAddressMode: string;
   confirmationMessage: string;
+  confirmationImageUrl: string;
+  confirmationVideoUrl: string;
+  headerText: string;
+  allowRecurringDonation: boolean;
   customFields: CustomFieldDefinition[];
 }
 
@@ -74,6 +78,10 @@ export function buildPreviewEvent(v: PreviewFormValues, priceCents: number): Pub
     groupRequired: v.allowGroups && v.groupRequired,
     mailingAddressMode: mode,
     confirmationMessage: v.confirmationMessage.trim() || null,
+    confirmationImageUrl: v.confirmationImageUrl.trim() || null,
+    confirmationVideoUrl: v.confirmationVideoUrl.trim() || null,
+    headerText: v.headerText.trim() || null,
+    allowRecurringDonation: v.allowOptionalDonation && v.allowRecurringDonation,
     customFields,
   };
 }

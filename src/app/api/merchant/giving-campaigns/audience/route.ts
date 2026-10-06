@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const audience = body.audience && typeof body.audience === "object" ? body.audience : {};
   if (!isAudienceSource(audience.source)) return NextResponse.json({ error: "Choose who to send to." }, { status: 400 });
-  if (audience.source === "EVENT" && !hasPermission(auth, "canViewEvents")) {
+  if ((audience.source === "EVENT" || audience.source === "NOT_REGISTERED") && !hasPermission(auth, "canViewEvents")) {
     return NextResponse.json({ error: "You don't have permission to message event attendees." }, { status: 403 });
   }
 
@@ -38,6 +38,7 @@ export async function POST(req: Request) {
       givingLinkId: typeof audience.givingLinkId === "string" ? audience.givingLinkId : undefined,
       eventId: typeof audience.eventId === "string" ? audience.eventId : undefined,
       eventScope: typeof audience.eventScope === "string" ? audience.eventScope : undefined,
+      base: audience.base === "DONORS" ? "DONORS" : "EVERYONE",
     },
     body.channel === "TEXT" ? "TEXT" : "EMAIL"
   );

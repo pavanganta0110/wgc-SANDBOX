@@ -48,6 +48,7 @@ export function parseAudienceRule(json: unknown): AudienceRequest | null {
     givingLinkId: typeof j.givingLinkId === "string" ? j.givingLinkId : undefined,
     eventId: typeof j.eventId === "string" ? j.eventId : undefined,
     eventScope: typeof j.eventScope === "string" ? j.eventScope : undefined,
+    base: j.base === "DONORS" ? "DONORS" : j.base === "EVERYONE" ? "EVERYONE" : undefined,
   };
 }
 
@@ -130,6 +131,7 @@ export async function runDueSeries(now: Date = new Date(), budgetMs = 45_000): P
         campaignTeamId: series.campaignTeamId,
         campaignFundraiserId: series.campaignFundraiserId,
         pledgeCampaignId: series.pledgeCampaignId,
+        eventId: series.eventId,
         parentCampaignId: series.id,
       },
     });

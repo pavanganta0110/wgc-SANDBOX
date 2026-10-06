@@ -15,6 +15,7 @@ export default async function GivingCampaignsPage() {
   }
   const churchId = session.churchId;
 
+  const unsubscribedCount = await prisma.emailOptOut.count({ where: { churchId } });
   const campaigns = await prisma.givingCampaign.findMany({
     where: { churchId },
     orderBy: { createdAt: "desc" },
@@ -38,6 +39,10 @@ export default async function GivingCampaignsPage() {
           <h2 className="text-lg font-bold text-slate-900">Giving Campaigns</h2>
           <p className="text-sm text-slate-500 mt-1">Send a giving link to your donor list and see who gave.</p>
         </div>
+        <div className="flex items-center gap-3">
+        <Link href="/merchant/giving-campaigns/unsubscribed" className="text-sm font-semibold text-slate-600 hover:underline">
+          Unsubscribed ({unsubscribedCount})
+        </Link>
         {permissions.canSendStatements && (
           <Link
             href="/merchant/giving-campaigns/create"
@@ -46,6 +51,7 @@ export default async function GivingCampaignsPage() {
             New Campaign
           </Link>
         )}
+        </div>
       </div>
 
       {campaigns.length === 0 ? (

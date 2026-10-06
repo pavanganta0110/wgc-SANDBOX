@@ -15,6 +15,8 @@ import { isEventAudienceScope, loadEventAudience, type EventAudienceScope } from
  *                       from registration rows, so people who registered free
  *                       and never paid are included
  *  - IMPORTED_CONTACTS  contacts added by CSV import (no donation required)
+ *  - NOT_REGISTERED     everyone on file (or only donors) who has NOT registered
+ *                       for a chosen event — for event invitations
  *  - NOT_GIVEN          everyone on file with an email who has never given:
  *                       no successful payment and no recorded external gift
  *                       (event registrants, imported contacts, newsletter
@@ -27,7 +29,7 @@ import { isEventAudienceScope, loadEventAudience, type EventAudienceScope } from
  * audiences.
  */
 
-export const AUDIENCE_SOURCES = ["SELECTED", "ALL_DONORS", "GIVING_PAGE", "EVENT", "IMPORTED_CONTACTS", "NOT_GIVEN"] as const;
+export const AUDIENCE_SOURCES = ["SELECTED", "ALL_DONORS", "GIVING_PAGE", "EVENT", "IMPORTED_CONTACTS", "NOT_GIVEN", "NOT_REGISTERED"] as const;
 export type AudienceSource = (typeof AUDIENCE_SOURCES)[number];
 
 export function isAudienceSource(v: unknown): v is AudienceSource {
@@ -40,6 +42,8 @@ export interface AudienceRequest {
   givingLinkId?: string;
   eventId?: string;
   eventScope?: string;
+  /** NOT_REGISTERED only: start from everyone on file (default) or from donors only. */
+  base?: "EVERYONE" | "DONORS";
 }
 
 export interface AudienceRecipient {
@@ -133,6 +137,27 @@ async function resolveRawAudience(churchId: string, req: AudienceRequest, channe
       const gave = new Set([...payers, ...externalGivers].map((p) => p.donorId as string));
       const rows = await prisma.donor.findMany({ where: { churchId, ...activeDonor, ...contactFilter }, select: donorSelect, take: MAX_AUDIENCE });
       return { ok: true, recipients: dedupe(rows.filter((d) => !gave.has(d.id)), channel) };
+    }
+
+    case "NOT_REGISTERED": {
+      if (channel === "TEXT") return { ok: false, status: 400, error: "Event invitations can only be emailed." };
+      if (!req.eventId) return { ok: false, status: 400, error: "Choose an event." };
+      const event = await prisma.event.findFirst({ where: { id: req.eventId, churchId }, select: { id: true } });
+      if (!event) return { ok: false, status: 404, error: "Event not found." };
+      // Registered = a confirmed registration (an unpaid cart isn't one), as
+      // either the registrant or a named attendee with an email.
+      const registered = await loadEventAudience(churchId, event.id, "EVERYONE");
+      const registeredEmails = new Set(registered.map((p) => p.normalizedEmail));
+      const registeredDonorIds = new Set(registered.map((p) => p.donorId).filter((id): id is string => Boolean(id)));
+      const pool =
+        req.base === "DONORS"
+          ? await resolveRawAudience(churchId, { source: "ALL_DONORS" }, "EMAIL")
+          : { ok: true as const, recipients: dedupe(await prisma.donor.findMany({ where: { churchId, ...activeDonor, email: { not: null } }, select: donorSelect, take: MAX_AUDIENCE }), "EMAIL") };
+      if (!pool.ok) return pool;
+      return {
+        ok: true,
+        recipients: pool.recipients.filter((r) => !(r.donorId && registeredDonorIds.has(r.donorId)) && !(r.email && registeredEmails.has(normalizeEmail(r.email) ?? ""))),
+      };
     }
 
     case "EVENT": {

@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import EventDetailClient from "@/components/events/merchant/EventDetailClient";
 import { loadOrganizationBrand } from "@/lib/eventRegistration/organizationBrand";
 
-export default async function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
+export default async function EventDetailPage({ params, searchParams }: { params: Promise<{ eventId: string }>; searchParams: Promise<{ created?: string }> }) {
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -18,6 +18,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
   if (!hasPermission(auth, "canViewEvents")) redirect("/merchant/dashboard");
 
   const { eventId } = await params;
+  const { created } = await searchParams;
   const event = await prisma.event.findFirst({ where: { id: eventId, churchId: auth.churchId, archivedAt: null }, select: { id: true, givingLinkId: true } });
   if (!event) notFound();
   const organization = await loadOrganizationBrand(auth.churchId, event.givingLinkId);
@@ -28,6 +29,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ ev
       <EventDetailClient
         eventId={event.id}
         organization={organization}
+        justCreated={created === "draft" || created === "published" ? created : undefined}
         canManage={hasPermission(auth, "canManageEvents")}
         canManageAttendees={hasPermission(auth, "canManageEventAttendees")}
         canExport={hasPermission(auth, "canExportEvents")}

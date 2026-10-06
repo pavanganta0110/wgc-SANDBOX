@@ -11,10 +11,10 @@ export default async function GivingLinkPublicPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ pledgeId?: string; share?: string }>;
+  searchParams: Promise<{ pledgeId?: string; share?: string; give?: string; amount?: string }>;
 }) {
   const { slug } = await params;
-  const { pledgeId, share } = await searchParams;
+  const { pledgeId, share, give, amount } = await searchParams;
 
   const data = await loadPublicGivingPageData(slug);
 
@@ -98,8 +98,14 @@ export default async function GivingLinkPublicPage({
             quantityItemLabel={link.quantityItemLabel}
             recurringEnabled={link.recurringEnabled}
             allowedFrequencies={allowedFrequencies}
-            defaultDonationType={link.defaultDonationType}
-            defaultRecurringAmountCents={link.defaultRecurringAmountCents}
+            // ?give=monthly&amount=2500 opens the form on a monthly gift of that
+            // amount (e.g. from an event registration's "make it monthly"
+            // option) — only a starting point the donor can change, and only
+            // when this page actually offers recurring giving.
+            defaultDonationType={give === "monthly" && link.recurringEnabled ? "RECURRING" : link.defaultDonationType}
+            defaultRecurringAmountCents={
+              give === "monthly" && link.recurringEnabled && /^\d{3,9}$/.test(amount ?? "") && Number(amount) >= 100 ? Number(amount) : link.defaultRecurringAmountCents
+            }
             allowedPaymentMethods={allowedPaymentMethods}
             feeCoverEnabled={link.feeCoverEnabled}
             feeCoverDefaultOn={link.feeCoverDefaultOn}

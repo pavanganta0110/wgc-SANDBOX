@@ -51,6 +51,7 @@ export default async function EmbedEventPage({ params }: { params: Promise<{ slu
         closedMessage={data.closedMessage}
         showPoweredByWgc={data.showPoweredByWgc}
         embed
+        monthlyGiftSlug={data.monthlyGiftSlug}
         formOverride={takesPayment ? <RegisterInWindowButton slug={slug} label={label} backgroundColor={light.buttonBackground} color={light.buttonText} /> : undefined}
       />
     </EventEmbedFrame>

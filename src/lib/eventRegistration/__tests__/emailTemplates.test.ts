@@ -103,3 +103,20 @@ describe("photos in event emails", () => {
     expect(evil).not.toMatch(/<[^>]*onerror=/); // stays inert, escaped text — never inside a tag
   });
 });
+
+describe("videos in event emails", () => {
+  it("turns [video: https://…] into a Watch button linking to the page", () => {
+    const html = bodyToHtml("See the recap:\n\n[video: https://youtu.be/abc123]", ctx);
+    expect(html).toContain('<a href="https://youtu.be/abc123"');
+    expect(html).toContain("Watch the video");
+    expect(html).not.toContain("<video");
+  });
+
+  it("only accepts https links and never lets a link break out of the attribute", () => {
+    expect(bodyToHtml("[video: http://insecure.example/v]", ctx)).not.toContain("Watch the video");
+    expect(bodyToHtml("[video: javascript:alert(1)]", ctx)).not.toContain("Watch the video");
+    const evil = bodyToHtml('[video: https://x.example/v" onclick="alert(1)]', ctx);
+    expect(evil).not.toContain("Watch the video");
+    expect(evil).not.toMatch(/<[^>]*onclick=/);
+  });
+});

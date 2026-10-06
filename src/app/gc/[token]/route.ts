@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { loadCampaignEventVars } from "@/lib/giving/campaignEventVars";
 
 const CAMPAIGN_REF_COOKIE = "wgc_campaign_ref";
 // Generous enough to cover someone clicking a link, getting distracted, and
@@ -28,6 +29,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
   if (!campaign) {
     return NextResponse.redirect(new URL("/", req.url));
   }
+  // An event invitation goes to the event's registration page, not a giving link.
+  if (campaign.eventId) {
+    const event = await loadCampaignEventVars(recipient.churchId, campaign.eventId);
+    if (!event) return NextResponse.redirect(new URL("/", req.url));
+    if (!recipient.clickedAt) {
+      await prisma.givingCampaignRecipient.update({ where: { id: recipient.id }, data: { clickedAt: new Date() } });
+    }
+    return NextResponse.redirect(new URL(`/event/${encodeURIComponent(event.slug)}`, req.url));
+  }
+
   const link = await prisma.givingLink.findFirst({ where: { id: campaign.givingLinkId, churchId: recipient.churchId }, select: { publicSlug: true } });
   if (!link) {
     return NextResponse.redirect(new URL("/", req.url));

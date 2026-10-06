@@ -37,10 +37,19 @@ export interface PublicEventData {
     groupRequired: boolean;
     mailingAddressMode: "HIDDEN" | "OPTIONAL" | "REQUIRED";
     confirmationMessage: string | null;
+    confirmationImageUrl: string | null;
+    confirmationVideoUrl: string | null;
+    headerText: string | null;
+    allowRecurringDonation: boolean;
     customFields: CustomFieldDefinition[];
   };
   addOns: { id: string; name: string; description: string | null; priceCents: number; maxQuantity: number }[];
   organization: { name: string; logoUrl: string | null; finixMerchantId: string | null };
+  /** Slug of the event's monthly-gift page, when the event offers a recurring additional donation. */
+  monthlyGiftSlug: string | null;
+  /** The event's own staff are looking at a page that isn't public yet (Draft / Inactive). Nothing on it submits. */
+  isPreview: boolean;
+  eventId: string;
   /** null while the window is open; otherwise the reason shown instead of the form. */
   closedMessage: string | null;
   /** Paid events only: the dedicated giving link the checkout posts to. */
@@ -62,9 +71,13 @@ export interface PublicEventData {
 
 export type LoadPublicEventResult = { ok: false } | ({ ok: true } & PublicEventData);
 
-export async function loadPublicEvent(slug: string, now: Date = new Date()): Promise<LoadPublicEventResult> {
+export async function loadPublicEvent(slug: string, now: Date = new Date(), opts: { previewChurchId?: string } = {}): Promise<LoadPublicEventResult> {
   const event = await prisma.event.findUnique({ where: { slug } });
-  if (!event || event.archivedAt || event.status !== "ACTIVE") return { ok: false };
+  if (!event || event.archivedAt) return { ok: false };
+  // A Draft/Inactive event is invisible to the public (404) — but the
+  // organization's own signed-in staff can open it to check their work.
+  const isPreview = event.status !== "ACTIVE";
+  if (isPreview && opts.previewChurchId !== event.churchId) return { ok: false };
 
   const church = await prisma.church.findUnique({ where: { id: event.churchId } });
   if (!church) return { ok: false };
@@ -78,6 +91,9 @@ export async function loadPublicEvent(slug: string, now: Date = new Date()): Pro
   });
 
   const link = event.givingLinkId ? await prisma.givingLink.findFirst({ where: { id: event.givingLinkId, churchId: event.churchId } }) : null;
+  const monthlyGiftLink = event.allowRecurringDonation && event.donationGivingLinkId
+    ? await prisma.givingLink.findFirst({ where: { id: event.donationGivingLinkId, churchId: event.churchId }, select: { publicSlug: true } })
+    : null;
   const branding = parseBrandingSettings(link?.brandingSettingsJson ?? null);
   const pricing = await prisma.churchPricing.findUnique({ where: { churchId: church.id } });
 
@@ -90,7 +106,7 @@ export async function loadPublicEvent(slug: string, now: Date = new Date()): Pro
   const googlePayEnvironment: "TEST" | "PRODUCTION" =
     process.env.NEXT_PUBLIC_FINIX_ENV === "live" && process.env.GOOGLE_PAY_PRODUCTION_APPROVED === "true" ? "PRODUCTION" : "TEST";
 
-  let closedMessage: string | null = state.open ? null : REGISTRATION_CLOSED_MESSAGES[state.reason];
+  let closedMessage: string | null = isPreview || state.open ? null : REGISTRATION_CLOSED_MESSAGES[state.reason];
   // A paid event can't take money for an organization that isn't approved
   // or has no Finix merchant yet. Free RSVPs don't touch payments at all.
   if (!closedMessage && (event.priceCents > 0 || event.allowOptionalDonation || addOns.length > 0)) {
@@ -126,14 +142,21 @@ export async function loadPublicEvent(slug: string, now: Date = new Date()): Pro
       groupRequired: event.groupRequired,
       mailingAddressMode: (["HIDDEN", "OPTIONAL", "REQUIRED"] as const).find((m) => m === event.mailingAddressMode) ?? "HIDDEN",
       confirmationMessage: event.confirmationMessage,
+      confirmationImageUrl: event.confirmationImageUrl,
+      confirmationVideoUrl: event.confirmationVideoUrl,
+      headerText: event.headerText,
+      allowRecurringDonation: event.allowRecurringDonation,
       customFields: parseCustomFields(event.customFieldsJson),
     },
     addOns: addOns.map((a) => ({ id: a.id, name: a.name, description: a.description, priceCents: a.priceCents, maxQuantity: a.maxQuantity })),
     organization: {
-      name: church.name,
+      name: event.hostName?.trim() || church.name,
       logoUrl: resolveGivingPageLogo({ givingPageLogoUrl: branding.light.logoUrl, organizationLogoUrl: church.logoUrl, fallbackLogoUrl: null }) || null,
       finixMerchantId: church.finixMerchantId,
     },
+    monthlyGiftSlug: monthlyGiftLink?.publicSlug ?? null,
+    isPreview,
+    eventId: event.id,
     closedMessage,
     checkout: link
       ? {
