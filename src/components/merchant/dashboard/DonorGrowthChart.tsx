@@ -75,7 +75,9 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
                 const x0 = cx - barW / 2;
                 const hNew = base - y(d.newDonors);
                 const hRet = base - y(d.returningDonors);
-                const dim = active != null && active !== i ? 0.45 : 1;
+                // The last period runs up to now, so it is still filling in: draw it lighter.
+                const inProgress = i === data.length - 1;
+                const dim = (active != null && active !== i ? 0.45 : 1) * (inProgress ? 0.55 : 1);
                 // Returning sits at the base (square), new stacks on top (rounded data end).
                 const retTop = base - hRet;
                 const newBottom = d.returningDonors > 0 ? retTop - GAP : base;
@@ -90,7 +92,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
                       height={plotH}
                       fill="transparent"
                       tabIndex={0}
-                      aria-label={`${d.label}: ${d.newDonors} new, ${d.returningDonors} returning`}
+                      aria-label={`${d.label}${i === data.length - 1 ? " (in progress)" : ""}: ${d.newDonors} new, ${d.returningDonors} returning`}
                       className="outline-none"
                       onPointerEnter={() => setActive(i)}
                       onPointerLeave={() => setActive(null)}
@@ -142,6 +144,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
                 <span className="inline-block h-0.5 w-3 rounded" style={{ background: RETURNING }} aria-hidden />
                 <span className="font-bold">{data[active].returningDonors}</span> returning
               </p>
+              {active === data.length - 1 && <p className="text-[11px] text-slate-500">In progress, still filling in</p>}
             </div>
           )}
           <table className="sr-only">
@@ -156,7 +159,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
             <tbody>
               {data.map((d) => (
                 <tr key={d.label}>
-                  <th scope="row">{d.label}</th>
+                  <th scope="row">{d.label}{d === data[data.length - 1] ? " (in progress)" : ""}</th>
                   <td>{d.newDonors}</td>
                   <td>{d.returningDonors}</td>
                 </tr>
