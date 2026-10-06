@@ -6,6 +6,7 @@ import StackedBarChart from "@/components/merchant/StackedBarChart";
 import BarChart from "@/components/merchant/BarChart";
 import DimensionFilter from "@/components/merchant/DimensionFilter";
 import ExternalDonationsInsightsFilterBar from "@/components/merchant/ExternalDonationsInsightsFilterBar";
+import MoneySources from "@/components/merchant/MoneySources";
 import CardPaymentDataTable from "@/components/merchant/CardPaymentDataTable";
 import CardAuthorizationDataTable from "@/components/merchant/CardAuthorizationDataTable";
 import CardDisputeDataTable from "@/components/merchant/CardDisputeDataTable";
@@ -22,6 +23,7 @@ import {
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
+import { getWhereMoneyCameFrom } from "@/lib/reports/moneySources";
 import { SOURCE_LABELS } from "@/lib/donations/externalDonationTypes";
 import { formatCents } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -126,7 +128,7 @@ export default async function InsightsPage({
       </div>
 
       {tab === "payments" && (
-        <PaymentsTab churchId={churchId} dateFilter={dateFilter} trend={trend} dimension={dimension} scopedUserId={scopedUserId} />
+        <PaymentsTab churchId={churchId} dateFilter={dateFilter} trend={trend} scopedUserId={scopedUserId} />
       )}
       {tab === "authorizations" && (
         <AuthorizationsTab
@@ -225,22 +227,23 @@ async function PaymentsTab({
   churchId,
   dateFilter,
   trend,
-  dimension,
   scopedUserId,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   trend: string;
-  dimension: PaymentDimensionKey;
   scopedUserId?: string;
 }) {
-  const { summary, byMethod, byMethodCount, byBrand, byBrandCount, byBrandTable, byFailureCode, hasData } =
-    await getPaymentsInsights(churchId, dateFilter, trend, dimension, scopedUserId);
-  const dimensionLabel = PAYMENT_DIMENSIONS.find((d) => d.key === dimension)?.label ?? "Card Brand";
+  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources] = await Promise.all([
+    getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
+    getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),
+  ]);
 
   return (
     <>
       <SummaryCards items={summary} />
+
+      <MoneySources data={moneySources} />
 
       <div className="flex items-center justify-between">
         <p className="text-sm font-bold text-slate-900">Payment Trends</p>
@@ -269,36 +272,6 @@ async function PaymentsTab({
             <EmptyChart />
           )}
         </ChartCard>
-        <ChartCard title="Payment Volume by Card Brand">
-          {hasData ? (
-            <StackedBarChart
-              data={byBrand}
-              seriesKeys={Object.keys(byBrand[0]?.values ?? {})}
-              formatValue={(n) => `$${n.toFixed(0)}`}
-            />
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
-        <ChartCard title="Payment Count by Card Brand">
-          {hasData ? (
-            <StackedBarChart
-              data={byBrandCount}
-              seriesKeys={Object.keys(byBrandCount[0]?.values ?? {})}
-              formatValue={(n) => n.toFixed(0)}
-            />
-          ) : (
-            <EmptyChart />
-          )}
-        </ChartCard>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900">Card Payment Data</h3>
-          <DimensionFilter />
-        </div>
-        <CardPaymentDataTable rows={byBrandTable} dimensionLabel={dimensionLabel} />
       </div>
 
       <ChartCard title="Failed Transactions by Failure Code">

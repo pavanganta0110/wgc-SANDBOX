@@ -45,6 +45,46 @@ export async function getCampaignRaisedCents(churchId: string, campaignId: strin
   return links.raisedCents + external;
 }
 
+/**
+ * Lifetime raised for many campaigns in two grouped queries — the same
+ * formula as getCampaignRaisedCents (link counters net of refunds/returns,
+ * plus non-returned/non-voided external donations), batched so a report
+ * listing N campaigns doesn't issue N×2 queries.
+ */
+export async function getCampaignsRaisedCentsBatch(
+  churchId: string,
+  campaignIds: string[]
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>(campaignIds.map((id) => [id, 0]));
+  if (campaignIds.length === 0) return result;
+  const [linkSums, externalSums] = await Promise.all([
+    prisma.givingLink.groupBy({
+      by: ["fundraisingCampaignId"],
+      where: { churchId, fundraisingCampaignId: { in: campaignIds } },
+      _sum: { totalCollectedCents: true, refundedCents: true, returnedCents: true },
+    }),
+    prisma.externalDonation.groupBy({
+      by: ["fundraisingCampaignId"],
+      where: { churchId, fundraisingCampaignId: { in: campaignIds }, status: { notIn: ["RETURNED", "VOIDED"] } },
+      _sum: { donationAmountCents: true },
+    }),
+  ]);
+  for (const row of linkSums) {
+    if (!row.fundraisingCampaignId) continue;
+    const net =
+      (row._sum.totalCollectedCents ?? 0) - (row._sum.refundedCents ?? 0) - (row._sum.returnedCents ?? 0);
+    result.set(row.fundraisingCampaignId, (result.get(row.fundraisingCampaignId) ?? 0) + net);
+  }
+  for (const row of externalSums) {
+    if (!row.fundraisingCampaignId) continue;
+    result.set(
+      row.fundraisingCampaignId,
+      (result.get(row.fundraisingCampaignId) ?? 0) + (row._sum.donationAmountCents ?? 0)
+    );
+  }
+  return result;
+}
+
 export async function getTeamRaisedCents(churchId: string, teamId: string): Promise<number> {
   const [links, external] = await Promise.all([
     sumGivingLinks({ churchId, campaignTeamId: teamId }),

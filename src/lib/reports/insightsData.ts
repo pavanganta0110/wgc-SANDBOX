@@ -140,7 +140,6 @@ export async function getPaymentsInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
   trend: string,
-  dimension: PaymentDimensionKey = "cardBrand",
   attributedUserId?: string
 ) {
   const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
@@ -176,37 +175,6 @@ export async function getPaymentsInsights(
   const byMethod = groupTrend(methodSeries, trend, methodKeys, "sum");
   const byMethodCount = groupTrend(methodSeries, trend, methodKeys, "count");
 
-  const brandSeries = transfers.map((t) => ({
-    createdAtFinix: t.createdAtFinix,
-    amountCents: t.amountCents,
-    series: dimensionValue(instrumentMap.get(t.finixPaymentInstrumentId ?? ""), "cardBrand"),
-  }));
-  const brandKeys = Array.from(new Set(brandSeries.map((s) => s.series)));
-  const byBrand = groupTrend(brandSeries, trend, brandKeys, "sum");
-  const byBrandCount = groupTrend(brandSeries, trend, brandKeys, "count");
-
-  const byBrandTable = Array.from(
-    transfers.reduce((map, t) => {
-      const key = dimensionValue(instrumentMap.get(t.finixPaymentInstrumentId ?? ""), dimension);
-      const entry = map.get(key) ?? { volume: 0, count: 0, failedVolume: 0, failedCount: 0 };
-      entry.volume += (t.state || "").toUpperCase() === "SUCCEEDED" ? t.amountCents ?? 0 : 0;
-      entry.count += (t.state || "").toUpperCase() === "SUCCEEDED" ? 1 : 0;
-      entry.failedVolume += (t.state || "").toUpperCase() === "FAILED" ? t.amountCents ?? 0 : 0;
-      entry.failedCount += (t.state || "").toUpperCase() === "FAILED" ? 1 : 0;
-      map.set(key, entry);
-      return map;
-    }, new Map<string, { volume: number; count: number; failedVolume: number; failedCount: number }>())
-  ).map(([brand, v]) => ({
-    brand,
-    volume: formatCents(v.volume),
-    volumeCents: v.volume,
-    count: v.count,
-    failedVolume: formatCents(v.failedVolume),
-    failedVolumeCents: v.failedVolume,
-    failedCount: v.failedCount,
-    successRatio: v.count + v.failedCount > 0 ? `${((v.count / (v.count + v.failedCount)) * 100).toFixed(2)}%` : "—",
-  }));
-
   const byFailureCode = Array.from(
     failed.reduce((map, t) => {
       const code = t.failureCode || "UNKNOWN";
@@ -222,10 +190,8 @@ export async function getPaymentsInsights(
     summary,
     byMethod,
     byMethodCount,
-    byBrand,
-    byBrandCount,
-    byBrandTable,
     byFailureCode,
+    totalVolumeCents,
     hasData: transfers.length > 0,
   };
 }
