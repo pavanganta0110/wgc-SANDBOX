@@ -19,6 +19,7 @@ import {
   buildLinkAssignments,
   buildSourceGroupsQuery,
   buildSourceTransactionsQuery,
+  buildEventRegistrationIdsQuery,
   TRANSACTIONS_PER_ROW,
   type SourceTransaction,
   type EventAttendeeInfo,
@@ -419,8 +420,8 @@ describe("event attendees", () => {
 
   it("fetchEventAttendees scopes by church, confirmed status, and the team user's own door sales", async () => {
     mockPrisma.eventRegistration.findMany.mockResolvedValue([
-      { id: "R1", eventId: "E1", registrantFirstName: "Amy", registrantLastName: "Buyer", paymentMethod: null },
-      { id: "R2", eventId: "E1", registrantFirstName: "Cal", registrantLastName: "Door", paymentMethod: "CASH" },
+      { id: "R1", eventId: "E1", registrantFirstName: "Amy", registrantLastName: "Buyer", paymentMethod: null, paymentId: "P1" },
+      { id: "R2", eventId: "E1", registrantFirstName: "Cal", registrantLastName: "Door", paymentMethod: "CASH", paymentId: null },
     ]);
     mockPrisma.eventAttendee.findMany.mockResolvedValue([
       { id: "a1", registrationId: "R1", firstName: "Zed", lastName: "Zane", checkedIn: true },
@@ -446,5 +447,43 @@ describe("event attendees", () => {
     mockPrisma.eventAttendee.findMany.mockClear();
     expect(await fetchEventAttendees({ churchId: "c", processedRegistrationIds: [] })).toEqual([]);
     expect(mockPrisma.eventAttendee.findMany).not.toHaveBeenCalled();
+  });
+
+  it("includes free and complimentary registrations (org scope), labelled", async () => {
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([
+      { id: "R3", eventId: "E1", registrantFirstName: "Fay", registrantLastName: "Free", paymentMethod: null, paymentId: null },
+      { id: "R4", eventId: "E1", registrantFirstName: "Cora", registrantLastName: "Comp", paymentMethod: "COMPLIMENTARY", paymentId: null },
+    ]);
+    mockPrisma.eventAttendee.findMany.mockResolvedValue([
+      { id: "a3", registrationId: "R3", firstName: "Fay", lastName: "Free", checkedIn: false },
+      { id: "a4", registrationId: "R4", firstName: "Cora", lastName: "Comp", checkedIn: false },
+    ]);
+    const out = await fetchEventAttendees({ churchId: "church_1", processedRegistrationIds: [], rangeFilter: { gte: new Date("2026-09-01") } });
+    const where = mockPrisma.eventRegistration.findMany.mock.calls.at(-1)![0].where;
+    expect(JSON.stringify(where.OR)).toContain('"totalCents":0');
+    expect(out.map((a) => a.paidVia).sort()).toEqual(["COMPLIMENTARY", "FREE"]);
+  });
+
+  it("a team/fundraiser view never gets free online registrations (no attribution)", async () => {
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([]);
+    await fetchEventAttendees({ churchId: "c", processedRegistrationIds: [], attributedUserId: "user_4" });
+    const where = mockPrisma.eventRegistration.findMany.mock.calls.at(-1)![0].where;
+    expect(JSON.stringify(where.OR)).not.toContain('"totalCents":0');
+    expect(JSON.stringify(where.OR)).toContain("user_4");
+  });
+
+  it("shows an event whose only activity is free registrations", () => {
+    const r = assembleWhereMoneyCameFrom([], cat, [], [att({ paidVia: "FREE" })]);
+    expect(r.events.rows).toHaveLength(1);
+    expect(r.events.rows[0].amountCents).toBe(0);
+    expect(r.events.rows[0].attendeeList[0].paidVia).toBe("FREE");
+  });
+
+  it("registration-id query is uncapped, successful payments only, church-scoped", () => {
+    const q = buildEventRegistrationIdsQuery({ churchId: "church_1", linkAssignments: new Map() });
+    expect(q.sql).toContain("SELECT DISTINCT reg_id");
+    expect(q.sql).not.toContain("ROW_NUMBER");
+    expect(q.sql).toContain("UPPER(t.state) = 'SUCCEEDED'");
+    expect(q.values).toContain("church_1");
   });
 });

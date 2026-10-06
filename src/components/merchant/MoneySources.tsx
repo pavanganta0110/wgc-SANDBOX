@@ -162,6 +162,14 @@ function WhoPaid({ transactions, total, label }: { transactions: SourceTransacti
   );
 }
 
+const PAID_VIA_LABEL: Record<EventAttendeeInfo["paidVia"], string> = {
+  CARD: "Online / card",
+  CASH: "Cash at door",
+  CHECK: "Check at door",
+  FREE: "Free registration",
+  COMPLIMENTARY: "Complimentary",
+};
+
 /** Named guests for an event: who is attending, who bought the ticket, how it was paid. */
 function Attendees({ attendees }: { attendees: EventAttendeeInfo[] }) {
   if (attendees.length === 0) return null;
@@ -188,7 +196,7 @@ function Attendees({ attendees }: { attendees: EventAttendeeInfo[] }) {
                   {a.registrantName.toLowerCase() === a.name.toLowerCase() ? "Self" : a.registrantName}
                 </td>
                 <td className="px-4 py-2 text-sm text-slate-500">
-                  {a.paidVia === "CARD" ? "Online / card" : a.paidVia === "CASH" ? "Cash at door" : "Check at door"}
+                  {PAID_VIA_LABEL[a.paidVia]}
                 </td>
                 <td className="px-4 py-2 text-sm">
                   {a.checkedIn ? (

@@ -241,6 +241,20 @@ export function buildSourceTransactionsQuery(params: SourceQueryParams): Prisma.
   `;
 }
 
+/** Every registration behind an in-range processed payment (no per-row cap),
+ * so the attendee list isn't limited to the "who paid" window. */
+export function buildEventRegistrationIdsQuery(params: SourceQueryParams): Prisma.Sql {
+  return Prisma.sql`
+    ${buildClassifiedCte(params)}
+    SELECT DISTINCT reg_id FROM classified WHERE reg_id IS NOT NULL
+  `;
+}
+
+export async function fetchEventRegistrationIds(params: SourceQueryParams): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ reg_id: string }[]>(buildEventRegistrationIdsQuery(params));
+  return rows.map((r) => r.reg_id);
+}
+
 export async function fetchSourceTransactions(params: SourceQueryParams): Promise<SourceTransaction[]> {
   const rows = await prisma.$queryRaw<RawTxRow[]>(buildSourceTransactionsQuery(params));
   return rows.map((r) => ({
@@ -296,8 +310,9 @@ export interface EventAttendeeInfo {
   name: string;
   /** Who bought the ticket, when that is a different person. */
   registrantName: string;
-  /** CARD = processed online/door card; CASH | CHECK = offline door sale. */
-  paidVia: "CARD" | "CASH" | "CHECK";
+  /** CARD = processed online/door card; CASH | CHECK = offline door sale;
+   * FREE = $0 registration; COMPLIMENTARY = comp ticket issued at the door. */
+  paidVia: "CARD" | "CASH" | "CHECK" | "FREE" | "COMPLIMENTARY";
   checkedIn: boolean;
 }
 
@@ -516,6 +531,28 @@ export function assembleWhereMoneyCameFrom(
     });
   }
 
+  // Events whose only activity in range is free/offline registrations.
+  const withAttendees = new Set(attendees.map((a) => a.eventId));
+  for (const eventId of withAttendees) {
+    const ev = eventById.get(eventId);
+    if (!ev || events.some((e) => e.id === eventId)) continue;
+    events.push({
+      id: ev.id,
+      name: ev.name,
+      href: `/merchant/events/${ev.id}`,
+      amountCents: 0,
+      donors: 0,
+      payments: 0,
+      sharePercent: 0,
+      transactions: [],
+      registrations: 0,
+      attendees: 0,
+      attendeeList: attendeesFor(ev.id),
+      offlineCents: 0,
+      offlineRegistrations: 0,
+    });
+  }
+
   const givingPages = section(pages, rollupDonors("PAGE"));
   const eventsSection = section(events, rollupDonors("EVENT"));
   const campaignsSection = section(campaigns, rollupDonors("CAMPAIGN"));
@@ -539,9 +576,13 @@ export function assembleWhereMoneyCameFrom(
 
 
 /**
- * Named attendees for the event rows: guests of the registrations behind the
- * listed processed payments, plus guests of door cash/check sales in range
- * (those have no payment row). Bounded by the per-row payment cap.
+ * Named attendees for the event rows. Three kinds of confirmed registration:
+ *  - processed: behind an in-range successful payment (ids from SQL),
+ *  - door cash/check/complimentary sales confirmed in range (no payment row),
+ *  - free online registrations ($0, no payment) confirmed in range.
+ * A team/fundraiser view only gets what they sold themselves (door sales);
+ * free online registrations carry no user attribution, so they are
+ * organization-scope only.
  */
 export async function fetchEventAttendees(params: {
   churchId: string;
@@ -550,6 +591,7 @@ export async function fetchEventAttendees(params: {
   attributedUserId?: string;
 }): Promise<EventAttendeeInfo[]> {
   const { churchId, processedRegistrationIds, rangeFilter, attributedUserId } = params;
+  const inRange = rangeFilter ? { confirmedAt: rangeFilter } : {};
   const registrations = await prisma.eventRegistration.findMany({
     where: {
       churchId,
@@ -557,15 +599,25 @@ export async function fetchEventAttendees(params: {
       OR: [
         ...(processedRegistrationIds.length ? [{ id: { in: processedRegistrationIds } }] : []),
         {
-          paymentMethod: { in: ["CASH", "CHECK"] },
+          paymentMethod: { in: ["CASH", "CHECK", "COMPLIMENTARY"] },
           soldAtDoor: true,
-          ...(rangeFilter ? { confirmedAt: rangeFilter } : {}),
+          ...inRange,
           ...(attributedUserId ? { soldByUserId: attributedUserId } : {}),
         },
+        ...(attributedUserId
+          ? []
+          : [{ paymentId: null, paymentMethod: null, totalCents: 0, ...inRange }]),
       ],
     },
-    select: { id: true, eventId: true, registrantFirstName: true, registrantLastName: true, paymentMethod: true },
-    take: 1000,
+    select: {
+      id: true,
+      eventId: true,
+      registrantFirstName: true,
+      registrantLastName: true,
+      paymentMethod: true,
+      paymentId: true,
+    },
+    take: 2000,
   });
   if (registrations.length === 0) return [];
   const byId = new Map(registrations.map((r) => [r.id, r]));
@@ -575,14 +627,19 @@ export async function fetchEventAttendees(params: {
   });
   return rows.map((a) => {
     const reg = byId.get(a.registrationId)!;
-    const method = reg.paymentMethod === "CASH" || reg.paymentMethod === "CHECK" ? reg.paymentMethod : "CARD";
+    const paidVia: EventAttendeeInfo["paidVia"] =
+      reg.paymentMethod === "CASH" || reg.paymentMethod === "CHECK" || reg.paymentMethod === "COMPLIMENTARY"
+        ? reg.paymentMethod
+        : reg.paymentId
+          ? "CARD"
+          : "FREE";
     return {
       id: a.id,
       eventId: reg.eventId,
       registrationId: a.registrationId,
       name: `${a.firstName} ${a.lastName}`.trim(),
       registrantName: `${reg.registrantFirstName} ${reg.registrantLastName}`.trim(),
-      paidVia: method,
+      paidVia,
       checkedIn: a.checkedIn,
     };
   });
@@ -626,9 +683,10 @@ export async function getWhereMoneyCameFrom(
 
   const rangeFilter = dateFilter ? { gte: dateFilter.gte, ...(dateFilter.lte ? { lte: dateFilter.lte } : {}) } : undefined;
 
-  const [groups, transactions, lifetimeRaised, offline, pledgeAgg, payerAgg] = await Promise.all([
+  const [groups, transactions, processedRegistrationIds, lifetimeRaised, offline, pledgeAgg, payerAgg] = await Promise.all([
     fetchSourceGroups({ churchId, dateFilter, attributedUserId, linkAssignments }),
     fetchSourceTransactions({ churchId, dateFilter, attributedUserId, linkAssignments }),
+    fetchEventRegistrationIds({ churchId, dateFilter, attributedUserId, linkAssignments }),
     getCampaignsRaisedCentsBatch(
       churchId,
       campaigns.map((c) => c.id)
@@ -667,9 +725,7 @@ export async function getWhereMoneyCameFrom(
 
   const attendees = await fetchEventAttendees({
     churchId,
-    processedRegistrationIds: transactions
-      .filter((t) => t.kind === "EVENT" && t.registrationId)
-      .map((t) => t.registrationId as string),
+    processedRegistrationIds,
     rangeFilter,
     attributedUserId,
   });
