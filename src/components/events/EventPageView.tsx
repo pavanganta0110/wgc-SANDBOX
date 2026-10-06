@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { CalendarDays, Clock, MapPin } from "lucide-react";
 import EventRegistrationForm from "@/components/events/EventRegistrationForm";
 import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
@@ -27,11 +28,13 @@ export interface EventPageViewProps {
   /** Editor preview: show the thank-you screen instead of the form. */
   previewConfirmation?: boolean;
   monthlyGiftSlug?: string | null;
+  /** Staff are selling at the door: the registration is marked a door sale and the buyer is checked in automatically. */
+  doorSale?: boolean;
   /** Replaces the registration form (e.g. the embed's "Register & pay" button for events that take payment). */
   formOverride?: React.ReactNode;
 }
 
-export default function EventPageView({ event, addOns, organization, checkout, light, closedMessage, showPoweredByWgc, preview = false, embed = false, formOverride, previewBanner, previewConfirmation = false, monthlyGiftSlug = null }: EventPageViewProps) {
+export default function EventPageView({ event, addOns, organization, checkout, light, closedMessage, showPoweredByWgc, preview = false, embed = false, formOverride, previewBanner, previewConfirmation = false, monthlyGiftSlug = null, doorSale = false }: EventPageViewProps) {
   const priceLabel =
     event.priceCents > 0 ? `${formatCents(event.priceCents)} ${event.priceMode === "PER_ATTENDEE" ? "per person" : "per registration"}` : "Free";
 
@@ -43,6 +46,12 @@ export default function EventPageView({ event, addOns, organization, checkout, l
         <a href={`/merchant/events/${previewBanner.eventId}`} className="underline font-semibold">
           Go to the event to publish it
         </a>
+      </div>
+    )}
+    {doorSale && (
+      <div className="bg-indigo-600 text-white text-sm text-center py-2 px-4">
+        <strong>Door sale mode.</strong> Whoever registers here is checked in automatically.{" "}
+        <Link href="/merchant/events" className="underline font-semibold">Back to events</Link>
       </div>
     )}
     <div className={preview || embed ? "py-4 px-2" : "min-h-screen py-10 px-4"} style={{ backgroundColor: light.pageBackground }}>
@@ -111,7 +120,7 @@ export default function EventPageView({ event, addOns, organization, checkout, l
         ) : formOverride ? (
           formOverride
         ) : (
-          <EventRegistrationForm event={event} addOns={addOns} organization={organization} checkout={checkout} light={light} previewMode={preview} previewConfirmation={previewConfirmation} monthlyGiftSlug={monthlyGiftSlug} />
+          <EventRegistrationForm event={event} addOns={addOns} organization={organization} checkout={checkout} light={light} previewMode={preview} previewConfirmation={previewConfirmation} monthlyGiftSlug={monthlyGiftSlug} doorSale={doorSale} />
         )}
 
         {showPoweredByWgc && <PoweredByWgc />}

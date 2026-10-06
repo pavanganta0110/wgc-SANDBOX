@@ -6,11 +6,15 @@ export interface EventStats {
   checkedIn: number;
   /** Sum of confirmed registrations whose payment has not failed. Free registrations contribute 0. */
   revenueCents: number;
+  /** Cash/check collected by staff at the door — never touched Finix, so kept out of revenueCents. */
+  doorCashCents: number;
+  /** Registrations (and tickets) sold at the door, any payment method. */
+  doorSales: number;
   /** Abandoned carts — PENDING registrations not yet paid. Informational. */
   pendingRegistrations: number;
 }
 
-const EMPTY: EventStats = { registrations: 0, attendees: 0, checkedIn: 0, revenueCents: 0, pendingRegistrations: 0 };
+const EMPTY: EventStats = { registrations: 0, attendees: 0, checkedIn: 0, revenueCents: 0, doorCashCents: 0, doorSales: 0, pendingRegistrations: 0 };
 const FAILED_PAYMENT_STATUSES = new Set(["FAILED", "CANCELED", "CANCELLED", "REVERSED"]);
 
 /** Dashboard numbers for one or many events — always scoped to `churchId`. */
@@ -21,7 +25,7 @@ export async function loadEventStats(churchId: string, eventIds: string[]): Prom
   const [registrations, pending, checkedIn] = await Promise.all([
     prisma.eventRegistration.findMany({
       where: { churchId, eventId: { in: eventIds }, status: "CONFIRMED" },
-      select: { eventId: true, attendeeCount: true, totalCents: true, paymentId: true },
+      select: { eventId: true, attendeeCount: true, totalCents: true, paymentId: true, paymentMethod: true, soldAtDoor: true },
     }),
     prisma.eventRegistration.groupBy({
       by: ["eventId"],
@@ -48,6 +52,8 @@ export async function loadEventStats(churchId: string, eventIds: string[]): Prom
     s.attendees += r.attendeeCount;
     const failed = r.paymentId ? FAILED_PAYMENT_STATUSES.has(paymentStatus.get(r.paymentId) ?? "") : false;
     if (r.paymentId && !failed) s.revenueCents += r.totalCents;
+    if (r.soldAtDoor) s.doorSales += 1;
+    if (!r.paymentId && (r.paymentMethod === "CASH" || r.paymentMethod === "CHECK")) s.doorCashCents += r.totalCents;
   }
   for (const p of pending) {
     const s = out.get(p.eventId);

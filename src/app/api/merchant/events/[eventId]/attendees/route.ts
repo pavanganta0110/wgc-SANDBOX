@@ -38,6 +38,8 @@ export async function GET(req: Request, { params }: Ctx) {
               { firstName: { contains: q, mode: "insensitive" } },
               { lastName: { contains: q, mode: "insensitive" } },
               { email: { contains: q, mode: "insensitive" } },
+              // A confirmation code read aloud at the door finds the whole party.
+              { registrationId: { in: registrations.filter((r) => r.confirmationCode === q.toUpperCase()).map((r) => r.id) } },
             ],
           }
         : {}),

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
-import { submitEventRegistration, type RegistrationInput } from "@/lib/eventRegistration/registrationService";
+import { submitEventRegistration, type RegistrationInput, type DoorSaleOptions } from "@/lib/eventRegistration/registrationService";
+import { guardEventsRoute } from "@/lib/eventRegistration/merchantGuard";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Public, unauthenticated registration endpoint. Everything that matters
@@ -18,14 +20,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ success: false, error: "Too many attempts. Please wait a moment and try again." }, { status: 429 });
   }
 
-  let body: RegistrationInput;
+  let body: RegistrationInput & { doorSale?: boolean };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ success: false, error: "Invalid request." }, { status: 400 });
   }
 
-  const result = await submitEventRegistration(slug, body);
+  // A door CARD sale: the same public checkout, driven by signed-in staff
+  // on their own device. The flag is honoured only for a session that can
+  // manage attendees AND belongs to the church that owns this event —
+  // anyone else sending it is simply refused.
+  let door: DoorSaleOptions | undefined;
+  if (body?.doorSale === true) {
+    const guard = await guardEventsRoute("canManageEventAttendees");
+    if ("response" in guard) return guard.response;
+    const event = await prisma.event.findUnique({ where: { slug }, select: { churchId: true } });
+    if (!event || event.churchId !== guard.auth.churchId) {
+      return NextResponse.json({ success: false, error: "This event could not be found." }, { status: 404 });
+    }
+    door = { userId: guard.auth.userId };
+  }
+
+  const result = await submitEventRegistration(slug, body, new Date(), door);
   if (!result.ok) {
     return NextResponse.json({ success: false, error: result.error }, { status: result.status });
   }

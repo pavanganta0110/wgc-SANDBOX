@@ -11,6 +11,7 @@ import {
   type EventEmailContext,
 } from "@/lib/eventRegistration/emailTemplates";
 import { loadEventAudience } from "@/lib/eventRegistration/audience";
+import { ensureTicketTokens, ticketPageUrl, ticketQrImageUrl } from "@/lib/eventRegistration/tickets";
 
 /**
  * Sending for the three automated event emails. Everything goes through the
@@ -103,6 +104,23 @@ function confirmationSummaryHtml(args: {
   return `<table style="margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;width:100%;" cellpadding="0" cellspacing="0"><tbody>${rows}</tbody></table>`;
 }
 
+/** One QR ticket per attendee — the thing they hold up at the door. The image is a hosted PNG because mail clients block inline data: images. */
+function ticketsHtml(attendees: { firstName: string; lastName: string; ticketToken: string | null }[]): string {
+  const cards = attendees
+    .filter((a): a is typeof a & { ticketToken: string } => Boolean(a.ticketToken))
+    .map((a) => {
+      const name = escapeHtml(`${a.firstName} ${a.lastName}`.trim());
+      return `<div style="display:inline-block;vertical-align:top;margin:8px 8px 0 0;padding:14px;border:1px solid #e2e8f0;border-radius:12px;text-align:center;width:200px;">
+<p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#0B1320;">${name}</p>
+<a href="${escapeHtml(ticketPageUrl(a.ticketToken))}"><img src="${escapeHtml(ticketQrImageUrl(a.ticketToken))}" alt="Ticket QR code for ${name}" width="172" height="172" style="display:block;margin:0 auto;border:0;" /></a>
+<p style="margin:8px 0 0;font-size:12px;"><a href="${escapeHtml(ticketPageUrl(a.ticketToken))}" style="color:#0B5DBC;">Open ticket</a></p>
+</div>`;
+    })
+    .join("");
+  if (!cards) return "";
+  return `<div style="margin-top:24px;border-top:1px solid #e2e8f0;padding-top:12px;"><p style="margin:0 0 4px;font-size:15px;font-weight:700;color:#0B1320;">Your ticket${attendees.length > 1 ? "s" : ""}</p><p style="margin:0;font-size:13px;color:#64748b;">Show ${attendees.length > 1 ? "each QR code" : "this QR code"} at the entrance to check in.</p>${cards}</div>`;
+}
+
 /** Sends the confirmation to the registrant. Idempotent: a registration is only ever emailed once unless `force`. */
 export async function sendRegistrationConfirmationEmail(
   registrationId: string,
@@ -116,7 +134,8 @@ export async function sendRegistrationConfirmationEmail(
   if (!event) return false;
 
   const [attendees, addOnLines, branding] = await Promise.all([
-    prisma.eventAttendee.findMany({ where: { registrationId, churchId: registration.churchId }, orderBy: { createdAt: "asc" } }),
+    // Also backfills a ticket token for any attendee that predates tickets.
+    ensureTicketTokens(registrationId, registration.churchId),
     prisma.eventRegistrationAddOn.findMany({ where: { registrationId, churchId: registration.churchId } }),
     loadChurchBranding(registration.churchId),
   ]);
@@ -139,8 +158,9 @@ export async function sendRegistrationConfirmationEmail(
       attendees,
       addOnLines,
       totalCents: registration.totalCents,
-      paid: Boolean(registration.paymentId),
-    });
+      paid: Boolean(registration.paymentId) || registration.paymentMethod === "CASH" || registration.paymentMethod === "CHECK",
+    }) +
+    ticketsHtml(attendees);
 
   const result = await sendWgcEmail({
     to: registration.registrantEmail,

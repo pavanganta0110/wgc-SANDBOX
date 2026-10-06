@@ -6095,6 +6095,16 @@ model EventRegistration {
   paymentId String?
   paidAt    DateTime?
 
+  // How the registration was paid: null = the ordinary online (Finix) flow.
+  // CASH | CHECK are recorded by staff at the door and never touch Finix —
+  // they have no Payment row and are reported separately from online revenue.
+  // COMPLIMENTARY = a free comp ticket issued at the door.
+  paymentMethod String?
+  // Sold by staff at the door: attendees are checked in the moment the
+  // registration is confirmed (card sales included — see finalizeEventRegistration).
+  soldAtDoor    Boolean @default(false)
+  soldByUserId  String?
+
   confirmationEmailSentAt DateTime?
   internalNote            String?
   confirmedAt             DateTime?
@@ -6130,6 +6140,12 @@ model EventAttendee {
   checkedIn         Boolean   @default(false)
   checkedInAt       DateTime?
   checkedInByUserId String?
+
+  // Unguessable per-attendee ticket secret — the value encoded in the QR code
+  // the merchant scans at the door. Nullable so attendees created before
+  // tickets existed keep working; it is generated lazily the first time a
+  // ticket is rendered (see lib/eventRegistration/tickets.ts).
+  ticketToken String? @unique
 
   createdAt DateTime @default(now())
 

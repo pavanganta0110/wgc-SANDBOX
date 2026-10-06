@@ -27,6 +27,8 @@ type Props = Pick<PublicEventData, "event" | "addOns" | "organization" | "checko
   previewConfirmation?: boolean;
   /** The event's monthly-gift page, when it offers a recurring additional donation. */
   monthlyGiftSlug?: string | null;
+  /** Staff-run door checkout: tells the register API to mark this a door sale (honoured only for a signed-in session of the owning organization). */
+  doorSale?: boolean;
 };
 
 interface AttendeeDraft {
@@ -128,7 +130,7 @@ function FieldInput({
   );
 }
 
-export default function EventRegistrationForm({ event, addOns, organization, checkout, light, previewMode = false, previewConfirmation = false, monthlyGiftSlug = null }: Props) {
+export default function EventRegistrationForm({ event, addOns, organization, checkout, light, previewMode = false, previewConfirmation = false, monthlyGiftSlug = null, doorSale = false }: Props) {
   const [clientKey] = useState(newClientKey);
   const nextKey = useRef(1);
 
@@ -267,6 +269,7 @@ export default function EventRegistrationForm({ event, addOns, organization, che
         customResponses: regResponses,
         addOns: selections,
         donationCents,
+        ...(doorSale ? { doorSale: true } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));

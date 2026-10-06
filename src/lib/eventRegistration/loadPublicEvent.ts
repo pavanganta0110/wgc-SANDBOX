@@ -3,7 +3,7 @@ import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVeri
 import { parseBrandingSettings, parseDonorFieldSettings, parseAllowedPaymentMethods, resolveGivingPageLogo, type PaymentMethodKey } from "@/lib/givingLinks/types";
 import { getPaymentMethodAvailability } from "@/lib/payments/paymentMethodAvailability";
 import { parseCustomFields, type CustomFieldDefinition } from "@/lib/eventRegistration/customFields";
-import { getRegistrationState, REGISTRATION_CLOSED_MESSAGES } from "@/lib/eventRegistration/eventConfig";
+import { getDoorSaleState, getRegistrationState, REGISTRATION_CLOSED_MESSAGES } from "@/lib/eventRegistration/eventConfig";
 import { formatEventDate, formatEventTime } from "@/lib/eventRegistration/timezone";
 
 /**
@@ -47,6 +47,8 @@ export interface PublicEventData {
   organization: { name: string; logoUrl: string | null; finixMerchantId: string | null };
   /** Slug of the event's monthly-gift page, when the event offers a recurring additional donation. */
   monthlyGiftSlug: string | null;
+  /** Staff of the owning organization are running the checkout at the door (?door=1): the sign-up deadline doesn't apply and the buyer is auto-checked-in. */
+  isDoorSale: boolean;
   /** The event's own staff are looking at a page that isn't public yet (Draft / Inactive). Nothing on it submits. */
   isPreview: boolean;
   eventId: string;
@@ -71,7 +73,7 @@ export interface PublicEventData {
 
 export type LoadPublicEventResult = { ok: false } | ({ ok: true } & PublicEventData);
 
-export async function loadPublicEvent(slug: string, now: Date = new Date(), opts: { previewChurchId?: string } = {}): Promise<LoadPublicEventResult> {
+export async function loadPublicEvent(slug: string, now: Date = new Date(), opts: { previewChurchId?: string; doorMode?: boolean } = {}): Promise<LoadPublicEventResult> {
   const event = await prisma.event.findUnique({ where: { slug } });
   if (!event || event.archivedAt) return { ok: false };
   // A Draft/Inactive event is invisible to the public (404) — but the
@@ -83,6 +85,10 @@ export async function loadPublicEvent(slug: string, now: Date = new Date(), opts
   if (!church) return { ok: false };
 
   const verification = await checkNonprofitVerificationStatus(church.id, church);
+  // Door mode is honoured only for a signed-in session of the owning church;
+  // for anyone else ?door=1 changes nothing.
+  const isDoorSale = Boolean(opts.doorMode) && opts.previewChurchId === event.churchId;
+  const doorState = isDoorSale ? getDoorSaleState(event, now) : null;
   const state = getRegistrationState(event, now);
 
   const addOns = await prisma.eventAddOn.findMany({
@@ -106,7 +112,10 @@ export async function loadPublicEvent(slug: string, now: Date = new Date(), opts
   const googlePayEnvironment: "TEST" | "PRODUCTION" =
     process.env.NEXT_PUBLIC_FINIX_ENV === "live" && process.env.GOOGLE_PAY_PRODUCTION_APPROVED === "true" ? "PRODUCTION" : "TEST";
 
-  let closedMessage: string | null = isPreview || state.open ? null : REGISTRATION_CLOSED_MESSAGES[state.reason];
+  let closedMessage: string | null;
+  if (doorState) closedMessage = doorState.open ? null : doorState.message;
+  else if (isPreview) closedMessage = null;
+  else closedMessage = state.open ? null : REGISTRATION_CLOSED_MESSAGES[state.reason];
   // A paid event can't take money for an organization that isn't approved
   // or has no Finix merchant yet. Free RSVPs don't touch payments at all.
   if (!closedMessage && (event.priceCents > 0 || event.allowOptionalDonation || addOns.length > 0)) {
@@ -155,7 +164,8 @@ export async function loadPublicEvent(slug: string, now: Date = new Date(), opts
       finixMerchantId: church.finixMerchantId,
     },
     monthlyGiftSlug: monthlyGiftLink?.publicSlug ?? null,
-    isPreview,
+    isPreview: isPreview && !isDoorSale,
+    isDoorSale,
     eventId: event.id,
     closedMessage,
     checkout: link

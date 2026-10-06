@@ -7,8 +7,9 @@ import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { parseCustomFields, validateCustomResponses, type CustomFieldResponses } from "@/lib/eventRegistration/customFields";
 import { computeRegistrationTotals, type RegistrationTotals } from "@/lib/eventRegistration/pricing";
-import { generateConfirmationCode, getRegistrationState, REGISTRATION_CLOSED_MESSAGES } from "@/lib/eventRegistration/eventConfig";
+import { generateConfirmationCode, getDoorSaleState, getRegistrationState, REGISTRATION_CLOSED_MESSAGES } from "@/lib/eventRegistration/eventConfig";
 import { sendRegistrationConfirmationEmail } from "@/lib/eventRegistration/eventEmails";
+import { generateTicketToken } from "@/lib/eventRegistration/tickets";
 
 /**
  * The one place a registration is created and confirmed. The public
@@ -47,6 +48,16 @@ export type SubmitResult =
       givingLinkSlug: string | null;
     };
 
+/** How a door sale is paid when staff take it themselves. CARD door sales go through the ordinary online flow and carry no method. */
+export type DoorPaymentMethod = "CASH" | "CHECK" | "COMPLIMENTARY";
+
+export interface DoorSaleOptions {
+  /** The signed-in staff member selling — resolved from the merchant session by the caller, never from the request body. */
+  userId: string;
+  /** Omitted for a card sale (paid through the normal Finix flow, then auto-checked-in). */
+  paymentMethod?: DoorPaymentMethod;
+}
+
 const NAME_MAX = 80;
 const MAX_CLIENT_KEY = 100;
 
@@ -54,14 +65,20 @@ function cleanName(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, NAME_MAX) : "";
 }
 
-export async function submitEventRegistration(slug: string, input: RegistrationInput, now: Date = new Date()): Promise<SubmitResult> {
+export async function submitEventRegistration(slug: string, input: RegistrationInput, now: Date = new Date(), door?: DoorSaleOptions): Promise<SubmitResult> {
   const fail = (status: number, error: string): SubmitResult => ({ ok: false, status, error });
 
   const event = await prisma.event.findUnique({ where: { slug } });
   if (!event || event.archivedAt) return fail(404, "This event could not be found.");
 
-  const state = getRegistrationState(event, now);
-  if (!state.open) return fail(409, REGISTRATION_CLOSED_MESSAGES[state.reason]);
+  if (door) {
+    const doorState = getDoorSaleState(event, now);
+    if (!doorState.open) return fail(409, doorState.message);
+  } else {
+    const state = getRegistrationState(event, now);
+    if (!state.open) return fail(409, REGISTRATION_CLOSED_MESSAGES[state.reason]);
+  }
+  const offlineMethod = door?.paymentMethod ?? null;
 
   if (typeof input.clientKey !== "string" || !input.clientKey || input.clientKey.length > MAX_CLIENT_KEY) {
     return fail(400, "Your session expired. Please refresh the page and try again.");
@@ -158,8 +175,14 @@ export async function submitEventRegistration(slug: string, input: RegistrationI
     donationCents: input.donationCents === undefined ? 0 : Number(input.donationCents),
   });
   if (!priced.ok) return fail(400, priced.error);
-  const totals = priced.totals;
-  const requiresPayment = totals.totalCents > 0;
+  const pricedTotals = priced.totals;
+  // A comp ticket records what it would have cost as $0 — nothing is owed or collected.
+  const totals: RegistrationTotals =
+    offlineMethod === "COMPLIMENTARY"
+      ? { ...pricedTotals, registrationAmountCents: 0, addOnsAmountCents: 0, donationAmountCents: 0, totalCents: 0, benefitValueCents: 0, contributionCents: 0, addOnLines: pricedTotals.addOnLines.map((l) => ({ ...l, unitPriceCents: 0, lineTotalCents: 0 })) }
+      : pricedTotals;
+  // Cash/check/comp are settled by staff on the spot: no Finix, no payment step.
+  const requiresPayment = totals.totalCents > 0 && !offlineMethod;
 
   let givingLinkSlug: string | null = null;
   if (requiresPayment) {
@@ -204,6 +227,7 @@ export async function submitEventRegistration(slug: string, input: RegistrationI
     addOnsAmountCents: totals.addOnsAmountCents,
     donationAmountCents: totals.donationAmountCents,
     totalCents: totals.totalCents,
+    ...(door ? { soldAtDoor: true, soldByUserId: door.userId, paymentMethod: offlineMethod } : {}),
   };
 
   const registration = await prisma.$transaction(async (tx) => {
@@ -237,6 +261,7 @@ export async function submitEventRegistration(slug: string, input: RegistrationI
         normalizedEmail: a.normalizedEmail,
         phone: a.phone,
         customResponsesJson: a.customResponses as Prisma.InputJsonValue,
+        ticketToken: generateTicketToken(),
       })),
     });
     if (totals.addOnLines.length > 0) {
@@ -258,7 +283,11 @@ export async function submitEventRegistration(slug: string, input: RegistrationI
 
   if (!requiresPayment) {
     // Free RSVP: no Finix, no Payment row — confirm right here.
-    await finalizeEventRegistration(registration.id, { address: cleanedAddress });
+    await finalizeEventRegistration(registration.id, {
+      address: cleanedAddress,
+      // Cash/check were taken in hand right now; stamp that as the payment time.
+      ...(offlineMethod === "CASH" || offlineMethod === "CHECK" ? { paidAt: now } : {}),
+    });
     return {
       ok: true,
       duplicate: false,
@@ -366,6 +395,14 @@ export async function finalizeEventRegistration(
     },
   });
   if (claimed.count === 0) return;
+
+  // Sold at the door: the buyer is standing right here, so they're in.
+  if (registration.soldAtDoor) {
+    await prisma.eventAttendee.updateMany({
+      where: { registrationId, churchId: registration.churchId, checkedIn: false },
+      data: { checkedIn: true, checkedInAt: new Date(), checkedInByUserId: registration.soldByUserId },
+    });
+  }
 
   try {
     await sendRegistrationConfirmationEmail(registrationId);

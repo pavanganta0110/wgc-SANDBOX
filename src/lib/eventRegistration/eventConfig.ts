@@ -44,6 +44,14 @@ export function getRegistrationState(event: RegistrationWindowEvent, now: Date =
   return { open: true };
 }
 
+/** Door sales stay open for the whole event (and a day past its start when no end time was set) — even past the online sign-up deadline. */
+export function getDoorSaleState(event: { status: string; startsAt: Date; endsAt: Date | null }, now: Date): { open: true } | { open: false; message: string } {
+  if (event.status !== "ACTIVE") return { open: false, message: "Publish the event (set it to Active) before selling tickets at the door." };
+  const end = event.endsAt ?? new Date(event.startsAt.getTime() + 24 * 60 * 60 * 1000);
+  if (now > end) return { open: false, message: "This event has already taken place." };
+  return { open: true };
+}
+
 export const REGISTRATION_CLOSED_MESSAGES: Record<RegistrationClosedReason, string> = {
   NOT_ACTIVE: "Registration for this event is not currently open.",
   NOT_YET_OPEN: "Registration for this event has not opened yet.",

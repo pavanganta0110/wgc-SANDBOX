@@ -8,6 +8,7 @@ import { inputClass, readApiError, secondaryButton } from "@/components/events/m
 import EventSettingsForm, { type AddOnFormValue, type EventFormValues } from "@/components/events/merchant/EventSettingsForm";
 import RegistrationsTab from "@/components/events/merchant/RegistrationsTab";
 import AttendeesTab from "@/components/events/merchant/AttendeesTab";
+import CheckInTab from "@/components/events/merchant/CheckInTab";
 import EmailsTab, { type EmailTemplates } from "@/components/events/merchant/EmailsTab";
 import EventEmbedPanel from "@/components/events/merchant/EventEmbedPanel";
 
@@ -16,6 +17,8 @@ interface Stats {
   attendees: number;
   checkedIn: number;
   revenueCents: number;
+  doorCashCents: number;
+  doorSales: number;
   pendingRegistrations: number;
 }
 
@@ -30,7 +33,7 @@ type EventDetail = EventFormValues & {
   thankYouSentAt: string | null;
 };
 
-const TABS = ["Overview", "Registrations", "Attendees", "Emails", "Settings"] as const;
+const TABS = ["Overview", "Registrations", "Attendees", "Check-in", "Emails", "Settings"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function EventDetailClient({
@@ -151,6 +154,7 @@ export default function EventDetailClient({
                 ["Attendees", String(stats.attendees)],
                 ["Checked in", `${stats.checkedIn} of ${stats.attendees}`],
                 ["Revenue", formatCents(stats.revenueCents)],
+                ...(stats.doorCashCents > 0 ? [["Door cash/check", formatCents(stats.doorCashCents)]] : []),
               ].map(([label, value]) => (
                 <div key={label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
                   <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -177,6 +181,20 @@ export default function EventDetailClient({
         )}
         {tab === "Registrations" && <RegistrationsTab eventId={eventId} canExport={canExport} />}
         {tab === "Attendees" && <AttendeesTab eventId={eventId} canManageAttendees={canManageAttendees} canExport={canExport} onChange={load} />}
+        {tab === "Check-in" && (
+          <CheckInTab
+            eventId={eventId}
+            publicUrl={event.publicUrl}
+            priceCents={event.priceCents}
+            priceMode={event.priceMode}
+            maxAttendees={event.allowMultipleAttendees ? event.maxAttendeesPerRegistration : 1}
+            addOns={addOns}
+            isActive={event.status === "ACTIVE"}
+            canManageAttendees={canManageAttendees}
+            stats={stats}
+            onChange={load}
+          />
+        )}
         {tab === "Emails" && <EmailsTab eventId={eventId} initial={event.emailTemplates} reminderSentAt={event.reminderSentAt} thankYouSentAt={event.thankYouSentAt} canManage={canManage} onSaved={load} />}
         {tab === "Settings" &&
           (canManage ? (

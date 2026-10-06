@@ -63,6 +63,11 @@ vi.mock("@/lib/prisma", () => {
       eventAttendee: {
         findMany: async ({ where }: any) => store.attendees.filter((a) => a.registrationId === where.registrationId && (where.donorId === null ? a.donorId === null : true)),
         update: async ({ where, data }: any) => Object.assign(store.attendees.find((a) => a.id === where.id)!, data),
+        updateMany: async ({ where, data }: any) => {
+          const rows = store.attendees.filter((a) => a.registrationId === where.registrationId && (where.checkedIn === undefined || a.checkedIn === where.checkedIn));
+          rows.forEach((r) => Object.assign(r, data));
+          return { count: rows.length };
+        },
       },
       eventRegistration: {
         findUnique: async ({ where }: any) => {
@@ -303,5 +308,84 @@ describe("finalizeEventRegistration", () => {
     await finalizeEventRegistration(r.registrationId, { paymentId: "pay1" });
     expect(store.registrations[0].status).toBe("CANCELED");
     expect(sendConfirmation).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("door sales", () => {
+  const DOOR = { userId: "staff1" };
+  // Mid-event, after the online sign-up deadline has passed.
+  const DURING = new Date("2030-05-02T23:30:00Z");
+  const paidEvent = (over: Record<string, unknown> = {}) =>
+    baseEvent({ priceCents: 2500, registrationClosesAt: new Date("2030-05-01T00:00:00Z"), endsAt: new Date("2030-05-03T02:00:00Z"), ...over });
+
+  it("rejects an online registration past the deadline but accepts a door sale", async () => {
+    store.event = paidEvent();
+    expect((await submitEventRegistration("spring", input(), DURING)).ok).toBe(false);
+    const r = await submitEventRegistration("spring", input(), DURING, { ...DOOR, paymentMethod: "CASH" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("records a cash sale as confirmed + paid in hand, checked in, with no Finix and no giving link", async () => {
+    store.event = paidEvent({ givingLinkId: null });
+    const r = await submitEventRegistration("spring", input(), DURING, { ...DOOR, paymentMethod: "CASH" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("CONFIRMED");
+    expect(r.requiresPayment).toBe(false);
+    expect(r.totals.totalCents).toBe(5000); // 2 attendees x $25, recomputed server-side
+    expect(finixTouched).not.toHaveBeenCalled();
+    expect(assertApproved).not.toHaveBeenCalled();
+    expect(store.registrations[0]).toMatchObject({ status: "CONFIRMED", paymentMethod: "CASH", soldAtDoor: true, soldByUserId: "staff1", paymentId: null, totalCents: 5000 });
+    expect(store.registrations[0].paidAt).toEqual(DURING);
+    expect(store.attendees).toHaveLength(2);
+    expect(store.attendees.every((a) => a.checkedIn && a.checkedInByUserId === "staff1")).toBe(true);
+    expect(sendConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives every attendee a unique ticket token", async () => {
+    await submitEventRegistration("spring", input({ clientKey: "k-a" }), NOW);
+    await submitEventRegistration("spring", input({ clientKey: "k-b" }), NOW);
+    const tokens = store.attendees.map((a) => a.ticketToken);
+    expect(tokens).toHaveLength(4);
+    expect(tokens.every((t) => typeof t === "string" && t.length >= 20)).toBe(true);
+    expect(new Set(tokens).size).toBe(4);
+  });
+
+  it("zeroes a complimentary ticket", async () => {
+    store.event = paidEvent();
+    const r = await submitEventRegistration("spring", input(), DURING, { ...DOOR, paymentMethod: "COMPLIMENTARY" });
+    expect(r.ok).toBe(true);
+    expect(store.registrations[0]).toMatchObject({ paymentMethod: "COMPLIMENTARY", totalCents: 0, registrationAmountCents: 0 });
+    expect(store.registrations[0].paidAt).toBeNull();
+  });
+
+  it("leaves a door CARD sale pending until paid, then confirms and checks the buyer in", async () => {
+    store.event = paidEvent();
+    const r = await submitEventRegistration("spring", input(), DURING, DOOR);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.status).toBe("PENDING");
+    expect(r.requiresPayment).toBe(true);
+    expect(store.attendees.every((a) => !a.checkedIn)).toBe(true);
+    expect(store.registrations[0]).toMatchObject({ soldAtDoor: true, paymentMethod: null });
+
+    await finalizeEventRegistration(r.registrationId, { paymentId: "pay1", paidAt: DURING });
+    expect(store.registrations[0].status).toBe("CONFIRMED");
+    expect(store.attendees.every((a) => a.checkedIn)).toBe(true);
+  });
+
+  it("does not check in an ordinary online registration", async () => {
+    await submitEventRegistration("spring", input(), NOW);
+    expect(store.attendees.every((a) => !a.checkedIn)).toBe(true);
+    expect(store.registrations[0].soldAtDoor).toBeFalsy();
+  });
+
+  it("refuses a door sale once the event is over or isn't published", async () => {
+    store.event = paidEvent();
+    const late = new Date("2030-05-03T03:00:00Z");
+    expect((await submitEventRegistration("spring", input(), late, { ...DOOR, paymentMethod: "CASH" })).ok).toBe(false);
+    store.event = paidEvent({ status: "DRAFT" });
+    expect((await submitEventRegistration("spring", input(), DURING, { ...DOOR, paymentMethod: "CASH" })).ok).toBe(false);
   });
 });

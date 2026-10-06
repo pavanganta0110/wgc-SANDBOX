@@ -15,15 +15,17 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function PublicEventPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function PublicEventPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ door?: string }> }) {
   const { slug } = await params;
+  const { door } = await searchParams;
   // Signed-in staff of the owning organization can open a Draft/Inactive event.
-  const data = await loadPublicEvent(slug, new Date(), { previewChurchId: await getPreviewChurchId() });
+  const data = await loadPublicEvent(slug, new Date(), { previewChurchId: await getPreviewChurchId(), doorMode: door === "1" });
   if (!data.ok) notFound();
 
   return (
     <EventPageView
       preview={data.isPreview}
+      doorSale={data.isDoorSale}
       previewBanner={data.isPreview ? { eventId: data.eventId } : undefined}
       monthlyGiftSlug={data.monthlyGiftSlug}
       event={data.event}
