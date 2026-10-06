@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, CreditCard, Plus, Trash2 } from "lucide-react";
+import { Camera, CameraOff, CreditCard, Plus, Trash2, Volume2, VolumeX } from "lucide-react";
 import toast from "react-hot-toast";
 import jsQR from "jsqr";
 import { formatCents } from "@/lib/format";
@@ -30,6 +30,31 @@ interface FoundAttendee {
   confirmationCode: string;
 }
 
+type Sound = "success" | "warning" | "error";
+
+/** Short synthesized tones (no audio files): a bright two-note chime for a good check-in, a double beep for already-in, a low buzz for a bad ticket. */
+function playTone(ctx: AudioContext, kind: Sound) {
+  const notes: { f: number; at: number; dur: number; type: OscillatorType }[] =
+    kind === "success"
+      ? [{ f: 880, at: 0, dur: 0.12, type: "sine" }, { f: 1320, at: 0.12, dur: 0.22, type: "sine" }]
+      : kind === "warning"
+        ? [{ f: 660, at: 0, dur: 0.12, type: "square" }, { f: 660, at: 0.2, dur: 0.12, type: "square" }]
+        : [{ f: 180, at: 0, dur: 0.45, type: "sawtooth" }];
+  const t0 = ctx.currentTime;
+  for (const n of notes) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = n.type;
+    osc.frequency.value = n.f;
+    gain.gain.setValueAtTime(0.0001, t0 + n.at);
+    gain.gain.exponentialRampToValueAtTime(0.25, t0 + n.at + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + n.at + n.dur);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0 + n.at);
+    osc.stop(t0 + n.at + n.dur + 0.05);
+  }
+}
+
 function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage: boolean; onChange: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -40,6 +65,26 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
   const [running, setRunning] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [result, setResult] = useState<ScanResponse | null>(null);
+  const [soundOn, setSoundOn] = useState(true);
+  const soundOnRef = useRef(true);
+  const audioRef = useRef<AudioContext | null>(null);
+
+  // Browsers only allow audio after a tap, so the context is created from the
+  // "Start scanning" / sound-toggle / manual check-in clicks.
+  const unlockAudio = useCallback(() => {
+    try {
+      if (!audioRef.current) {
+        const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (Ctor) audioRef.current = new Ctor();
+      }
+      void audioRef.current?.resume();
+    } catch {
+      // No audio support — the colour banner and vibration still work.
+    }
+  }, []);
+  const beep = useCallback((kind: Sound) => {
+    if (soundOnRef.current && audioRef.current) playTone(audioRef.current, kind);
+  }, []);
 
   const [q, setQ] = useState("");
   const [found, setFound] = useState<FoundAttendee[] | null>(null);
@@ -60,13 +105,14 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
         }
         const data = (await res.json()) as ScanResponse;
         setResult(data);
+        beep(data.outcome === "CHECKED_IN" ? "success" : data.outcome === "ALREADY_CHECKED_IN" ? "warning" : "error");
         if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(data.outcome === "CHECKED_IN" ? 80 : [120, 60, 120]);
         if (data.outcome === "CHECKED_IN") onChange();
       } finally {
         busyRef.current = false;
       }
     },
-    [eventId, onChange]
+    [eventId, onChange, beep]
   );
 
   const stop = useCallback(() => {
@@ -108,6 +154,7 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
 
   async function start() {
     setCameraError(null);
+    unlockAudio();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
       streamRef.current = stream;
@@ -134,6 +181,7 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
   }, [q, eventId]);
 
   async function manualCheckIn(a: FoundAttendee) {
+    unlockAudio();
     const res = await fetch(`/api/merchant/events/${eventId}/attendees/${a.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -141,6 +189,7 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
     });
     if (!res.ok) return void toast.error(await readApiError(res, "Couldn't check in."));
     setFound((prev) => prev?.map((x) => (x.id === a.id ? { ...x, checkedIn: true } : x)) ?? prev);
+    beep("success");
     toast.success(`${a.firstName} ${a.lastName} checked in`);
     onChange();
   }
@@ -149,15 +198,32 @@ function Scanner({ eventId, canManage, onChange }: { eventId: string; canManage:
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-slate-900">Scan tickets</h3>
-        {running ? (
-          <button type="button" onClick={stop} className={secondaryButton}>
-            <CameraOff className="w-4 h-4 mr-1.5" aria-hidden="true" /> Stop camera
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={soundOn}
+            aria-label={soundOn ? "Mute check-in sounds" : "Unmute check-in sounds"}
+            onClick={() => {
+              const next = !soundOn;
+              setSoundOn(next);
+              soundOnRef.current = next;
+              unlockAudio();
+              if (next) beep("success");
+            }}
+            className={secondaryButton}
+          >
+            {soundOn ? <Volume2 className="w-4 h-4" aria-hidden="true" /> : <VolumeX className="w-4 h-4" aria-hidden="true" />}
           </button>
-        ) : (
-          <button type="button" onClick={() => void start()} disabled={!canManage} className={primaryButton}>
-            <Camera className="w-4 h-4 mr-1.5" aria-hidden="true" /> Start scanning
-          </button>
-        )}
+          {running ? (
+            <button type="button" onClick={stop} className={secondaryButton}>
+              <CameraOff className="w-4 h-4 mr-1.5" aria-hidden="true" /> Stop camera
+            </button>
+          ) : (
+            <button type="button" onClick={() => void start()} disabled={!canManage} className={primaryButton}>
+              <Camera className="w-4 h-4 mr-1.5" aria-hidden="true" /> Start scanning
+            </button>
+          )}
+        </div>
       </div>
 
       <div className={`relative overflow-hidden rounded-xl bg-slate-900 ${running ? "" : "hidden"}`}>
