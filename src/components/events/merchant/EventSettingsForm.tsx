@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Plus, Trash2, Upload, Film, Eye } from "lucide-react";
@@ -44,6 +44,8 @@ export interface EventFormValues {
   headerText: string;
   paymentMethods: string[];
   allowRecurringDonation: boolean;
+  /** An existing giving page for the monthly gift; "" = the event makes its own. */
+  donationGivingLinkId: string;
   customFields: CustomFieldDefinition[];
 }
 
@@ -90,6 +92,7 @@ export const EMPTY_EVENT: EventFormValues = {
   headerText: "",
   paymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
   allowRecurringDonation: false,
+  donationGivingLinkId: "",
   customFields: [],
 };
 
@@ -153,6 +156,20 @@ export default function EventSettingsForm({
   const [uploadingMedia, setUploadingMedia] = useState<"image" | "video" | null>(null);
   const [videoProgress, setVideoProgress] = useState<number | null>(null);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [giftLinks, setGiftLinks] = useState<{ id: string; publicSlug: string; name: string }[] | null>(null);
+
+  const wantsMonthlyGift = v.allowOptionalDonation && v.allowRecurringDonation;
+  useEffect(() => {
+    if (!wantsMonthlyGift || giftLinks) return;
+    let cancelled = false;
+    fetch("/api/merchant/events/monthly-gift-links", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { links: [] }))
+      .then((d) => !cancelled && setGiftLinks(d.links ?? []))
+      .catch(() => !cancelled && setGiftLinks([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsMonthlyGift, giftLinks]);
 
   async function uploadThankYouImage(file: File) {
     setUploadingMedia("image");
@@ -416,6 +433,21 @@ export default function EventSettingsForm({
             onChange={(x) => set("allowRecurringDonation", x)}
             hint="They register and pay today's total as usual, then finish setting up the monthly gift on a secure recurring-giving page. The monthly part is never mixed into the registration charge."
           />
+        )}
+        {wantsMonthlyGift && (
+          <div>
+            <label htmlFor="ev-gift-link" className={labelClass}>Connect the monthly gift to a giving page</label>
+            <select id="ev-gift-link" className={inputClass} value={v.donationGivingLinkId} onChange={(e) => set("donationGivingLinkId", e.target.value)}>
+              <option value="">Create a page for this event automatically</option>
+              {(giftLinks ?? []).map((l) => (
+                <option key={l.id} value={l.id}>{l.name}</option>
+              ))}
+              {v.donationGivingLinkId && giftLinks && !giftLinks.some((l) => l.id === v.donationGivingLinkId) && <option value={v.donationGivingLinkId}>Current page</option>}
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              Pick one of your existing giving pages and monthly gifts go there — with that page&apos;s fund, receipts and branding. Only active pages that allow monthly giving are listed. Choosing a page doesn&apos;t change it.
+            </p>
+          </div>
         )}
       </Section>
 

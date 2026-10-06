@@ -141,4 +141,10 @@ describe("round 4 settings: payment methods, thank-you media, monthly gift", () 
     expect(d.hostName).toBe("Riverbend");
     expect(d.headerText).toBe("Join us");
   });
+
+  it("carries a chosen monthly-gift page only while the monthly gift is on", () => {
+    expect(ok({ allowOptionalDonation: true, allowRecurringDonation: true, donationGivingLinkId: "link1" }).donationGivingLinkId).toBe("link1");
+    expect(ok({ allowOptionalDonation: true, allowRecurringDonation: false, donationGivingLinkId: "link1" }).donationGivingLinkId).toBeNull();
+    expect(ok({ allowOptionalDonation: false, allowRecurringDonation: true, donationGivingLinkId: "link1" }).donationGivingLinkId).toBeNull();
+  });
 });

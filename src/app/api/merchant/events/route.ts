@@ -6,7 +6,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { guardEventsRoute } from "@/lib/eventRegistration/merchantGuard";
 import { loadEventStats } from "@/lib/eventRegistration/eventStats";
 import { validateEventSettings, validateAddOns, publicEventUrl } from "@/lib/eventRegistration/eventConfig";
-import { provisionEventGivingLink, provisionEventDonationLink } from "@/lib/eventRegistration/eventGivingLink";
+import { provisionEventGivingLink, resolveEventDonationLink } from "@/lib/eventRegistration/eventGivingLink";
 import { generateEventSlug } from "@/lib/eventRegistration/eventSlug";
 
 export async function GET() {
@@ -49,17 +49,25 @@ export async function POST(req: Request) {
   const addOns = validateAddOns((body as Record<string, unknown>).addOns);
   if (!addOns.ok) return validationError(addOns.error);
 
-  const { customFields, paymentMethods, ...data } = settings.data;
+  const { customFields, paymentMethods, donationGivingLinkId: chosenDonationLinkId, ...data } = settings.data;
   const slug = await generateEventSlug(data.name);
+
+  // Resolve the monthly-gift page first so a bad choice fails before anything is created.
+  const donation = await resolveEventDonationLink({
+    churchId: auth.churchId,
+    ownerUserId: auth.userId,
+    event: { name: data.name, status: data.status, hostName: data.hostName, enabled: data.allowRecurringDonation },
+    chosenLinkId: chosenDonationLinkId,
+    current: { id: null, isExisting: false },
+  });
+  if (!donation.ok) return validationError(donation.error);
+  const donationGivingLinkId = donation.id;
 
   const givingLinkId = await provisionEventGivingLink({
     churchId: auth.churchId,
     ownerUserId: auth.userId,
     event: { name: data.name, status: data.status, mailingAddressMode: data.mailingAddressMode, registrantPhoneRequired: data.registrantPhoneRequired, paymentMethods },
   });
-  const donationGivingLinkId = data.allowRecurringDonation
-    ? await provisionEventDonationLink({ churchId: auth.churchId, ownerUserId: auth.userId, event: { name: data.name, status: data.status, hostName: data.hostName, enabled: true } })
-    : null;
 
   let event;
   try {
@@ -72,6 +80,7 @@ export async function POST(req: Request) {
         paymentMethodsJson: paymentMethods,
         givingLinkId,
         donationGivingLinkId,
+        donationLinkIsExisting: donation.isExisting,
         ...(data.status === "ACTIVE" ? { publishedAt: new Date() } : {}),
         createdByUserId: auth.userId,
       },
@@ -92,8 +101,8 @@ export async function POST(req: Request) {
       });
     }
   } catch (err) {
-    // Don't leave a live, orphaned dedicated link behind a failed create.
-    await prisma.givingLink.updateMany({ where: { id: { in: [givingLinkId, donationGivingLinkId].filter((id): id is string => Boolean(id)) }, churchId: auth.churchId }, data: { status: "ARCHIVED" } }).catch(() => undefined);
+    // Don't leave a live, orphaned dedicated link behind a failed create (never an existing page the organization already owns).
+    await prisma.givingLink.updateMany({ where: { id: { in: [givingLinkId, donation.isExisting ? null : donationGivingLinkId].filter((id): id is string => Boolean(id)) }, churchId: auth.churchId }, data: { status: "ARCHIVED" } }).catch(() => undefined);
     throw err;
   }
 

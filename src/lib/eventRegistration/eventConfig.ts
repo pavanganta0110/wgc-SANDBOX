@@ -122,6 +122,8 @@ export interface EventSettingsData {
   headerText: string | null;
   paymentMethods: EventPaymentMethod[];
   allowRecurringDonation: boolean;
+  /** An existing giving page the monthly gift should use; null = the event makes its own. */
+  donationGivingLinkId: string | null;
   customFields: CustomFieldDefinition[];
 }
 
@@ -255,6 +257,7 @@ export function validateEventSettings(input: Record<string, unknown>): EventSett
       headerText: str(input.headerText, 200),
       paymentMethods,
       allowRecurringDonation: Boolean(input.allowOptionalDonation) && Boolean(input.allowRecurringDonation),
+      donationGivingLinkId: Boolean(input.allowOptionalDonation) && Boolean(input.allowRecurringDonation) ? str(input.donationGivingLinkId, 60) : null,
       customFields: fields.fields,
     },
   };

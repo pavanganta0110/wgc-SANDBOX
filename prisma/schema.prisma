@@ -5995,6 +5995,10 @@ model Event {
   // single one-time charge.
   allowRecurringDonation Boolean @default(false)
   donationGivingLinkId   String?
+  // true = donationGivingLinkId is one of the organization's own existing
+  // giving pages (picked in settings): the event never edits or deactivates
+  // it. false = a page the event created for itself.
+  donationLinkIsExisting Boolean @default(false)
   publishedAt            DateTime?
 
   // Merchant-defined registration questions. Array of

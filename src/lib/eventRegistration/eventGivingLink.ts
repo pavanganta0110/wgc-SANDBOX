@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { generatePublicSlug } from "@/lib/givingLinks/validation";
-import type { DonorFieldSettings } from "@/lib/givingLinks/types";
+import { parseAllowedFrequencies, type DonorFieldSettings } from "@/lib/givingLinks/types";
 
 /**
  * Every Event owns one dedicated GivingLink and every payment for it is
@@ -166,4 +166,69 @@ export async function provisionEventDonationLink(params: { churchId: string; own
 export async function syncEventDonationLink(churchId: string, givingLinkId: string | null, event: EventDonationLinkSource): Promise<void> {
   if (!givingLinkId) return;
   await prisma.givingLink.updateMany({ where: { id: givingLinkId, churchId }, data: deriveEventDonationLinkSettings(event) });
+}
+
+/**
+ * Giving pages an event's monthly gift can point at: the organization's own,
+ * active, recurring-enabled, monthly-capable pages — never a page that an
+ * event created for itself (those are managed by the event).
+ */
+export async function listMonthlyGiftLinkOptions(churchId: string) {
+  const links = await prisma.givingLink.findMany({
+    where: { churchId, status: "ACTIVE", recurringEnabled: true },
+    select: { id: true, publicSlug: true, publicTitle: true, internalName: true, allowedFrequenciesJson: true },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+  });
+  const eventOwned = await prisma.event.findMany({
+    where: { churchId, OR: [{ givingLinkId: { in: links.map((l) => l.id) } }, { donationGivingLinkId: { in: links.map((l) => l.id) }, donationLinkIsExisting: false }] },
+    select: { givingLinkId: true, donationGivingLinkId: true, donationLinkIsExisting: true },
+  });
+  const owned = new Set<string>();
+  for (const e of eventOwned) {
+    if (e.givingLinkId) owned.add(e.givingLinkId);
+    if (e.donationGivingLinkId && !e.donationLinkIsExisting) owned.add(e.donationGivingLinkId);
+  }
+  return links
+    .filter((l) => !owned.has(l.id) && parseAllowedFrequencies(l.allowedFrequenciesJson).includes("MONTHLY"))
+    .map((l) => ({ id: l.id, publicSlug: l.publicSlug, name: l.internalName || l.publicTitle || l.publicSlug }));
+}
+
+export type ResolvedDonationLink = { ok: true; id: string | null; isExisting: boolean } | { ok: false; error: string };
+
+/**
+ * Decides which giving page the event's monthly gift uses.
+ *  - A chosen existing page (must be on the eligible list) is used as-is and
+ *    flagged isExisting, so the event never rewrites or deactivates it.
+ *  - Otherwise the event keeps (or creates) its own dedicated page.
+ */
+export async function resolveEventDonationLink(params: {
+  churchId: string;
+  ownerUserId: string | null;
+  event: EventDonationLinkSource;
+  chosenLinkId: string | null;
+  current: { id: string | null; isExisting: boolean };
+}): Promise<ResolvedDonationLink> {
+  const { churchId, chosenLinkId, current, event } = params;
+  if (!event.enabled) return { ok: true, id: current.id, isExisting: current.isExisting };
+
+  if (chosenLinkId) {
+    if (chosenLinkId === current.id && current.isExisting) {
+      // Unchanged choice — still has to be one of the organization's own pages.
+      const stillOwned = await prisma.givingLink.findFirst({ where: { id: chosenLinkId, churchId }, select: { id: true } });
+      if (stillOwned) return { ok: true, id: chosenLinkId, isExisting: true };
+    }
+    const options = await listMonthlyGiftLinkOptions(churchId);
+    if (!options.some((o) => o.id === chosenLinkId)) {
+      return { ok: false, error: "That giving page can't be used for a monthly gift. Choose an active page that allows monthly giving." };
+    }
+    return { ok: true, id: chosenLinkId, isExisting: true };
+  }
+
+  if (current.id && !current.isExisting) {
+    const owned = await prisma.givingLink.findFirst({ where: { id: current.id, churchId }, select: { id: true } });
+    if (owned) return { ok: true, id: current.id, isExisting: false };
+  }
+  const id = await provisionEventDonationLink({ churchId, ownerUserId: params.ownerUserId, event });
+  return { ok: true, id, isExisting: false };
 }

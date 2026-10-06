@@ -6,7 +6,7 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { guardEventsRoute, loadOwnedEvent, notFoundResponse } from "@/lib/eventRegistration/merchantGuard";
 import { loadEventStats } from "@/lib/eventRegistration/eventStats";
 import { validateEventSettings, validateAddOns, publicEventUrl, appOrigin, parseEventPaymentMethods } from "@/lib/eventRegistration/eventConfig";
-import { provisionEventGivingLink, syncEventGivingLink, provisionEventDonationLink, syncEventDonationLink } from "@/lib/eventRegistration/eventGivingLink";
+import { provisionEventGivingLink, syncEventGivingLink, resolveEventDonationLink, syncEventDonationLink } from "@/lib/eventRegistration/eventGivingLink";
 import { parseCustomFields } from "@/lib/eventRegistration/customFields";
 import { parseEmailTemplates } from "@/lib/eventRegistration/emailTemplates";
 import { utcToZonedLocal } from "@/lib/eventRegistration/timezone";
@@ -66,6 +66,7 @@ export async function GET(_req: Request, { params }: Ctx) {
       headerText: event.headerText ?? "",
       paymentMethods: parseEventPaymentMethods(event.paymentMethodsJson),
       allowRecurringDonation: event.allowRecurringDonation,
+      donationGivingLinkId: event.donationLinkIsExisting ? event.donationGivingLinkId ?? "" : "",
       publishedAt: event.publishedAt?.toISOString() ?? null,
       customFields: parseCustomFields(event.customFieldsJson),
       emailTemplates: parseEmailTemplates(event.emailTemplatesJson),
@@ -104,7 +105,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const addOns = input.addOns === undefined ? null : validateAddOns(input.addOns);
   if (addOns && !addOns.ok) return validationError(addOns.error);
 
-  const { customFields, paymentMethods, ...data } = settings.data;
+  const { customFields, paymentMethods, donationGivingLinkId: chosenDonationLinkId, ...data } = settings.data;
 
   // Events created before a link existed (or whose link was removed) get a
   // fresh dedicated one rather than failing the save.
@@ -121,20 +122,19 @@ export async function PATCH(req: Request, { params }: Ctx) {
     });
   }
 
-  // The monthly-gift link exists only once an event offers it; turning the
-  // option off later just deactivates the link (past gifts keep working).
-  let donationGivingLinkId = event.donationGivingLinkId;
-  if (donationGivingLinkId) {
-    const owned = await prisma.givingLink.findFirst({ where: { id: donationGivingLinkId, churchId: auth.churchId }, select: { id: true } });
-    if (!owned) donationGivingLinkId = null;
-  }
-  if (data.allowRecurringDonation && !donationGivingLinkId) {
-    donationGivingLinkId = await provisionEventDonationLink({
-      churchId: auth.churchId,
-      ownerUserId: auth.userId,
-      event: { name: data.name, status: data.status, hostName: data.hostName, enabled: true },
-    });
-  }
+  // The monthly gift points at an existing giving page the organization chose,
+  // or at a dedicated page the event keeps for itself. Turning the option off
+  // later just deactivates a dedicated page (past gifts keep working); an
+  // existing page is never touched.
+  const donation = await resolveEventDonationLink({
+    churchId: auth.churchId,
+    ownerUserId: auth.userId,
+    event: { name: data.name, status: data.status, hostName: data.hostName, enabled: data.allowRecurringDonation },
+    chosenLinkId: chosenDonationLinkId,
+    current: { id: event.donationGivingLinkId, isExisting: event.donationLinkIsExisting },
+  });
+  if (!donation.ok) return validationError(donation.error);
+  const donationGivingLinkId = donation.id;
 
   await prisma.event.update({
     where: { id: event.id },
@@ -144,6 +144,7 @@ export async function PATCH(req: Request, { params }: Ctx) {
       paymentMethodsJson: paymentMethods,
       givingLinkId,
       donationGivingLinkId,
+      donationLinkIsExisting: donation.isExisting,
       // First time the event goes live; later edits keep the original date.
       ...(data.status === "ACTIVE" && !event.publishedAt ? { publishedAt: new Date() } : {}),
     },
@@ -155,7 +156,14 @@ export async function PATCH(req: Request, { params }: Ctx) {
     registrantPhoneRequired: data.registrantPhoneRequired,
     paymentMethods,
   });
-  await syncEventDonationLink(auth.churchId, donationGivingLinkId, { name: data.name, status: data.status, hostName: data.hostName, enabled: data.allowRecurringDonation });
+  // Only a page the event made for itself is kept in step with the event.
+  if (!donation.isExisting) {
+    await syncEventDonationLink(auth.churchId, donationGivingLinkId, { name: data.name, status: data.status, hostName: data.hostName, enabled: data.allowRecurringDonation });
+  }
+  // Switched away from the event's own page to an existing one: retire the old page.
+  if (event.donationGivingLinkId && !event.donationLinkIsExisting && event.donationGivingLinkId !== donationGivingLinkId) {
+    await syncEventDonationLink(auth.churchId, event.donationGivingLinkId, { name: data.name, status: data.status, hostName: data.hostName, enabled: false });
+  }
 
   if (addOns && addOns.ok) {
     const existing = await prisma.eventAddOn.findMany({ where: { eventId: event.id, churchId: auth.churchId }, select: { id: true } });
