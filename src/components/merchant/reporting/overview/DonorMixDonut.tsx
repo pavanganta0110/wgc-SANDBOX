@@ -64,7 +64,7 @@ export default function DonorMixDonut({
                 r={r}
                 fill="none"
                 stroke="#F1F5F9"
-                strokeWidth="14"
+                strokeWidth="10"
               />
               {segs.map((s) => {
                 const len = (s.count / total) * c;
@@ -77,7 +77,7 @@ export default function DonorMixDonut({
                       r={r}
                       fill="none"
                       stroke={s.color}
-                      strokeWidth="14"
+                      strokeWidth="10"
                       strokeDasharray={`${Math.max(len - gap, 0)} ${c}`}
                       strokeDashoffset={-offset}
                     />

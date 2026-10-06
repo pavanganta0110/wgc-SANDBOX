@@ -36,9 +36,9 @@ export default function DonorBands({ rows }: { rows: BandRow[] }) {
                       </span>
                     </span>
                   </span>
-                  <span className="mt-1.5 block h-2 w-full rounded-full bg-slate-100">
+                  <span className="mt-1.5 block h-1.5 w-full rounded-full bg-slate-100">
                     <span
-                      className="block h-2 rounded-full"
+                      className="block h-1.5 rounded-full"
                       style={{
                         width:
                           r.donorCount === 0

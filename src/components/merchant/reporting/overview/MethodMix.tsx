@@ -21,7 +21,7 @@ export default function MethodMix({ rows }: { rows: MixRow[] }) {
       ) : (
         <>
           <div
-            className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
+            className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full"
             role="img"
             aria-label={rows
               .map((r) => `${r.label} ${percent(r.sharePercent)}`)

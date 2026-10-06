@@ -36,9 +36,9 @@ export default function FundRanking({ rows }: { rows: FundRow[] }) {
                       {percent(r.sharePercent)}
                     </span>
                   </span>
-                  <span className="mt-1.5 ml-7 block h-2 rounded-full bg-slate-100">
+                  <span className="mt-1.5 ml-7 block h-1.5 rounded-full bg-slate-100">
                     <span
-                      className="block h-2 rounded-full"
+                      className="block h-1.5 rounded-full"
                       style={{
                         width: `${Math.max((r.valueCents / max) * 100, 2)}%`,
                         background: r.isOther ? SERIES.other : SERIES.indigo,

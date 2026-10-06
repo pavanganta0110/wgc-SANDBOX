@@ -83,7 +83,7 @@ export default function GivingTrend({
     meta.money ? compactMoney(v) : v.toLocaleString("en-US");
 
   const peakIdx = hasData ? values.indexOf(Math.max(...values)) : -1;
-  const { top, step } = niceScale(Math.max(...values, 0));
+  const { top, step } = niceScale(Math.max(...values, 0), 3);
   const innerW = width - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
   const x = (i: number) =>
@@ -220,12 +220,6 @@ export default function GivingTrend({
                 </span>
               </dd>
             </div>
-            <div>
-              <dt className="text-slate-500">Monthly average</dt>
-              <dd className="text-base font-bold tabular-nums text-slate-900">
-                {fmt(Math.round(total / data.length))}
-              </dd>
-            </div>
           </dl>
 
           {view === "table" ? (
@@ -295,7 +289,7 @@ export default function GivingTrend({
                     <stop
                       offset="0%"
                       stopColor={SERIES.indigo}
-                      stopOpacity={0.22}
+                      stopOpacity={0.12}
                     />
                     <stop
                       offset="100%"
@@ -311,9 +305,8 @@ export default function GivingTrend({
                       x2={width - PAD.right}
                       y1={y(v)}
                       y2={y(v)}
-                      stroke="#E2E8F0"
+                      stroke={v === 0 ? "#CBD5E1" : "#F1F5F9"}
                       strokeWidth={1}
-                      strokeDasharray={v === 0 ? undefined : "2 4"}
                     />
                     <text
                       x={PAD.left - 8}
@@ -350,30 +343,6 @@ export default function GivingTrend({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
-                {/* Peak annotation: the only always-on value label */}
-                {peakIdx >= 0 && active === null && (
-                  <g>
-                    <circle
-                      cx={pts[peakIdx][0]}
-                      cy={pts[peakIdx][1]}
-                      r={4}
-                      fill={SERIES.indigo}
-                      stroke="#fff"
-                      strokeWidth={2}
-                    />
-                    <text
-                      x={Math.min(Math.max(pts[peakIdx][0], 40), width - 40)}
-                      y={pts[peakIdx][1] - 12}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fontWeight={600}
-                      fill="#0F172A"
-                      className="tabular-nums"
-                    >
-                      {fmtAxis(values[peakIdx])}
-                    </text>
-                  </g>
-                )}
                 {active !== null && (
                   <g>
                     <line
