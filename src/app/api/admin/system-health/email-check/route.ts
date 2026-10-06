@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth/session";
 
@@ -39,6 +40,9 @@ export async function GET() {
     keyPresent: raw.length > 0,
     keyLength: raw.length,
     startsWithRe: raw.startsWith("re_"),
+    // One-way fingerprint: compare with `printf %s "YOUR_KEY" | shasum -a 256` (first 8 characters). Reveals nothing about the key.
+    keySha256First8: raw ? createHash("sha256").update(raw).digest("hex").slice(0, 8) : null,
+    deployedCommit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? null,
     hasLeadingOrTrailingWhitespace: raw !== raw.trim(),
     hasQuotes: /^["']|["']$/.test(raw.trim()),
     vercelEnv: process.env.VERCEL_ENV ?? null,
