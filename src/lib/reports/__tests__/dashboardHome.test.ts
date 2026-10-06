@@ -5,6 +5,10 @@ const mockPrisma = vi.hoisted(() => ({
   finixDispute: { count: vi.fn() },
   finixTransfer: { count: vi.fn() },
   bankReturn: { count: vi.fn() },
+  payment: { findMany: vi.fn() },
+  eventRegistration: { findMany: vi.fn() },
+  pledge: { findMany: vi.fn() },
+  donor: { findMany: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
@@ -15,6 +19,14 @@ import {
   buildAttentionItems,
   getAttentionCounts,
   describeAuthRate,
+  getTopDonors,
+  getDonorGrowth,
+  getRecentActivity,
+  mergeActivity,
+  timeAgo,
+  initialsOf,
+  ACTIVITY_LIMIT,
+  type ActivityItem,
 } from "@/lib/reports/dashboardHome";
 
 describe("previousWindow / splitWindow", () => {
@@ -147,5 +159,175 @@ describe("describeAuthRate", () => {
   it("treats the thresholds as inclusive on the good side", () => {
     expect(describeAuthRate(85, 100).status).toBe("good");
     expect(describeAuthRate(70, 100).status).toBe("warning");
+  });
+});
+
+describe("getTopDonors", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { donor_id: "d1", name: "alice adams", anonymous: false, amt: BigInt(9000), gifts: BigInt(3) },
+      { donor_id: "d2", name: "Private Person", anonymous: true, amt: BigInt(500), gifts: BigInt(1) },
+    ]);
+  });
+
+  it("counts only succeeded non-settlement transfers, scoped by the session church, with a LIMIT", async () => {
+    await getTopDonors({ churchId: "church_1", dateFilter: { gte: new Date("2026-01-01") } });
+    const q = mockPrisma.$queryRaw.mock.calls[0][0];
+    expect(q.sql).toContain("UPPER(t.state) = 'SUCCEEDED'");
+    expect(q.sql).toContain("SETTLEMENT");
+    expect(q.sql).toContain("LIMIT");
+    expect(q.sql).not.toContain("church_1");
+    expect(q.values).toEqual(expect.arrayContaining(["church_1", 5]));
+  });
+
+  it("scopes a team member to their own attributed payments", async () => {
+    await getTopDonors({ churchId: "church_1", attributedUserId: "user_2" });
+    const q = mockPrisma.$queryRaw.mock.calls[0][0];
+    expect(q.sql).toContain('p."attributedUserId" =');
+    expect(q.values).toContain("user_2");
+  });
+
+  it("maps rows and respects a donor's anonymity preference", async () => {
+    const out = await getTopDonors({ churchId: "church_1" });
+    expect(out[0]).toMatchObject({ donorId: "d1", amountCents: 9000, gifts: 3 });
+    expect(out[1].name).toBe("Anonymous donor");
+  });
+
+  it("returns an empty list when there are no donors (empty state)", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+    expect(await getTopDonors({ churchId: "church_1" })).toEqual([]);
+  });
+});
+
+describe("initialsOf", () => {
+  it("uses the first letters of the first two words", () => {
+    expect(initialsOf("Alice Adams")).toBe("AA");
+    expect(initialsOf("madonna")).toBe("M");
+    expect(initialsOf("Mary Jane Watson")).toBe("MJ");
+    expect(initialsOf("  ")).toBe("?");
+  });
+});
+
+describe("getDonorGrowth", () => {
+  const buckets = [
+    { start: new Date("2026-09-01T00:00:00Z"), end: new Date("2026-09-08T00:00:00Z"), label: "Sep 1" },
+    { start: new Date("2026-09-08T00:00:00Z"), end: new Date("2026-09-15T00:00:00Z"), label: "Sep 8" },
+  ];
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.$queryRaw.mockResolvedValue([
+      { idx: BigInt(1), new_donors: BigInt(2), returning: BigInt(1) },
+      { idx: BigInt(2), new_donors: BigInt(0), returning: BigInt(3) },
+    ]);
+  });
+
+  it("maps new vs returning per bucket, in order", async () => {
+    expect(await getDonorGrowth({ churchId: "c", buckets })).toEqual([
+      { label: "Sep 1", newDonors: 2, returningDonors: 1 },
+      { label: "Sep 8", newDonors: 0, returningDonors: 3 },
+    ]);
+  });
+
+  it("only counts successful payments, scoped to the church and (when set) the team user", async () => {
+    await getDonorGrowth({ churchId: "church_1", attributedUserId: "user_5", buckets });
+    const q = mockPrisma.$queryRaw.mock.calls[0][0];
+    expect(q.sql).toContain("UPPER(t.state) = 'SUCCEEDED'");
+    expect(q.sql).toContain("p.status = 'SUCCEEDED'");
+    expect(q.values).toEqual(expect.arrayContaining(["church_1", "user_5"]));
+  });
+
+  it("only looks up first-gift dates for donors active in the span, not the whole table", async () => {
+    await getDonorGrowth({ churchId: "c", buckets });
+    expect(mockPrisma.$queryRaw.mock.calls[0][0].sql).toContain("IN (SELECT DISTINCT donor_id FROM active)");
+  });
+
+  it("fills zeros for missing rows and skips the query with no buckets", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+    expect(await getDonorGrowth({ churchId: "c", buckets })).toEqual([
+      { label: "Sep 1", newDonors: 0, returningDonors: 0 },
+      { label: "Sep 8", newDonors: 0, returningDonors: 0 },
+    ]);
+    mockPrisma.$queryRaw.mockClear();
+    expect(await getDonorGrowth({ churchId: "c", buckets: [] })).toEqual([]);
+    expect(mockPrisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe("mergeActivity / timeAgo", () => {
+  const item = (id: string, type: ActivityItem["type"], minsAgo: number): ActivityItem => ({
+    id,
+    type,
+    name: id,
+    amountCents: 100,
+    at: new Date(Date.now() - minsAgo * 60000),
+    href: "/x",
+  });
+
+  it("merges every source newest-first and trims to the limit", () => {
+    const merged = mergeActivity([[item("a", "donation", 30)], [item("b", "registration", 5)], [item("c", "pledge", 60)]]);
+    expect(merged.map((m) => m.id)).toEqual(["b", "a", "c"]);
+    const many = mergeActivity([Array.from({ length: 30 }, (_, i) => item(`x${i}`, "donation", i))]);
+    expect(many).toHaveLength(ACTIVITY_LIMIT);
+  });
+
+  it("formats relative time", () => {
+    const now = new Date("2026-10-05T12:00:00Z");
+    expect(timeAgo(new Date("2026-10-05T11:59:40Z"), now)).toBe("just now");
+    expect(timeAgo(new Date("2026-10-05T11:55:00Z"), now)).toBe("5m ago");
+    expect(timeAgo(new Date("2026-10-05T09:00:00Z"), now)).toBe("3h ago");
+    expect(timeAgo(new Date("2026-10-03T12:00:00Z"), now)).toBe("2d ago");
+    expect(timeAgo(new Date("2026-09-01T12:00:00Z"), now)).toBe("Sep 1");
+    expect(timeAgo(new Date("2026-10-05T12:00:30Z"), now)).toBe("just now"); // clock skew never goes negative
+  });
+});
+
+describe("getRecentActivity", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPrisma.payment.findMany.mockResolvedValue([
+      { id: "p1", donorId: "d1", amountCents: 2500, createdAt: new Date("2026-10-05T10:00:00Z"), isAnonymous: false, fundName: "General", finixTransferId: "t1" },
+      { id: "p2", donorId: null, amountCents: 900, createdAt: new Date("2026-10-05T09:00:00Z"), isAnonymous: false, fundName: null, finixTransferId: null },
+      { id: "p3", donorId: "d1", amountCents: 100, createdAt: new Date("2026-10-04T09:00:00Z"), isAnonymous: true, fundName: null, finixTransferId: "t3" },
+    ]);
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([
+      { id: "r1", eventId: "e1", registrantFirstName: "Amy", registrantLastName: "Buyer", totalCents: 0, attendeeCount: 1, confirmedAt: new Date("2026-10-05T11:00:00Z"), createdAt: new Date("2026-10-05T11:00:00Z") },
+    ]);
+    mockPrisma.pledge.findMany.mockResolvedValue([
+      { id: "pl1", pledgeCampaignId: "pc1", donorId: "d1", isAnonymous: false, pledgeAmountCents: 50000, pledgedAt: new Date("2026-10-03T09:00:00Z") },
+    ]);
+    mockPrisma.donor.findMany.mockResolvedValue([{ id: "d1", name: "alice adams", anonymousPreference: false }]);
+  });
+
+  it("merges donations, registrations and pledges newest-first with correct names and links", async () => {
+    const out = await getRecentActivity({ churchId: "church_1", paymentScope: { churchId: "church_1" }, includeRegistrations: true });
+    expect(out.map((i) => i.id)).toEqual(["registration:r1", "payment:p1", "payment:p2", "payment:p3", "pledge:pl1"]);
+    expect(out.find((i) => i.id === "payment:p2")!.name).toBe("Guest donor");
+    expect(out.find((i) => i.id === "payment:p3")!.name).toBe("Anonymous donor");
+    expect(out.find((i) => i.id === "registration:r1")!.amountCents).toBeNull(); // free registration
+    expect(out.find((i) => i.id === "payment:p1")!.href).toContain("id=t1");
+  });
+
+  it("only reads successful payments inside the supplied scope, and the session church for everything else", async () => {
+    await getRecentActivity({ churchId: "church_1", paymentScope: { churchId: "church_1", attributedUserId: "user_1" }, includeRegistrations: true });
+    const where = mockPrisma.payment.findMany.mock.calls[0][0].where;
+    expect(where).toMatchObject({ churchId: "church_1", attributedUserId: "user_1", status: "SUCCEEDED" });
+    expect(mockPrisma.eventRegistration.findMany.mock.calls[0][0].where.churchId).toBe("church_1");
+    expect(mockPrisma.pledge.findMany.mock.calls[0][0].where.churchId).toBe("church_1");
+    expect(mockPrisma.donor.findMany.mock.calls[0][0].where.churchId).toBe("church_1");
+  });
+
+  it("omits registrations and filters pledges for a team view", async () => {
+    await getRecentActivity({ churchId: "c", paymentScope: { churchId: "c" }, includeRegistrations: false, attributedUserId: "user_9" });
+    expect(mockPrisma.eventRegistration.findMany).not.toHaveBeenCalled();
+    expect(mockPrisma.pledge.findMany.mock.calls[0][0].where.attributedUserId).toBe("user_9");
+  });
+
+  it("returns an empty list for a brand-new account", async () => {
+    mockPrisma.payment.findMany.mockResolvedValue([]);
+    mockPrisma.eventRegistration.findMany.mockResolvedValue([]);
+    mockPrisma.pledge.findMany.mockResolvedValue([]);
+    expect(await getRecentActivity({ churchId: "c", paymentScope: { churchId: "c" }, includeRegistrations: true })).toEqual([]);
+    expect(mockPrisma.donor.findMany).not.toHaveBeenCalled();
   });
 });

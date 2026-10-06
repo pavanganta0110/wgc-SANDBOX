@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import CustomizeSummaryPanel from "@/components/merchant/CustomizeSummaryPanel";
 import { Suspense, type ReactNode } from "react";
+import type { Prisma } from "@prisma/client";
 import {
   DollarSign,
   Receipt,
@@ -29,6 +30,9 @@ import {
   getAttentionCounts,
   buildAttentionItems,
   describeAuthRate,
+  getTopDonors,
+  getDonorGrowth,
+  getRecentActivity,
 } from "@/lib/reports/dashboardHome";
 import { getSourceTotals } from "@/lib/reports/moneySources";
 import { resolveScopedTransferIds } from "@/lib/reports/insightsData";
@@ -40,6 +44,9 @@ import MiniBarChart from "@/components/merchant/dashboard/MiniBarChart";
 import TrendToggle from "@/components/merchant/dashboard/TrendToggle";
 import AuthRateMeter from "@/components/merchant/dashboard/AuthRateMeter";
 import SourcesCard from "@/components/merchant/dashboard/SourcesCard";
+import TopDonorsCard from "@/components/merchant/dashboard/TopDonorsCard";
+import DonorGrowthChart from "@/components/merchant/dashboard/DonorGrowthChart";
+import ActivityFeed from "@/components/merchant/dashboard/ActivityFeed";
 import QuickActions from "@/components/merchant/dashboard/QuickActions";
 import { CardSkeleton } from "@/components/merchant/dashboard/Skeletons";
 import {
@@ -57,7 +64,7 @@ import { resolveDateRange, rangeLabel } from "@/lib/dateRangePresets";
 import { startOfDayCentral } from "@/lib/formatDateTimeCDT";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildFinixTransferScope, buildRefundScope, resolveScopedUserId } from "@/lib/auth/scopes";
+import { buildFinixTransferScope, buildRefundScope, buildPaymentScope, resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
 const CENTRAL_TIME_ZONE = "America/Chicago";
@@ -189,6 +196,56 @@ async function SourcesSection({
   return (
     <Card>
       <SourcesCard totals={totals} insightsHref={insightsHref} />
+    </Card>
+  );
+}
+
+async function DonorsSection({
+  churchId,
+  dateFilter,
+  attributedUserId,
+  buckets,
+}: {
+  churchId: string;
+  dateFilter: { gte: Date; lte?: Date } | undefined;
+  attributedUserId?: string;
+  buckets: TrendBucket[];
+}) {
+  const [donors, growth] = await Promise.all([
+    getTopDonors({ churchId, attributedUserId, dateFilter }),
+    getDonorGrowth({ churchId, attributedUserId, buckets }),
+  ]);
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <Card>
+        <TopDonorsCard donors={donors} />
+      </Card>
+      <Card>
+        <DonorGrowthChart data={growth} />
+      </Card>
+    </div>
+  );
+}
+
+async function ActivitySection({
+  churchId,
+  paymentScope,
+  attributedUserId,
+}: {
+  churchId: string;
+  paymentScope: Prisma.PaymentWhereInput;
+  attributedUserId?: string;
+}) {
+  const items = await getRecentActivity({
+    churchId,
+    paymentScope,
+    attributedUserId,
+    // Registrations have no per-user attribution, so a team view omits them.
+    includeRegistrations: !attributedUserId,
+  });
+  return (
+    <Card>
+      <ActivityFeed items={items} />
     </Card>
   );
 }
@@ -420,6 +477,21 @@ export default async function MerchantDashboardPage({
           />
         </Suspense>
       </div>
+
+      <Suspense
+        fallback={
+          <div className="grid gap-4 md:grid-cols-2">
+            <CardSkeleton height={260} />
+            <CardSkeleton height={260} />
+          </div>
+        }
+      >
+        <DonorsSection churchId={churchId} dateFilter={dateFilter} attributedUserId={scopedUserId} buckets={trendBuckets} />
+      </Suspense>
+
+      <Suspense fallback={<CardSkeleton height={320} />}>
+        <ActivitySection churchId={churchId} paymentScope={buildPaymentScope(auth, viewScope)} attributedUserId={scopedUserId} />
+      </Suspense>
 
       <QuickActions
         finixMerchantId={church?.finixMerchantId || ""}
