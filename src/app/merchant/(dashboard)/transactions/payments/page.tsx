@@ -15,6 +15,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation";
 import { resolveFundFilteredTransferIds } from "@/lib/giving/fundAssignment";
+import { getRevenueBySource, buildSourceClassifier, SOURCE_KEYS, SOURCE_LABELS, type RevenueSourceKey } from "@/lib/reporting/revenueBySource";
 import { PaymentInstrumentCell, InstrumentTypeCell } from "@/components/merchant/PaymentInstrumentDisplay";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
@@ -31,6 +32,7 @@ export default async function PaymentsListPage({
     to?: string;
     id?: string;
     fund?: string;
+    source?: string;
   }>;
 }) {
   const auth = await requireMerchantSession();
@@ -41,7 +43,7 @@ export default async function PaymentsListPage({
   // (see that helper's comment). Organization scope still includes
   // unattributed transfers, matching the approved payment-scope policy.
   const transferScope = await buildFinixTransferScope(auth, viewScope);
-  const { state, last4, buyer, range, from, to, id, fund } = await searchParams;
+  const { state, last4, buyer, range, from, to, id, fund, source } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
@@ -87,6 +89,26 @@ export default async function PaymentsListPage({
     ? await resolveFundFilteredTransferIds(buildPaymentScope(auth, viewScope), fund)
     : null;
 
+  const paymentScope = buildPaymentScope(auth, viewScope);
+  const [revenueBySource, classifySource] = await Promise.all([
+    getRevenueBySource(paymentScope, churchId, dateFilter),
+    buildSourceClassifier(churchId),
+  ]);
+
+  // Source filter: resolve the matching transfer ids server-side (same
+  // scope as the table) and intersect with the fund filter if both are set.
+  const sourceFilter = SOURCE_KEYS.includes(source as RevenueSourceKey) ? (source as RevenueSourceKey) : null;
+  let sourceMatchedTransferIds: string[] | null = null;
+  if (sourceFilter) {
+    const scoped = await prisma.payment.findMany({
+      where: { ...paymentScope, finixTransferId: { not: null } },
+      select: { id: true, givingLinkId: true, finixTransferId: true },
+    });
+    sourceMatchedTransferIds = scoped
+      .filter((p) => classifySource(p) === sourceFilter)
+      .map((p) => p.finixTransferId as string);
+  }
+
   const transfers = await prisma.finixTransfer.findMany({
     where: {
       ...transferScope,
@@ -95,7 +117,17 @@ export default async function PaymentsListPage({
       ],
       ...(state && !isRefundDerivedFilter ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
-      ...(fundMatchedTransferIds ? { finixTransferId: { in: fundMatchedTransferIds } } : {}),
+      ...(fundMatchedTransferIds || sourceMatchedTransferIds
+        ? {
+            finixTransferId: {
+              in: sourceMatchedTransferIds
+                ? fundMatchedTransferIds
+                  ? sourceMatchedTransferIds.filter((x) => fundMatchedTransferIds.includes(x))
+                  : sourceMatchedTransferIds
+                : (fundMatchedTransferIds as string[]),
+            },
+          }
+        : {}),
     },
     orderBy: { createdAtFinix: "desc" },
     take: 100,
@@ -134,7 +166,7 @@ export default async function PaymentsListPage({
   const payments = transferIds.length
     ? await prisma.payment.findMany({
         where: { churchId, finixTransferId: { in: transferIds } },
-        select: { finixTransferId: true, fundName: true },
+        select: { id: true, givingLinkId: true, finixTransferId: true, fundName: true },
       })
     : [];
   const paymentByTransfer = new Map(payments.filter((p) => p.finixTransferId).map((p) => [p.finixTransferId as string, p]));
@@ -177,6 +209,27 @@ export default async function PaymentsListPage({
         />
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {revenueBySource.rows
+          .filter((r) => r.key !== "OTHER" || r.count > 0)
+          .map((r) => (
+            <div key={r.key} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{r.label}</p>
+              <p className="mt-1 text-xl font-bold text-slate-900">{formatCents(r.grossCents)}</p>
+              <p className="text-xs text-slate-400">
+                {r.count} payment{r.count === 1 ? "" : "s"}
+              </p>
+            </div>
+          ))}
+        <div className="bg-slate-900 rounded-2xl shadow-sm px-5 py-4">
+          <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Total received</p>
+          <p className="mt-1 text-xl font-bold text-white">{formatCents(revenueBySource.totalCents)}</p>
+          <p className="text-xs text-slate-400">
+            {revenueBySource.totalCount} payment{revenueBySource.totalCount === 1 ? "" : "s"} · selected range
+          </p>
+        </div>
+      </div>
+
       <PaymentsFilterBar fundSuggestions={fundSuggestions} />
 
       <div className="flex items-start gap-6">
@@ -197,6 +250,7 @@ export default async function PaymentsListPage({
                 <th className="px-6 py-3">Payment Instrument</th>
                 <th className="px-6 py-3">Instrument Type</th>
                 <th className="px-6 py-3">Fund</th>
+                <th className="px-6 py-3">Source</th>
               </tr>
             </thead>
             <tbody>
@@ -251,6 +305,11 @@ export default async function PaymentsListPage({
                         ((t.tagsJson as Record<string, string> | null)?.source === "wgc_invoice_payment"
                           ? `Invoice ${(t.tagsJson as Record<string, string>).invoiceNumber || ""}`
                           : "Unspecified")}
+                    </td>
+                    <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
+                      {payment
+                        ? SOURCE_LABELS[classifySource(payment)].replace(/ \(.*\)$/, "")
+                        : "—"}
                     </td>
                   </ClickableTableRow>
                 );

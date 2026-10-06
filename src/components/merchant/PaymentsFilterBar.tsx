@@ -17,6 +17,13 @@ const STATES = [
   "REFUND_PENDING",
 ];
 
+const SOURCES = [
+  { value: "EVENTS", label: "Events" },
+  { value: "CAMPAIGNS", label: "Fundraising campaigns" },
+  { value: "GIVING_PAGES", label: "Giving pages" },
+  { value: "OTHER", label: "Other" },
+];
+
 export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSuggestions?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,7 +31,9 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
   const last4 = searchParams.get("last4") || "";
   const donorName = searchParams.get("buyer") || "";
   const fund = searchParams.get("fund") || "";
+  const source = searchParams.get("source") || "";
   const [isStateOpen, setIsStateOpen] = useState(false);
+  const [isSourceOpen, setIsSourceOpen] = useState(false);
 
   const setParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -79,6 +88,46 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
                   className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
                   {titleCaseState(s)}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="relative">
+        <button
+          onClick={() => setIsSourceOpen((o) => !o)}
+          className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-sm font-semibold text-slate-700 bg-white hover:bg-slate-50 ${
+            isSourceOpen ? "border-slate-900" : "border-slate-200"
+          }`}
+        >
+          {SOURCES.find((s) => s.value === source)?.label ?? "Source"}
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isSourceOpen ? "rotate-180" : ""}`} />
+        </button>
+        {isSourceOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setIsSourceOpen(false)} />
+            <div className="absolute left-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl py-2 w-56">
+              <button
+                onClick={() => {
+                  setParam("source", "");
+                  setIsSourceOpen(false);
+                }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                All Sources
+              </button>
+              {SOURCES.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => {
+                    setParam("source", s.value);
+                    setIsSourceOpen(false);
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  {s.label}
                 </button>
               ))}
             </div>
