@@ -1,5 +1,6 @@
 "use client";
 
+import { donorInfoMessage } from "@/lib/giving/donorInfoMessage";
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { CheckCircle, Clock, AlertCircle, Repeat, Loader2 } from "lucide-react";
@@ -355,6 +356,11 @@ export default function GivingLinkForm({
     ? phoneDigitCount(phone) >= 10 || (phone.trim() === "" && !eventMode.phoneRequired)
     : phoneDigitCount(phone) >= 10;
   const donorInfoValid = Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneOk);
+  // What to tell the donor when donorInfoValid is false (see donorInfoMessage).
+  const donorInfoMessageText = donorInfoMessage({
+    phoneOptional: Boolean(eventMode && !eventMode.phoneRequired),
+    nameAndEmailOk: Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email)),
+  });
 
   // addressRequired is declared above, alongside mailingAddressPayload.
   const mailingAddressValid =
@@ -580,7 +586,7 @@ export default function GivingLinkForm({
     if (!donorInfoValid || !mailingAddressValid) {
       toast.error(
         !donorInfoValid
-          ? "Enter your name, email, and phone number to continue."
+          ? donorInfoMessageText
           : "A mailing address is required for this gift."
       );
       focusFirstMissingDonorField();
@@ -651,7 +657,7 @@ export default function GivingLinkForm({
     if (!donorInfoValid || !mailingAddressValid) {
       toast.error(
         !donorInfoValid
-          ? "Enter your name, email, and phone number to continue."
+          ? donorInfoMessageText
           : "A mailing address is required for this gift."
       );
       focusFirstMissingDonorField();
@@ -912,7 +918,7 @@ export default function GivingLinkForm({
     if (!donorInfoValid || !mailingAddressValid) {
       toast.error(
         !donorInfoValid
-          ? "Enter your name, email, and phone number to continue."
+          ? donorInfoMessageText
           : "A mailing address is required for this gift."
       );
       focusFirstMissingDonorField();
@@ -1623,7 +1629,7 @@ export default function GivingLinkForm({
             <>
               {!donorInfoValid && (
                 <p className="text-xs" style={{ color: light.bodyTextColor }}>
-                  Enter your name, email, and phone number to continue.
+                  {donorInfoMessageText}
                 </p>
               )}
               {appleAvailable && (
