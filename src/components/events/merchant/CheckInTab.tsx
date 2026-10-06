@@ -284,7 +284,6 @@ type DoorMethod = "CARD" | "CASH" | "CHECK" | "COMPLIMENTARY";
 
 function DoorSales({
   eventId,
-  publicUrl,
   priceCents,
   priceMode,
   maxAttendees,
@@ -294,7 +293,6 @@ function DoorSales({
   onChange,
 }: {
   eventId: string;
-  publicUrl: string;
   priceCents: number;
   priceMode: string;
   maxAttendees: number;
@@ -339,10 +337,6 @@ function DoorSales({
     if (!first.trim() || !last.trim()) return setError("Enter the buyer's first and last name.");
     if (!email.trim()) return setError("Enter an email address — the ticket and receipt are sent there.");
     if (guests.some((g) => !g.firstName.trim() || !g.lastName.trim())) return setError("Every guest needs a first and last name.");
-    if (method === "CARD") {
-      window.open(`${publicUrl}?door=1`, "_blank", "noopener,noreferrer");
-      return;
-    }
     setSaving(true);
     try {
       const res = await fetch(`/api/merchant/events/${eventId}/door-sale`, {
@@ -361,6 +355,12 @@ function DoorSales({
       });
       if (!res.ok) return setError(await readApiError(res, "Couldn't complete the sale."));
       const data = await res.json();
+      // Card: straight to the payment page with these details and tickets
+      // already filled in — no second form.
+      if (data.payUrl) {
+        window.location.assign(data.payUrl);
+        return;
+      }
       setDone({ code: data.confirmationCode, count: data.attendeeCount, totalCents: data.totalCents, method });
       reset();
       onChange();
@@ -464,7 +464,7 @@ function DoorSales({
             </button>
           ))}
         </div>
-        {method === "CARD" && <p className="text-xs text-slate-500 mt-2">Card sales open the secure checkout in a new tab so the payment runs through Finix and is reconciled like any online registration. The buyer is checked in automatically once it&apos;s paid.</p>}
+        {method === "CARD" && <p className="text-xs text-slate-500 mt-2">Card sales continue to the secure payment page with these details already filled in. The payment runs through Finix and is reconciled like any online registration, and the buyer is checked in automatically once it&apos;s paid.</p>}
         {(method === "CASH" || method === "CHECK") && <p className="text-xs text-slate-500 mt-2">Cash and checks are recorded on the registration only — they don&apos;t go through Finix, so they appear under &ldquo;Door cash/check&rdquo;, not Revenue.</p>}
       </div>
 
@@ -475,10 +475,10 @@ function DoorSales({
         <button type="submit" disabled={saving || !canManage || !isActive} className={primaryButton}>
           {method === "CARD" ? (
             <>
-              <CreditCard className="w-4 h-4 mr-1.5" aria-hidden="true" /> Open card checkout
+              <CreditCard className="w-4 h-4 mr-1.5" aria-hidden="true" /> {saving ? "Please wait…" : "Continue to card payment"}
             </>
           ) : saving ? (
-            "Selling…"
+            "Please wait…"
           ) : (
             `Complete ${method === "COMPLIMENTARY" ? "free" : method === "CHECK" ? "check" : "cash"} sale`
           )}
@@ -490,7 +490,6 @@ function DoorSales({
 
 export default function CheckInTab({
   eventId,
-  publicUrl,
   priceCents,
   priceMode,
   maxAttendees,
@@ -501,7 +500,6 @@ export default function CheckInTab({
   onChange,
 }: {
   eventId: string;
-  publicUrl: string;
   priceCents: number;
   priceMode: string;
   maxAttendees: number;
@@ -531,7 +529,6 @@ export default function CheckInTab({
       <Scanner eventId={eventId} canManage={canManageAttendees} onChange={onChange} />
       <DoorSales
         eventId={eventId}
-        publicUrl={publicUrl}
         priceCents={priceCents}
         priceMode={priceMode}
         maxAttendees={maxAttendees}

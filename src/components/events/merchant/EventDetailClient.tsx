@@ -184,7 +184,6 @@ export default function EventDetailClient({
         {tab === "Check-in" && (
           <CheckInTab
             eventId={eventId}
-            publicUrl={event.publicUrl}
             priceCents={event.priceCents}
             priceMode={event.priceMode}
             maxAttendees={event.allowMultipleAttendees ? event.maxAttendeesPerRegistration : 1}

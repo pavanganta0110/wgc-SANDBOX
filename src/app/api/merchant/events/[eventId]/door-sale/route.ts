@@ -29,8 +29,11 @@ export async function POST(req: Request, { params }: Ctx) {
 
   const body = (await req.json().catch(() => null)) as (Partial<RegistrationInput> & { paymentMethod?: string }) | null;
   if (!body) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  // CARD creates the pending registration only; the buyer then pays on the
+  // door-pay page through the normal Finix checkout.
+  const isCard = body.paymentMethod === "CARD";
   const method = METHODS.find((m) => m === body.paymentMethod);
-  if (!method) return NextResponse.json({ error: "Choose cash, check or complimentary." }, { status: 400 });
+  if (!method && !isCard) return NextResponse.json({ error: "Choose cash, check, card or complimentary." }, { status: 400 });
 
   const result = await submitEventRegistration(
     event.slug,
@@ -45,9 +48,24 @@ export async function POST(req: Request, { params }: Ctx) {
       donationCents: 0,
     },
     new Date(),
-    { userId: auth.userId, paymentMethod: method }
+    { userId: auth.userId, ...(method ? { paymentMethod: method } : {}) }
   );
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+
+  if (isCard) {
+    if (!result.requiresPayment) {
+      // Nothing to charge (a $0 total) — it's already confirmed and checked in.
+      return NextResponse.json({ success: true, registrationId: result.registrationId, confirmationCode: result.confirmationCode, totalCents: 0, attendeeCount: result.totals.attendeeCount });
+    }
+    return NextResponse.json({
+      success: true,
+      payUrl: `/event/${encodeURIComponent(event.slug)}/door-pay/${result.registrationId}`,
+      registrationId: result.registrationId,
+      confirmationCode: result.confirmationCode,
+      totalCents: result.totals.totalCents,
+      attendeeCount: result.totals.attendeeCount,
+    });
+  }
 
   return NextResponse.json({
     success: true,

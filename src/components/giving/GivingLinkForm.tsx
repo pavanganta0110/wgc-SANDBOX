@@ -151,6 +151,8 @@ export default function GivingLinkForm({
   eventMode?: {
     totalCents: number;
     phoneRequired: boolean;
+    /** Registrant details already known (a staff-run door sale), so the buyer goes straight to payment. */
+    prefill?: { firstName: string; lastName: string; email: string; phone: string };
     /** Event-side checks (required answers, attendee names) that must pass before any wallet sheet opens. Returns a message to show, or null when fine. */
     validate?: () => string | null;
     beforeCharge: (registrant: {
@@ -213,10 +215,10 @@ export default function GivingLinkForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedPaymentMethods]);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [firstName, setFirstName] = useState(eventMode?.prefill?.firstName ?? "");
+  const [lastName, setLastName] = useState(eventMode?.prefill?.lastName ?? "");
+  const [email, setEmail] = useState(eventMode?.prefill?.email ?? "");
+  const [phone, setPhone] = useState(eventMode?.prefill?.phone ?? "");
   const [note, setNote] = useState("");
   const [companyName, setCompanyName] = useState("");
   // Mailing address — collapsed by default, never required. Values persist
