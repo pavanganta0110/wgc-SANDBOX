@@ -30,6 +30,9 @@ interface WgcEmailOptions {
   cc?: string[];
   /** Extra message headers, e.g. List-Unsubscribe on bulk campaign email. */
   headers?: Record<string, string>;
+  /** Overrides the default Reply-To (WGC support) — used when a church writes
+   * to its own donor, so the donor's reply reaches the church. */
+  replyTo?: string;
 
   /** Overrides the WGC Payments logo in the header — used for donor-facing
    * emails sent on behalf of a specific church (Giving Campaigns), so the
@@ -232,7 +235,7 @@ support@wgcpayments.com
   try {
     const response = await getResendClient().emails.send({
       from: process.env.EMAIL_FROM || "WGC Payments <no-reply@wgcpayments.com>",
-      replyTo: process.env.SUPPORT_EMAIL || "support@wgcpayments.com",
+      replyTo: options.replyTo || process.env.SUPPORT_EMAIL || "support@wgcpayments.com",
       to: options.to,
       subject: options.subject,
       html,

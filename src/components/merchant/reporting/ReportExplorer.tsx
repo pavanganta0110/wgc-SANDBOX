@@ -25,6 +25,7 @@ import {
   Filter,
 } from "lucide-react";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
+import FollowUpEmailDialog from "./FollowUpEmailDialog";
 import PageHeader from "./ui/PageHeader";
 import SummaryStrip from "./ui/SummaryStrip";
 import Avatar from "./ui/Avatar";
@@ -251,6 +252,7 @@ export default function ReportExplorer({
   fixedDateRange,
   canManageSavedReports,
   canExportReports,
+  canEmailDonors = false,
   header,
   afterHeader,
 }: {
@@ -258,6 +260,8 @@ export default function ReportExplorer({
   fixedDateRange?: { key: string; year?: number };
   canManageSavedReports: boolean;
   canExportReports: boolean;
+  /** Lets the Lapsed report's Email button open the in-app composer; otherwise it falls back to a mailto: link. */
+  canEmailDonors?: boolean;
   header: ReportHeader;
   /** Optional content rendered between the page header and the summary strip (e.g. the Top Donors leaderboard). */
   afterHeader?: React.ReactNode;
@@ -268,6 +272,7 @@ export default function ReportExplorer({
   const [year, setYear] = useState<number>(
     fixedDateRange?.year ?? new Date().getFullYear(),
   );
+  const [emailTarget, setEmailTarget] = useState<{ donorId: string; donorName: string } | null>(null);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [sources, setSources] = useState<SourceToggles>(DEFAULT_SOURCES);
@@ -918,6 +923,15 @@ export default function ReportExplorer({
                               <FollowUp
                                 email={row.email as string | null | undefined}
                                 donorId={row.donorId}
+                                onCompose={
+                                  canEmailDonors
+                                    ? () =>
+                                        setEmailTarget({
+                                          donorId: row.donorId,
+                                          donorName: String(row.donorName ?? "this donor"),
+                                        })
+                                    : undefined
+                                }
                               />
                             </Td>
                           )}
@@ -1086,6 +1100,14 @@ export default function ReportExplorer({
             </PrimaryButton>
           </div>
         </Drawer>
+      )}
+
+      {emailTarget && (
+        <FollowUpEmailDialog
+          donorId={emailTarget.donorId}
+          donorName={emailTarget.donorName}
+          onClose={() => setEmailTarget(null)}
+        />
       )}
 
       {/* Column customizer */}
@@ -1328,13 +1350,24 @@ function DonorCell({ name, donorId }: { name: string; donorId: string }) {
 function FollowUp({
   email,
   donorId,
+  onCompose,
 }: {
   email: string | null | undefined;
   donorId: string;
+  onCompose?: () => void;
 }) {
   return (
     <span className="inline-flex items-center gap-2">
-      {email ? (
+      {email && onCompose ? (
+        <button
+          type="button"
+          onClick={onCompose}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 ${FOCUS}`}
+        >
+          <Mail className="h-3.5 w-3.5" aria-hidden />
+          Email
+        </button>
+      ) : email ? (
         <a
           href={`mailto:${email}`}
           className={`inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 ${FOCUS}`}
