@@ -47,7 +47,11 @@ export async function POST(req: Request) {
 
   let def: ReportDefinition;
   try {
-    def = parseReportDefinition({ ...(body.definition as object), page: 1, pageSize: MAX_EXPORT_ROWS });
+    // Validate with an interactive-sized page (the schema caps pageSize at
+    // MAX_PAGE_SIZE), then widen it: an export is one page of every row, up
+    // to MAX_EXPORT_ROWS. Validating with MAX_EXPORT_ROWS directly always
+    // failed with "pageSize: Too big".
+    def = { ...parseReportDefinition({ ...(body.definition as object), page: 1, pageSize: 1 }), page: 1, pageSize: MAX_EXPORT_ROWS };
   } catch (err) {
     if (err instanceof ReportValidationError) return NextResponse.json({ error: err.message }, { status: 400 });
     throw err;
