@@ -102,14 +102,14 @@ export async function queryDonorReport(auth: MerchantAuthContext, def: ReportDef
   const needsSmallest = needsAny(def.columns, SMALLEST_DONATION_COLUMNS);
 
   const [lifetimeAgg, periodAgg, ytdAgg, prevYearAgg, breakdown, recurring, attribution, smallest] = await Promise.all([
-    loadDonorAggregatesBatch(donorIds, churchId, undefined, effectiveAttributedUserId),
-    loadDonorAggregatesBatch(donorIds, churchId, periodFilter, effectiveAttributedUserId),
-    needsYtd ? loadDonorAggregatesBatch(donorIds, churchId, toPrismaDateFilter(ytdRange()), effectiveAttributedUserId) : Promise.resolve(new Map()),
-    needsPrevYear ? loadDonorAggregatesBatch(donorIds, churchId, toPrismaDateFilter(previousYearRange()), effectiveAttributedUserId) : Promise.resolve(new Map()),
-    needsBreakdown ? loadPaymentMethodBreakdownBatch(donorIds, churchId, periodFilter, effectiveAttributedUserId) : Promise.resolve(new Map()),
+    loadDonorAggregatesBatch(donorIds, churchId, undefined, effectiveAttributedUserId, givingLinkFilter),
+    loadDonorAggregatesBatch(donorIds, churchId, periodFilter, effectiveAttributedUserId, givingLinkFilter),
+    needsYtd ? loadDonorAggregatesBatch(donorIds, churchId, toPrismaDateFilter(ytdRange()), effectiveAttributedUserId, givingLinkFilter) : Promise.resolve(new Map()),
+    needsPrevYear ? loadDonorAggregatesBatch(donorIds, churchId, toPrismaDateFilter(previousYearRange()), effectiveAttributedUserId, givingLinkFilter) : Promise.resolve(new Map()),
+    needsBreakdown ? loadPaymentMethodBreakdownBatch(donorIds, churchId, periodFilter, effectiveAttributedUserId, givingLinkFilter) : Promise.resolve(new Map()),
     loadRecurringSummaryBatch(donorIds, churchId),
     needsAttribution ? loadAttributionBatch(donorIds, churchId, givingLinkFilter) : Promise.resolve(new Map()),
-    needsSmallest ? loadSmallestDonationBatch(donorIds, churchId, periodFilter) : Promise.resolve(new Map()),
+    needsSmallest ? loadSmallestDonationBatch(donorIds, churchId, periodFilter, givingLinkFilter) : Promise.resolve(new Map()),
   ]);
 
   let rows: DonorReportRow[] = candidateDonors.map((d) => {
@@ -238,10 +238,24 @@ async function loadAttributionBatch(donorIds: string[], churchId: string, onlyGi
   const linkTitle = new Map(links.map((l) => [l.id, l.publicTitle]));
   const userName = new Map(users.map((u) => [u.id, u.name || u.email]));
 
+  // With a giving-link filter on, list every filtered link the donor used (most recent first), not just one.
+  const filteredTitlesByDonor = new Map<string, string[]>();
+  if (onlyGivingLinkIds.length) {
+    for (const p of payments) {
+      const title = p.donorId && p.givingLinkId ? linkTitle.get(p.givingLinkId) : null;
+      if (!p.donorId || !title) continue;
+      const list = filteredTitlesByDonor.get(p.donorId) ?? [];
+      if (!list.includes(title)) list.push(title);
+      filteredTitlesByDonor.set(p.donorId, list);
+    }
+  }
+
   for (const p of payments) {
     if (!p.donorId || result.has(p.donorId)) continue; // first row per donor = most recent (already ordered desc)
     result.set(p.donorId, {
-      givingPage: p.givingLinkId ? linkTitle.get(p.givingLinkId) ?? null : null,
+      givingPage: onlyGivingLinkIds.length
+        ? filteredTitlesByDonor.get(p.donorId)?.join("; ") ?? null
+        : p.givingLinkId ? linkTitle.get(p.givingLinkId) ?? null : null,
       fund: p.fundName ?? null,
       purpose: null,
       attributedUserName: p.attributedUserId ? userName.get(p.attributedUserId) ?? null : null,

@@ -347,6 +347,19 @@ function mergeExternalDonationContribution(
   };
 }
 
+/** Finix transfer ids of payments made through any of the given giving links (optionally also limited to one attributed user). */
+export async function loadTransferIdsForGivingLinks(
+  churchId: string,
+  givingLinkIds: string[],
+  attributedUserId?: string,
+): Promise<Set<string>> {
+  const rows = await prisma.payment.findMany({
+    where: { churchId, givingLinkId: { in: givingLinkIds }, ...(attributedUserId ? { attributedUserId } : {}) },
+    select: { finixTransferId: true },
+  });
+  return new Set(rows.map((p) => p.finixTransferId).filter((id): id is string => Boolean(id)));
+}
+
 export async function loadDonorAggregatesBatch(
   donorIds: string[],
   churchId: string,
@@ -357,7 +370,12 @@ export async function loadDonorAggregatesBatch(
   // transfer filter a few lines down for how this bridges through
   // Payment.attributedUserId (FinixTransfer itself carries no attribution).
   attributedUserId?: string,
+  // When non-empty, every total counts only gifts made through these giving
+  // links. Invoices and external donations have no giving link, so they
+  // contribute nothing in this mode.
+  givingLinkIds?: string[],
 ): Promise<Map<string, DonorAggregates>> {
+  const byGivingLink = Boolean(givingLinkIds && givingLinkIds.length > 0);
   const result = new Map<string, DonorAggregates>(
     donorIds.map((id) => [id, { ...EMPTY_DONOR_AGGREGATES }]),
   );
@@ -374,35 +392,31 @@ export async function loadDonorAggregatesBatch(
 
   // Resolved once, up front, so the in-memory transfer filter below is a
   // simple Set membership check rather than a second query per branch.
-  const allowedTransferIds = attributedUserId
-    ? new Set(
-        (
-          await prisma.payment.findMany({
-            where: { churchId, attributedUserId },
-            select: { finixTransferId: true },
-          })
+  const allowedTransferIds = byGivingLink
+    ? await loadTransferIdsForGivingLinks(churchId, givingLinkIds!, attributedUserId)
+    : attributedUserId
+      ? new Set(
+          (
+            await prisma.payment.findMany({
+              where: { churchId, attributedUserId },
+              select: { finixTransferId: true },
+            })
+          )
+            .map((p) => p.finixTransferId)
+            .filter((id): id is string => Boolean(id)),
         )
-          .map((p) => p.finixTransferId)
-          .filter((id): id is string => Boolean(id)),
-      )
-    : null;
+      : null;
 
   if (instrumentIds.length === 0) {
     const [activeSubs, invoiceContributions, externalContributions] =
       await Promise.all([
         loadActiveSubscriptionCounts(donorIds, churchId, attributedUserId),
-        loadInvoiceContributionsByDonor(
-          donorIds,
-          churchId,
-          dateFilter,
-          attributedUserId,
-        ),
-        loadExternalDonationContributionsByDonor(
-          donorIds,
-          churchId,
-          dateFilter,
-          attributedUserId,
-        ),
+        byGivingLink
+          ? Promise.resolve(new Map<string, never>())
+          : loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+        byGivingLink
+          ? Promise.resolve(new Map<string, never>())
+          : loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
       ]);
     for (const donorId of donorIds) {
       const base = {
@@ -521,18 +535,12 @@ export async function loadDonorAggregatesBatch(
           select: { finixTransferId: true, givingLinkId: true },
         })
       : Promise.resolve([]),
-    loadInvoiceContributionsByDonor(
-      donorIds,
-      churchId,
-      dateFilter,
-      attributedUserId,
-    ),
-    loadExternalDonationContributionsByDonor(
-      donorIds,
-      churchId,
-      dateFilter,
-      attributedUserId,
-    ),
+    byGivingLink
+      ? Promise.resolve(new Map<string, never>())
+      : loadInvoiceContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
+    byGivingLink
+      ? Promise.resolve(new Map<string, never>())
+      : loadExternalDonationContributionsByDonor(donorIds, churchId, dateFilter, attributedUserId),
   ]);
 
   const refundedByDonor = new Map<string, { amount: number; count: number }>();

@@ -20,7 +20,7 @@ export async function queryRecurringReport(auth: MerchantAuthContext, def: Repor
     search: def.filters.search,
     status: def.filters.recurringStatus?.[0],
     fundId: def.filters.fundIds?.[0],
-    givingLinkId: def.filters.givingLinkIds?.[0],
+    givingLinkIds: def.filters.givingLinkIds,
     minMonthlyValueCents: def.filters.minAmountCents,
     maxMonthlyValueCents: def.filters.maxAmountCents,
     attributedUserId: def.filters.attributedUserId ?? scopedUserId ?? undefined,

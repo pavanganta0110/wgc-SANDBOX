@@ -307,7 +307,6 @@ export default function ReportExplorer({
 
   // Giving links available for the "Giving link" filter (server-scoped to what this user may see).
   useEffect(() => {
-    if (reportType === "RECURRING") return;
     let cancelled = false;
     fetch("/api/merchant/giving-links")
       .then((r) => (r.ok ? r.json() : null))
@@ -1127,40 +1126,38 @@ export default function ReportExplorer({
                 <option value="IN_KIND_DONOR">In-Kind Donors</option>
               </SelectField>
             </div>
-            {reportType !== "RECURRING" && (
-              <fieldset>
-                <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                  Giving link
-                </legend>
-                <p className="mb-2 text-xs text-slate-500">
-                  Only donors who gave through the selected link(s). Leave empty for all donors. The export uses the same filter.
-                </p>
-                {givingLinks.length === 0 ? (
-                  <p className="text-xs text-slate-500">No giving links yet.</p>
-                ) : (
-                  <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
-                    {givingLinks.map((l) => (
-                      <label
-                        key={l.id}
-                        className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${givingLinkIds.includes(l.id) ? "bg-indigo-50 text-indigo-900" : "text-slate-700 hover:bg-slate-50"}`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="h-4 w-4 accent-indigo-600"
-                          checked={givingLinkIds.includes(l.id)}
-                          onChange={(e) =>
-                            setGivingLinkIds((prev) =>
-                              e.target.checked ? [...prev, l.id] : prev.filter((id) => id !== l.id),
-                            )
-                          }
-                        />
-                        <span className="truncate">{l.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </fieldset>
-            )}
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                Giving link
+              </legend>
+              <p className="mb-2 text-xs text-slate-500">
+                Only gifts made through the selected link(s) are counted, and only donors with such a gift are listed. Leave empty for all donors. The export uses the same filter.
+              </p>
+              {givingLinks.length === 0 ? (
+                <p className="text-xs text-slate-500">No giving links yet.</p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                  {givingLinks.map((l) => (
+                    <label
+                      key={l.id}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${givingLinkIds.includes(l.id) ? "bg-indigo-50 text-indigo-900" : "text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-indigo-600"
+                        checked={givingLinkIds.includes(l.id)}
+                        onChange={(e) =>
+                          setGivingLinkIds((prev) =>
+                            e.target.checked ? [...prev, l.id] : prev.filter((id) => id !== l.id),
+                          )
+                        }
+                      />
+                      <span className="truncate">{l.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </fieldset>
             <PrimaryButton
               className="w-full justify-center"
               onClick={() => {
