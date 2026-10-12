@@ -187,6 +187,10 @@ export async function sendDonationReceipt(
     title: "Thank You for Your Gift",
     badgeText: "Receipt",
     badgeColor: "#10B981",
+    // Church-branded (Settings -> Branding / Receipts), matching the attached PDF.
+    logoUrl: church.logoUrl || undefined,
+    logoAlt: orgName,
+    senderName: orgName,
     bodyHtml: lines.join("\n"),
     attachments: [{ filename: `receipt-${receiptNumber}${nextVersion > 1 ? `-v${nextVersion}` : ""}.pdf`, content: pdf as unknown as Buffer }],
     log: {
