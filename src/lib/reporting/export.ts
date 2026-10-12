@@ -24,21 +24,36 @@ export function donorReportCsvResponse(rows: DonorReportRow[], columns: DonorRep
  * when relevant to the selected report type (item 16: "only include sheets
  * relevant to the selected report").
  */
+/** Lowercase, hyphenated, filename-safe version of an organization's name ("Waypoint Gateway Collective" -> "waypoint-gateway-collective"). */
+export function organizationFilenameSlug(name: string | null | undefined): string {
+  const slug = (name ?? "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/g, "");
+  return slug || "organization";
+}
+
 export async function buildDonorReportWorkbook(params: {
   rows: DonorReportRow[];
   columns: DonorReportColumn[];
   reportName: string;
+  organizationName?: string;
   dateRangeLabel: string;
   generatedAt: Date;
   totalRowsAvailable: number;
 }): Promise<ExcelJS.Buffer> {
-  const { rows, columns, reportName, dateRangeLabel, generatedAt, totalRowsAvailable } = params;
+  const { rows, columns, reportName, organizationName, dateRangeLabel, generatedAt, totalRowsAvailable } = params;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "WGC Payments";
+  workbook.creator = organizationName || "WGC Payments";
   workbook.created = generatedAt;
 
   const summary = workbook.addWorksheet("Summary");
   summary.columns = [{ width: 28 }, { width: 40 }];
+  if (organizationName) summary.addRow(["Organization", organizationName]);
   summary.addRow(["Report", reportName]);
   summary.addRow(["Date Range", dateRangeLabel]);
   summary.addRow(["Generated", generatedAt.toLocaleString("en-US")]);
@@ -47,7 +62,7 @@ export async function buildDonorReportWorkbook(params: {
     summary.addRow(["Note", `This report matched ${totalRowsAvailable} donors; the export is capped at ${rows.length} rows.`]);
   }
   summary.getRow(1).font = { bold: true };
-  for (let i = 1; i <= 4; i++) summary.getCell(i, 1).font = { bold: true };
+  for (let i = 1; i <= summary.rowCount; i++) summary.getCell(i, 1).font = { bold: true };
 
   const sheet = workbook.addWorksheet("Donors", { views: [{ state: "frozen", ySplit: 1 }] });
   sheet.columns = columns.map((col) => ({
@@ -107,17 +122,19 @@ export function recurringReportCsvResponse(rows: RecurringDonorRow[], filename: 
 
 export async function buildRecurringReportWorkbook(params: {
   rows: RecurringDonorRow[];
+  organizationName?: string;
   dateRangeLabel: string;
   generatedAt: Date;
   totalRowsAvailable: number;
 }): Promise<ExcelJS.Buffer> {
-  const { rows, dateRangeLabel, generatedAt, totalRowsAvailable } = params;
+  const { rows, organizationName, dateRangeLabel, generatedAt, totalRowsAvailable } = params;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "WGC Payments";
+  workbook.creator = organizationName || "WGC Payments";
   workbook.created = generatedAt;
 
   const summary = workbook.addWorksheet("Summary");
   summary.columns = [{ width: 28 }, { width: 40 }];
+  if (organizationName) summary.addRow(["Organization", organizationName]);
   summary.addRow(["Report", "Recurring Giving Report"]);
   summary.addRow(["Date Range", dateRangeLabel]);
   summary.addRow(["Generated", generatedAt.toLocaleString("en-US")]);
@@ -126,7 +143,7 @@ export async function buildRecurringReportWorkbook(params: {
     summary.addRow(["Note", `This report matched ${totalRowsAvailable} recurring donors; the export is capped at ${rows.length} rows.`]);
   }
   summary.getRow(1).font = { bold: true };
-  for (let i = 1; i <= 4; i++) summary.getCell(i, 1).font = { bold: true };
+  for (let i = 1; i <= summary.rowCount; i++) summary.getCell(i, 1).font = { bold: true };
 
   const sheet = workbook.addWorksheet("Recurring Donors", { views: [{ state: "frozen", ySplit: 1 }] });
   sheet.columns = RECURRING_COLUMNS.map((c) => ({ header: c.header, key: c.header, width: Math.max(c.header.length + 2, 14) }));

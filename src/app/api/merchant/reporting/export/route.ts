@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { parseReportDefinition, ReportValidationError } from "@/lib/reporting/validation";
@@ -13,6 +14,7 @@ import {
   recurringReportCsvResponse,
   buildRecurringReportWorkbook,
   excelResponse,
+  organizationFilenameSlug,
 } from "@/lib/reporting/export";
 import { rangeLabel } from "@/lib/dateRangePresets";
 import { MAX_EXPORT_ROWS, type ReportDefinition, type DonorReportRow } from "@/lib/reporting/types";
@@ -59,7 +61,10 @@ export async function POST(req: Request) {
 
   const dateRangeLabel = rangeLabel(def.dateRange.key === "year" ? "custom" : def.dateRange.key, def.dateRange.from, def.dateRange.to) || `Year ${def.dateRange.year}`;
   const timestamp = new Date().toISOString().slice(0, 10);
-  const baseFilename = `wgc-${def.reportType.toLowerCase()}-report-${timestamp}`;
+  // Named after the organization, not WGC — the file is the merchant's own record.
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, statementSenderName: true } });
+  const organizationName = church?.statementSenderName || church?.name || undefined;
+  const baseFilename = `${organizationFilenameSlug(organizationName)}-${def.reportType.toLowerCase()}-report-${timestamp}`;
 
   if (def.reportType === "RECURRING") {
     let recurringResult: { rows: RecurringDonorRow[]; totalCount: number };
@@ -72,12 +77,17 @@ export async function POST(req: Request) {
     if (format === "csv") return recurringReportCsvResponse(recurringResult.rows, `${baseFilename}.csv`);
     const buffer = await buildRecurringReportWorkbook({
       rows: recurringResult.rows,
+      organizationName,
       dateRangeLabel,
       generatedAt: new Date(),
       totalRowsAvailable: recurringResult.totalCount,
     });
     return excelResponse(buffer, `${baseFilename}.xlsx`);
   }
+
+  // Every donor export says which giving link the donor gave through (their
+  // most recent one), even when the on-screen table doesn't show that column.
+  if (!def.columns.includes("givingPage")) def = { ...def, columns: [...def.columns, "givingPage"] };
 
   let result: { rows: DonorReportRow[]; totalCount: number };
   try {
@@ -103,6 +113,7 @@ export async function POST(req: Request) {
     rows: result.rows,
     columns: def.columns,
     reportName: reportTypeLabel(def.reportType),
+    organizationName,
     dateRangeLabel,
     generatedAt: new Date(),
     totalRowsAvailable: result.totalCount,

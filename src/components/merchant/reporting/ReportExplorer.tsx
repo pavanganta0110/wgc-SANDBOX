@@ -112,7 +112,7 @@ const COLUMN_LABELS: Record<Column, string> = {
   isRecurringDonor: "Recurring Donor",
   recurringAmountCents: "Recurring Amount",
   givingFrequency: "Giving Frequency",
-  givingPage: "Giving Page",
+  givingPage: "Giving Link",
   fund: "Fund",
   purpose: "Purpose",
   attributedUserName: "Assigned Fundraiser",
