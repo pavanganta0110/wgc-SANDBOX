@@ -16,6 +16,7 @@ import {
   PlanningCenterConnectionError,
 } from "./errors";
 import { fetchPlanningCenterIdentity, PlanningCenterClient, probeGivingAccess } from "./resourceClient";
+import { resetGivingSetupIfOrganizationChanged } from "./syncConfig";
 
 /**
  * The only place that decides how to reach Planning Center for a given
@@ -137,6 +138,10 @@ export async function completePlanningCenterConnection(params: {
     throw err;
   }
 
+  // Reconnecting to a different Planning Center organization invalidates
+  // every payment source / fund id chosen against the old one.
+  const setupWasReset = await resetGivingSetupIfOrganizationChanged(params.churchId, identity.organizationId);
+
   await logDashboardAction({
     churchId: params.churchId,
     actorUserId: params.actorUserId,
@@ -145,7 +150,7 @@ export async function completePlanningCenterConnection(params: {
     action: "planningcenter.connection_created",
     entityType: "PlanningCenterConnection",
     entityId: connection.id,
-    metadata: { pcoOrganizationId: identity.organizationId, canReadGiving },
+    metadata: { pcoOrganizationId: identity.organizationId, canReadGiving, givingSetupReset: setupWasReset },
     req: params.req,
   });
 

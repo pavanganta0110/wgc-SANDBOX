@@ -39,6 +39,15 @@ export class PlanningCenterConnectionError extends Error {
   }
 }
 
+/** A problem the church can fix (bad selection, name collision, missing
+ * permission). Safe to show verbatim; routes map it to HTTP 400/409. */
+export class PlanningCenterSetupError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PlanningCenterSetupError";
+  }
+}
+
 export class PlanningCenterAuthError extends Error {
   readonly normalized: NormalizedPlanningCenterError;
   constructor(normalized: NormalizedPlanningCenterError, message?: string) {
