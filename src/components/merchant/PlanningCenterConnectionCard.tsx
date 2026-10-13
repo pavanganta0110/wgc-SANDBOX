@@ -61,9 +61,11 @@ export default function PlanningCenterConnectionCard() {
       if (!res.ok || result.success === false) throw new Error(result.error || result.message || "Something went wrong.");
       toast.success(action === "disconnect" ? "Disconnected." : result.message || "Connection is healthy.");
       load();
+      window.dispatchEvent(new Event("pco-connection-changed"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong.");
       load();
+      window.dispatchEvent(new Event("pco-connection-changed"));
     } finally {
       setBusy(null);
     }

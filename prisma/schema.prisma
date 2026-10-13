@@ -4813,6 +4813,56 @@ model PlanningCenterConnection {
   @@index([refreshTokenExpiresAt])
 }
 
+/// Per-church Planning Center Giving setup (phase 3): the "WGC Payments"
+/// payment source and the default fund. Separate from PlanningCenterConnection
+/// so connection state (tokens, health) and sync policy never share a row.
+/// Only valid for the Planning Center organization recorded here — if the
+/// church reconnects to a DIFFERENT organization the setup is reset and
+/// syncVersion is bumped so nothing from the old account is ever reused.
+/// See docs/integrations/planning-center-phase-2-4.md.
+model PlanningCenterSyncConfig {
+  id       String @id @default(cuid())
+  churchId String @unique
+
+  // The Planning Center organization this setup belongs to.
+  pcoOrganizationId String
+
+  // The payment source WGC gifts will be recorded under. Planning Center
+  // requires one on every API-created donation; the built-in "Planning
+  // Center" source is reserved and cannot be used.
+  pcoPaymentSourceId   String?
+  pcoPaymentSourceName String?
+  paymentSourceReadyAt DateTime?
+
+  // Used for gifts whose WGC fund has no explicit mapping.
+  defaultPcoFundId   String?
+  defaultPcoFundName String?
+
+  syncVersion Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Maps one of a church's WGC funds to a Planning Center Giving fund.
+/// Many WGC funds may map to the same Planning Center fund (consolidation),
+/// but each WGC fund maps to at most one. Modeled on AplosPurposeMapping.
+model PlanningCenterFundMapping {
+  id       String @id @default(cuid())
+  churchId String
+  fundId   String // WGC Fund.id
+
+  pcoFundId   String
+  pcoFundName String // snapshot for display; the live name is re-read from Planning Center
+
+  mappedByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([churchId, fundId])
+  @@index([churchId])
+}
+
 model QuickBooksSyncRecord {
   id                     String @id @default(cuid())
   quickBooksConnectionId String

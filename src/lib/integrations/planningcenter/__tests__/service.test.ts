@@ -34,7 +34,10 @@ const update = vi.fn(async (args: Args) => {
 vi.mock("@/lib/prisma", () => ({
   prisma: { planningCenterConnection: { findUnique: (a: Args) => findUnique(a), findMany: () => findMany(), updateMany: (a: Args) => updateMany(a), upsert: (a: Args) => upsert(a), update: (a: Args) => update(a) } },
 }));
-vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: vi.fn(async () => {}) }));
+const mockAudit = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
+vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: (...a: unknown[]) => mockAudit(...a) }));
+const mockResetSetup = vi.fn<(churchId: string, orgId: string) => Promise<boolean>>(async () => false);
+vi.mock("../syncConfig", () => ({ resetGivingSetupIfOrganizationChanged: (c: string, o: string) => mockResetSetup(c, o) }));
 
 const mockRefresh = vi.fn();
 const mockExchange = vi.fn();
@@ -178,6 +181,19 @@ describe("completePlanningCenterConnection", () => {
     expect(row!.canWriteGiving).toBeNull();
     expect(row!.accessTokenEncrypted).not.toContain("new-access");
     expect(mockRevoke).not.toHaveBeenCalled();
+  });
+
+  it("clears the Giving setup when the church reconnects to a DIFFERENT Planning Center organization, and says so in the audit log", async () => {
+    mockResetSetup.mockResolvedValueOnce(true);
+    await completePlanningCenterConnection(params);
+    expect(mockResetSetup).toHaveBeenCalledWith("church1", "127");
+    expect(mockAudit).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ givingSetupReset: true }) }));
+  });
+
+  it("does not touch the Giving setup when a connection is refused", async () => {
+    row = connectedRow({ churchId: "other-church" });
+    await expect(completePlanningCenterConnection(params)).rejects.toThrow(/already connected/);
+    expect(mockResetSetup).not.toHaveBeenCalled();
   });
 
   it("connects but records canReadGiving=false when Giving access is missing", async () => {
