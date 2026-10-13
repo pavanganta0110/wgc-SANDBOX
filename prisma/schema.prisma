@@ -4765,6 +4765,54 @@ model QuickBooksConnection {
   @@index([automaticSyncEnabled])
 }
 
+/// A church's connection to Planning Center (People + Giving). One active
+/// connection per church. Phase 1 only stores/refreshes the OAuth grant —
+/// nothing is written to the church's Planning Center account yet. See
+/// docs/integrations/planning-center-phase-1.md.
+model PlanningCenterConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  status String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // Planning Center's own organization id. Unique so one Planning Center
+  // organization can never feed two WGC churches (later phases write gifts
+  // into it). Cleared on disconnect so another church may then connect it.
+  pcoOrganizationId    String?  @unique
+  pcoOrganizationName  String?
+  pcoConnectedUserId   String?
+  pcoConnectedUserName String?
+
+  // Versioned encrypted-envelope JSON strings — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted     String?
+  refreshTokenEncrypted    String?
+  encryptionKeyFingerprint String?
+  tokenExpiresAt           DateTime? // access token: ~2h
+  refreshTokenExpiresAt    DateTime? // refresh honored ~90d after issue
+  scopesJson               Json?
+
+  // Connect-time permission probe. The integration acts with the
+  // authorizing Planning Center user's permissions.
+  canReadPeople  Boolean?
+  canReadGiving  Boolean?
+  canWriteGiving Boolean? // unknown (null) until a phase that first writes
+
+  connectedByUserId    String?
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+  lastConnectionTestAt DateTime?
+  lastErrorAt          DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([refreshTokenExpiresAt])
+}
+
 model QuickBooksSyncRecord {
   id                     String @id @default(cuid())
   quickBooksConnectionId String
