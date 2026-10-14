@@ -500,9 +500,8 @@ platform switch `PLANNING_CENTER_SYNC_ENABLED` defaults to false and every churc
   as contacts" job (sets `contactSource = PLANNING_CENTER`, fills blanks only), and a merge hook so a donor merge
   moves the link to the surviving donor (best-effort; it can never break a merge).
 - **Planning** (`giftPlan.ts`, `giftPayload.ts`): DB-only plan of what to send for a settled deposit. Skips, with a
-  stated reason: refunded, partly refunded, returned, not succeeded, donor-covered fee (via the same
-  `resolveContributionAmountPolicy` Aplos uses, so resolving that decision in one place resolves it here), goods or
-  services, unsupported payment method. Pure payload builder with a stable hash.
+  stated reason: refunded, partly refunded, returned, not succeeded, goods or services, unsupported payment method.
+  **Gifts where the donor covered the fee are sent** (see "Donor-covered fees" below). Pure payload builder with a stable hash.
 - **Engine** (`syncEngine.ts`, `syncReconcile.ts`): the write protocol in §4.4, exactly as designed. One batch per
   deposit; `PlanningCenterDonationRecord @@unique([churchId, paymentId])`; a donation is `SENDING` before its POST;
   an unknown outcome is settled only by reading the batch, only concluding "never landed" after a 2-minute grace
@@ -544,3 +543,22 @@ platform switch `PLANNING_CENTER_SYNC_ENABLED` defaults to false and every churc
 - `POST /people/v2/people` (+ `/emails`, `/phone_numbers`) works with the attributes sent (CREATE_PERSON only).
 - `GET /giving/v2/batches?order=-updated_at` can find a batch by exact description among the latest 200.
 - Batch `commit` goes `updating` then `committed`, and re-committing an already committed batch is rejected, not harmful.
+
+### Donor-covered fees (decided; supersedes the earlier "skip")
+Decision from Collin Sansom: **A**. A gift where the donor covered the processing fee is sent to Planning Center at the
+**gift amount without the fee** ($250 when the donor was charged $250.25), the same figure the donation receipt uses.
+- `fee_cents` is **0** for those gifts: the donor paid the fee, so the church bore no cost. For gifts where the donor did
+  not cover the fee, `fee_cents` is the real processing cost (negative), as before.
+- Planning Center has no field to show the covered fee separately (`fee_covered` can only be true for Stripe), so it
+  appears only on WGC's own documents.
+- Fee-covered gifts no longer wait for Finix fee data (there is no church cost to record).
+- Collin's condition: the year-end statement must stay clear for tax purposes. The statement counts the covered fee in
+  the donor's total ($250.25) and shows it on its own "Donor-Covered Transaction Costs" line **only if the church's
+  `statementShowDonorCoveredFees` setting is on** (default off). Recommendation sent to Collin: turn that on by default.
+  Not changed here; it alters existing churches' statements.
+- Switching to B later is a one-line change in `giftPlan.ts`. Gifts already sent keep the amount they were sent at.
+
+### Receipt fix shipped alongside
+The church setting `receiptShowDonorCoveredFee` existed (and showed in the settings preview) but was never passed to the
+real receipt, so turning it on did nothing. The receipt PDF and email now show "Processing Fee Covered by Donor" and
+"Total Charged" when the setting is on and the donor covered a fee.

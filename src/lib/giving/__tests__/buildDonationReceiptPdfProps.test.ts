@@ -151,4 +151,48 @@ describe("buildDonationReceiptPdfProps", () => {
       })
     ).rejects.toThrow("Organization not found");
   });
+
+  describe("donor-covered fee on the receipt", () => {
+    const snapshot = {
+      receiptNumber: "TC-0001",
+      paymentAmountCents: 25000,
+      goodsServicesProvided: false,
+      goodsServicesDescription: null,
+      goodsServicesFairMarketValueCents: null,
+      recordedContributionAmountCents: 25000,
+      acknowledgmentText: "Thank you",
+    };
+
+    it("is passed to the receipt when the church turned the setting on and the donor covered a fee", async () => {
+      mockPrisma.church.findUnique.mockResolvedValue({ ...church, receiptShowDonorCoveredFee: true });
+      const { buildDonationReceiptPdfProps } = await loadModule();
+      const { props } = await buildDonationReceiptPdfProps({ ...payment, feeCoveredCents: 25 }, "church-1", snapshot);
+      expect(props.amountCents).toBe(25000); // the gift itself is unchanged
+      expect(props.donorCoveredFeeCents).toBe(25);
+    });
+
+    it("is NOT shown when the setting is off (the default), even if the donor covered a fee", async () => {
+      const { buildDonationReceiptPdfProps } = await loadModule();
+      const { props } = await buildDonationReceiptPdfProps({ ...payment, feeCoveredCents: 25 }, "church-1", snapshot);
+      expect(props.donorCoveredFeeCents).toBe(0);
+    });
+
+    it("is NOT shown when the donor didn't cover a fee, even with the setting on", async () => {
+      mockPrisma.church.findUnique.mockResolvedValue({ ...church, receiptShowDonorCoveredFee: true });
+      const { buildDonationReceiptPdfProps } = await loadModule();
+      for (const fee of [0, null, undefined]) {
+        const { props } = await buildDonationReceiptPdfProps({ ...payment, feeCoveredCents: fee }, "church-1", snapshot);
+        expect(props.donorCoveredFeeCents).toBe(0);
+      }
+    });
+
+    it("coveredFeeForReceipt only ever returns a positive fee, and only when the setting is on", async () => {
+      const { coveredFeeForReceipt } = await loadModule();
+      expect(coveredFeeForReceipt(true, 25)).toBe(25);
+      expect(coveredFeeForReceipt(false, 25)).toBe(0);
+      expect(coveredFeeForReceipt(true, 0)).toBe(0);
+      expect(coveredFeeForReceipt(true, -5)).toBe(0);
+      expect(coveredFeeForReceipt(true, null)).toBe(0);
+    });
+  });
 });

@@ -43,9 +43,21 @@ describe("classifyPayment", () => {
     expect(classifyPayment(payment({ status }), transfer(), instrument).decision).toEqual({ kind: "SKIP", reason });
   });
 
-  it("skips gifts where the donor covered the fee, using the SAME policy function Aplos uses", () => {
-    const g = classifyPayment(payment({ amountCents: 5175, donationAmountCents: 5000, feeCoveredCents: 175 }), transfer(), instrument);
-    expect(g.decision).toEqual({ kind: "SKIP", reason: "DONOR_COVERED_FEE" });
+  it("a gift where the donor covered the fee is SENT at the gift amount WITHOUT the fee, and records no church cost", () => {
+    const g = classifyPayment(payment({ amountCents: 25025, donationAmountCents: 25000, feeCoveredCents: 25, actualFinixFeesCents: 25 }), transfer({ applicationFeeCents: 0 }), instrument);
+    expect(g.decision).toEqual({ kind: "PUSH" });
+    expect(g.amountCents).toBe(25000); // not $250.25
+    expect(g.feeCents).toBe(0); // the donor paid the fee; the church paid none
+  });
+
+  it("a gift where the donor did NOT cover the fee still records the real processing cost", () => {
+    const g = classifyPayment(payment({ amountCents: 25000, donationAmountCents: 25000, feeCoveredCents: 0, actualFinixFeesCents: 175 }), transfer({ applicationFeeCents: 25 }), instrument);
+    expect(g).toMatchObject({ amountCents: 25000, feeCents: -200 });
+  });
+
+  it("a fee-covered gift with no donationAmountCents falls back to the amount charged (older rows)", () => {
+    const g = classifyPayment(payment({ amountCents: 5000, donationAmountCents: null, feeCoveredCents: 0 }), transfer(), instrument);
+    expect(g.amountCents).toBe(5000);
   });
 
   it("skips goods-and-services payments and unsupported methods", () => {
@@ -108,6 +120,15 @@ describe("buildSettlementPlan", () => {
     paymentFind.mockResolvedValue([payment({ actualFinixFeesCents: null })]);
     const plan = await buildSettlementPlan("c1", "ST1");
     expect(plan).toMatchObject({ eligible: false, awaitingFees: true, reasons: [] });
+  });
+
+  it("a fee-covered gift does NOT wait for fee data (there is no church cost to record)", async () => {
+    paymentFind.mockResolvedValue([payment({ amountCents: 5025, donationAmountCents: 5000, feeCoveredCents: 25, actualFinixFeesCents: null })]);
+    transferFind.mockResolvedValue([transfer({ amountCents: 5025, applicationFeeCents: null })]);
+    settlementFind.mockResolvedValue({ ...settled, totalAmountCents: 5025 });
+    const plan = await buildSettlementPlan("c1", "ST1");
+    expect(plan.eligible).toBe(true);
+    expect(plan.gifts[0]).toMatchObject({ amountCents: 5000, feeCents: 0 });
   });
 
   it("a skipped (refunded) payment with no fee data does NOT hold up the rest of the settlement", async () => {
