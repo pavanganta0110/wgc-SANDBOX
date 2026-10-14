@@ -1,6 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { resolveContributionAmountPolicy } from "@/lib/integrations/aplos/contributionPolicy";
-import type { ContributionFinancialSnapshot } from "@/lib/integrations/aplos/financialSnapshot";
 
 /**
  * Turns a settled WGC settlement into a plan of gifts to record in Planning
@@ -114,24 +112,13 @@ interface InstrumentRow {
 /** Pure: classify one payment. Exported for tests. */
 export function classifyPayment(payment: PaymentRow, transfer: TransferRow, instrument: InstrumentRow | undefined): PlannedGift {
   const method = toPcoMethod(payment.paymentMethodType);
+  // The GIFT, without any processing fee the donor chose to cover on top (decision "A", confirmed by Collin Sansom).
+  // That is the figure the donation receipt uses. The covered fee is shown on the WGC receipt and year-end statement
+  // (when the church's settings show it); Planning Center has no field for it, so it is not recorded there.
   const donationAmountCents = payment.donationAmountCents ?? payment.amountCents;
+  const donorCoveredFee = (payment.feeCoveredCents ?? 0) > 0;
   const processorFee = payment.actualFinixFeesCents ?? 0;
   const applicationFee = transfer.applicationFeeCents ?? 0;
-
-  const snapshot: ContributionFinancialSnapshot = {
-    paymentId: payment.id,
-    finixTransferId: transfer.finixTransferId,
-    donorId: payment.donorId,
-    fundId: payment.fundId,
-    isAnonymous: payment.isAnonymous,
-    donationAmountCents,
-    feeCoveredCents: payment.feeCoveredCents ?? 0,
-    totalChargedCents: payment.amountCents,
-    processorFeeCents: payment.actualFinixFeesCents,
-    applicationFeeCents: transfer.applicationFeeCents,
-    goodsServicesProvided: payment.goodsServicesProvided,
-    goodsServicesFairMarketValueCents: null,
-  };
 
   const base = {
     paymentId: payment.id,
@@ -140,7 +127,9 @@ export function classifyPayment(payment: PaymentRow, transfer: TransferRow, inst
     fundId: payment.fundId,
     isAnonymous: payment.isAnonymous,
     receivedOn: payment.createdAt.toISOString().slice(0, 10),
-    feeCents: -(processorFee + applicationFee),
+    // When the donor covered the fee, the church paid none of it, so there is no cost to record. Otherwise it is the
+    // real processing cost, as a negative integer (Planning Center's convention).
+    feeCents: donorCoveredFee ? 0 : -(processorFee + applicationFee),
     method: method ?? ("card" as PcoPaymentMethod),
     cardBrand: method === "card" ? instrument?.cardBrand ?? payment.cardBrand : null,
     cardSubtype: method === "card" ? toCardSubtype(instrument?.cardType) : null,
@@ -156,14 +145,7 @@ export function classifyPayment(payment: PaymentRow, transfer: TransferRow, inst
   if (!method) return skip("UNSUPPORTED_PAYMENT_METHOD");
   if (payment.goodsServicesProvided) return skip("GOODS_OR_SERVICES");
 
-  // WGC's own receipt and year-end statement disagree about the amount of a
-  // gift where the donor covered the fee; the Aplos integration blocks on the
-  // same unresolved policy. Reuse that single decision point so resolving it
-  // there resolves it here too.
-  const policy = resolveContributionAmountPolicy(snapshot);
-  if (!policy.resolved || policy.contributionAmountCents === undefined) return skip("DONOR_COVERED_FEE");
-
-  return { ...base, amountCents: policy.contributionAmountCents, decision: { kind: "PUSH" } };
+  return { ...base, amountCents: donationAmountCents, decision: { kind: "PUSH" } };
 }
 
 /** Builds the plan for one settlement. Every query is scoped to the church. */
@@ -206,6 +188,8 @@ export async function buildSettlementPlan(churchId: string, finixSettlementId: s
   const awaitingFees = gifts.some((g) => {
     if (g.decision.kind !== "PUSH") return false;
     const payment = paymentById.get(g.paymentId)!;
+    // A gift whose fee the donor covered has no church cost to record, so it never waits for fee data.
+    if ((payment.feeCoveredCents ?? 0) > 0) return false;
     const transfer = transfers.find((t) => t.paymentId === g.paymentId)!;
     return payment.actualFinixFeesCents === null || payment.actualFinixFeesCents === undefined || transfer.applicationFeeCents === null || transfer.applicationFeeCents === undefined;
   });

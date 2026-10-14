@@ -40,6 +40,9 @@ export interface DonationReceiptPdfProps {
   transactionReference: string;
   donationDate: Date;
   amountCents: number;
+  /** The processing fee the donor chose to cover on top of `amountCents`. Set only when the church's receipt
+   * setting "show donor-covered fee" is on and the donor actually covered one; omitted/0 otherwise. */
+  donorCoveredFeeCents?: number;
   fundName: string | null;
   paymentMethodLabel: string;
   isRecurring: boolean;
@@ -92,6 +95,12 @@ export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
           <View style={styles.row}><Text style={styles.label}>Transaction Reference</Text><Text style={styles.value}>{props.transactionReference}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Date</Text><Text style={styles.value}>{formatDate(props.donationDate)}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Amount</Text><Text style={styles.value}>{formatCents(props.amountCents)}</Text></View>
+          {!!props.donorCoveredFeeCents && props.donorCoveredFeeCents > 0 && (
+            <>
+              <View style={styles.row}><Text style={styles.label}>Processing Fee Covered by Donor</Text><Text style={styles.value}>{formatCents(props.donorCoveredFeeCents)}</Text></View>
+              <View style={styles.row}><Text style={styles.label}>Total Charged</Text><Text style={styles.value}>{formatCents(props.amountCents + props.donorCoveredFeeCents)}</Text></View>
+            </>
+          )}
           {props.fundName && <View style={styles.row}><Text style={styles.label}>Fund / Campaign</Text><Text style={styles.value}>{props.fundName}</Text></View>}
           <View style={styles.row}><Text style={styles.label}>Payment Method</Text><Text style={styles.value}>{props.paymentMethodLabel}</Text></View>
           <View style={styles.row}>

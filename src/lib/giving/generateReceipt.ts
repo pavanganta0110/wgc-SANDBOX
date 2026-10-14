@@ -27,6 +27,15 @@ import { DonationReceiptPdf, type DonationReceiptPdfProps } from "@/lib/giving/p
  * previously issued receipt is ever mutated in place, so a donor who
  * already received version 1 can be shown exactly what changed.
  */
+/**
+ * The processing fee a donor covered, to show on a receipt: only when the church turned the setting on AND the
+ * donor actually covered one. Otherwise 0, so nothing is shown. (The setting existed before but was never passed
+ * to the receipt, so turning it on had no effect on real receipts.)
+ */
+export function coveredFeeForReceipt(showSetting: boolean, feeCoveredCents: number | null | undefined): number {
+  return showSetting && typeof feeCoveredCents === "number" && feeCoveredCents > 0 ? feeCoveredCents : 0;
+}
+
 type ReceiptFinancialSnapshot = {
   receiptNumber: string;
   paymentAmountCents: number;
@@ -101,6 +110,7 @@ export async function buildDonationReceiptPdfProps(
     transactionReference: settings.showDonationReference ? payment.finixTransferId || payment.id : payment.id,
     donationDate: payment.createdAt,
     amountCents: snapshot.paymentAmountCents,
+    donorCoveredFeeCents: coveredFeeForReceipt(settings.showDonorCoveredFee, payment.feeCoveredCents),
     fundName: settings.showFund ? payment.fundName : null,
     paymentMethodLabel: settings.showPaymentMethodLastFour ? paymentMethodLabel : describeInstrumentType(payment.paymentMethodType),
     isRecurring: false,
@@ -163,6 +173,8 @@ export async function sendDonationReceipt(
   if (settings.header) lines.push(`<p>${settings.header}</p>`);
   lines.push(`<p>Thank you for your gift of <strong>${formatCents(paymentAmountCents)}</strong> to <strong>${orgName}</strong>.</p>`);
   if (settings.showFund && payment.fundName) lines.push(`<p>Fund/Campaign: ${payment.fundName}</p>`);
+  const coveredFeeCents = coveredFeeForReceipt(settings.showDonorCoveredFee, payment.feeCoveredCents);
+  if (coveredFeeCents > 0) lines.push(`<p>You generously covered ${formatCents(coveredFeeCents)} in transaction costs.</p>`);
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
   lines.push(`<p>${settings.thankYouMessage}</p>`);
   lines.push(`<p>${acknowledgmentText}</p>`);
