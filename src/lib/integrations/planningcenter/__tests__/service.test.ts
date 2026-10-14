@@ -36,6 +36,8 @@ vi.mock("@/lib/prisma", () => ({
 }));
 const mockAudit = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: (...a: unknown[]) => mockAudit(...a) }));
+const mockNotifyReconnect = vi.fn(async () => {});
+vi.mock("../notifications", () => ({ notifyReconnectRequired: (...a: unknown[]) => mockNotifyReconnect(...(a as [])) }));
 const mockResetSetup = vi.fn<(churchId: string, orgId: string) => Promise<boolean>>(async () => false);
 vi.mock("../syncConfig", () => ({ resetGivingSetupIfOrganizationChanged: (c: string, o: string) => mockResetSetup(c, o) }));
 
@@ -138,6 +140,7 @@ describe("getAccessTokenForChurch", () => {
     await expect(getAccessTokenForChurch("church1")).rejects.toBeInstanceOf(PlanningCenterAuthError);
     expect(row!.status).toBe("REAUTHENTICATION_REQUIRED");
     expect(row!.lastErrorCode).toBe("INVALID_GRANT");
+    expect(mockNotifyReconnect).toHaveBeenCalledTimes(1);
     // And later calls refuse without hitting Planning Center again.
     mockRefresh.mockClear();
     await expect(getAccessTokenForChurch("church1")).rejects.toThrow(/reconnected/);
@@ -149,6 +152,7 @@ describe("getAccessTokenForChurch", () => {
     mockRefresh.mockRejectedValue(new PlanningCenterAuthError({ category: "TEMPORARY_PLANNING_CENTER_ERROR", retryable: true, safeMessage: "down" }));
     await expect(getAccessTokenForChurch("church1")).rejects.toBeInstanceOf(PlanningCenterAuthError);
     expect(row!.status).toBe("CONNECTED");
+    expect(mockNotifyReconnect).not.toHaveBeenCalled();
   });
 
   it("refuses when there is no connection or it was disconnected", async () => {
@@ -254,6 +258,7 @@ describe("testExistingPlanningCenterConnection", () => {
     const result = await testExistingPlanningCenterConnection("church1");
     expect(result.ok).toBe(false);
     expect(row!.status).toBe("REAUTHENTICATION_REQUIRED");
+    expect(mockNotifyReconnect).toHaveBeenCalledTimes(1);
   });
 });
 
