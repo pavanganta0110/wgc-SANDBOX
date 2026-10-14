@@ -8,8 +8,10 @@ export const maxDuration = 60;
 
 /**
  * Pushes settled deposits to Planning Center for every church that has gift
- * sync on. Bounded to one time budget per tick; a large deposit simply
- * continues on the next tick. Does nothing at all unless the platform switch
+ * sync on. Bounded to one time budget per run; a large deposit simply
+ * continues on the next run. Registered DAILY because this Vercel plan only
+ * permits once-a-day crons (a more frequent schedule makes Vercel reject the
+ * whole deployment). Church admins can press "Sync now" for an immediate pass. Does nothing at all unless the platform switch
  * PLANNING_CENTER_SYNC_ENABLED is true.
  */
 export async function GET(req: Request) {

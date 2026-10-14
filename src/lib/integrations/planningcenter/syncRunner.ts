@@ -124,7 +124,8 @@ export async function runSyncForAllChurches(options: EngineOptions = {}): Promis
   if (churches.length === 0) return summary;
 
   const deadline = now().getTime() + (options.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS);
-  const start = Math.floor(now().getTime() / (15 * 60 * 1000)) % churches.length;
+  // Rotates daily, so with one run a day every church gets a turn at the front of the queue.
+  const start = Math.floor(now().getTime() / (24 * 60 * 60 * 1000)) % churches.length;
   for (let i = 0; i < churches.length; i++) {
     if (now().getTime() >= deadline - 1000) {
       summary.stoppedForTime = true;

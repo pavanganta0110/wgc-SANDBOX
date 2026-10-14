@@ -51,7 +51,7 @@
     },
     {
       "path": "/api/cron/planning-center-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "40 19 * * *"
     },
     {
       "path": "/api/cron/planning-center-token-refresh",
