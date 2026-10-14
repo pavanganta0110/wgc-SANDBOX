@@ -1,0 +1,47 @@
+/* Scoped to .pco-page so nothing here can touch the rest of the site. Converted from the design export. */
+.pco-page {
+  color: #334155;
+  background: #fdfdfd;
+  font-size: 17px;
+  line-height: 1.6;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+/* :where() keeps link colors at the lowest specificity so the button classes below always win */
+:where(.pco-page) a { color: #a16207; }
+:where(.pco-page) a:hover { color: #854d0e; }
+
+.pco-wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; }
+.pco-row { display: flex; flex-wrap: wrap; gap: 56px; align-items: center; }
+.pco-col { flex: 1 1 440px; min-width: 0; }
+
+.pco-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 50px; padding: 0 32px; border-radius: 16px; font-weight: 700; font-size: 14px; text-decoration: none; box-sizing: border-box; }
+.pco-btn-gold { background: linear-gradient(135deg, #ca8a04 0%, #eab308 100%); color: #020617; }
+.pco-btn-gold:hover { color: #020617; filter: brightness(1.06); }
+.pco-btn-glass { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); color: #ffffff; }
+.pco-btn-glass:hover { background: rgba(255, 255, 255, 0.14); color: #ffffff; }
+.pco-btn-dark { background: #010409; color: #ffffff; }
+.pco-btn-dark:hover { background: #1e293b; color: #ffffff; }
+
+.pco-pill-dark { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.15); color: #eab308; font-size: 11px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; }
+.pco-pill-light { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 1px solid #e7d9a8; background: #fefce8; color: #a16207; font-size: 11px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; }
+
+.pco-h1 { font-weight: 800; letter-spacing: -0.03em; line-height: 1.04; margin: 0; }
+.pco-h2 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.12; margin: 0; }
+.pco-gold { color: #eab308; font-style: italic; }
+.pco-gold-dk { color: #a16207; font-style: italic; }
+
+.pco-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.pco-step-nav { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; text-decoration: none; color: #020617; min-height: 44px; }
+.pco-step-nav:hover { border-color: #ca8a04; color: #020617; }
+
+.pco-cmp { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 640px; }
+.pco-cmp th, .pco-cmp td { text-align: left; padding: 18px 22px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+
+.pco-page details { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; padding: 20px 22px; }
+.pco-page summary { cursor: pointer; font-weight: 700; font-size: 17px; color: #020617; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.pco-page summary::-webkit-details-marker { display: none; }
+.pco-page summary:focus-visible, .pco-page a:focus-visible { outline: 2px solid #ca8a04; outline-offset: 2px; border-radius: 6px; }
+
+@media (max-width: 720px) { .pco-steps { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .pco-btn { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .pco-btn-gold:hover { filter: none; } }
