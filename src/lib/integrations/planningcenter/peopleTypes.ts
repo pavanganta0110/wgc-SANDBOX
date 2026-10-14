@@ -6,6 +6,8 @@ export interface PeopleCandidate {
   emails: string[];
   phones: string[];
   alreadyLinkedDonorId?: string;
+  /** The WGC donor already linked to this person, so the church can see who they might be duplicating. */
+  alreadyLinkedDonorName?: string | null;
 }
 
 export interface PeopleReviewItem {

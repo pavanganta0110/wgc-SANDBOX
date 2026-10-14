@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { runAsIntegrationsManager, parseJsonBody } from "@/lib/integrations/planningcenter/routeAuth";
 import { linkDonorManually, rejectCandidate, resolveDonorLink, unlinkDonor } from "@/lib/integrations/planningcenter/personMatching";
 import { getClientForChurch } from "@/lib/integrations/planningcenter/service";
+import { mergeIntoLinkedDonor } from "@/lib/integrations/planningcenter/sameDonorMerge";
 import { PlanningCenterConnectionError } from "@/lib/integrations/planningcenter/errors";
 
 const bodySchema = z.discriminatedUnion("action", [
@@ -11,6 +12,8 @@ const bodySchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("REJECT"), donorId: z.string().min(1).max(64), pcoPersonId: z.string().min(1).max(64) }),
   z.object({ action: z.literal("UNLINK"), donorId: z.string().min(1).max(64) }),
   z.object({ action: z.literal("RECHECK"), donorId: z.string().min(1).max(64) }),
+  // "Yes, these two WGC donors are the same person": merge into the donor already linked to that Planning Center person.
+  z.object({ action: z.literal("MERGE"), donorId: z.string().min(1).max(64), pcoPersonId: z.string().min(1).max(64) }),
 ]);
 
 /** Link, reject, unlink or re-check one donor. The church always comes from the session. */
@@ -24,6 +27,11 @@ export async function PUT(req: Request) {
     if (!connection || connection.status !== "CONNECTED" || !connection.pcoOrganizationId) throw new PlanningCenterConnectionError("Connect Planning Center first.");
     const org = connection.pcoOrganizationId;
     const input = body.data;
+
+    if (input.action === "MERGE") {
+      const merged = await mergeIntoLinkedDonor(auth.churchId, input.donorId, input.pcoPersonId, actor);
+      return NextResponse.json({ success: true, mergedInto: merged.mergedInto });
+    }
 
     if (input.action === "UNLINK") {
       await unlinkDonor(auth.churchId, input.donorId, actor);

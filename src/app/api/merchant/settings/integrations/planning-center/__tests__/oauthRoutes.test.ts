@@ -14,6 +14,11 @@ vi.mock("@/lib/auth/requireMerchantSession", () => ({ requireMerchantSession: ()
 const mockRequirePermission = vi.fn();
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: unknown[]) => mockRequirePermission(...a) }));
 
+const mockAutoSetup = vi.fn();
+vi.mock("@/lib/integrations/planningcenter/autoSetup", () => ({ autoSetupAfterConnect: (...a: unknown[]) => mockAutoSetup(...a) }));
+const mockAfter = vi.fn();
+vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: (fn: () => unknown) => mockAfter(fn) }));
+
 const mockComplete = vi.fn();
 vi.mock("@/lib/integrations/planningcenter/service", () => ({ completePlanningCenterConnection: (...a: unknown[]) => mockComplete(...a) }));
 
@@ -41,6 +46,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRequirePermission.mockReset();
   mockComplete.mockReset();
+  mockAutoSetup.mockReset();
+  mockAfter.mockReset();
   mockRequireSession.mockResolvedValue(session);
 });
 
@@ -79,6 +86,31 @@ describe("callback", () => {
     expect(mockComplete).toHaveBeenCalledWith(expect.objectContaining({ churchId: "church1", code: "abc", codeVerifier: "verifier", actorUserId: "u1" }));
     expect(location(res)).toContain("connected=true");
     expect(cookieJar.size).toBe(0); // one-time cookies are consumed
+  });
+
+  it("after connecting, sets up Giving and turns sync on for the SESSION's church, after the redirect", async () => {
+    armCookies();
+    await callback(cbUrl("code=abc&state=good-state"));
+    expect(mockAfter).toHaveBeenCalledTimes(1);
+    expect(mockAutoSetup).not.toHaveBeenCalled(); // not run inline: the church isn't kept waiting
+    await mockAfter.mock.calls[0][0]();
+    expect(mockAutoSetup).toHaveBeenCalledWith("church1", expect.objectContaining({ userId: "u1" }));
+  });
+
+  it("a failure in the automatic setup never breaks the connection", async () => {
+    armCookies();
+    mockAutoSetup.mockRejectedValue(new Error("planning center is down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await callback(cbUrl("code=abc&state=good-state"));
+    expect(location(res)).toContain("connected=true");
+    await expect(mockAfter.mock.calls[0][0]()).resolves.toBeUndefined();
+  });
+
+  it("does NOT set anything up when the connection was refused or failed", async () => {
+    armCookies();
+    mockComplete.mockRejectedValue(new PlanningCenterConnectionError("already connected to a different WGC organization"));
+    await callback(cbUrl("code=abc&state=good-state"));
+    expect(mockAfter).not.toHaveBeenCalled();
   });
 
   it("rejects a state mismatch without exchanging the code", async () => {

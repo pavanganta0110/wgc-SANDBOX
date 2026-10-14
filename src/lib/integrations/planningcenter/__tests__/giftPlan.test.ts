@@ -5,12 +5,18 @@ const settlementFind = vi.fn();
 const transferFind = vi.fn();
 const paymentFind = vi.fn();
 const instrumentFind = vi.fn();
+const recordFind = vi.fn();
+const refundFind = vi.fn<(...args: unknown[]) => Promise<any[]>>(async () => []);
+const returnFind = vi.fn<(...args: unknown[]) => Promise<any[]>>(async () => []);
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     finixSettlement: { findUnique: (a: any) => settlementFind(a) },
     finixTransfer: { findMany: (a: any) => transferFind(a) },
     payment: { findMany: (a: any) => paymentFind(a) },
     finixPaymentInstrumentSnapshot: { findMany: (a: any) => instrumentFind(a) },
+    planningCenterDonationRecord: { findMany: (a: any) => recordFind(a) },
+    finixRefundOrReversal: { findMany: (a: any) => refundFind(a) },
+    bankReturn: { findMany: (a: any) => returnFind(a) },
   },
 }));
 
@@ -195,5 +201,138 @@ describe("helpers", () => {
   it("the batch description carries the settlement id so it can be found again", () => {
     expect(batchDescription("ST1", new Date("2026-10-11T12:00:00Z"))).toBe("WGC settlement ST1 · 2026-10-11");
     expect(batchDescription("ST1", null)).toBe("WGC settlement ST1");
+  });
+});
+
+import { buildDayPlan, dateKeyOf, dayHasWork, dayUnitKey, parseDayUnitKey } from "../giftPlan";
+
+describe("day units", () => {
+  it("keys round-trip and reject anything that isn't a date", () => {
+    expect(dayUnitKey("2026-10-14")).toBe("day:2026-10-14");
+    expect(parseDayUnitKey("day:2026-10-14")).toBe("2026-10-14");
+    for (const bad of ["ST123", "day:", "day:2026-1-4", "day:2026-10-14x", "day:../../x"]) expect(parseDayUnitKey(bad)).toBeNull();
+    expect(dateKeyOf(new Date("2026-10-14T23:59:59Z"))).toBe("2026-10-14");
+  });
+});
+
+describe("buildDayPlan", () => {
+  beforeEach(() => {
+    [transferFind, paymentFind, instrumentFind, recordFind].forEach((m) => m.mockReset());
+    instrumentFind.mockResolvedValue([instrument]);
+    transferFind.mockResolvedValue([]);
+  });
+
+  it("asks only for THIS church's payments on THIS day, in a final state, never before the go-live moment", async () => {
+    paymentFind.mockResolvedValue([]);
+    const since = new Date("2026-10-14T15:00:00Z");
+    await buildDayPlan("c1", "2026-10-14", since);
+    const where = paymentFind.mock.calls[0][0].where;
+    expect(where.churchId).toBe("c1");
+    expect(where.status.in).toEqual(["SUCCEEDED", "PARTIALLY_REFUNDED", "REFUNDED", "RETURNED"]);
+    expect(where.createdAt.gte).toEqual(since); // later than midnight, so the go-live moment wins
+    expect(where.createdAt.lt).toEqual(new Date("2026-10-15T00:00:00.000Z"));
+  });
+
+  it("uses midnight when go-live was on an earlier day, or there is no watermark", async () => {
+    paymentFind.mockResolvedValue([]);
+    await buildDayPlan("c1", "2026-10-14", new Date("2026-10-01T00:00:00Z"));
+    expect(paymentFind.mock.calls[0][0].where.createdAt.gte).toEqual(new Date("2026-10-14T00:00:00.000Z"));
+    await buildDayPlan("c1", "2026-10-14", null);
+    expect(paymentFind.mock.calls[1][0].where.createdAt.gte).toEqual(new Date("2026-10-14T00:00:00.000Z"));
+  });
+
+  it("builds a gift per payment, needing no settlement and no fee data", async () => {
+    paymentFind.mockResolvedValue([
+      payment({ id: "pA", finixTransferId: "TRA", actualFinixFeesCents: null }),
+      payment({ id: "pB", finixTransferId: null, status: "REFUNDED" }),
+    ]);
+    const plan = await buildDayPlan("c1", "2026-10-10", null);
+    expect(plan).toMatchObject({ eligible: true, awaitingFees: false });
+    expect(plan.gifts.map((g) => [g.paymentId, g.decision.kind])).toEqual([["pA", "PUSH"], ["pB", "SKIP"]]);
+    expect(plan.gifts[0].feeCents).toBe(0); // fee not known yet: nothing is invented
+  });
+
+  it("a fee-covered gift goes at the gift amount with no fee, with no transfer row needed", async () => {
+    paymentFind.mockResolvedValue([payment({ amountCents: 25025, donationAmountCents: 25000, feeCoveredCents: 25 })]);
+    const [g] = (await buildDayPlan("c1", "2026-10-10", null)).gifts;
+    expect(g).toMatchObject({ amountCents: 25000, feeCents: 0, decision: { kind: "PUSH" } });
+  });
+
+  it("an empty day is simply empty", async () => {
+    paymentFind.mockResolvedValue([]);
+    const plan = await buildDayPlan("c1", "2026-10-10", null);
+    expect(plan.gifts).toEqual([]);
+    expect(transferFind).not.toHaveBeenCalled();
+  });
+});
+
+describe("dayHasWork", () => {
+  beforeEach(() => {
+    paymentFind.mockReset();
+    recordFind.mockReset();
+  });
+
+  it("is true for a paid gift with no record yet, or one still waiting to be sent", async () => {
+    paymentFind.mockResolvedValue([{ id: "p1" }, { id: "p2" }]);
+    recordFind.mockResolvedValue([{ paymentId: "p1", status: "CREATED" }]);
+    expect(await dayHasWork("c1", "2026-10-10", null)).toBe(true); // p2 unrecorded
+    recordFind.mockResolvedValue([{ paymentId: "p1", status: "CREATED" }, { paymentId: "p2", status: "PENDING" }]);
+    expect(await dayHasWork("c1", "2026-10-10", null)).toBe(true);
+    recordFind.mockResolvedValue([{ paymentId: "p1", status: "CREATED" }, { paymentId: "p2", status: "SENDING" }]);
+    expect(await dayHasWork("c1", "2026-10-10", null)).toBe(true);
+  });
+
+  it("is false when everything is sent, skipped, or only held for a person (those wait on a human, not on us)", async () => {
+    paymentFind.mockResolvedValue([{ id: "p1" }, { id: "p2" }, { id: "p3" }]);
+    recordFind.mockResolvedValue([{ paymentId: "p1", status: "CREATED" }, { paymentId: "p2", status: "SKIPPED" }, { paymentId: "p3", status: "HELD" }]);
+    expect(await dayHasWork("c1", "2026-10-10", null)).toBe(false);
+  });
+
+  it("is false for a day with no payments, without querying records", async () => {
+    paymentFind.mockResolvedValue([]);
+    expect(await dayHasWork("c1", "2026-10-10", null)).toBe(false);
+    expect(recordFind).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("refunds are found even though Payment.status doesn't change", () => {
+  const settled = { id: "s", churchId: "c1", finixSettlementId: "ST1", state: "SETTLED", totalAmountCents: 5000, settledAt: new Date("2026-10-11T00:00:00Z") };
+  beforeEach(() => {
+    [settlementFind, transferFind, paymentFind, instrumentFind, recordFind].forEach((m) => m.mockReset());
+    refundFind.mockReset().mockResolvedValue([]);
+    returnFind.mockReset().mockResolvedValue([]);
+    instrumentFind.mockResolvedValue([instrument]);
+    settlementFind.mockResolvedValue(settled);
+    transferFind.mockResolvedValue([transfer({ amountCents: 5000 })]);
+  });
+
+  it("a FULLY REFUNDED gift (payment still says SUCCEEDED) is skipped, never sent, in a day batch", async () => {
+    paymentFind.mockResolvedValue([payment({ amountCents: 5000, donationAmountCents: 5000, finixTransferId: "TR1" })]);
+    refundFind.mockResolvedValue([{ finixOriginalTransferId: "TR1", amountCents: 5000, state: "SUCCEEDED" }]);
+    const plan = await buildDayPlan("c1", "2026-10-10", null);
+    expect(plan.gifts[0].decision).toEqual({ kind: "SKIP", reason: "REFUNDED" });
+  });
+
+  it("…and in a settlement plan", async () => {
+    paymentFind.mockResolvedValue([payment({ amountCents: 5000, donationAmountCents: 5000, finixTransferId: "TR1" })]);
+    refundFind.mockResolvedValue([{ finixOriginalTransferId: "TR1", amountCents: 5000, state: "SUCCEEDED" }]);
+    const plan = await buildSettlementPlan("c1", "ST1");
+    expect(plan.gifts[0].decision).toEqual({ kind: "SKIP", reason: "REFUNDED" });
+  });
+
+  it("a partial refund is skipped for a person to enter by hand; a bank return is skipped", async () => {
+    paymentFind.mockResolvedValue([payment({ id: "pA", finixTransferId: "TRA" }), payment({ id: "pB", finixTransferId: "TRB" })]);
+    refundFind.mockResolvedValue([{ finixOriginalTransferId: "TRA", amountCents: 1000, state: "SUCCEEDED" }]);
+    returnFind.mockResolvedValue([{ originalTransferId: "TRB", amountCents: 5000 }]);
+    const plan = await buildDayPlan("c1", "2026-10-10", null);
+    expect(plan.gifts.map((g) => g.decision)).toEqual([{ kind: "SKIP", reason: "PARTIALLY_REFUNDED" }, { kind: "SKIP", reason: "RETURNED" }]);
+  });
+
+  it("a refund still IN PROGRESS leaves the gift out of the plan entirely, so it is decided once the refund settles", async () => {
+    paymentFind.mockResolvedValue([payment({ id: "pA", finixTransferId: "TRA" }), payment({ id: "pB", finixTransferId: "TRB" })]);
+    refundFind.mockResolvedValue([{ finixOriginalTransferId: "TRA", amountCents: 5000, state: "PENDING" }]);
+    const plan = await buildDayPlan("c1", "2026-10-10", null);
+    expect(plan.gifts.map((g) => g.paymentId)).toEqual(["pB"]);
   });
 });

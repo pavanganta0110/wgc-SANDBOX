@@ -4,6 +4,7 @@ import { finixClient } from "@/lib/finix/client";
 import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
 import { resolveWgcTransferFeeStrategy } from "@/lib/giving/serverFeeStrategy";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
+import { triggerPlanningCenterSync } from "@/lib/integrations/planningcenter/syncTrigger";
 import { sendDonationReceipt, notifyMerchantOfNewDonation } from "@/lib/giving/generateReceipt";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
@@ -356,6 +357,8 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("Failed to notify merchant of new donation:", err);
       }
+      // Planning Center: send the gift now (after the response; never affects this payment).
+      triggerPlanningCenterSync(newPayment.id);
     }
 
     return NextResponse.json({ success: true, transferId: transfer.id, state: transfer.state });

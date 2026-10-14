@@ -74,9 +74,24 @@ describe("updateSyncSettings", () => {
     expect(db.config).toMatchObject({ syncMode: "DRY_RUN", enabledAt: null });
   });
 
-  it("LIVE is refused until a preview has actually run", async () => {
-    await expect(updateSyncSettings("c1", { syncMode: "LIVE" }, actor, NOW)).rejects.toThrow(/Run a preview first/);
+  it("LIVE no longer needs a preview first: sending is automatic once the church is set up", async () => {
+    await updateSyncSettings("c1", { syncMode: "LIVE" }, actor, NOW);
+    expect(db.config).toMatchObject({ syncMode: "LIVE", enabledAt: NOW });
+  });
+
+  it("but LIVE still needs complete Giving setup and the platform switch", async () => {
+    readiness.value = { ready: false, reasons: ["Choose a default Planning Center fund."], notes: [] };
+    await expect(updateSyncSettings("c1", { syncMode: "LIVE" }, actor, NOW)).rejects.toThrow(/Choose a default Planning Center fund/);
+    readiness.value = { ready: true, reasons: [], notes: [] };
+    platformOn = false;
+    await expect(updateSyncSettings("c1", { syncMode: "LIVE" }, actor, NOW)).rejects.toThrow(/isn't available yet/);
     expect(db.config!.syncMode).toBe("OFF");
+  });
+
+  it("accepts the 'attach the person later' policy and validates when gifts are sent", async () => {
+    await updateSyncSettings("c1", { unmatchedDonorPolicy: "ATTACH_LATER", sendTiming: "ON_SETTLEMENT" }, actor, NOW);
+    expect(db.config).toMatchObject({ unmatchedDonorPolicy: "ATTACH_LATER", sendTiming: "ON_SETTLEMENT" });
+    await expect(updateSyncSettings("c1", { sendTiming: "WHENEVER" as any }, actor, NOW)).rejects.toThrow(/when gifts should be sent/);
   });
 
   it("going LIVE after a preview sets the watermark to now", async () => {
@@ -159,6 +174,29 @@ describe("resolveDonationRecord", () => {
     await resolveDonationRecord("c1", "d2", "RETRY", actor);
     expect(db.donations[0]).toMatchObject({ status: "SKIPPED", skippedReason: "MANUAL" });
     expect(db.records[0]).toMatchObject({ status: "PENDING", requiresManualReview: false });
+  });
+
+  describe("a refund/return Planning Center wouldn't apply (the gift is ALREADY in Planning Center)", () => {
+    beforeEach(() => {
+      db.donations = [{ id: "d1", syncRecordId: "r1", churchId: "c1", paymentId: "p1", status: "NEEDS_REVIEW", lastErrorCode: "REVERSAL_NOT_APPLIED", pcoDonationId: "pd1" }];
+    });
+
+    it("'Check again' puts it back to be re-checked and can NEVER make it sendable again", async () => {
+      await resolveDonationRecord("c1", "d1", "RETRY", actor);
+      expect(db.donations[0].status).toBe("CREATED"); // not PENDING: PENDING would mean "send it"
+    });
+
+    it("'I handled it' records that the church fixed it in Planning Center", async () => {
+      await resolveDonationRecord("c1", "d1", "SKIP", actor);
+      expect(db.donations[0]).toMatchObject({ status: "REVERSED", lastErrorCode: null });
+      expect(db.donations[0].reversedAt).toBeInstanceOf(Date);
+    });
+
+    it("an ordinary flagged gift still behaves as before (retry = send, skip = don't)", async () => {
+      db.donations[0] = { id: "d1", syncRecordId: "r1", churchId: "c1", paymentId: "p1", status: "NEEDS_REVIEW", lastErrorCode: "AMBIGUOUS", pcoDonationId: null };
+      await resolveDonationRecord("c1", "d1", "RETRY", actor);
+      expect(db.donations[0].status).toBe("PENDING");
+    });
   });
 
   it("only gifts waiting on a decision can be resolved, and only in your own church", async () => {

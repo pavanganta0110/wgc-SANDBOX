@@ -34,6 +34,8 @@ vi.mock("@/lib/integrations/planningcenter/personMatching", () => ({
   resolveDonorLink: (...a: unknown[]) => matching.resolveDonorLink(...a),
 }));
 vi.mock("@/lib/integrations/planningcenter/service", () => ({ getClientForChurch: async () => ({}) }));
+const sameDonor = { mergeIntoLinkedDonor: vi.fn() };
+vi.mock("@/lib/integrations/planningcenter/sameDonorMerge", () => ({ mergeIntoLinkedDonor: (...a: unknown[]) => sameDonor.mergeIntoLinkedDonor(...a) }));
 
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import { PlanningCenterSetupError } from "@/lib/integrations/planningcenter/errors";
@@ -53,7 +55,7 @@ const params = <T extends object>(p: T) => ({ params: Promise.resolve(p) });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  [...Object.values(actions), ...Object.values(people), ...Object.values(jobs), ...Object.values(matching), overview, prismaConn.findUnique].forEach((m) => m.mockReset());
+  [...Object.values(actions), ...Object.values(people), ...Object.values(jobs), ...Object.values(matching), ...Object.values(sameDonor), overview, prismaConn.findUnique].forEach((m) => m.mockReset());
   mockRequirePermission.mockReset();
   mockRequireSession.mockResolvedValue(session);
   prismaConn.findUnique.mockResolvedValue({ status: "CONNECTED", pcoOrganizationId: "org1" });
@@ -102,6 +104,7 @@ describe("sync routes", () => {
     expect((await putSettings(json("PUT", {}))).status).toBe(400);
     expect((await putSettings(json("PUT", { syncMode: "TURBO" }))).status).toBe(400);
     expect((await putSettings(json("PUT", { autoCommitBatches: "yes" }))).status).toBe(400);
+    expect((await putSettings(json("PUT", { sendTiming: "WHENEVER" }))).status).toBe(400);
     expect(actions.updateSyncSettings).not.toHaveBeenCalled();
     actions.updateSyncSettings.mockRejectedValue(new PlanningCenterSetupError("Run a preview first."));
     const res = await putSettings(json("PUT", { syncMode: "LIVE" }));
@@ -152,6 +155,20 @@ describe("people routes", () => {
     expect(matching.rejectCandidate).toHaveBeenCalledWith("church-from-session", "d1", "p1", expect.anything());
     await putLink(json("PUT", { action: "UNLINK", donorId: "d1" }));
     expect(matching.unlinkDonor).toHaveBeenCalledWith("church-from-session", "d1", expect.anything());
+  });
+
+  it("MERGE ('yes, same person') merges for the SESSION's church; the kept donor is decided server-side, not by the caller", async () => {
+    sameDonor.mergeIntoLinkedDonor.mockResolvedValue({ mergedInto: "dKeep" });
+    const res = await putLink(json("PUT", { action: "MERGE", donorId: "dDup", pcoPersonId: "p1", mergeInto: "attacker-donor", churchId: "other" }));
+    expect(await res.json()).toEqual({ success: true, mergedInto: "dKeep" });
+    expect(sameDonor.mergeIntoLinkedDonor).toHaveBeenCalledWith("church-from-session", "dDup", "p1", expect.objectContaining({ userId: "u1" }));
+    expect((await putLink(json("PUT", { action: "MERGE", donorId: "dDup" }))).status).toBe(400); // needs the person too
+  });
+
+  it("MERGE with nothing to merge is a clear 400", async () => {
+    sameDonor.mergeIntoLinkedDonor.mockRejectedValue(new PlanningCenterSetupError("No other donor is linked to that person, so there's nothing to merge."));
+    const res = await putLink(json("PUT", { action: "MERGE", donorId: "dDup", pcoPersonId: "p1" }));
+    expect(res.status).toBe(400);
   });
 
   it("re-check forces a fresh lookup and reports the result", async () => {

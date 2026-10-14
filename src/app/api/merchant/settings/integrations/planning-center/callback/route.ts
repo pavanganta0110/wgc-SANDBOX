@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError, ForbiddenError } from "@/lib/auth/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { completePlanningCenterConnection } from "@/lib/integrations/planningcenter/service";
+import { autoSetupAfterConnect } from "@/lib/integrations/planningcenter/autoSetup";
 import { PlanningCenterAuthError, PlanningCenterConnectionError } from "@/lib/integrations/planningcenter/errors";
 
 // Duplicated from ../connect/route.ts on purpose: a Next.js route module may
@@ -80,6 +81,22 @@ export async function GET(req: Request) {
       return fail(err.message);
     }
     throw err;
+  }
+
+  // "Connect, and that's all": set up the payment source, funds and sync after the redirect, so the church isn't kept
+  // waiting. Best effort: if anything stops it, the Giving setup panel shows exactly what's left.
+  const actor = { userId: auth.userId, email: auth.email, role: auth.role };
+  const setUp = async () => {
+    try {
+      await autoSetupAfterConnect(auth.churchId, actor);
+    } catch (err) {
+      console.error("planning-center: automatic setup failed:", err instanceof Error ? err.message : err);
+    }
+  };
+  try {
+    after(setUp);
+  } catch {
+    void setUp();
   }
 
   return NextResponse.redirect(new URL(`${SETTINGS_PATH}?connected=true`, url.origin));

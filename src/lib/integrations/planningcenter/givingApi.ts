@@ -153,6 +153,9 @@ export interface PcoDonation {
   personId: string | null;
   paymentSourceId: string | null;
   feeCents: number;
+  /** Only present when Planning Center reports it (single-donation reads). */
+  refunded?: boolean;
+  paymentStatus?: string;
 }
 
 function toBatch(r: JsonApiResource): PcoBatch {
@@ -170,6 +173,8 @@ function toDonation(r: JsonApiResource & { relationships?: Record<string, { data
     personId: rel.person?.data?.id ?? null,
     paymentSourceId: rel.payment_source?.data?.id ?? null,
     feeCents: typeof a.fee_cents === "number" ? a.fee_cents : 0,
+    ...(typeof a.refunded === "boolean" ? { refunded: a.refunded } : {}),
+    ...(typeof a.payment_status === "string" ? { paymentStatus: a.payment_status } : {}),
   };
 }
 
@@ -222,4 +227,44 @@ export async function createDonation(client: PlanningCenterClient, batchId: stri
 /** Asynchronous on Planning Center's side: the batch goes `updating`, then `committed`. */
 export async function commitBatch(client: PlanningCenterClient, batchId: string): Promise<void> {
   await client.request(`/giving/v2/batches/${encodeURIComponent(batchId)}/commit`, { method: "POST" });
+}
+
+/** One donation, or null when it no longer exists (404). */
+export async function getDonation(client: PlanningCenterClient, donationId: string): Promise<PcoDonation | null> {
+  try {
+    const body = await client.get<JsonApiOne>(`/giving/v2/donations/${encodeURIComponent(donationId)}`);
+    return body.data ? toDonation(body.data) : null;
+  } catch (err) {
+    if (typeof err === "object" && err !== null && (err as { status?: number }).status === 404) return null;
+    throw err;
+  }
+}
+
+/** Sets the person on a donation. The same value every time, so repeating it is harmless. */
+export async function updateDonationPerson(client: PlanningCenterClient, donationId: string, personId: string): Promise<void> {
+  await client.request(`/giving/v2/donations/${encodeURIComponent(donationId)}`, {
+    method: "PATCH",
+    body: { data: { type: "Donation", id: donationId, relationships: { person: { data: { type: "Person", id: personId } } } } },
+  });
+}
+
+/** Removes a donation from a batch that hasn't been committed yet (the batch is a staging area). */
+export async function deleteDonation(client: PlanningCenterClient, donationId: string): Promise<void> {
+  await client.request(`/giving/v2/donations/${encodeURIComponent(donationId)}`, { method: "DELETE" });
+}
+
+/** Refunds a donation in a committed batch. */
+export async function issueRefund(client: PlanningCenterClient, donationId: string, refundedOn: string): Promise<void> {
+  await client.request(`/giving/v2/donations/${encodeURIComponent(donationId)}/issue_refund`, {
+    method: "POST",
+    body: { data: { attributes: { refunded_at: refundedOn } } },
+  });
+}
+
+/** Marks a donation failed (for example a returned bank payment). It stays in the donor's history but is excluded from totals. */
+export async function markDonationFailed(client: PlanningCenterClient, donationId: string, reason: string): Promise<void> {
+  await client.request(`/giving/v2/donations/${encodeURIComponent(donationId)}/mark_failed`, {
+    method: "POST",
+    body: { data: { attributes: { reason } } },
+  });
 }

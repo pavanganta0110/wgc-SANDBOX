@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { isPlanningCenterSyncEnabled } from "./config";
 import { computeStoredGivingReadiness } from "./syncConfig";
-import { describePaymentChange, HELD_MESSAGES, SKIP_MESSAGES, type SkipReason, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "./syncTypes";
+import { effectivePaymentStatuses } from "./giftOutcomes";
+import { describePaymentChange, HELD_MESSAGES, SKIP_MESSAGES, type SkipReason, type SendTiming, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "./syncTypes";
 
 const LIST_LIMIT = 50;
 const PAYMENT_CHANGED = ["REFUNDED", "PARTIALLY_REFUNDED", "RETURNED", "FAILED", "CANCELED"];
@@ -49,6 +50,7 @@ export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
       amountCents: d.amountCents,
       receivedOn: d.receivedOn,
       message: d.lastErrorMessage ?? "This gift needs a decision.",
+      code: d.lastErrorCode ?? null,
     }));
 
   // Held gifts (waiting on a donor match) across ALL deposits, not just the recent ones.
@@ -66,10 +68,12 @@ export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
 
   // Gifts already in Planning Center whose payment changed afterwards.
   const created = await prisma.planningCenterDonationRecord.findMany({ where: { churchId, status: "CREATED" }, orderBy: { updatedAt: "desc" }, take: 2000 });
-  const changed = created.length
-    ? await prisma.payment.findMany({ where: { churchId, id: { in: created.map((c) => c.paymentId) }, status: { in: PAYMENT_CHANGED } }, select: { id: true, status: true } })
+  const createdPayments = created.length
+    ? await prisma.payment.findMany({ where: { churchId, id: { in: created.map((c) => c.paymentId) } }, select: { id: true, status: true, amountCents: true, finixTransferId: true } })
     : [];
-  const statusOf = new Map(changed.map((p) => [p.id, p.status]));
+  // A refund doesn't change Payment.status; the real state comes from the refund and return rows.
+  const effective = await effectivePaymentStatuses(churchId, createdPayments);
+  const statusOf = new Map([...effective].filter(([, status]) => PAYMENT_CHANGED.includes(status)));
   const batchOf = new Map<string, string | null>();
   if (created.length) {
     const syncRows = await prisma.planningCenterSyncRecord.findMany({ where: { id: { in: [...new Set(created.map((c) => c.syncRecordId))] } }, select: { id: true, pcoBatchId: true } });
@@ -92,6 +96,7 @@ export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
     platformEnabled: isPlanningCenterSyncEnabled(),
     settings: {
       syncMode: (config?.syncMode ?? "OFF") as SyncMode,
+      sendTiming: (config?.sendTiming ?? "ON_PAYMENT") as SendTiming,
       unmatchedDonorPolicy: (config?.unmatchedDonorPolicy ?? "HOLD_FOR_REVIEW") as UnmatchedDonorPolicy,
       autoCommitBatches: config?.autoCommitBatches ?? false,
       enabledAt: config?.enabledAt ? config.enabledAt.toISOString() : null,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import { SYNC_STATUS_LABELS, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "@/lib/integrations/planningcenter/syncTypes";
+import { describeSyncUnit, SYNC_STATUS_LABELS, type SendTiming, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "@/lib/integrations/planningcenter/syncTypes";
 import { buttonDanger, buttonPrimary, buttonSecondary, money, PcoApiError, pcoFetch } from "./planningCenterApi";
 
 const TONE: Record<string, string> = {
@@ -20,13 +20,19 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const MODES: Array<{ mode: SyncMode; title: string; body: string }> = [
+  { mode: "LIVE", title: "On", body: "Each gift is added to Planning Center after it's paid. Gifts from before you turned it on are never sent." },
   { mode: "OFF", title: "Off", body: "Nothing is sent to Planning Center." },
-  { mode: "DRY_RUN", title: "Preview", body: "WGC works out what it would send for recent deposits and shows you. Nothing is sent." },
-  { mode: "LIVE", title: "Live", body: "Gifts from deposits that settle from now on are added to Planning Center. Earlier gifts are never sent." },
+  { mode: "DRY_RUN", title: "Preview only", body: "WGC works out what it would send and shows you. Nothing is sent." },
+];
+
+const TIMINGS: Array<{ value: SendTiming; label: string; hint: string }> = [
+  { value: "ON_PAYMENT", label: "As soon as it's paid (recommended)", hint: "Gifts appear in Planning Center within minutes, in one batch per day. If a gift is later refunded or returned, WGC updates it there too." },
+  { value: "ON_SETTLEMENT", label: "After the bank deposit arrives", hint: "One batch per bank deposit, sent once the deposit settles. Slower, but a gift is never sent before the money is final." },
 ];
 
 const POLICIES: Array<{ value: UnmatchedDonorPolicy; label: string; hint: string }> = [
-  { value: "HOLD_FOR_REVIEW", label: "Hold the gift until I choose the person (recommended)", hint: "Everything else is sent. Held gifts are sent as soon as the donor is linked." },
+  { value: "ATTACH_LATER", label: "Send the gift now and attach the person once they're matched (recommended)", hint: "The gift is never held back, and no duplicate person is created. It goes in without a name and is given one as soon as the donor is matched." },
+  { value: "HOLD_FOR_REVIEW", label: "Hold the gift until I choose the person", hint: "Everything else is sent. Held gifts are sent as soon as the donor is linked." },
   { value: "ANONYMOUS", label: "Send it as an anonymous gift", hint: "It won't appear on the donor's Planning Center giving statement." },
   { value: "CREATE_PERSON", label: "Create the person in Planning Center (experimental)", hint: "Adds a new person to your Planning Center directory. Only used when nobody could match." },
 ];
@@ -98,21 +104,19 @@ export default function PlanningCenterGiftSync() {
     if (mode === "OFF") return null;
     if (!data.platformEnabled) return "Not available yet";
     if (!data.ready) return "Finish Giving setup first";
-    if (mode === "LIVE" && !data.hasDryRun) return "Run a preview first";
     return null;
   };
 
   const changeMode = (mode: SyncMode) => {
     if (mode === settings.syncMode) return;
-    if (mode === "LIVE" && !window.confirm("Go live?\n\nFrom now on, gifts from deposits that settle will be added to your Planning Center Giving as batches. Gifts from before today will NOT be sent.\n\nYou can switch it off at any time.")) return;
-    putSettings({ syncMode: mode }, mode === "OFF" ? "Gift sync is off." : mode === "DRY_RUN" ? "Preview is on." : "Gift sync is live.");
+    putSettings({ syncMode: mode }, mode === "OFF" ? "Gift sync is off." : mode === "DRY_RUN" ? "Preview is on." : "Gift sync is on.");
   };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
       <div>
         <h3 className="text-sm font-bold text-slate-900">Gift sync</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Record your WGC gifts in Planning Center Giving, one batch per deposit, so your donors&apos; giving stays in one place.</p>
+        <p className="text-xs text-slate-500 mt-0.5">Every gift given through WGC is added to Planning Center Giving automatically, so your donors&apos; giving stays in one place.</p>
       </div>
 
       {!data.platformEnabled && (
@@ -155,12 +159,23 @@ export default function PlanningCenterGiftSync() {
           })}
         </div>
         {settings.syncMode === "LIVE" && settings.enabledAt && (
-          <p className="text-xs text-slate-500 mt-2">Live since {new Date(settings.enabledAt).toLocaleString()}. Only deposits that settled after that are sent.</p>
+          <p className="text-xs text-slate-500 mt-2">On since {new Date(settings.enabledAt).toLocaleString()}. Only gifts paid after that are sent.</p>
         )}
       </section>
 
       {/* Settings */}
       <section aria-labelledby="pco-sync-settings" className="space-y-4">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 mb-1">When gifts are sent</h4>
+          <div className="space-y-1.5">
+            {TIMINGS.map((t) => (
+              <label key={t.value} className="flex items-start gap-2 text-xs cursor-pointer">
+                <input type="radio" name="pco-timing" className="mt-0.5" disabled={disabled} checked={settings.sendTiming === t.value} onChange={() => putSettings({ sendTiming: t.value }, "Saved.")} />
+                <span><span className="font-medium text-slate-900">{t.label}</span><span className="block text-slate-500">{t.hint}</span></span>
+              </label>
+            ))}
+          </div>
+        </div>
         <div>
           <h4 id="pco-sync-settings" className="text-sm font-semibold text-slate-900 mb-1">If a donor can&apos;t be matched to a person in Planning Center</h4>
           <div className="space-y-1.5">
@@ -205,15 +220,22 @@ export default function PlanningCenterGiftSync() {
       {data.needsReview.length > 0 && (
         <section aria-labelledby="pco-sync-review">
           <h4 id="pco-sync-review" className="text-sm font-semibold text-red-700 mb-1">Needs your review ({data.needsReview.length})</h4>
-          <p className="text-xs text-slate-500 mb-2">WGC couldn&apos;t confirm what happened with these gifts, so it stopped. Open the batch in Planning Center Giving and look for them before choosing.</p>
+          <p className="text-xs text-slate-500 mb-2">WGC couldn&apos;t confirm what happened with these gifts, so it set them aside. Open the batch in Planning Center Giving and look for them before choosing.</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-red-100">
             {data.needsReview.map((item) => (
               <div key={item.donationId} className="p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="text-xs min-w-0">
-                  <div className="font-medium text-slate-900">{money(item.amountCents)} · {item.receivedOn} · deposit {item.settlementId}</div>
+                  <div className="font-medium text-slate-900">{money(item.amountCents)} · {item.receivedOn} · {describeSyncUnit(item.settlementId)}</div>
                   <div className="text-slate-600 mt-0.5">{item.message}</div>
                 </div>
-                {item.status === "NEEDS_REVIEW" && (
+                {item.status === "NEEDS_REVIEW" && item.code === "REVERSAL_NOT_APPLIED" && (
+                  // Already in Planning Center and refunded/returned in WGC: it can never be "sent" again.
+                  <div className="flex gap-2 shrink-0">
+                    <button className={buttonSecondary} disabled={disabled} onClick={() => run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "WGC will check again."; })}>Check again</button>
+                    <button className={buttonSecondary} disabled={disabled} onClick={() => run(`s-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "SKIP" }) }); return "Marked as handled."; })}>I handled it in Planning Center</button>
+                  </div>
+                )}
+                {item.status === "NEEDS_REVIEW" && item.code !== "REVERSAL_NOT_APPLIED" && (
                   <div className="flex gap-2 shrink-0">
                     <button className={buttonSecondary} disabled={disabled} onClick={() => {
                       if (window.confirm("Only choose this if you checked Planning Center and this gift is NOT in the batch. WGC will then send it.")) run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "It will be sent."; });
@@ -261,16 +283,16 @@ export default function PlanningCenterGiftSync() {
 
       {/* Deposits */}
       <section aria-labelledby="pco-sync-deposits">
-        <h4 id="pco-sync-deposits" className="text-sm font-semibold text-slate-900 mb-2">Recent deposits</h4>
+        <h4 id="pco-sync-deposits" className="text-sm font-semibold text-slate-900 mb-2">Recent batches</h4>
         {data.records.length === 0 ? (
-          <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3">Nothing yet. Once gift sync is on, each deposit that settles appears here.</p>
+          <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3">Nothing yet. Once gift sync is on, each day&apos;s gifts appear here as they&apos;re sent.</p>
         ) : (
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.records.map((r) => (
               <div key={r.id} className="p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-slate-900 break-all">{r.settlementId}</span>
+                    <span className="font-medium text-slate-900 break-words">{describeSyncUnit(r.settlementId)}</span>
                     <StatusBadge status={r.status} />
                     {r.commitStatus === "COMMITTED" && <span className="text-[11px] text-green-700 font-semibold">Committed</span>}
                   </div>
