@@ -507,8 +507,11 @@ platform switch `PLANNING_CENTER_SYNC_ENABLED` defaults to false and every churc
   deposit; `PlanningCenterDonationRecord @@unique([churchId, paymentId])`; a donation is `SENDING` before its POST;
   an unknown outcome is settled only by reading the batch, only concluding "never landed" after a 2-minute grace
   period, and never auto-retried beyond a cap (it becomes NEEDS_REVIEW). Batches are verified before any commit.
-- **Runner and cron** (`syncRunner.ts`, `/api/cron/planning-center-sync`, every 15 minutes; token refresh daily).
-  Both are in `vercel.json` and are no-ops while the platform switch is off.
+- **Runner and cron** (`syncRunner.ts`, `/api/cron/planning-center-sync` and the token refresh, both **daily**).
+  Both are in `vercel.json` and are no-ops while the platform switch is off. They are daily because this Vercel plan
+  only allows once-a-day crons: a sub-daily schedule makes Vercel reject the whole deployment (this happened to the
+  first version of this feature, which used every 15 minutes). A large deposit therefore advances once per day, or on
+  demand with "Sync now". A paid plan would allow a tighter schedule.
 - **Settings and actions** (`syncActions.ts`): turning sync on requires complete Giving setup and the platform switch;
   **LIVE requires a completed preview**; the go-live watermark is set when sync first goes LIVE and cleared when it is
   turned OFF; retry; resolve a flagged gift ("it isn't there, send it" / "don't send"); "Sync now".
