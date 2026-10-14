@@ -35,6 +35,19 @@ export function isPlanningCenterIntegrationEnabled(): boolean {
   return raw.trim().toLowerCase() === "true";
 }
 
+/**
+ * Platform kill switch for GIFT SYNC specifically (phase 4), separate from
+ * the integration flag so connecting/mapping can be live while no sync runs.
+ * Defaults to OFF. Applies to dry runs as well as live runs: when it is off,
+ * the cron and "Sync now" do nothing at all.
+ */
+export function isPlanningCenterSyncEnabled(): boolean {
+  if (!isPlanningCenterIntegrationEnabled()) return false;
+  const raw = process.env.PLANNING_CENTER_SYNC_ENABLED;
+  if (raw === undefined) return false;
+  return raw.trim().toLowerCase() === "true";
+}
+
 /** True once the WGC OAuth application's credentials are present. */
 export function isPlanningCenterIntegrationConfigured(): boolean {
   return Boolean(

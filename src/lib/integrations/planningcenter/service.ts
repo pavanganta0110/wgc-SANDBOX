@@ -17,6 +17,7 @@ import {
 } from "./errors";
 import { fetchPlanningCenterIdentity, PlanningCenterClient, probeGivingAccess } from "./resourceClient";
 import { resetGivingSetupIfOrganizationChanged } from "./syncConfig";
+import { notifyReconnectRequired } from "./notifications";
 
 /**
  * The only place that decides how to reach Planning Center for a given
@@ -217,10 +218,12 @@ export async function getAccessTokenForChurch(churchId: string, options: { force
       // (use theirs) or the grant is truly dead (church must reconnect).
       const winner = await adoptWinner();
       if (winner) return winner;
-      await prisma.planningCenterConnection.updateMany({
-        where: { id: row.id, refreshTokenEncrypted: row.refreshTokenEncrypted },
+      const flipped = await prisma.planningCenterConnection.updateMany({
+        where: { id: row.id, refreshTokenEncrypted: row.refreshTokenEncrypted, status: { not: "REAUTHENTICATION_REQUIRED" } },
         data: { status: "REAUTHENTICATION_REQUIRED", lastErrorAt: new Date(), lastErrorCode: "INVALID_GRANT", lastErrorMessage: err.normalized.safeMessage },
       });
+      // Tell the church once, on the transition; not on every later failed check.
+      if (flipped.count > 0) await notifyReconnectRequired(churchId);
     }
     throw err;
   }
@@ -310,7 +313,7 @@ export async function testExistingPlanningCenterConnection(churchId: string): Pr
     const needsReauth =
       (err instanceof PlanningCenterAuthError && err.normalized.category === "INVALID_GRANT") ||
       (err instanceof PlanningCenterApiError && err.normalized.category === "AUTHENTICATION_REQUIRED");
-    await prisma.planningCenterConnection.updateMany({
+    const updated = await prisma.planningCenterConnection.updateMany({
       where: { churchId, status: { notIn: ["DISCONNECTED", "NOT_CONNECTED", "REAUTHENTICATION_REQUIRED"] } },
       data: {
         status: needsReauth ? "REAUTHENTICATION_REQUIRED" : "ERROR",
@@ -319,6 +322,7 @@ export async function testExistingPlanningCenterConnection(churchId: string): Pr
         lastErrorMessage: message,
       },
     });
+    if (needsReauth && updated.count > 0) await notifyReconnectRequired(churchId);
     return { ok: false, message };
   }
 }

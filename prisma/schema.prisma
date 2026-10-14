@@ -4840,6 +4840,22 @@ model PlanningCenterSyncConfig {
 
   syncVersion Int @default(1)
 
+  // Gift sync policy (phase 4). OFF = nothing happens. DRY_RUN = builds and
+  // stores what WOULD be sent, with zero writes to Planning Center. LIVE =
+  // pushes settled gifts. Always OFF until a church deliberately changes it,
+  // and LIVE additionally requires the platform kill switch.
+  syncMode             String    @default("OFF") // OFF | DRY_RUN | LIVE
+  // Watermark: only settlements that settled on/after this moment are pushed,
+  // so enabling sync never back-posts history a church may have keyed in by
+  // hand. Set the first time the church goes LIVE.
+  enabledAt            DateTime?
+  // What to do with a gift whose donor can't be matched to a Planning Center
+  // person: HOLD_FOR_REVIEW (default, safest) | CREATE_PERSON | ANONYMOUS.
+  unmatchedDonorPolicy String    @default("HOLD_FOR_REVIEW")
+  // Commit batches in Planning Center automatically. Off by default so the
+  // church's finance admin can review a batch before donors see the gifts.
+  autoCommitBatches    Boolean   @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -4861,6 +4877,183 @@ model PlanningCenterFundMapping {
 
   @@unique([churchId, fundId])
   @@index([churchId])
+}
+
+/// A durable link between a WGC Donor and a Planning Center person, used only
+/// to attribute pushed gifts. Never auto-links when more than one Planning
+/// Center person matches (spouses commonly share an email) and never matches
+/// on name alone. See docs/integrations/planning-center-phase-2-4.md.
+model PlanningCenterPersonLink {
+  id       String @id @default(cuid())
+  churchId String
+  donorId  String
+
+  // The Planning Center organization this link was made against.
+  pcoOrganizationId String
+
+  // LINKED = pcoPersonId is the match | NEEDS_REVIEW = several candidates (or
+  // the only candidate is already linked to another donor) and a human must
+  // choose | NO_MATCH = searched, nobody found (re-checked after a while).
+  status String @default("NO_MATCH") // LINKED | NEEDS_REVIEW | NO_MATCH
+
+  pcoPersonId          String?
+  pcoPersonName        String?
+  // EMAIL | PHONE | MANUAL | CREATED
+  matchMethod          String?
+  // [{ pcoPersonId, name, emails[], phones[] }] while NEEDS_REVIEW.
+  candidatesJson       Json?
+  // People the church said are NOT this donor — never offered or auto-linked again.
+  rejectedPcoPersonIds String[] @default([])
+
+  linkedByUserId String?
+  matchedAt      DateTime?
+  lastCheckedAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // One link per donor, and one donor per Planning Center person.
+  @@unique([churchId, donorId])
+  @@unique([churchId, pcoPersonId])
+  @@index([churchId, status])
+}
+
+/// Resumable, chunked bulk job over a church's donors or Planning Center
+/// people, in the style of QuickBooksBackfillJob / BulkReceiptJob: created
+/// once, then the UI calls .../process repeatedly until COMPLETED.
+model PlanningCenterPeopleJob {
+  id       String @id @default(cuid())
+  churchId String
+
+  type   String // MATCH_DONORS | IMPORT_PEOPLE
+  status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+
+  // Where the next chunk resumes (donor id for MATCH_DONORS, offset for IMPORT_PEOPLE).
+  cursorJson Json?
+
+  totalCount     Int?
+  processedCount Int  @default(0)
+  linkedCount    Int  @default(0)
+  reviewCount    Int  @default(0)
+  noMatchCount   Int  @default(0)
+  createdCount   Int  @default(0)
+  skippedCount   Int  @default(0)
+  failedCount    Int  @default(0)
+
+  lastError       String?
+  createdByUserId String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([churchId, type, status])
+}
+
+/// One gift sync per settlement per syncVersion: one Planning Center batch
+/// per WGC settlement. Mirrors AplosSyncRecord and its state machine.
+model PlanningCenterSyncRecord {
+  id           String @id @default(cuid())
+  churchId     String
+  settlementId String // FinixSettlement.finixSettlementId
+  syncVersion  Int    @default(1)
+
+  // PENDING | PROCESSING (actively claimed; heartbeat in lastAttemptAt) |
+  // IN_PROGRESS (more gifts remain, released between cron ticks) |
+  // BLOCKED | BLOCKED_AWAITING_FEES | DRY_RUN | SYNCED | PARTIAL (all
+  // pushable gifts done, some held for a donor match) | RETRY_SCHEDULED |
+  // FAILED | NEEDS_REVIEW | CANCELLED
+  status        String  @default("PENDING")
+  blockedReason String?
+
+  pcoBatchId       String?
+  batchDescription String?
+  // NOT_COMMITTED | COMMITTING | COMMITTED | N_A
+  commitStatus     String  @default("N_A")
+
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime?
+  startedAt     DateTime?
+  lastAttemptAt DateTime? // heartbeat while PROCESSING
+  syncedAt      DateTime?
+
+  lastErrorCode        String?
+  lastErrorMessage     String?
+  requiresManualReview Boolean @default(false)
+  // Last status a notification was sent for, so a state is announced once.
+  lastNotifiedStatus   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  donations PlanningCenterDonationRecord[]
+  attempts  PlanningCenterSyncAttempt[]
+
+  // The settlement-level duplicate guarantee, enforced by the database.
+  @@unique([churchId, settlementId, syncVersion])
+  @@index([churchId, status])
+  @@index([status, nextAttemptAt])
+}
+
+/// One row per WGC payment, ever. The unique constraint is the core
+/// duplicate guarantee: a payment can be pushed to Planning Center at most
+/// once regardless of retries, a bumped syncVersion or a backfill.
+/// (Planning Center has no idempotency key and no field for our own id.)
+model PlanningCenterDonationRecord {
+  id           String  @id @default(cuid())
+  syncRecordId String
+  churchId     String
+  paymentId    String
+  donorId      String?
+
+  // PENDING | SENDING (a write is in flight or its outcome is unknown) |
+  // CREATED | SKIPPED | HELD (waiting on a donor match) | NEEDS_REVIEW | FAILED
+  status        String  @default("PENDING")
+  skippedReason String?
+
+  amountCents Int
+  fundId      String? // WGC Fund.id
+  pcoFundId   String?
+  pcoPersonId String?
+  receivedOn  String // YYYY-MM-DD, the original donation date
+  payloadHash String?
+  // What would be / was sent, ids only (no names, no card data).
+  payloadJson Json?
+
+  pcoDonationId    String?
+  sendingStartedAt DateTime?
+  attemptCount     Int       @default(0)
+  lastErrorCode    String?
+  lastErrorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncRecord PlanningCenterSyncRecord @relation(fields: [syncRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([churchId, paymentId])
+  @@index([syncRecordId, status])
+  @@index([churchId, status])
+}
+
+/// Append-only audit of every attempt. Never stores tokens, authorization
+/// headers or card/bank data.
+model PlanningCenterSyncAttempt {
+  id            String   @id @default(cuid())
+  syncRecordId  String
+  churchId      String
+  attemptNumber Int
+  outcome       String // e.g. SYNCED | PARTIAL | IN_PROGRESS | BLOCKED | RETRY_SCHEDULED | FAILED | NEEDS_REVIEW | DRY_RUN
+  createdCount  Int      @default(0)
+  skippedCount  Int      @default(0)
+  heldCount     Int      @default(0)
+  errorCode     String?
+  errorMessage  String?
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+
+  syncRecord PlanningCenterSyncRecord @relation(fields: [syncRecordId], references: [id], onDelete: Cascade)
+
+  @@index([syncRecordId])
 }
 
 model QuickBooksSyncRecord {

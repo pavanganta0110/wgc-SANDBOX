@@ -126,3 +126,62 @@ describe("helpers", () => {
     expect(normalizeFundName("  General   FUND ")).toBe("general fund");
   });
 });
+
+import { commitBatch, createBatch, createDonation, findBatchByDescription, getBatch, listBatchDonations } from "../givingApi";
+
+describe("batches and donations", () => {
+  it("creates a batch with its description", async () => {
+    const client = fakeClient({ request: () => ({ data: { id: "b1", attributes: { description: "WGC settlement ST1", status: "in_progress" } } }) });
+    await expect(createBatch(client, "WGC settlement ST1")).resolves.toEqual({ id: "b1", description: "WGC settlement ST1", status: "in_progress" });
+    expect(client.request.mock.calls[0][1]).toEqual({ method: "POST", body: { data: { type: "Batch", attributes: { description: "WGC settlement ST1" } } } });
+  });
+
+  it("finds an existing batch by EXACT description (reading, not creating)", async () => {
+    const client = fakeClient({
+      get: () => ({ data: [{ id: "b1", attributes: { description: "WGC settlement ST10" } }, { id: "b2", attributes: { description: "WGC settlement ST1", status: "committed" } }] }),
+    });
+    await expect(findBatchByDescription(client, "WGC settlement ST1")).resolves.toMatchObject({ id: "b2", status: "committed" });
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("looks at a second page only when the first is full, then gives up", async () => {
+    const full = { data: Array.from({ length: 100 }, (_, i) => ({ id: String(i), attributes: { description: `other ${i}` } })) };
+    const client = fakeClient({ get: () => full });
+    await expect(findBatchByDescription(client, "nope")).resolves.toBeNull();
+    expect(client.get).toHaveBeenCalledTimes(2);
+    const short = fakeClient({ get: () => ({ data: [] }) });
+    await findBatchByDescription(short, "nope");
+    expect(short.get).toHaveBeenCalledTimes(1);
+  });
+
+  it("getBatch returns null on 404", async () => {
+    const client = fakeClient({ get: () => { throw Object.assign(new Error("nf"), { status: 404 }); } });
+    await expect(getBatch(client, "b1")).resolves.toBeNull();
+  });
+
+  it("lists a batch's donations with person, source, amount and date", async () => {
+    const client = fakeClient({
+      get: () => ({
+        data: [
+          { id: "d1", attributes: { amount_cents: 5000, received_at: "2026-10-10T05:00:00Z", fee_cents: -200 }, relationships: { person: { data: { id: "p1" } }, payment_source: { data: { id: "s1" } } } },
+          { id: "d2", attributes: { amount_cents: 100, received_at: "2026-10-11" }, relationships: { person: { data: null } } },
+        ],
+      }),
+    });
+    expect(await listBatchDonations(client, "b1")).toEqual([
+      { id: "d1", amountCents: 5000, receivedOn: "2026-10-10", personId: "p1", paymentSourceId: "s1", feeCents: -200 },
+      { id: "d2", amountCents: 100, receivedOn: "2026-10-11", personId: null, paymentSourceId: null, feeCents: 0 },
+    ]);
+  });
+
+  it("creating a donation and committing are POSTs", async () => {
+    const client = fakeClient({ request: () => ({ data: { id: "d9" } }) });
+    await expect(createDonation(client, "b1", { data: {} })).resolves.toEqual({ id: "d9" });
+    await commitBatch(client, "b1");
+    expect(client.request.mock.calls.map((c) => [c[0], c[1].method])).toEqual([["/giving/v2/batches/b1/donations", "POST"], ["/giving/v2/batches/b1/commit", "POST"]]);
+  });
+
+  it("a donation response without an id is an error, not a silent success", async () => {
+    await expect(createDonation(fakeClient({ request: () => ({}) }), "b1", {})).rejects.toThrow(/did not return the created donation/);
+  });
+});
