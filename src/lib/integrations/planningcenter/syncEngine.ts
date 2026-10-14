@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { computeNextAttemptAt, MAX_AUTOMATIC_RETRY_ATTEMPTS } from "@/lib/integrations/aplos/retryPolicy";
 import { getClientForChurch } from "./service";
 import { buildSettlementPlan, SKIP_MESSAGES, type PlannedGift } from "./giftPlan";
+import { HELD_MESSAGES } from "./syncTypes";
 import { batchDescription, buildDonationPayload, resolveTargetFund, type DonationPayload } from "./giftPayload";
 import { commitBatch, createBatch, createDonation, findBatchByDescription, getBatch, listBatchDonations, type PcoDonation } from "./givingApi";
 import { RECONCILE_GRACE_MS, reconcileSending } from "./syncReconcile";
@@ -456,13 +457,6 @@ type Target =
   | { kind: "HELD"; code: string }
   | { kind: "REVIEW"; code: string; message: string };
 
-export const HELD_MESSAGES: Record<string, string> = {
-  PERSON_NOT_FOUND: "No matching person was found in Planning Center for this donor.",
-  PERSON_NEEDS_REVIEW: "Several people in Planning Center could match this donor. Choose the right one.",
-  NO_NAME: "This donor has no usable name, so a Planning Center person can't be created.",
-  PERSON_CREATE_UNCERTAIN: "Creating this donor in Planning Center didn't confirm. WGC will look for them before trying again.",
-};
-
 async function resolveTarget(ctx: Ctx, gift: PlannedGift, donor: DonorLite | undefined, writes: boolean): Promise<Target> {
   const fund = resolveTargetFund(gift.fundId, ctx.mappingByFundId, ctx.config.defaultPcoFundId);
   if (!fund) {
@@ -759,4 +753,4 @@ async function handleRunError(ctx: Ctx, record: SyncRecord, err: unknown, tally:
   );
 }
 
-export { SKIP_MESSAGES };
+export { SKIP_MESSAGES, HELD_MESSAGES };

@@ -488,3 +488,56 @@ Shipped in the phase 3 PR (build order is 3 → 2 → 4a → 4b).
   collision (we also check names first, so this only matters in a race).
 - `PATCH /giving/v2/payment_sources/{id}` with an unchanged name is accepted.
 - `visibility: admin_only` for API-created funds does what the docs describe.
+
+## 11. Phases 2 and 4 — as built
+
+Built together (people linking, gift sync engine, dry run and live, UI). **Everything ships switched off**: the
+platform switch `PLANNING_CENTER_SYNC_ENABLED` defaults to false and every church's mode defaults to OFF.
+
+### What exists
+- **People** (`people.ts`, `personMatching.ts`, `peopleJobs.ts`, `peopleOverview.ts`): the matching rules in §3, a
+  review list, manual link / reject / unlink / re-check, a chunked "match my donors" job, an optional "import people
+  as contacts" job (sets `contactSource = PLANNING_CENTER`, fills blanks only), and a merge hook so a donor merge
+  moves the link to the surviving donor (best-effort; it can never break a merge).
+- **Planning** (`giftPlan.ts`, `giftPayload.ts`): DB-only plan of what to send for a settled deposit. Skips, with a
+  stated reason: refunded, partly refunded, returned, not succeeded, donor-covered fee (via the same
+  `resolveContributionAmountPolicy` Aplos uses, so resolving that decision in one place resolves it here), goods or
+  services, unsupported payment method. Pure payload builder with a stable hash.
+- **Engine** (`syncEngine.ts`, `syncReconcile.ts`): the write protocol in §4.4, exactly as designed. One batch per
+  deposit; `PlanningCenterDonationRecord @@unique([churchId, paymentId])`; a donation is `SENDING` before its POST;
+  an unknown outcome is settled only by reading the batch, only concluding "never landed" after a 2-minute grace
+  period, and never auto-retried beyond a cap (it becomes NEEDS_REVIEW). Batches are verified before any commit.
+- **Runner and cron** (`syncRunner.ts`, `/api/cron/planning-center-sync`, every 15 minutes; token refresh daily).
+  Both are in `vercel.json` and are no-ops while the platform switch is off.
+- **Settings and actions** (`syncActions.ts`): turning sync on requires complete Giving setup and the platform switch;
+  **LIVE requires a completed preview**; the go-live watermark is set when sync first goes LIVE and cleared when it is
+  turned OFF; retry; resolve a flagged gift ("it isn't there, send it" / "don't send"); "Sync now".
+- **UI**: People panel and Gift sync panel under the Planning Center settings page.
+- **Notifications**: needs-review and failed (once per state), and the reconnect-required email that phase 1 lacked.
+
+### Deviations from the plan
+- The Aplos reconciliation was **re-implemented, not extracted**, so the shipped Aplos integration is untouched.
+- A settlement containing refunds is **not blocked** (only the affected payment is skipped).
+- **Refunds, returns and disputes after a gift was sent are not corrected in Planning Center.** They are listed under
+  "Changed after it was sent" so the church can fix them there. Automatic correction (`issue_refund` / `mark_failed`)
+  is a later phase.
+- `received_at` uses the UTC date of the original donation (same as the Aplos sync); late-evening US gifts can land
+  on the next calendar day.
+- A stored preview is not recomputed every tick; use "Refresh preview".
+
+### Verification status
+- Engine tests inject faults into a fake Planning Center and database: timeouts that did and didn't land, a crash
+  between a send and its record, two workers claiming the same deposit (with a barrier forcing the race), verification
+  mismatches, hand-added gifts in the batch, rate limits and outages. Deliberately breaking the grace period, the
+  claim check and the "read before resend" rule each makes tests fail.
+- **Not run against a real Planning Center organization.** Treat the first live deposit as a pilot: preview first,
+  one church, auto-commit off.
+
+### Additional unverified assumptions
+- `POST /giving/v2/batches/{id}/donations` accepts `received_at` as `YYYY-MM-DD` and back-dated values, and
+  `payment_brand` / `payment_last4` as free text.
+- `GET /giving/v2/batches/{id}/donations` returns `person` and `payment_source` relationships and `amount_cents`
+  (reconciliation and verification depend on it).
+- `POST /people/v2/people` (+ `/emails`, `/phone_numbers`) works with the attributes sent (CREATE_PERSON only).
+- `GET /giving/v2/batches?order=-updated_at` can find a batch by exact description among the latest 200.
+- Batch `commit` goes `updating` then `committed`, and re-committing an already committed batch is rejected, not harmful.

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import PlanningCenterConnectionCard from "@/components/merchant/PlanningCenterConnectionCard";
 import PlanningCenterGivingSetup from "@/components/merchant/PlanningCenterGivingSetup";
+import PlanningCenterPeople from "@/components/merchant/PlanningCenterPeople";
+import PlanningCenterGiftSync from "@/components/merchant/PlanningCenterGiftSync";
 
 export default function PlanningCenterIntegrationPage() {
   return (
@@ -12,6 +14,8 @@ export default function PlanningCenterIntegrationPage() {
       <div className="space-y-6">
         <PlanningCenterConnectionCard />
         <PlanningCenterGivingSetup />
+        <PlanningCenterPeople />
+        <PlanningCenterGiftSync />
       </div>
     </div>
   );

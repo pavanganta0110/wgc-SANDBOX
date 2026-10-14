@@ -5,6 +5,7 @@ type Row = Record<string, any>;
 
 // ───────────────────────────── in-memory database ─────────────────────────────
 
+const barrier = { size: 0, arrived: 0, release: null as null | (() => void), gate: null as null | Promise<void> };
 const db = {
   config: null as Row | null,
   connection: null as Row | null,
@@ -18,6 +19,20 @@ const db = {
 };
 let clock = 1;
 let idSeq = 1;
+/** Forces concurrent claimants to reach the claim together, so the claim's own atomicity is what decides the winner. */
+function withClaimBarrier(ops: any) {
+  const original = ops.updateMany;
+  ops.updateMany = async (args: any) => {
+    if (barrier.size > 0 && args.data?.status === "PROCESSING") {
+      barrier.arrived++;
+      if (barrier.arrived >= barrier.size) barrier.release?.();
+      await barrier.gate;
+    }
+    return original(args);
+  };
+  return ops;
+}
+
 function bump() {
   return new Date(1_700_000_000_000 + clock++);
 }
@@ -79,7 +94,7 @@ vi.mock("@/lib/prisma", () => {
     finixSettlement: { findUnique: async ({ where }: any) => db.settlements.find((s) => s.finixSettlementId === where.finixSettlementId) ?? null },
     planningCenterFundMapping: { findMany: async () => db.mappings },
     donor: { findMany: async ({ where }: any) => db.donors.filter((d) => d.churchId === where.churchId && where.id.in.includes(d.id)) },
-    planningCenterSyncRecord: tableOps(() => db.syncRecords, (r) => db.syncRecords.push(r), () => ({ status: "PENDING", attemptCount: 0, commitStatus: "N_A", pcoBatchId: null, startedAt: null, lastAttemptAt: null, nextAttemptAt: null, lastNotifiedStatus: null }), ["churchId", "settlementId", "syncVersion"]),
+    planningCenterSyncRecord: withClaimBarrier(tableOps(() => db.syncRecords, (r) => db.syncRecords.push(r), () => ({ status: "PENDING", attemptCount: 0, commitStatus: "N_A", pcoBatchId: null, startedAt: null, lastAttemptAt: null, nextAttemptAt: null, lastNotifiedStatus: null }), ["churchId", "settlementId", "syncVersion"])),
     planningCenterDonationRecord: {
       ...tableOps(() => db.donationRecords, (r) => db.donationRecords.push(r), () => ({ status: "PENDING", attemptCount: 0, pcoDonationId: null, sendingStartedAt: null, skippedReason: null, lastErrorCode: null, lastErrorMessage: null })),
       createMany: async ({ data, skipDuplicates }: any) => {
@@ -191,8 +206,8 @@ const linkStates = new Map<string, { status: string; pcoPersonId: string | null 
 vi.mock("../personMatching", () => ({ resolveDonorLink: async (_c: string, donorId: string) => linkStates.get(donorId) ?? { status: "NO_MATCH", pcoPersonId: null } }));
 const createPersonMock = vi.fn();
 vi.mock("../people", () => ({ createPerson: (...a: unknown[]) => createPersonMock(...a) }));
-const notifyReview = vi.fn(async (..._a: unknown[]) => {});
-const notifyFailed = vi.fn(async (..._a: unknown[]) => {});
+const notifyReview = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
+const notifyFailed = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 vi.mock("../notifications", () => ({ notifySyncNeedsReview: (...a: unknown[]) => notifyReview(...a), notifySyncFailed: (...a: unknown[]) => notifyFailed(...a) }));
 const readiness = { value: { ready: true, reasons: [] as string[], notes: [] as string[] } };
 vi.mock("../syncConfig", () => ({ computeStoredGivingReadiness: async () => readiness.value }));
@@ -240,7 +255,7 @@ beforeEach(() => {
   pco.batches = []; pco.donations = []; pco.calls = []; pco.donationFaults = []; pco.batchFaults = []; pco.readFaults = []; pco.mutateAfterCreate = null; pco.batchStatusOnGet = null;
   linkStates.clear(); gifts.plan = null; readiness.value = { ready: true, reasons: [], notes: [] };
   notifyReview.mockClear(); notifyFailed.mockClear(); createPersonMock.mockReset();
-  clock = 1; idSeq = 1; nowMs = T0.getTime();
+  clock = 1; idSeq = 1; nowMs = T0.getTime(); barrier.size = 0;
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -408,6 +423,18 @@ describe("one payment, one donation — ever", () => {
     await run();
     expect(pco.donations.map((d) => d.amountCents)).toEqual([2000]);
     expect(db.donationRecords.filter((r) => r.paymentId === "pay1")).toHaveLength(1);
+  });
+
+  it("two workers that BOTH read the record as claimable and reach the claim together: the claim itself lets exactly one through", async () => {
+    seed(3);
+    barrier.size = 2;
+    barrier.arrived = 0;
+    barrier.gate = new Promise<void>((resolve) => { barrier.release = resolve; });
+    const results = await Promise.all([run(), run()]);
+    barrier.size = 0;
+    expect(results.sort()).toEqual(["CONTENDED", "SYNCED"]);
+    expect(pco.donations).toHaveLength(3);
+    expect(pco.batches).toHaveLength(1);
   });
 
   it("two workers on the same settlement: one works, the other backs off, nothing is duplicated", async () => {
@@ -604,7 +631,7 @@ describe("definite failures", () => {
     let outcome = "";
     for (let i = 0; i < 6 && outcome !== "NEEDS_REVIEW"; i++) {
       pco.batchFaults = ["timeout-before-create"];
-      db.syncRecords[0] && (db.syncRecords[0].nextAttemptAt = null);
+      if (db.syncRecords[0]) db.syncRecords[0].nextAttemptAt = null;
       outcome = await run();
     }
     expect(outcome).toBe("NEEDS_REVIEW");
