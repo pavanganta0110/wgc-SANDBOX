@@ -48,10 +48,12 @@ export const SYNC_STATUS_LABELS: Record<string, { label: string; tone: "ok" | "i
 };
 
 export type SyncMode = "OFF" | "DRY_RUN" | "LIVE";
-export type UnmatchedDonorPolicy = "HOLD_FOR_REVIEW" | "CREATE_PERSON" | "ANONYMOUS";
+export type UnmatchedDonorPolicy = "HOLD_FOR_REVIEW" | "ATTACH_LATER" | "CREATE_PERSON" | "ANONYMOUS";
+export type SendTiming = "ON_PAYMENT" | "ON_SETTLEMENT";
 
 export interface SyncSettingsInput {
   syncMode?: SyncMode;
+  sendTiming?: SendTiming;
   unmatchedDonorPolicy?: UnmatchedDonorPolicy;
   autoCommitBatches?: boolean;
 }
@@ -76,6 +78,8 @@ export interface ReviewItem {
   amountCents: number;
   receivedOn: string;
   message: string;
+  /** Why it was flagged. REVERSAL_NOT_APPLIED means: this gift was refunded/returned in WGC but Planning Center wouldn't update it. */
+  code: string | null;
 }
 
 export interface HeldItem {
@@ -108,7 +112,7 @@ export interface SkippedItem {
 
 export interface SyncOverview {
   platformEnabled: boolean;
-  settings: { syncMode: SyncMode; unmatchedDonorPolicy: UnmatchedDonorPolicy; autoCommitBatches: boolean; enabledAt: string | null };
+  settings: { syncMode: SyncMode; sendTiming: SendTiming; unmatchedDonorPolicy: UnmatchedDonorPolicy; autoCommitBatches: boolean; enabledAt: string | null };
   ready: boolean;
   readinessReasons: string[];
   hasDryRun: boolean;
@@ -118,6 +122,14 @@ export interface SyncOverview {
   /** Gifts already recorded in Planning Center whose WGC payment was refunded, returned or failed afterwards. */
   needsAttention: AttentionItem[];
   skipped: { total: number; items: SkippedItem[] };
+}
+
+/** A readable name for a sync unit: a day of gifts, or a bank deposit. */
+export function describeSyncUnit(unitKey: string): string {
+  const m = /^day:(\d{4})-(\d{2})-(\d{2})$/.exec(unitKey);
+  if (!m) return `Deposit ${unitKey}`;
+  const date = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return `Gifts paid ${date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })}`;
 }
 
 export function describePaymentChange(status: string): string {

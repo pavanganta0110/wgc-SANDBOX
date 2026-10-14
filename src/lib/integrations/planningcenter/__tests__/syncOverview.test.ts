@@ -18,11 +18,12 @@ vi.mock("@/lib/prisma", () => ({
       count: async ({ where }: any) => db.donations.filter((d) => match(d, where)).length,
     },
     donor: { findMany: async ({ where }: any) => db.donors.filter((d) => match(d, where)) },
-    payment: { findMany: async ({ where }: any) => db.payments.filter((p) => p.churchId === where.churchId && where.id.in.includes(p.id) && where.status.in.includes(p.status)) },
+    payment: { findMany: async ({ where }: any) => db.payments.filter((p) => p.churchId === where.churchId && where.id.in.includes(p.id)) },
   },
 }));
 let platformOn = true;
 vi.mock("../config", () => ({ isPlanningCenterSyncEnabled: () => platformOn }));
+vi.mock("../giftOutcomes", () => ({ effectivePaymentStatuses: async (_c: string, payments: any[]) => new Map(payments.map((p) => [p.id, db.payments.find((x) => x.id === p.id)?.effective ?? p.status])) }));
 vi.mock("../syncConfig", () => ({ computeStoredGivingReadiness: async () => ({ ready: false, reasons: ["Choose a default fund."], notes: [] }) }));
 
 import { getSyncOverview } from "../syncOverview";
@@ -48,7 +49,7 @@ describe("getSyncOverview", () => {
     db.attempts = [{ churchId: "c1", outcome: "DRY_RUN" }];
     const o = await getSyncOverview("c1");
     expect(o).toMatchObject({ platformEnabled: true, ready: false, readinessReasons: ["Choose a default fund."], hasDryRun: true });
-    expect(o.settings).toEqual({ syncMode: "LIVE", unmatchedDonorPolicy: "ANONYMOUS", autoCommitBatches: true, enabledAt: "2026-10-01T00:00:00.000Z" });
+    expect(o.settings).toEqual({ syncMode: "LIVE", sendTiming: "ON_PAYMENT", unmatchedDonorPolicy: "ANONYMOUS", autoCommitBatches: true, enabledAt: "2026-10-01T00:00:00.000Z" });
   });
 
   it("defaults to OFF for a church that never set anything up", async () => {
@@ -80,6 +81,7 @@ describe("getSyncOverview", () => {
     db.donations = [don("e", "NEEDS_REVIEW", { lastErrorMessage: "Check the batch." }), don("f", "FAILED", { lastErrorMessage: "Planning Center rejected this gift." })];
     const { needsReview } = await getSyncOverview("c1");
     expect(needsReview.map((n) => [n.status, n.message])).toEqual([["NEEDS_REVIEW", "Check the batch."], ["FAILED", "Planning Center rejected this gift."]]);
+    expect(needsReview.every((n) => "code" in n)).toBe(true);
     expect(needsReview[0].settlementId).toBe("ST1");
   });
 
@@ -94,6 +96,14 @@ describe("getSyncOverview", () => {
     expect(needsAttention).toHaveLength(1);
     expect(needsAttention[0]).toMatchObject({ paymentId: "pay-g", paymentStatus: "REFUNDED", pcoDonationId: "pd9", pcoBatchId: "b1" });
     expect(needsAttention[0].message).toMatch(/later refunded in WGC.*Update it in Planning Center/);
+  });
+
+  it("flags a gift that was refunded even though its payment still says SUCCEEDED (the real-world case)", async () => {
+    db.donations = [don("g", "CREATED", { pcoDonationId: "pd9" })];
+    db.payments = [{ id: "pay-g", churchId: "c1", status: "SUCCEEDED", effective: "REFUNDED" }];
+    const { needsAttention } = await getSyncOverview("c1");
+    expect(needsAttention).toHaveLength(1);
+    expect(needsAttention[0].paymentStatus).toBe("REFUNDED");
   });
 
   it("reflects the platform switch", async () => {

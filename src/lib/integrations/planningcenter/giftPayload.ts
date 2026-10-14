@@ -102,6 +102,11 @@ export function stableStringify(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** The day batch's description: one batch per church per day. The date is in the name so an ambiguous create can be found by reading. */
+export function dayBatchDescription(dateKey: string): string {
+  return `WGC gifts · ${dateKey}`;
+}
+
 /** The batch description: carries the settlement id so an ambiguous create can be found again by reading. */
 export function batchDescription(finixSettlementId: string, settledAt: Date | null): string {
   const date = settledAt ? ` · ${settledAt.toISOString().slice(0, 10)}` : "";

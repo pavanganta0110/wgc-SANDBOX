@@ -562,3 +562,39 @@ Decision from Collin Sansom: **A**. A gift where the donor covered the processin
 The church setting `receiptShowDonorCoveredFee` existed (and showed in the settings preview) but was never passed to the
 real receipt, so turning it on did nothing. The receipt PDF and email now show "Processing Fee Covered by Donor" and
 "Total Charged" when the setting is on and the donor covered a fee.
+
+## 12. Send when it's paid — as built
+
+Gifts now go to Planning Center **the moment they succeed** instead of waiting for the bank deposit. Connecting Planning Center sets everything up. The old per-deposit mode still exists as `sendTiming = ON_SETTLEMENT`; `ON_PAYMENT` is the default.
+
+### Day batches
+- One Planning Center batch per church per UTC day (`unitKey = day:YYYY-MM-DD`, description `WGC gifts · YYYY-MM-DD`). Settlement units are unchanged.
+- Trigger: `syncTrigger.ts` runs after a payment succeeds (donate route, `take-payment`, Finix webhook, recurring create). It runs through Next's `after()`, so the donor's response is never delayed, and it never throws. All hooks are no-ops while `PLANNING_CENTER_SYNC_ENABLED` is off.
+- Safety net: the daily cron's `sweepDays` (90-day lookback; 14 in preview) picks up anything the trigger missed.
+- Duplicate protection is unchanged: `@@unique([churchId, paymentId])`, SENDING marked before the POST, and an unknown outcome is settled only by reading the batch (2-minute grace).
+- A flagged gift (NEEDS_REVIEW/FAILED) never stops the rest of the day. The day becomes PARTIAL with a message.
+- Batches are never auto-committed by default (`autoCommitBatches false`); the church reviews and commits in Planning Center.
+
+### Refunds and returns (important finding)
+A refund or bank return does **not** change `Payment.status`. Status is derived in `giftOutcomes.ts` from refund and return rows. Both plans, the reversal job and the overview use it. A `REFUND_PENDING` payment is not sent.
+
+### Reversals (`syncReversals.ts`)
+If a sent gift is later fully refunded/returned: re-read the donation; if the batch is still open, delete it; otherwise `issue_refund` (refund) or `mark_failed` (return/failure). The result is confirmed by reading again. Only a definite rejection flags `REVERSAL_NOT_APPLIED`; the UI then offers "Check again" / "I handled it in Planning Center" (never "send it" — the gift is already there). Partial refunds are listed under "changed after it was sent" for the church to handle.
+
+### Unmatched donors: attach later
+New policy `ATTACH_LATER` (recommended): send the gift now with no person, then PATCH the person onto the donation once the donor is matched (`syncAttach.ts`). Attach happens only after the link is confirmed, is verified by read-back, and is idempotent. Anonymous donors/gifts are never attached.
+
+### Auto-setup (`autoSetup.ts`)
+After OAuth connect, `after()` creates the payment source, picks a default fund, applies suggested fund mappings, creates Planning Center funds for unmapped active WGC funds, and — only if giving readiness passes — sets sync LIVE / `ON_PAYMENT` / `ATTACH_LATER`. Failures leave sync OFF with a reason. The "LIVE requires a preview first" gate is removed (readiness is still required).
+
+### Fee-covered gifts
+Sent as the gift amount **without** the fee (option A, per Collin). Switching later is a one-function change in `classifyPayment`.
+
+### "Same person? Merge"
+Planning Center people that are already linked to another WGC donor show "Yes, same person — merge" (`sameDonorMerge.ts`, action `MERGE`). The donor to keep is decided server-side from the link table; the other donor is archived, not deleted.
+
+### Schema (additive)
+`PlanningCenterSyncConfig.sendTiming`, `PlanningCenterDonationRecord.attachPersonPending`, `reversedAt`.
+
+### Still unverified against a real account
+PATCH of a donation's person via relationships; DELETE and `issue_refund`/`mark_failed` on batch donations; back-dated `received_at`; `POST /payment_sources` with only a name; the donations list returning `person`/`payment_source` relationships; a 404 on Giving meaning "not enabled". Test with a sandbox church before turning the platform switch on for real churches.

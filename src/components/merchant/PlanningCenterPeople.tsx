@@ -148,7 +148,7 @@ export default function PlanningCenterPeople() {
       {data.review.length > 0 && (
         <section aria-labelledby="pco-people-review">
           <h4 id="pco-people-review" className="text-sm font-semibold text-slate-900 mb-1">Choose the right person ({data.counts.needsReview})</h4>
-          <p className="text-xs text-slate-500 mb-2">More than one person in Planning Center could be this donor (for example a couple sharing an email).</p>
+          <p className="text-xs text-slate-500 mb-2">WGC isn&apos;t sure who this is, and it won&apos;t guess. Gifts from these donors are already in Planning Center; the person is added once you choose.</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.review.map((item) => (
               <div key={item.donorId} className="p-3 text-xs">
@@ -160,11 +160,33 @@ export default function PlanningCenterPeople() {
                       <div className="min-w-0">
                         <div className="font-medium text-slate-900">{c.name}</div>
                         <div className="text-slate-500 break-words">{[...c.emails, ...c.phones].join(" · ") || "No contact details"}</div>
-                        {c.alreadyLinkedDonorId && <div className="text-amber-700">Already linked to another WGC donor. If that&apos;s the same person, merge the two donors first.</div>}
+                        {c.alreadyLinkedDonorId && (
+                          <div className="text-amber-700 mt-0.5">
+                            Already linked to <span className="font-semibold">{c.alreadyLinkedDonorName ?? "another WGC donor"}</span>. Are {item.donorName ?? "this donor"} and {c.alreadyLinkedDonorName ?? "that donor"} the same person?
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2 shrink-0">
-                        {!c.alreadyLinkedDonorId && <button className={buttonSecondary} disabled={disabled} onClick={() => link(item.donorId, "LINK", c.pcoPersonId, "Linked.")}>This is them</button>}
-                        <button className={buttonSecondary} disabled={disabled} onClick={() => link(item.donorId, "REJECT", c.pcoPersonId, "Got it, not offered again.")}>Not them</button>
+                        {c.alreadyLinkedDonorId ? (
+                          <>
+                            <button
+                              className={buttonSecondary}
+                              disabled={disabled}
+                              onClick={() => {
+                                if (window.confirm(`Merge "${item.donorName ?? "this donor"}" into "${c.alreadyLinkedDonorName ?? "the other donor"}"?\n\nAll giving history moves to one donor, and the other is archived (not deleted). Only do this if they are the same person.`))
+                                  link(item.donorId, "MERGE", c.pcoPersonId, "Merged into one donor.");
+                              }}
+                            >
+                              Yes, same person — merge
+                            </button>
+                            <button className={buttonSecondary} disabled={disabled} onClick={() => link(item.donorId, "REJECT", c.pcoPersonId, "Got it, kept as two people.")}>No, different people</button>
+                          </>
+                        ) : (
+                          <>
+                            <button className={buttonSecondary} disabled={disabled} onClick={() => link(item.donorId, "LINK", c.pcoPersonId, "Linked.")}>This is them</button>
+                            <button className={buttonSecondary} disabled={disabled} onClick={() => link(item.donorId, "REJECT", c.pcoPersonId, "Got it, not offered again.")}>Not them</button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}

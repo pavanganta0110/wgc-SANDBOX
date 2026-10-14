@@ -2,9 +2,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeNextAttemptAt, MAX_AUTOMATIC_RETRY_ATTEMPTS } from "@/lib/integrations/aplos/retryPolicy";
 import { getClientForChurch } from "./service";
-import { buildSettlementPlan, SKIP_MESSAGES, type PlannedGift } from "./giftPlan";
+import { buildDayPlan, buildSettlementPlan, dayHasWork, parseDayUnitKey, dayUnitKey, SKIP_MESSAGES, type PlannedGift } from "./giftPlan";
 import { HELD_MESSAGES } from "./syncTypes";
-import { batchDescription, buildDonationPayload, resolveTargetFund, type DonationPayload } from "./giftPayload";
+import { batchDescription, buildDonationPayload, dayBatchDescription, resolveTargetFund, type DonationPayload } from "./giftPayload";
 import { commitBatch, createBatch, createDonation, findBatchByDescription, getBatch, listBatchDonations, type PcoDonation } from "./givingApi";
 import { RECONCILE_GRACE_MS, reconcileSending } from "./syncReconcile";
 import { computeStoredGivingReadiness } from "./syncConfig";
@@ -116,24 +116,52 @@ export function classifyWriteError(err: unknown): WriteErrorKind {
 
 // ─────────────────────────────── entry point ───────────────────────────────
 
+/** One batch per bank deposit (the original mode). */
 export async function processSettlementSync(churchId: string, finixSettlementId: string, options: EngineOptions = {}): Promise<SyncOutcome> {
+  return processUnit(churchId, finixSettlementId, options);
+}
+
+/** One batch per church per day, filled as gifts are paid (`sendTiming: ON_PAYMENT`). `dateKey` is YYYY-MM-DD (UTC). */
+export async function processDaySync(churchId: string, dateKey: string, options: EngineOptions = {}): Promise<SyncOutcome> {
+  return processUnit(churchId, dayUnitKey(dateKey), options);
+}
+
+async function processUnit(churchId: string, unitKey: string, options: EngineOptions): Promise<SyncOutcome> {
   const now = options.now ?? (() => new Date());
+  const dateKey = parseDayUnitKey(unitKey);
+  const isDay = dateKey !== null;
 
   const config = await prisma.planningCenterSyncConfig.findUnique({ where: { churchId } });
   if (!config || (config.syncMode !== "DRY_RUN" && config.syncMode !== "LIVE")) return "OFF";
   const mode = config.syncMode as "DRY_RUN" | "LIVE";
+  // The church chose one timing. (An unset timing allows both; only old data and tests have none.)
+  if (isDay && config.sendTiming === "ON_SETTLEMENT") return "OFF";
+  if (!isDay && config.sendTiming === "ON_PAYMENT") return "OFF";
 
   // The watermark: going live never back-posts history a church may have keyed in by hand.
   if (mode === "LIVE") {
-    const settlement = await prisma.finixSettlement.findUnique({ where: { finixSettlementId }, select: { settledAt: true, churchId: true } });
-    if (!settlement || settlement.churchId !== churchId || !config.enabledAt || !settlement.settledAt || settlement.settledAt < config.enabledAt) {
-      return "OUT_OF_SCOPE";
+    if (isDay) {
+      const dayEnd = new Date(new Date(`${dateKey}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
+      if (!config.enabledAt || dayEnd <= config.enabledAt) return "OUT_OF_SCOPE";
+    } else {
+      const settlement = await prisma.finixSettlement.findUnique({ where: { finixSettlementId: unitKey }, select: { settledAt: true, churchId: true } });
+      if (!settlement || settlement.churchId !== churchId || !config.enabledAt || !settlement.settledAt || settlement.settledAt < config.enabledAt) {
+        return "OUT_OF_SCOPE";
+      }
     }
   }
 
-  let record = await getOrCreateRecord(churchId, finixSettlementId, config.syncVersion);
+  // A day with nothing to send creates no record at all.
+  if (isDay) {
+    const exists = await prisma.planningCenterSyncRecord.findUnique({ where: { churchId_settlementId_syncVersion: { churchId, settlementId: unitKey, syncVersion: config.syncVersion } } });
+    if (!exists && !(await dayHasWork(churchId, dateKey, config.enabledAt))) return "ALREADY_DONE";
+  }
 
-  const gate = statusGate(record, mode, now(), options, config.autoCommitBatches);
+  let record = await getOrCreateRecord(churchId, unitKey, config.syncVersion);
+
+  // A day's batch keeps receiving gifts after it is 'done', so it is re-opened whenever a new gift is waiting.
+  const dayWork = isDay && (record.status === "SYNCED" || record.status === "PARTIAL") ? await dayHasWork(churchId, dateKey, config.enabledAt) : false;
+  const gate = statusGate(record, mode, now(), options, config.autoCommitBatches, dayWork);
   if (gate !== "PROCEED") return gate;
 
   const connection = await prisma.planningCenterConnection.findUnique({ where: { churchId } });
@@ -173,7 +201,7 @@ export async function processSettlementSync(churchId: string, finixSettlementId:
   const tally: Tally = { created: 0, skipped: 0, held: 0 };
   const startedMs = now().getTime();
   try {
-    const result = await runClaimed(ctx, record, finixSettlementId, tally, stale, previousStatus);
+    const result = await runClaimed(ctx, record, unitKey, tally, stale, previousStatus, dayWork);
     return await finish(ctx, record, result, tally, startedMs);
   } catch (err) {
     return handleRunError(ctx, record, err, tally, startedMs);
@@ -182,7 +210,9 @@ export async function processSettlementSync(churchId: string, finixSettlementId:
 
 // ─────────────────────────────── gating ───────────────────────────────
 
-function statusGate(record: SyncRecord, mode: "DRY_RUN" | "LIVE", now: Date, options: EngineOptions, autoCommit: boolean): SyncOutcome | "PROCEED" {
+function statusGate(record: SyncRecord, mode: "DRY_RUN" | "LIVE", now: Date, options: EngineOptions, autoCommit: boolean, dayWork = false): SyncOutcome | "PROCEED" {
+  // A new gift is waiting in a day batch: always work it, even if the last pass was recent.
+  if (dayWork) return "PROCEED";
   switch (record.status) {
     case "SYNCED": {
       // A finished settlement only needs attention while its commit is unsettled.
@@ -227,22 +257,27 @@ async function getOrCreateRecord(churchId: string, settlementId: string, syncVer
 // ──────────────────────────── the claimed run ────────────────────────────
 
 type RunResult =
-  | { status: "SYNCED" | "PARTIAL" | "DRY_RUN" | "IN_PROGRESS" | "NEEDS_REVIEW" | "FAILED"; message?: string; commitStatus?: string; nextAttemptAt?: Date }
+  | { status: "SYNCED" | "PARTIAL" | "DRY_RUN" | "IN_PROGRESS" | "NEEDS_REVIEW" | "FAILED"; message?: string; commitStatus?: string; nextAttemptAt?: Date; flagged?: number }
   | { status: "BLOCKED" | "BLOCKED_AWAITING_FEES"; message: string }
   | { status: "RETRY_SCHEDULED"; message: string; nextAttemptAt: Date };
 
-async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: string, tally: Tally, recoveringStale: boolean, previousStatus: string): Promise<RunResult> {
+async function runClaimed(ctx: Ctx, record: SyncRecord, unitKey: string, tally: Tally, recoveringStale: boolean, previousStatus: string, dayWork: boolean): Promise<RunResult> {
+  const dateKey = parseDayUnitKey(unitKey);
+  const isDay = dateKey !== null;
+
   // A finished settlement that is only waiting on its commit skips straight to the commit phase,
   // after re-verifying the batch (it may have been edited since).
-  if (previousStatus === "SYNCED" && record.pcoBatchId) {
+  if (previousStatus === "SYNCED" && record.pcoBatchId && !dayWork) {
     const client = await ctx.getClient();
-    const created = await prisma.planningCenterDonationRecord.findMany({ where: { syncRecordId: record.id, status: "CREATED" } });
-    const verification = await verifyBatch(client, record.pcoBatchId, created);
+    const all = await prisma.planningCenterDonationRecord.findMany({ where: { syncRecordId: record.id, status: { in: ["CREATED", "REVERSED"] } } });
+    const created = all.filter((r) => r.status === "CREATED");
+    const reversedIds = new Set(all.filter((r) => r.status === "REVERSED" && r.pcoDonationId).map((r) => r.pcoDonationId as string));
+    const verification = await verifyBatch(client, record.pcoBatchId, created, reversedIds);
     if (!verification.ok) return { status: "NEEDS_REVIEW", message: verification.message };
     return commitPhase(ctx, record, "SYNCED", verification.extras === 0, client);
   }
 
-  const plan = await buildSettlementPlan(ctx.churchId, finixSettlementId);
+  const plan = isDay ? await buildDayPlan(ctx.churchId, dateKey, ctx.config.enabledAt) : await buildSettlementPlan(ctx.churchId, unitKey);
   if (!plan.eligible) {
     return { status: plan.awaitingFees ? "BLOCKED_AWAITING_FEES" : "BLOCKED", message: plan.safeMessage };
   }
@@ -257,13 +292,13 @@ async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: strin
     return { status: ctx.mode === "DRY_RUN" ? "DRY_RUN" : "SYNCED", commitStatus: "N_A" };
   }
 
-  const donors = await loadDonors(ctx.churchId, records);
+  const donors = await loadDonors(ctx.churchId, plan.gifts);
 
   if (ctx.mode === "DRY_RUN") {
     for (const rec of records.filter((r) => r.status === "PENDING" || r.status === "HELD")) {
       const gift = giftByPayment.get(rec.paymentId);
       if (!gift) continue;
-      const target = await resolveTarget(ctx, gift, donors.get(rec.donorId ?? ""), false);
+      const target = await resolveTarget(ctx, gift, donors.get(gift.donorId ?? ""), false);
       await recordPreview(rec.id, target);
       if (target.kind === "HELD") tally.held++;
     }
@@ -272,7 +307,8 @@ async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: strin
 
   // ── LIVE ──
   const client = await ctx.getClient();
-  const batch = await ensureBatch(ctx, record, client, plan.settledAt, finixSettlementId);
+  const batchName = isDay ? dayBatchDescription(dateKey) : batchDescription(unitKey, plan.settledAt);
+  const batch = await ensureBatch(ctx, record, client, batchName);
   if (batch.kind === "RETRY_LATER") {
     if (record.attemptCount + 1 >= MAX_AUTOMATIC_RETRY_ATTEMPTS) {
       return { status: "NEEDS_REVIEW", message: "Planning Center never confirmed that this deposit's batch was created. Check Planning Center Giving for a batch with this deposit's id before retrying." };
@@ -314,7 +350,7 @@ async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: strin
         continue;
       }
 
-      const target = await resolveTarget(ctx, gift, donors.get(rec.donorId ?? ""), true);
+      const target = await resolveTarget(ctx, gift, donors.get(gift.donorId ?? ""), true);
       if (target.kind === "HELD") {
         await markHeld(rec.id, target);
         tally.held++;
@@ -339,6 +375,7 @@ async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: strin
           payloadJson: target.payload.summary as unknown as Prisma.InputJsonValue,
           pcoPersonId: target.payload.summary.pcoPersonId,
           pcoFundId: target.payload.summary.pcoFundId,
+          attachPersonPending: Boolean(target.attachLater),
           skippedReason: null,
           lastErrorCode: null,
           lastErrorMessage: null,
@@ -396,19 +433,24 @@ async function runClaimed(ctx: Ctx, record: SyncRecord, finixSettlementId: strin
   }
 
   const needsReview = records.filter((r) => r.status === "NEEDS_REVIEW");
-  if (needsReview.length > 0) {
-    return { status: "NEEDS_REVIEW", message: needsReview[0].lastErrorMessage ?? "Some gifts need a person to look at them." };
-  }
   const failed = records.filter((r) => r.status === "FAILED");
-  if (failed.length > 0) {
-    return { status: "FAILED", message: `${failed.length} gift${failed.length === 1 ? " was" : "s were"} rejected by Planning Center.` };
+  // A settlement is one unit of work, so a flagged gift stops it for a person to look at. A day batch keeps
+  // receiving gifts all day, so one flagged gift must NOT stop the rest: it is listed on its own instead.
+  if (!isDay) {
+    if (needsReview.length > 0) return { status: "NEEDS_REVIEW", message: needsReview[0].lastErrorMessage ?? "Some gifts need a person to look at them." };
+    if (failed.length > 0) return { status: "FAILED", message: `${failed.length} gift${failed.length === 1 ? " was" : "s were"} rejected by Planning Center.` };
   }
+  const flagged = needsReview.length + failed.length;
 
   // Verify against what we recorded BEFORE anything is committed.
-  const verification = await verifyBatch(client, batchId, records.filter((r) => r.status === "CREATED"));
+  const reversedIds = new Set(records.filter((r) => r.status === "REVERSED" && r.pcoDonationId).map((r) => r.pcoDonationId as string));
+  const verification = await verifyBatch(client, batchId, records.filter((r) => r.status === "CREATED"), reversedIds);
   if (!verification.ok) return { status: "NEEDS_REVIEW", message: verification.message };
 
-  return commitPhase(ctx, record, tally.held > 0 ? "PARTIAL" : "SYNCED", verification.extras === 0, client);
+  const result = await commitPhase(ctx, record, tally.held > 0 || flagged > 0 ? "PARTIAL" : "SYNCED", verification.extras === 0, client);
+  return flagged > 0 && result.status === "PARTIAL"
+    ? { ...result, flagged, message: needsReview[0]?.lastErrorMessage ?? `${flagged} gift${flagged === 1 ? " needs" : "s need"} your attention.` }
+    : result;
 }
 
 // ─────────────────────────── donation records ───────────────────────────
@@ -443,8 +485,9 @@ interface DonorLite {
   anonymousPreference: boolean;
 }
 
-async function loadDonors(churchId: string, records: DonationRecord[]): Promise<Map<string, DonorLite>> {
-  const ids = [...new Set(records.map((r) => r.donorId).filter((id): id is string => Boolean(id)))];
+/** Donors are looked up by the payment's CURRENT donor (not the one recorded when the row was made), so a merge of two donors is honored. */
+async function loadDonors(churchId: string, gifts: PlannedGift[]): Promise<Map<string, DonorLite>> {
+  const ids = [...new Set(gifts.map((g) => g.donorId).filter((id): id is string => Boolean(id)))];
   if (ids.length === 0) return new Map();
   const donors = await prisma.donor.findMany({ where: { churchId, id: { in: ids } }, select: { id: true, name: true, email: true, phone: true, anonymousPreference: true } });
   return new Map(donors.map((d) => [d.id, d]));
@@ -453,7 +496,7 @@ async function loadDonors(churchId: string, records: DonationRecord[]): Promise<
 // ─────────────────────────── choosing the target ───────────────────────────
 
 type Target =
-  | { kind: "READY"; payload: DonationPayload; wouldCreatePerson?: boolean }
+  | { kind: "READY"; payload: DonationPayload; wouldCreatePerson?: boolean; attachLater?: boolean }
   | { kind: "HELD"; code: string }
   | { kind: "REVIEW"; code: string; message: string };
 
@@ -469,6 +512,7 @@ async function resolveTarget(ctx: Ctx, gift: PlannedGift, donor: DonorLite | und
   const anonymous = gift.isAnonymous || !gift.donorId || !donor || donor.anonymousPreference;
   let personId: string | null = null;
   let wouldCreatePerson = false;
+  let attachLater = false;
 
   if (!anonymous) {
     const client = await ctx.getClient();
@@ -479,6 +523,11 @@ async function resolveTarget(ctx: Ctx, gift: PlannedGift, donor: DonorLite | und
       const policy = ctx.config.unmatchedDonorPolicy;
       if (policy === "ANONYMOUS") {
         personId = null;
+      } else if (policy === "ATTACH_LATER") {
+        // Send now without a person, so the gift is never held back, and attach the person once the donor is matched.
+        // Attaching is a PATCH that sets the same value every time, so unlike creating a gift it is safe to repeat.
+        personId = null;
+        attachLater = true;
       } else if (policy === "CREATE_PERSON" && state.status === "NO_MATCH") {
         if (!writes) wouldCreatePerson = true;
         else {
@@ -492,7 +541,7 @@ async function resolveTarget(ctx: Ctx, gift: PlannedGift, donor: DonorLite | und
     }
   }
 
-  return { kind: "READY", wouldCreatePerson, payload: buildDonationPayload({ gift, paymentSourceId, pcoFundId: fund.pcoFundId, pcoPersonId: personId }) };
+  return { kind: "READY", wouldCreatePerson, attachLater, payload: buildDonationPayload({ gift, paymentSourceId, pcoFundId: fund.pcoFundId, pcoPersonId: personId }) };
 }
 
 /** CREATE_PERSON policy. A POST: never retried. If it can't be confirmed we look for the person by reading next time. */
@@ -528,7 +577,7 @@ async function recordPreview(id: string, target: Target): Promise<void> {
       where: { id },
       data: {
         payloadHash: target.payload.hash,
-        payloadJson: { ...target.payload.summary, ...(target.wouldCreatePerson ? { wouldCreatePerson: true } : {}) } as unknown as Prisma.InputJsonValue,
+        payloadJson: { ...target.payload.summary, ...(target.wouldCreatePerson ? { wouldCreatePerson: true } : {}), ...(target.attachLater ? { attachLater: true } : {}) } as unknown as Prisma.InputJsonValue,
         pcoPersonId: target.payload.summary.pcoPersonId,
         pcoFundId: target.payload.summary.pcoFundId,
         status: "PENDING",
@@ -555,12 +604,10 @@ async function ensureBatch(
   ctx: Ctx,
   record: SyncRecord,
   client: PlanningCenterClient,
-  settledAt: Date | null,
-  finixSettlementId: string
+  description: string
 ): Promise<{ kind: "OK"; id: string } | { kind: "RETRY_LATER" }> {
   if (record.pcoBatchId) return { kind: "OK", id: record.pcoBatchId };
 
-  const description = batchDescription(finixSettlementId, settledAt);
   const persist = async (id: string) => {
     await prisma.planningCenterSyncRecord.update({ where: { id: record.id }, data: { pcoBatchId: id, batchDescription: description, commitStatus: "NOT_COMMITTED" } });
     record.pcoBatchId = id;
@@ -619,7 +666,9 @@ async function reconcileStuckSends(ctx: Ctx, record: SyncRecord, batchId: string
 async function verifyBatch(
   client: PlanningCenterClient,
   batchId: string,
-  created: DonationRecord[]
+  created: DonationRecord[],
+  /** Donations WGC itself refunded or marked failed in Planning Center: still in a committed batch, but not "extra". */
+  reversedIds: Set<string> = new Set()
 ): Promise<{ ok: true; extras: number } | { ok: false; message: string }> {
   const donations = await listBatchDonations(client, batchId);
   const byId = new Map(donations.map((d) => [d.id, d]));
@@ -631,7 +680,7 @@ async function verifyBatch(
   }
   const ours = new Set(created.map((r) => r.pcoDonationId));
   // Gifts someone added by hand to our batch are not ours to commit.
-  const extras = donations.filter((d) => !ours.has(d.id)).length;
+  const extras = donations.filter((d) => !ours.has(d.id) && !reversedIds.has(d.id)).length;
   return { ok: true, extras };
 }
 
@@ -678,7 +727,7 @@ async function finish(ctx: Ctx, record: SyncRecord, result: RunResult, tally: Ta
   if (result.status === "SYNCED" || result.status === "PARTIAL") {
     data.syncedAt = now;
     data.lastErrorCode = null;
-    data.lastErrorMessage = null;
+    data.lastErrorMessage = "message" in result && result.message ? result.message : null; // a PARTIAL day can carry "N gifts need attention"
     data.requiresManualReview = false;
   }
   if (result.status === "NEEDS_REVIEW") data.requiresManualReview = true;
@@ -703,6 +752,8 @@ async function finish(ctx: Ctx, record: SyncRecord, result: RunResult, tally: Ta
   });
 
   await notifyOnce(ctx.churchId, record, result.status, "message" in result ? result.message : undefined);
+  // A day batch stays PARTIAL while gifts in it are flagged, but the church should still hear about it (once).
+  if ("flagged" in result && result.flagged) await notifyOnce(ctx.churchId, record, "NEEDS_REVIEW", result.message);
   return result.status;
 }
 

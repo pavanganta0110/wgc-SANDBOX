@@ -44,7 +44,9 @@ export default function PlanningCenterConnectionCard() {
     // Surface the callback route's redirect result once, then clean the URL.
     const params = new URLSearchParams(window.location.search);
     if (params.get("connected") === "true") {
-      toast.success("Connected to Planning Center.");
+      toast.success("Connected to Planning Center. Setting up your funds and gift sending…");
+      // WGC finishes the setup right after the redirect; refresh the panels below while it does.
+      [3000, 7000, 12000, 20000, 30000].forEach((ms) => window.setTimeout(() => window.dispatchEvent(new Event("pco-connection-changed")), ms));
       window.history.replaceState({}, "", window.location.pathname);
     } else if (params.get("error")) {
       toast.error(params.get("error") || "Could not connect to Planning Center.");

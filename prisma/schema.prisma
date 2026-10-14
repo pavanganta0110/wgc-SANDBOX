@@ -4850,8 +4850,12 @@ model PlanningCenterSyncConfig {
   // hand. Set the first time the church goes LIVE.
   enabledAt            DateTime?
   // What to do with a gift whose donor can't be matched to a Planning Center
-  // person: HOLD_FOR_REVIEW (default, safest) | CREATE_PERSON | ANONYMOUS.
+  // person: HOLD_FOR_REVIEW (safest) | ATTACH_LATER (send now without a person, attach them once matched) |
+  // CREATE_PERSON | ANONYMOUS (send without a person, never attach).
   unmatchedDonorPolicy String    @default("HOLD_FOR_REVIEW")
+  // When gifts are sent: ON_PAYMENT = as soon as the payment succeeds, into that day's batch (default) |
+  // ON_SETTLEMENT = after the bank deposit settles, one batch per deposit.
+  sendTiming String @default("ON_PAYMENT")
   // Commit batches in Planning Center automatically. Off by default so the
   // church's finance admin can review a batch before donors see the gifts.
   autoCommitBatches    Boolean   @default(false)
@@ -5006,7 +5010,8 @@ model PlanningCenterDonationRecord {
   donorId      String?
 
   // PENDING | SENDING (a write is in flight or its outcome is unknown) |
-  // CREATED | SKIPPED | HELD (waiting on a donor match) | NEEDS_REVIEW | FAILED
+  // CREATED | REVERSED (refunded/returned/failed after it was sent) | SKIPPED | HELD (waiting on a donor
+  // match) | NEEDS_REVIEW | FAILED
   status        String  @default("PENDING")
   skippedReason String?
 
@@ -5021,6 +5026,10 @@ model PlanningCenterDonationRecord {
 
   pcoDonationId    String?
   sendingStartedAt DateTime?
+  // Sent without a person because the donor wasn't matched yet; the person is attached once they are.
+  attachPersonPending Boolean   @default(false)
+  // Set when the gift was later refunded/returned/failed and Planning Center was updated to match.
+  reversedAt          DateTime?
   attemptCount     Int       @default(0)
   lastErrorCode    String?
   lastErrorMessage String?

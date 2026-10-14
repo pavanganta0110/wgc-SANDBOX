@@ -185,3 +185,37 @@ describe("batches and donations", () => {
     await expect(createDonation(fakeClient({ request: () => ({}) }), "b1", {})).rejects.toThrow(/did not return the created donation/);
   });
 });
+
+import { deleteDonation, getDonation, issueRefund, markDonationFailed, updateDonationPerson } from "../givingApi";
+
+describe("changing a donation after it was sent", () => {
+  it("reads one donation, including whether it was refunded, and returns null when it's gone", async () => {
+    const client = fakeClient({ get: () => ({ data: { id: "d1", attributes: { amount_cents: 100, received_at: "2026-10-10T05:00:00Z", refunded: true, payment_status: "succeeded" }, relationships: { person: { data: { id: "p1" } } } } }) });
+    expect(await getDonation(client, "d1")).toMatchObject({ id: "d1", amountCents: 100, personId: "p1", refunded: true, paymentStatus: "succeeded" });
+    const gone = fakeClient({ get: () => { throw Object.assign(new Error("nf"), { status: 404 }); } });
+    expect(await getDonation(gone, "d1")).toBeNull();
+  });
+
+  it("attaches a person with a PATCH that carries ONLY the person", async () => {
+    const client = fakeClient({ request: () => ({}) });
+    await updateDonationPerson(client, "d1", "p9");
+    const [path, opts] = client.request.mock.calls[0];
+    expect(path).toBe("/giving/v2/donations/d1");
+    expect(opts.method).toBe("PATCH");
+    expect(opts.body).toEqual({ data: { type: "Donation", id: "d1", relationships: { person: { data: { type: "Person", id: "p9" } } } } });
+  });
+
+  it("deletes, refunds and marks failed with the documented endpoints", async () => {
+    const client = fakeClient({ request: () => ({}) });
+    await deleteDonation(client, "d1");
+    await issueRefund(client, "d1", "2026-10-12");
+    await markDonationFailed(client, "d1", "Returned by bank");
+    expect(client.request.mock.calls.map((c) => [c[0], c[1].method])).toEqual([
+      ["/giving/v2/donations/d1", "DELETE"],
+      ["/giving/v2/donations/d1/issue_refund", "POST"],
+      ["/giving/v2/donations/d1/mark_failed", "POST"],
+    ]);
+    expect(client.request.mock.calls[1][1].body).toEqual({ data: { attributes: { refunded_at: "2026-10-12" } } });
+    expect(client.request.mock.calls[2][1].body).toEqual({ data: { attributes: { reason: "Returned by bank" } } });
+  });
+});

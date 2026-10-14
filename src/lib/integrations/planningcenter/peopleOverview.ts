@@ -33,7 +33,8 @@ export async function getPeopleOverview(churchId: string, pcoOrganizationId: str
     prisma.planningCenterPeopleJob.findFirst({ where: { churchId, type: "IMPORT_PEOPLE" }, orderBy: { createdAt: "desc" } }),
   ]);
 
-  const donorIds = reviewRows.map((r) => r.donorId);
+  const candidatesOf = (r: (typeof reviewRows)[number]) => (Array.isArray(r.candidatesJson) ? (r.candidatesJson as unknown as MatchCandidate[]) : []);
+  const donorIds = [...new Set([...reviewRows.map((r) => r.donorId), ...reviewRows.flatMap((r) => candidatesOf(r).map((c) => c.alreadyLinkedDonorId).filter((id): id is string => Boolean(id)))])];
   const donors = donorIds.length ? await prisma.donor.findMany({ where: { churchId, id: { in: donorIds } }, select: { id: true, name: true, email: true, phone: true } }) : [];
   const donorById = new Map(donors.map((d) => [d.id, d]));
 
@@ -46,7 +47,7 @@ export async function getPeopleOverview(churchId: string, pcoOrganizationId: str
         donorName: d?.name ?? null,
         donorEmail: d?.email ?? null,
         donorPhone: d?.phone ?? null,
-        candidates: Array.isArray(r.candidatesJson) ? (r.candidatesJson as unknown as MatchCandidate[]) : [],
+        candidates: candidatesOf(r).map((c) => (c.alreadyLinkedDonorId ? { ...c, alreadyLinkedDonorName: donorById.get(c.alreadyLinkedDonorId)?.name ?? null } : c)),
       };
     }),
     matchJob: toJob(matchJob),

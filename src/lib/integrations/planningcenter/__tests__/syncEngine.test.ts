@@ -200,6 +200,13 @@ vi.mock("../giftPlan", async () => {
   return {
     ...actual,
     buildSettlementPlan: async () => gifts.plan ?? { eligible: true, awaitingFees: false, reasons: [], safeMessage: "Eligible.", gifts: gifts.list, settledAt: new Date("2026-10-11T00:00:00Z") },
+    // "As soon as it's paid": the day plan is just whatever gifts exist right now.
+    buildDayPlan: async () => ({ eligible: true, awaitingFees: false, reasons: [], safeMessage: "Eligible.", gifts: gifts.list, settledAt: new Date("2026-10-14T00:00:00Z") }),
+    dayHasWork: async () =>
+      gifts.list.some((g) => {
+        const rec = db.donationRecords.find((r) => r.paymentId === g.paymentId);
+        return !rec || rec.status === "PENDING" || rec.status === "SENDING";
+      }),
   };
 });
 const linkStates = new Map<string, { status: string; pcoPersonId: string | null }>();
@@ -215,7 +222,7 @@ vi.mock("../service", () => ({ getClientForChurch: async () => ({}) }));
 
 import { PlanningCenterApiError } from "../errors";
 import { RECONCILE_GRACE_MS } from "../syncReconcile";
-import { classifyWriteError, processSettlementSync, STALE_PROCESSING_MS } from "../syncEngine";
+import { classifyWriteError, processDaySync, processSettlementSync, STALE_PROCESSING_MS } from "../syncEngine";
 PlanningCenterApiErrorRef.cls = PlanningCenterApiError;
 
 // ─────────────────────────────────── helpers ───────────────────────────────────
@@ -817,5 +824,135 @@ describe("classifyWriteError", () => {
     for (const s of [0, 500, 502, 503, 429, 408]) expect(classifyWriteError(e(s))).toBe("AMBIGUOUS");
     expect(classifyWriteError(new Error("Planning Center did not return the created donation."))).toBe("AMBIGUOUS");
     expect(classifyWriteError("weird")).toBe("AMBIGUOUS");
+  });
+});
+
+
+// ───────────────────────── "as soon as it's paid": one batch per church per day ─────────────────────────
+
+describe("day batches (send as soon as it's paid)", () => {
+  const runDay = (opts: Record<string, any> = {}) => processDaySync("c1", "2026-10-14", { client, now, ...opts });
+  const dayRecords = () => db.syncRecords.filter((r) => r.settlementId === "day:2026-10-14");
+
+  beforeEach(() => {
+    seed(2, { config: { sendTiming: "ON_PAYMENT", enabledAt: new Date("2026-10-14T00:00:00Z") } });
+    nowMs = new Date("2026-10-14T18:00:00Z").getTime();
+  });
+
+  it("sends the day's gifts into ONE batch named for the day", async () => {
+    expect(await runDay()).toBe("SYNCED");
+    expect(pco.batches).toEqual([{ id: "b1", description: "WGC gifts · 2026-10-14", status: "in_progress" }]);
+    expect(pco.donations).toHaveLength(2);
+    expect(dayRecords()).toHaveLength(1);
+  });
+
+  it("a gift paid LATER the same day goes into the SAME batch, and nothing already sent is sent again", async () => {
+    await runDay();
+    expect(await runDay()).toBe("ALREADY_DONE"); // nothing new: no Planning Center calls at all
+    const callsBefore = pco.calls.length;
+    gifts.list.push(gift(3));
+    db.donors.push({ id: "d3", churchId: "c1", name: "Donor 3", email: "d3@x.com", phone: null, anonymousPreference: false });
+    linkStates.set("d3", { status: "LINKED", pcoPersonId: "person3" });
+    expect(await runDay()).toBe("SYNCED");
+    expect(pco.batches).toHaveLength(1);
+    expect(pco.donations.map((d) => d.amountCents)).toEqual([1000, 2000, 3000]);
+    expect(pco.calls.slice(callsBefore).filter((c) => c === "createDonation")).toHaveLength(1);
+    expect(pco.calls.slice(callsBefore)).not.toContain("createBatch");
+  });
+
+  it("a day with nothing to send creates no record and calls nothing", async () => {
+    gifts.list = [];
+    expect(await runDay()).toBe("ALREADY_DONE");
+    expect(db.syncRecords).toHaveLength(0);
+    expect(pco.calls).toEqual([]);
+  });
+
+  it("each church chooses ONE timing: the other path does nothing", async () => {
+    expect(await processSettlementSync("c1", "ST1", { client, now })).toBe("OFF");
+    db.config!.sendTiming = "ON_SETTLEMENT";
+    expect(await runDay()).toBe("OFF");
+    expect(pco.calls).toEqual([]);
+  });
+
+  it("never touches a day that ended before the go-live moment", async () => {
+    db.config!.enabledAt = new Date("2026-10-15T09:00:00Z");
+    expect(await runDay()).toBe("OUT_OF_SCOPE");
+    expect(db.syncRecords).toHaveLength(0);
+  });
+
+  it("two payments triggering the same day at once: one works, the other backs off, nothing is duplicated", async () => {
+    gifts.list = [gift(1)];
+    await runDay(); // the day's batch exists and is SYNCED; then two more gifts land at the same moment
+    gifts.list = [gift(1), gift(2), gift(3)];
+    db.donors.push({ id: "d3", churchId: "c1", name: "Donor 3", email: "d3@x.com", phone: null, anonymousPreference: false });
+    linkStates.set("d3", { status: "LINKED", pcoPersonId: "person3" });
+    barrier.size = 2; // force both workers to reach the claim together
+    barrier.arrived = 0;
+    barrier.gate = new Promise<void>((resolve) => { barrier.release = resolve; });
+    const results = await Promise.all([runDay(), runDay()]);
+    barrier.size = 0;
+    expect(results.sort()).toEqual(["CONTENDED", "SYNCED"]);
+    expect(pco.donations).toHaveLength(3);
+    expect(pco.batches).toHaveLength(1);
+    expect(new Set(records().map((r) => r.paymentId)).size).toBe(3);
+  });
+
+  it("ONE flagged gift does not stop the rest of the day, and a later gift still goes out", async () => {
+    pco.donationFaults = ["422"];
+    expect(await runDay()).toBe("PARTIAL"); // not FAILED: the day keeps working
+    expect(statuses()).toEqual(["FAILED", "CREATED"]);
+    expect(db.syncRecords[0].lastErrorMessage).toMatch(/rejected|attention/i);
+    expect(notifyReview).toHaveBeenCalledTimes(1);
+
+    gifts.list.push(gift(3));
+    db.donors.push({ id: "d3", churchId: "c1", name: "Donor 3", email: "d3@x.com", phone: null, anonymousPreference: false });
+    linkStates.set("d3", { status: "LINKED", pcoPersonId: "person3" });
+    expect(await runDay()).toBe("PARTIAL");
+    expect(statuses()).toEqual(["FAILED", "CREATED", "CREATED"]);
+    expect(pco.donations).toHaveLength(2);
+    expect(notifyReview).toHaveBeenCalledTimes(1); // told once, not on every gift
+  });
+
+  it("a stuck unknown outcome still stops being resent: the same read-before-resend rule applies to day batches", async () => {
+    pco.donationFaults = ["timeout-before-create"];
+    expect(await runDay()).toBe("RETRY_SCHEDULED");
+    expect(pco.donations).toHaveLength(0);
+    advance(RECONCILE_GRACE_MS + 1000);
+    expect(await runDay()).toBe("SYNCED");
+    expect(pco.donations).toHaveLength(2);
+  });
+
+  it("uses the payment's CURRENT donor, so two donors merged into one are treated as one", async () => {
+    // pay2 now belongs to donor d1 (after a merge), who is linked and NOT anonymous; d2 would have been anonymous.
+    db.donors[1].anonymousPreference = true;
+    gifts.list[1] = gift(2, { donorId: "d1" });
+    await runDay();
+    expect(pco.donations.map((d) => d.personId)).toEqual(["person1", "person1"]);
+  });
+
+  describe("ATTACH_LATER: send now, attach the person once the donor is matched", () => {
+    beforeEach(() => {
+      db.config!.unmatchedDonorPolicy = "ATTACH_LATER";
+      linkStates.set("d2", { status: "NO_MATCH", pcoPersonId: null });
+    });
+
+    it("an unmatched donor's gift is NOT held: it goes out now with no person, and is marked to attach later", async () => {
+      expect(await runDay()).toBe("SYNCED");
+      expect(pco.donations.map((d) => d.personId)).toEqual(["person1", null]);
+      expect(records().map((r) => r.attachPersonPending)).toEqual([false, true]);
+    });
+
+    it("several possible matches also go out now (the church picks the person afterwards)", async () => {
+      linkStates.set("d2", { status: "NEEDS_REVIEW", pcoPersonId: null });
+      expect(await runDay()).toBe("SYNCED");
+      expect(statuses()).toEqual(["CREATED", "CREATED"]);
+      expect(records()[1].attachPersonPending).toBe(true);
+    });
+
+    it("an anonymous donor is NOT marked to attach: they asked not to be named", async () => {
+      db.donors[1].anonymousPreference = true;
+      await runDay();
+      expect(records()[1].attachPersonPending).toBe(false);
+    });
   });
 });
