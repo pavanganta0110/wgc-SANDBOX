@@ -7,6 +7,7 @@ const bodySchema = z
   .object({
     syncMode: z.enum(["OFF", "DRY_RUN", "LIVE"]).optional(),
     sendTiming: z.enum(["ON_PAYMENT", "ON_SETTLEMENT"]).optional(),
+    syncTarget: z.enum(["GIFTS", "PROFILE_FIELDS"]).optional(),
     unmatchedDonorPolicy: z.enum(["HOLD_FOR_REVIEW", "ATTACH_LATER", "CREATE_PERSON", "ANONYMOUS"]).optional(),
     autoCommitBatches: z.boolean().optional(),
   })

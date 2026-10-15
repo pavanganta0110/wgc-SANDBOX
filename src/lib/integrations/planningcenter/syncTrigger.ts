@@ -5,6 +5,7 @@ import { dateKeyOf } from "./giftPlan";
 import { processDaySync } from "./syncEngine";
 import { reverseChangedGifts } from "./syncReversals";
 import { attachPendingPeople } from "./syncAttach";
+import { syncProfileForDonor } from "./profileSync";
 import type { PlanningCenterClient } from "./resourceClient";
 
 /**
@@ -27,11 +28,19 @@ export async function syncAfterPaymentChange(
   try {
     if (!isPlanningCenterSyncEnabled()) return;
 
-    const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { id: true, churchId: true, status: true, createdAt: true } });
+    const payment = await prisma.payment.findUnique({ where: { id: paymentId }, select: { id: true, churchId: true, donorId: true, status: true, createdAt: true } });
     if (!payment) return;
 
     const config = await prisma.planningCenterSyncConfig.findUnique({ where: { churchId: payment.churchId } });
-    if (!config || config.syncMode !== "LIVE" || config.sendTiming !== "ON_PAYMENT") return;
+    if (!config || config.syncMode !== "LIVE") return;
+
+    // "People only": no donation is sent. The donor's "WGC Giving" section is refreshed instead, for ANY change to
+    // the payment (a new gift, a refund, a bank return), because the totals move in every one of those cases.
+    if (config.syncTarget === "PROFILE_FIELDS") {
+      if (payment.donorId) await syncProfileForDonor(payment.churchId, payment.donorId, { client: options.client });
+      return;
+    }
+    if (config.sendTiming !== "ON_PAYMENT") return;
 
     const sleep = options.sleep ?? defaultSleep;
     if (payment.status === "SUCCEEDED") {

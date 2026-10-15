@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
-import { describeSyncUnit, SYNC_STATUS_LABELS, type SendTiming, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "@/lib/integrations/planningcenter/syncTypes";
+import { describeSyncUnit, SYNC_STATUS_LABELS, type SendTiming, type SyncMode, type SyncOverview, type SyncTarget, type UnmatchedDonorPolicy } from "@/lib/integrations/planningcenter/syncTypes";
+import type { ProfilePreview } from "@/lib/integrations/planningcenter/profilePreview";
 import { buttonDanger, buttonPrimary, buttonSecondary, money, PcoApiError, pcoFetch } from "./planningCenterApi";
 
 const TONE: Record<string, string> = {
@@ -23,6 +24,21 @@ const MODES: Array<{ mode: SyncMode; title: string; body: string }> = [
   { mode: "LIVE", title: "On", body: "Each gift is added to Planning Center after it's paid. Gifts from before you turned it on are never sent." },
   { mode: "OFF", title: "Off", body: "Nothing is sent to Planning Center." },
   { mode: "DRY_RUN", title: "Preview only", body: "WGC works out what it would send and shows you. Nothing is sent." },
+];
+
+const TARGETS: Array<{ value: SyncTarget; title: string; body: string; points: string[] }> = [
+  {
+    value: "GIFTS",
+    title: "People + every gift",
+    body: "Every gift is added to Planning Center Giving, so your giving history, batches, fund totals, reports and statements stay there.",
+    points: ["Best if your team lives in Planning Center Giving", "Planning Center's Giving subscription applies, and grows with the number of gifts each month"],
+  },
+  {
+    value: "PROFILE_FIELDS",
+    title: "People only, with giving on their profile",
+    body: "No donations are sent. Each matched person gets a \"WGC Giving\" section with their totals, last gift and a link to their giving in WGC.",
+    points: ["Nothing extra to pay Planning Center for Giving", "Planning Center's own giving screens, reports and \"has given\" lists won't include these gifts, so a donor who gave recently can look lapsed there. Build your lists on the \"WGC Giving\" fields instead."],
+  },
 ];
 
 const TIMINGS: Array<{ value: SendTiming; label: string; hint: string }> = [
@@ -99,24 +115,25 @@ export default function PlanningCenterGiftSync() {
   if (!data) return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">Loading gift sync…</div>;
 
   const { settings } = data;
+  const isPeople = settings.syncTarget === "PROFILE_FIELDS";
   const disabled = busy !== null;
   const modeBlocked = (mode: SyncMode): string | null => {
     if (mode === "OFF") return null;
     if (!data.platformEnabled) return "Not available yet";
-    if (!data.ready) return "Finish Giving setup first";
+    if (!data.ready) return isPeople ? "Reconnect Planning Center first" : "Finish Giving setup first";
     return null;
   };
 
   const changeMode = (mode: SyncMode) => {
     if (mode === settings.syncMode) return;
-    putSettings({ syncMode: mode }, mode === "OFF" ? "Gift sync is off." : mode === "DRY_RUN" ? "Preview is on." : "Gift sync is on.");
+    putSettings({ syncMode: mode }, mode === "OFF" ? "Sync is off." : mode === "DRY_RUN" ? "Preview is on." : isPeople ? "People sync is on." : "Gift sync is on.");
   };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
       <div>
-        <h3 className="text-sm font-bold text-slate-900">Gift sync</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Every gift given through WGC is added to Planning Center Giving automatically, so your donors&apos; giving stays in one place.</p>
+        <h3 className="text-sm font-bold text-slate-900">{isPeople ? "People sync" : "Gift sync"}</h3>
+        <p className="text-xs text-slate-500 mt-0.5">{isPeople ? "Your donors are matched to people in Planning Center, and their giving is shown on their profile. No donations are sent to Planning Center Giving." : "Every gift given through WGC is added to Planning Center Giving automatically, so your donors' giving stays in one place."}</p>
       </div>
 
       {!data.platformEnabled && (
@@ -127,10 +144,45 @@ export default function PlanningCenterGiftSync() {
       )}
       {data.platformEnabled && !data.ready && (
         <div className="rounded-lg bg-amber-50 text-amber-800 text-xs p-3">
-          <div className="font-semibold mb-1">Finish Giving setup to turn this on:</div>
+          <div className="font-semibold mb-1">{isPeople ? "Fix this to turn it on:" : "Finish Giving setup to turn this on:"}</div>
           <ul className="list-disc pl-5 space-y-0.5">{data.readinessReasons.map((r) => <li key={r}>{r}</li>)}</ul>
         </div>
       )}
+
+      {/* What to send */}
+      <section aria-labelledby="pco-sync-target">
+        <h4 id="pco-sync-target" className="text-sm font-semibold text-slate-900 mb-2">What WGC sends to Planning Center</h4>
+        <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-labelledby="pco-sync-target">
+          {TARGETS.map((t) => {
+            const selected = settings.syncTarget === t.value;
+            return (
+              <button
+                key={t.value}
+                role="radio"
+                aria-checked={selected}
+                disabled={disabled}
+                onClick={() => {
+                  if (selected) return;
+                  const msg = t.value === "PROFILE_FIELDS"
+                    ? "Switch to people only? WGC will stop sending donations to Planning Center and will fill a \"WGC Giving\" section on each matched person instead. Gifts already sent stay where they are."
+                    : "Switch to sending every gift? Only gifts paid from now on are sent. Gifts paid while you were on people only are not added to Planning Center Giving.";
+                  if (window.confirm(msg)) putSettings({ syncTarget: t.value }, "Saved.");
+                }}
+                className={`text-left rounded-xl border p-3 transition disabled:opacity-60 ${selected ? "border-slate-900 bg-slate-50" : "border-slate-200 hover:border-slate-300"}`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-slate-900">{t.title}</span>
+                  {selected && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{t.body}</p>
+                <ul className="mt-2 space-y-1 text-xs text-slate-600 list-disc pl-4">{t.points.map((pt) => <li key={pt}>{pt}</li>)}</ul>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {isPeople && <PeopleOnlyPanel data={data} disabled={disabled} />}
 
       {/* Mode */}
       <section aria-labelledby="pco-sync-mode">
@@ -158,13 +210,14 @@ export default function PlanningCenterGiftSync() {
             );
           })}
         </div>
-        {settings.syncMode === "LIVE" && settings.enabledAt && (
+        {settings.syncMode === "LIVE" && settings.enabledAt && !isPeople && (
           <p className="text-xs text-slate-500 mt-2">On since {new Date(settings.enabledAt).toLocaleString()}. Only gifts paid after that are sent.</p>
         )}
       </section>
 
       {/* Settings */}
       <section aria-labelledby="pco-sync-settings" className="space-y-4">
+        {!isPeople && (<>
         <div>
           <h4 className="text-sm font-semibold text-slate-900 mb-1">When gifts are sent</h4>
           <div className="space-y-1.5">
@@ -194,18 +247,20 @@ export default function PlanningCenterGiftSync() {
             <span className="block text-slate-500">Off by default: batches wait in Planning Center for your finance team to review and commit. Until a batch is committed, its gifts aren&apos;t in donors&apos; giving history or statements.</span>
           </span>
         </label>
+        </>)}
       </section>
 
       {/* Actions */}
       {settings.syncMode !== "OFF" && data.platformEnabled && (
         <div className="flex flex-wrap gap-2">
           <button className={buttonPrimary} disabled={disabled} onClick={() => run("now", async () => {
-            const r = await pcoFetch<{ processed: number; stoppedForTime: boolean }>("/sync/run", { method: "POST", body: JSON.stringify({}) });
+            const r = await pcoFetch<{ processed: number; profilesUpdated?: number; stoppedForTime: boolean }>("/sync/run", { method: "POST", body: JSON.stringify({}) });
+            if (isPeople) return settings.syncMode === "DRY_RUN" ? "Preview mode doesn't change Planning Center." : r.profilesUpdated ? `Updated ${r.profilesUpdated} ${r.profilesUpdated === 1 ? "person" : "people"}${r.stoppedForTime ? " (more to do, it will continue)" : ""}.` : "Everyone is up to date.";
             return r.processed === 0 ? "Nothing new to sync." : `Checked ${r.processed} deposit${r.processed === 1 ? "" : "s"}${r.stoppedForTime ? " (more to do, it will continue)" : ""}.`;
           })}>
-            {busy === "now" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} {settings.syncMode === "DRY_RUN" ? "Preview recent deposits" : "Sync now"}
+            {busy === "now" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} {isPeople ? "Update people now" : settings.syncMode === "DRY_RUN" ? "Preview recent deposits" : "Sync now"}
           </button>
-          {settings.syncMode === "DRY_RUN" && (
+          {settings.syncMode === "DRY_RUN" && !isPeople && (
             <button className={buttonSecondary} disabled={disabled} onClick={() => run("recompute", async () => {
               await pcoFetch("/sync/run", { method: "POST", body: JSON.stringify({ recomputePreview: true }) });
               return "Preview refreshed.";
@@ -216,6 +271,7 @@ export default function PlanningCenterGiftSync() {
         </div>
       )}
 
+      {!isPeople && (<>
       {/* Needs your review */}
       {data.needsReview.length > 0 && (
         <section aria-labelledby="pco-sync-review">
@@ -330,6 +386,87 @@ export default function PlanningCenterGiftSync() {
           )}
         </section>
       )}
+      </>)}
     </div>
+  );
+}
+
+/** "People only": what's been written, and a preview of exactly how a profile will read in Planning Center. */
+function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boolean }) {
+  const [preview, setPreview] = useState<ProfilePreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchPreview = useCallback(
+    () =>
+      pcoFetch<ProfilePreview>("/sync/profile-preview")
+        .then((next) => {
+          setPreview(next);
+          setError(null);
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : "Could not load the preview."))
+        .finally(() => setLoading(false)),
+    []
+  );
+  useEffect(() => { fetchPreview(); }, [fetchPreview]);
+  const loadPreview = () => {
+    setLoading(true);
+    fetchPreview();
+  };
+
+  const { profile } = data;
+  return (
+    <section aria-labelledby="pco-people-only" className="rounded-xl border border-slate-200 p-4 space-y-3">
+      <div>
+        <h4 id="pco-people-only" className="text-sm font-semibold text-slate-900">What your team will see in Planning Center</h4>
+        <p className="text-xs text-slate-500 mt-0.5">A &quot;{preview?.sectionName ?? "WGC Giving"}&quot; section on each matched person, updated when they give. It shows totals, not individual gifts: open the link on the profile for the full detail in WGC.</p>
+      </div>
+
+      {data.settings.syncMode === "LIVE" && (
+        <p className="text-xs text-slate-600">
+          {profile.updatedPeople} of {profile.linkedPeople} matched {profile.linkedPeople === 1 ? "person has" : "people have"} the section{profile.lastUpdatedAt ? `. Last updated ${new Date(profile.lastUpdatedAt).toLocaleString()}` : ""}.
+        </p>
+      )}
+
+      {loading && !preview && <p className="text-xs text-slate-500">Loading the preview…</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {preview && (
+        <>
+          <p className="text-xs text-slate-600">
+            <strong>{preview.counts.matched}</strong> {preview.counts.matched === 1 ? "donor who has given is" : "donors who have given are"} matched and would get the section.
+            {preview.counts.notMatched > 0 && <> <strong>{preview.counts.notMatched}</strong> aren&apos;t matched yet: nothing is written for them and no person is created. Use &quot;Match my donors&quot; in the People section below to match them.</>}
+            {preview.counts.anonymous > 0 && <> {preview.counts.anonymous} asked to stay anonymous and never appear.</>}
+          </p>
+          {preview.samples.length === 0 ? (
+            <p className="text-xs text-slate-500">No gifts to show yet. Once donors give and are matched, you&apos;ll see exactly how their profiles will read.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {preview.samples.map((sample, i) => (
+                <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-semibold text-slate-900">{sample.matchedPersonName ?? sample.donorName}</div>
+                  {!sample.matchedPersonName && <div className="text-[11px] text-amber-700 mb-1">Not matched yet. Shown as it would look once they are.</div>}
+                  <div className="text-[11px] uppercase tracking-wide text-slate-400 mt-2 mb-1">{preview.sectionName}</div>
+                  <dl className="space-y-0.5">
+                    {sample.rows.map((row) => (
+                      <div key={row.label} className="flex justify-between gap-3 text-xs">
+                        <dt className="text-slate-500">{row.label}</dt>
+                        <dd className="text-slate-900 text-right">{row.value}</dd>
+                      </div>
+                    ))}
+                    <div className="flex justify-between gap-3 text-xs">
+                      <dt className="text-slate-500">Giving details</dt>
+                      <dd className="text-blue-700 text-right">Opens in WGC</dd>
+                    </div>
+                  </dl>
+                </div>
+              ))}
+            </div>
+          )}
+          <button type="button" className={buttonSecondary} disabled={disabled || loading} onClick={loadPreview}>
+            {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh preview
+          </button>
+        </>
+      )}
+    </section>
   );
 }

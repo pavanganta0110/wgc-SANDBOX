@@ -50,10 +50,13 @@ export const SYNC_STATUS_LABELS: Record<string, { label: string; tone: "ok" | "i
 export type SyncMode = "OFF" | "DRY_RUN" | "LIVE";
 export type UnmatchedDonorPolicy = "HOLD_FOR_REVIEW" | "ATTACH_LATER" | "CREATE_PERSON" | "ANONYMOUS";
 export type SendTiming = "ON_PAYMENT" | "ON_SETTLEMENT";
+/** What WGC sends to Planning Center: every gift as a Giving donation, or only people (with giving shown on their profile). */
+export type SyncTarget = "GIFTS" | "PROFILE_FIELDS";
 
 export interface SyncSettingsInput {
   syncMode?: SyncMode;
   sendTiming?: SendTiming;
+  syncTarget?: SyncTarget;
   unmatchedDonorPolicy?: UnmatchedDonorPolicy;
   autoCommitBatches?: boolean;
 }
@@ -112,7 +115,7 @@ export interface SkippedItem {
 
 export interface SyncOverview {
   platformEnabled: boolean;
-  settings: { syncMode: SyncMode; sendTiming: SendTiming; unmatchedDonorPolicy: UnmatchedDonorPolicy; autoCommitBatches: boolean; enabledAt: string | null };
+  settings: { syncMode: SyncMode; sendTiming: SendTiming; syncTarget: SyncTarget; unmatchedDonorPolicy: UnmatchedDonorPolicy; autoCommitBatches: boolean; enabledAt: string | null };
   ready: boolean;
   readinessReasons: string[];
   hasDryRun: boolean;
@@ -122,6 +125,8 @@ export interface SyncOverview {
   /** Gifts already recorded in Planning Center whose WGC payment was refunded, returned or failed afterwards. */
   needsAttention: AttentionItem[];
   skipped: { total: number; items: SkippedItem[] };
+  /** "People only": how many matched people have their "WGC Giving" section, and when it last changed. */
+  profile: { linkedPeople: number; updatedPeople: number; lastUpdatedAt: string | null };
 }
 
 /** A readable name for a sync unit: a day of gifts, or a bank deposit. */

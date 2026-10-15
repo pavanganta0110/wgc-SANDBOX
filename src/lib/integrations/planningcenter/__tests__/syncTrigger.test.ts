@@ -13,6 +13,8 @@ const attach = vi.fn();
 vi.mock("../syncEngine", () => ({ processDaySync: (...a: unknown[]) => day(...a) }));
 vi.mock("../syncReversals", () => ({ reverseChangedGifts: (...a: unknown[]) => reverse(...a) }));
 vi.mock("../syncAttach", () => ({ attachPendingPeople: (...a: unknown[]) => attach(...a) }));
+const profile = vi.fn();
+vi.mock("../profileSync", () => ({ syncProfileForDonor: (...a: unknown[]) => profile(...a) }));
 const afterMock = vi.fn();
 vi.mock("next/server", () => ({ after: (fn: () => unknown) => afterMock(fn) }));
 
@@ -22,7 +24,7 @@ const sleep = vi.fn(async () => {});
 const live = { syncMode: "LIVE", sendTiming: "ON_PAYMENT" };
 
 beforeEach(() => {
-  [payment.find, config.find, day, reverse, attach, afterMock, sleep].forEach((m) => m.mockReset());
+  [payment.find, config.find, day, reverse, attach, afterMock, sleep, profile].forEach((m) => m.mockReset());
   platformOn = true;
   payment.find.mockResolvedValue({ id: "p1", churchId: "c1", status: "SUCCEEDED", createdAt: new Date("2026-10-14T22:30:00Z") });
   config.find.mockResolvedValue(live);
@@ -30,6 +32,45 @@ beforeEach(() => {
   reverse.mockResolvedValue({ reversed: 0, waiting: 0, flagged: 0 });
   attach.mockResolvedValue({ attached: 0, cleared: 0, waiting: 0, flagged: 0 });
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("syncAfterPaymentChange: people only", () => {
+  const peopleOnly = { syncMode: "LIVE", sendTiming: "ON_PAYMENT", syncTarget: "PROFILE_FIELDS" };
+  beforeEach(() => config.find.mockResolvedValue(peopleOnly));
+
+  it("refreshes the donor's profile and sends NO donation (no batch, no reversal, no attach)", async () => {
+    payment.find.mockResolvedValue({ id: "p1", churchId: "c1", donorId: "d1", status: "SUCCEEDED", createdAt: new Date("2026-10-14T22:30:00Z") });
+    await syncAfterPaymentChange("p1", { sleep });
+    expect(profile).toHaveBeenCalledWith("c1", "d1", expect.anything());
+    expect(day).not.toHaveBeenCalled();
+    expect(reverse).not.toHaveBeenCalled();
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  it("also refreshes it when a payment is refunded or returned, because the totals move", async () => {
+    payment.find.mockResolvedValue({ id: "p1", churchId: "c1", donorId: "d1", status: "RETURNED", createdAt: new Date() });
+    await syncAfterPaymentChange("p1", { sleep });
+    expect(profile).toHaveBeenCalledTimes(1);
+  });
+
+  it("a payment with no donor changes nothing", async () => {
+    payment.find.mockResolvedValue({ id: "p1", churchId: "c1", donorId: null, status: "SUCCEEDED", createdAt: new Date() });
+    await syncAfterPaymentChange("p1", { sleep });
+    expect(profile).not.toHaveBeenCalled();
+  });
+
+  it("only when LIVE (a preview writes nothing)", async () => {
+    config.find.mockResolvedValue({ ...peopleOnly, syncMode: "DRY_RUN" });
+    payment.find.mockResolvedValue({ id: "p1", churchId: "c1", donorId: "d1", status: "SUCCEEDED", createdAt: new Date() });
+    await syncAfterPaymentChange("p1", { sleep });
+    expect(profile).not.toHaveBeenCalled();
+  });
+
+  it("still does nothing while the platform switch is off", async () => {
+    platformOn = false;
+    await syncAfterPaymentChange("p1", { sleep });
+    expect(profile).not.toHaveBeenCalled();
+  });
 });
 
 describe("syncAfterPaymentChange", () => {

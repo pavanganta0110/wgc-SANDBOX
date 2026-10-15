@@ -4,6 +4,8 @@ import { isPlanningCenterSyncEnabled } from "./config";
 import { PlanningCenterConnectionError, PlanningCenterSetupError } from "./errors";
 import { ensureSyncConfig, computeStoredGivingReadiness } from "./syncConfig";
 import { runSyncForChurch, type RunSummary } from "./syncRunner";
+import { getClientForChurch } from "./service";
+import { ensureProfileSetup } from "./profileFields";
 import type { SyncSettingsInput } from "./syncTypes";
 
 /**
@@ -23,6 +25,7 @@ export interface Actor {
 const MODES = ["OFF", "DRY_RUN", "LIVE"];
 const POLICIES = ["HOLD_FOR_REVIEW", "ATTACH_LATER", "CREATE_PERSON", "ANONYMOUS"];
 const TIMINGS = ["ON_PAYMENT", "ON_SETTLEMENT"];
+const TARGETS = ["GIFTS", "PROFILE_FIELDS"];
 
 async function audit(churchId: string, actor: Actor, action: string, entityType: string, entityId: string | undefined, metadata?: Record<string, unknown>) {
   await logDashboardAction({ churchId, actorUserId: actor.userId, actorEmail: actor.email, actorRole: actor.role, action, entityType, entityId, metadata, req: actor.req });
@@ -57,17 +60,39 @@ export async function updateSyncSettings(churchId: string, input: SyncSettingsIn
     data.sendTiming = input.sendTiming;
   }
 
-  if (input.syncMode !== undefined && input.syncMode !== config.syncMode) {
-    if (!MODES.includes(input.syncMode)) throw new PlanningCenterSetupError("Choose a valid sync mode.");
-    if (input.syncMode !== "OFF") {
-      if (!isPlanningCenterSyncEnabled()) throw new PlanningCenterSetupError("Gift sync isn't available yet. WGC will let you know when it is.");
+  const targetChanged = input.syncTarget !== undefined && input.syncTarget !== config.syncTarget;
+  if (input.syncTarget !== undefined) {
+    if (!TARGETS.includes(input.syncTarget)) throw new PlanningCenterSetupError("Choose what to send to Planning Center.");
+    data.syncTarget = input.syncTarget;
+  }
+  const target = (data.syncTarget as string | undefined) ?? config.syncTarget ?? "GIFTS";
+  const modeChanged = input.syncMode !== undefined && input.syncMode !== config.syncMode;
+  const finalMode = input.syncMode ?? config.syncMode;
+
+  if (modeChanged) {
+    if (!MODES.includes(input.syncMode as string)) throw new PlanningCenterSetupError("Choose a valid sync mode.");
+  }
+  // Anything that leaves sync running (turning it on, or changing what it sends while it runs) must be allowed.
+  if ((modeChanged || targetChanged) && finalMode !== "OFF") {
+    if (!isPlanningCenterSyncEnabled()) throw new PlanningCenterSetupError("Planning Center sync isn't available yet. WGC will let you know when it is.");
+    if (target === "GIFTS") {
       const readiness = await computeStoredGivingReadiness(churchId);
       if (!readiness.ready) throw new PlanningCenterSetupError(`Finish the Giving setup first: ${readiness.reasons[0]}`);
     }
+  }
+  // "People only" and LIVE: create the "WGC Giving" section now, so a church that isn't allowed to add one finds out
+  // here, with a clear message, instead of silently never getting any giving on their people.
+  if (finalMode === "LIVE" && target === "PROFILE_FIELDS" && (modeChanged || targetChanged)) {
+    await ensureProfileSetup(churchId, await getClientForChurch(churchId));
+  }
+  if (modeChanged) {
     data.syncMode = input.syncMode;
     if (input.syncMode === "OFF") data.enabledAt = null;
     else if (input.syncMode === "LIVE") data.enabledAt = config.syncMode === "OFF" ? now : config.enabledAt ?? now;
   }
+  // Switching back to sending gifts while running starts the clock now: gifts made while only people were being sent
+  // are never sent afterwards as donations the church didn't ask for.
+  if (targetChanged && target === "GIFTS" && finalMode === "LIVE") data.enabledAt = now;
 
   if (Object.keys(data).length === 0) return config;
   const updated = await prisma.planningCenterSyncConfig.update({ where: { churchId }, data });

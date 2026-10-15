@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 type Row = Record<string, any>;
-const db = { config: null as Row | null, records: [] as Row[], donations: [] as Row[], attempts: [] as Row[], donors: [] as Row[], payments: [] as Row[] };
+const db = { config: null as Row | null, records: [] as Row[], donations: [] as Row[], attempts: [] as Row[], donors: [] as Row[], payments: [] as Row[], links: [] as Row[], connection: { status: "CONNECTED" } as Row | null };
 
 const match = (row: Row, where: Row) =>
   Object.entries(where).every(([k, v]: any) => (v && typeof v === "object" && "in" in v ? v.in.includes(row[k]) : row[k] === v));
@@ -17,6 +17,11 @@ vi.mock("@/lib/prisma", () => ({
       findMany: async ({ where, take: n }: any) => take(db.donations.filter((d) => match(d, where)), n),
       count: async ({ where }: any) => db.donations.filter((d) => match(d, where)).length,
     },
+    planningCenterPersonLink: {
+      count: async ({ where }: any) => db.links.filter((l) => match(l, { churchId: where.churchId, status: where.status }) && (!where.profileSyncedAt || l.profileSyncedAt)).length,
+      findFirst: async () => db.links.filter((l) => l.profileSyncedAt).sort((a, b) => b.profileSyncedAt - a.profileSyncedAt)[0] ?? null,
+    },
+    planningCenterConnection: { findUnique: async () => db.connection },
     donor: { findMany: async ({ where }: any) => db.donors.filter((d) => match(d, where)) },
     payment: { findMany: async ({ where }: any) => db.payments.filter((p) => p.churchId === where.churchId && where.id.in.includes(p.id)) },
   },
@@ -44,12 +49,48 @@ beforeEach(() => {
   db.payments = [];
 });
 
+describe("getSyncOverview: people only", () => {
+  beforeEach(() => {
+    db.links = [
+      { churchId: "c1", status: "LINKED", profileSyncedAt: new Date("2026-10-12T10:00:00Z") },
+      { churchId: "c1", status: "LINKED", profileSyncedAt: null },
+      { churchId: "c1", status: "NO_MATCH", profileSyncedAt: null },
+    ];
+    db.config = { ...db.config, syncMode: "OFF", syncTarget: "PROFILE_FIELDS" };
+  });
+
+  it("is ready with just a working connection: no Giving setup is asked for", async () => {
+    const o = await getSyncOverview("c1");
+    expect(o.settings.syncTarget).toBe("PROFILE_FIELDS");
+    expect(o.ready).toBe(true);
+    expect(o.readinessReasons).toEqual([]);
+  });
+
+  it("is not ready when Planning Center isn't connected", async () => {
+    db.connection = { status: "DISCONNECTED" };
+    const o = await getSyncOverview("c1");
+    expect(o.ready).toBe(false);
+    expect(o.readinessReasons).toEqual(["Reconnect Planning Center first."]);
+    db.connection = { status: "CONNECTED" };
+  });
+
+  it("counts matched people and how many already have the section", async () => {
+    const o = await getSyncOverview("c1");
+    expect(o.profile).toEqual({ linkedPeople: 2, updatedPeople: 1, lastUpdatedAt: "2026-10-12T10:00:00.000Z" });
+  });
+
+  it("a gifts church still asks for the Giving setup", async () => {
+    db.config = { ...db.config, syncTarget: "GIFTS" };
+    expect((await getSyncOverview("c1")).ready).toBe(false);
+  });
+});
+
 describe("getSyncOverview", () => {
   it("reports settings, readiness and whether a preview has ever run", async () => {
     db.attempts = [{ churchId: "c1", outcome: "DRY_RUN" }];
     const o = await getSyncOverview("c1");
     expect(o).toMatchObject({ platformEnabled: true, ready: false, readinessReasons: ["Choose a default fund."], hasDryRun: true });
-    expect(o.settings).toEqual({ syncMode: "LIVE", sendTiming: "ON_PAYMENT", unmatchedDonorPolicy: "ANONYMOUS", autoCommitBatches: true, enabledAt: "2026-10-01T00:00:00.000Z" });
+    expect(o.settings).toEqual({ syncMode: "LIVE", sendTiming: "ON_PAYMENT", syncTarget: "GIFTS", unmatchedDonorPolicy: "ANONYMOUS", autoCommitBatches: true, enabledAt: "2026-10-01T00:00:00.000Z" });
   });
 
   it("defaults to OFF for a church that never set anything up", async () => {

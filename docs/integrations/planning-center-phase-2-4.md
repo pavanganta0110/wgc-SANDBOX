@@ -598,3 +598,33 @@ Planning Center people that are already linked to another WGC donor show "Yes, s
 
 ### Still unverified against a real account
 PATCH of a donation's person via relationships; DELETE and `issue_refund`/`mark_failed` on batch donations; back-dated `received_at`; `POST /payment_sources` with only a name; the donations list returning `person`/`payment_source` relationships; a 404 on Giving meaning "not enabled". Test with a sandbox church before turning the platform switch on for real churches.
+
+## 13. People only — giving on the person's profile (no donations)
+
+A church chooses **what WGC sends** (`PlanningCenterSyncConfig.syncTarget`):
+
+| | `GIFTS` (default) | `PROFILE_FIELDS` |
+|---|---|---|
+| Donations in Planning Center Giving | one per gift | none |
+| Giving visible in Planning Center | full history, batches, funds, statements | a "WGC Giving" section on each matched person |
+| Planning Center cost | Giving subscription (priced by gifts/month) | none (People is free) |
+| Needs Giving setup | yes | no, only a working connection |
+
+Why: Planning Center prices Giving by the number of donations recorded per month (free up to 10), and processing at 2.15% + $0.30 per card gift. Moving payments to WGC removes processing fees either way; people-only also removes the subscription.
+
+### Built
+- `profileFields.ts` — creates the "WGC Giving" tab and 10 fields once (People API: `POST /people/v2/tabs`, `POST /people/v2/tabs/{id}/field_definitions`) and writes per-person values (`POST /people/v2/people/{id}/field_data`, `PATCH /people/v2/field_data/{id}`). It always LOOKS first (by name) so a lost response can never create a second tab/field/value, and writes only what differs. Every field's name/type lives in one table (`PROFILE_FIELDS`).
+- `profileSummary.ts` — the numbers, from WGC's own data: this year / last year / lifetime / count / first and last gift / last amount / recurring / main fund / a link to the donor in WGC. Gift amount excludes a donor-covered fee; refunds and bank returns come out; anonymous gifts and gifts that gave goods or services are never counted; UTC years.
+- `profileSync.ts` — `syncProfileForDonor` (on every payment change, via the same `after()` trigger) and `syncProfilesForChurch` (the daily sweep). A fingerprint (`PlanningCenterPersonLink.profileDigest`) means nothing is written again until the summary changes; a link is re-verified weekly, which repairs a value someone deleted. Only people already matched are written; an unmatched donor is looked up, **never created**; an anonymous donor is never written.
+- `profilePreview.ts` + `GET .../sync/profile-preview` — how profiles will read, for real donors, with no Planning Center call. Shown in the Gift sync panel before turning it on.
+- Settings: switching target is a confirmed action. LIVE + people-only creates the section immediately, so a church that isn't allowed to add one finds out at once. Switching back to gifts restarts the go-live clock so gifts made while on people-only are never sent later as donations.
+
+### What a church must understand (shown in the UI)
+Planning Center's own giving screens, reports and any "has given" list are built from Giving donations, so gifts that went through WGC don't appear there: a donor who gave recently can look lapsed in those views. Lists must be built on the "WGC Giving" fields. The section shows totals, not individual gifts; the link opens the full detail in WGC. "Given last year"/"Lifetime" are correct only for the history WGC holds, so a church that wants them complete imports its Planning Center history first (CSV Migration Center today; a direct import is not built).
+
+### Unverified against a real account (test in a sandbox church first)
+- `number` fields accepting two decimals and `date` fields accepting `YYYY-MM-DD` (if not, change the type in `PROFILE_FIELDS`).
+- Which Planning Center permission is needed to add a tab (assumed: a People administrator).
+- Whether a text field renders a URL as a clickable link.
+- Whether custom-field tabs are visible to the staff who need them under the church's own People permissions.
+- Rate limits at scale: one read plus up to ten writes per person on first fill; the sweep is resumable and stops on a rate limit.

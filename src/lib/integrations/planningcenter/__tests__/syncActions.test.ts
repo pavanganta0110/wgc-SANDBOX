@@ -38,6 +38,10 @@ vi.mock("../syncConfig", () => ({
 const runMock = vi.fn<(...args: unknown[]) => Promise<{ churchesChecked: number; settlementsProcessed: number; outcomes: object; stoppedForTime: boolean }>>(async () => ({ churchesChecked: 1, settlementsProcessed: 2, outcomes: {}, stoppedForTime: false }));
 vi.mock("../syncRunner", () => ({ runSyncForChurch: (...a: unknown[]) => runMock(...a) }));
 
+const profileSetup = vi.fn<(...args: unknown[]) => Promise<{ tabId: string; fieldIds: object }>>(async () => ({ tabId: "t1", fieldIds: {} }));
+vi.mock("../profileFields", () => ({ ensureProfileSetup: (...a: unknown[]) => profileSetup(...a) }));
+vi.mock("../service", () => ({ getClientForChurch: async () => ({}) }));
+
 import { retrySyncRecord, resolveDonationRecord, syncNow, updateSyncSettings } from "../syncActions";
 
 const actor = { userId: "u1" };
@@ -50,6 +54,57 @@ beforeEach(() => {
   platformOn = true;
   readiness.value = { ready: true, reasons: [], notes: [] };
   runMock.mockClear();
+});
+
+describe("updateSyncSettings: what to send (gifts or people only)", () => {
+  beforeEach(() => { profileSetup.mockClear(); db.config!.syncTarget = "GIFTS"; });
+
+  it("'people only' goes LIVE with NO Giving setup at all, and creates the profile section right away", async () => {
+    readiness.value = { ready: false, reasons: ["Choose a default Planning Center fund."], notes: [] };
+    await updateSyncSettings("c1", { syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" }, actor, NOW);
+    expect(db.config).toMatchObject({ syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" });
+    expect(profileSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it("people-only still needs the platform switch", async () => {
+    platformOn = false;
+    await expect(updateSyncSettings("c1", { syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" }, actor, NOW)).rejects.toThrow(/isn't available yet/);
+  });
+
+  it("if Planning Center won't let us add the section, it says so and does NOT turn people-only on", async () => {
+    profileSetup.mockRejectedValueOnce(new Error("Reconnect Planning Center with a People administrator."));
+    await expect(updateSyncSettings("c1", { syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" }, actor, NOW)).rejects.toThrow(/People administrator/);
+    expect(db.config).toMatchObject({ syncMode: "OFF" });
+  });
+
+  it("people-only in preview creates nothing in Planning Center", async () => {
+    await updateSyncSettings("c1", { syncTarget: "PROFILE_FIELDS", syncMode: "DRY_RUN" }, actor, NOW);
+    expect(profileSetup).not.toHaveBeenCalled();
+  });
+
+  it("switching a LIVE church to people-only keeps it running and sets up the section", async () => {
+    Object.assign(db.config!, { syncMode: "LIVE", enabledAt: new Date("2026-10-01") });
+    await updateSyncSettings("c1", { syncTarget: "PROFILE_FIELDS" }, actor, NOW);
+    expect(db.config).toMatchObject({ syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" });
+    expect(profileSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it("switching back to gifts starts the clock now: gifts made while only people were sent are never sent as donations", async () => {
+    Object.assign(db.config!, { syncTarget: "PROFILE_FIELDS", syncMode: "LIVE", enabledAt: new Date("2026-09-01") });
+    await updateSyncSettings("c1", { syncTarget: "GIFTS" }, actor, NOW);
+    expect(db.config).toMatchObject({ syncTarget: "GIFTS", enabledAt: NOW });
+  });
+
+  it("switching back to gifts needs the Giving setup to be complete", async () => {
+    Object.assign(db.config!, { syncTarget: "PROFILE_FIELDS", syncMode: "LIVE" });
+    readiness.value = { ready: false, reasons: ["Choose a default Planning Center fund."], notes: [] };
+    await expect(updateSyncSettings("c1", { syncTarget: "GIFTS" }, actor, NOW)).rejects.toThrow(/default Planning Center fund/);
+    expect(db.config!.syncTarget).toBe("PROFILE_FIELDS");
+  });
+
+  it("rejects a target that doesn't exist", async () => {
+    await expect(updateSyncSettings("c1", { syncTarget: "EVERYTHING" as any }, actor, NOW)).rejects.toThrow(/what to send/i);
+  });
 });
 
 describe("updateSyncSettings", () => {
