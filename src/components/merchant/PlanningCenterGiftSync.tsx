@@ -29,15 +29,21 @@ const MODES: Array<{ mode: SyncMode; title: string; body: string }> = [
 const TARGETS: Array<{ value: SyncTarget; title: string; body: string; points: string[] }> = [
   {
     value: "GIFTS",
-    title: "People + every gift",
-    body: "Every gift is added to Planning Center Giving, so your giving history, batches, fund totals, reports and statements stay there.",
-    points: ["Best if your team lives in Planning Center Giving", "Planning Center's Giving subscription applies, and grows with the number of gifts each month"],
+    title: "Send every gift to Planning Center",
+    body: "Each gift is added to Planning Center Giving as soon as it's paid. Your giving history, reports and year-end statements stay in Planning Center.",
+    points: [
+      "Best if your team already works in Planning Center Giving.",
+      "Planning Center charges a monthly Giving fee. It depends on how many gifts it records each month.",
+    ],
   },
   {
     value: "PROFILE_FIELDS",
-    title: "People only, with giving on their profile",
-    body: "No donations are sent. Each matched person gets a \"WGC Giving\" section with their totals, last gift and a link to their giving in WGC.",
-    points: ["Nothing extra to pay Planning Center for Giving", "Planning Center's own giving screens, reports and \"has given\" lists won't include these gifts, so a donor who gave recently can look lapsed there. Build your lists on the \"WGC Giving\" fields instead."],
+    title: "Send people only",
+    body: "No gifts are added to Planning Center Giving. Instead, each person gets a \"WGC Giving\" box on their profile showing what they've given, with a link to the full details in WGC.",
+    points: [
+      "You don't pay Planning Center's monthly Giving fee, because no gifts are recorded there.",
+      "Planning Center's own giving reports and \"has given\" lists won't include these gifts, so someone who just gave can look inactive there. Use the \"WGC Giving\" fields for those lists instead.",
+    ],
   },
 ];
 
@@ -151,7 +157,8 @@ export default function PlanningCenterGiftSync() {
 
       {/* What to send */}
       <section aria-labelledby="pco-sync-target">
-        <h4 id="pco-sync-target" className="text-sm font-semibold text-slate-900 mb-2">What WGC sends to Planning Center</h4>
+        <h4 id="pco-sync-target" className="text-sm font-semibold text-slate-900 mb-2">What should WGC send to Planning Center?</h4>
+        <SavingsNote activity={data.activity} />
         <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-labelledby="pco-sync-target">
           {TARGETS.map((t) => {
             const selected = settings.syncTarget === t.value;
@@ -387,6 +394,29 @@ export default function PlanningCenterGiftSync() {
         </section>
       )}
       </>)}
+    </div>
+  );
+}
+
+/** What taking gifts through WGC saves, in plain words, using the church's own last 30 days. */
+function SavingsNote({ activity }: { activity: SyncOverview["activity"] }) {
+  return (
+    <div className="rounded-xl bg-green-50 border border-green-100 p-3 mb-3 text-xs text-green-900 space-y-1.5">
+      <p>
+        <strong>You&apos;re already saving on fees.</strong> Gifts taken through WGC aren&apos;t charged Planning Center&apos;s payment fees (2.15% + $0.30 for each card gift, $0.30 for each bank gift). Both choices below keep that saving.
+      </p>
+      {activity.gifts > 0 ? (
+        <p>
+          In the last {activity.days} days you received <strong>{activity.gifts}</strong> {activity.gifts === 1 ? "gift" : "gifts"}. Had Planning Center processed them, its fees would have been about <strong>{money(activity.estimatedPlanningCenterFeeCents)}</strong>.
+        </p>
+      ) : (
+        <p>Once gifts come in, this shows what Planning Center&apos;s fees would have cost on the same gifts.</p>
+      )}
+      <p>
+        Planning Center&apos;s separate monthly Giving fee depends on how many gifts it records each month (the first 10 are free). Choosing <strong>Send people only</strong> avoids it. Check your price on{" "}
+        <a href="https://www.planningcenter.com/pricing" target="_blank" rel="noreferrer" className="underline font-medium">Planning Center&apos;s pricing page</a>
+        {activity.gifts > 0 ? `, using about ${activity.gifts} gifts a month.` : "."}
+      </p>
     </div>
   );
 }

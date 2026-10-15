@@ -127,6 +127,8 @@ export interface SyncOverview {
   skipped: { total: number; items: SkippedItem[] };
   /** "People only": how many matched people have their "WGC Giving" section, and when it last changed. */
   profile: { linkedPeople: number; updatedPeople: number; lastUpdatedAt: string | null };
+  /** The last 30 days of gifts through WGC, and about what Planning Center would have charged to process them. */
+  activity: { days: number; gifts: number; cardGifts: number; bankGifts: number; estimatedPlanningCenterFeeCents: number };
 }
 
 /** A readable name for a sync unit: a day of gifts, or a bank deposit. */

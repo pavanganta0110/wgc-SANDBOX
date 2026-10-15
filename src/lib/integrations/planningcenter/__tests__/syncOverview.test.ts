@@ -31,6 +31,8 @@ vi.mock("../config", () => ({ isPlanningCenterSyncEnabled: () => platformOn }));
 vi.mock("../giftOutcomes", () => ({ effectivePaymentStatuses: async (_c: string, payments: any[]) => new Map(payments.map((p) => [p.id, db.payments.find((x) => x.id === p.id)?.effective ?? p.status])) }));
 vi.mock("../syncConfig", () => ({ computeStoredGivingReadiness: async () => ({ ready: false, reasons: ["Choose a default fund."], notes: [] }) }));
 
+vi.mock("../giftActivity", () => ({ getGiftActivity: async () => ({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, estimatedPlanningCenterFeeCents: 12345 }) }));
+
 import { getSyncOverview } from "../syncOverview";
 
 const don = (id: string, status: string, over: Row = {}) => ({ id, syncRecordId: "r1", churchId: "c1", paymentId: `pay-${id}`, donorId: null, status, amountCents: 1000, receivedOn: "2026-10-10", skippedReason: null, lastErrorMessage: null, pcoDonationId: null, createdAt: new Date(), updatedAt: new Date(), ...over });
@@ -77,6 +79,10 @@ describe("getSyncOverview: people only", () => {
   it("counts matched people and how many already have the section", async () => {
     const o = await getSyncOverview("c1");
     expect(o.profile).toEqual({ linkedPeople: 2, updatedPeople: 1, lastUpdatedAt: "2026-10-12T10:00:00.000Z" });
+  });
+
+  it("includes the last 30 days of gifts and what Planning Center would have charged", async () => {
+    expect((await getSyncOverview("c1")).activity).toEqual({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, estimatedPlanningCenterFeeCents: 12345 });
   });
 
   it("a gifts church still asks for the Giving setup", async () => {
