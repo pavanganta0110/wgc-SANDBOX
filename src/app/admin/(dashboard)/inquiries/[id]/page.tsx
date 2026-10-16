@@ -53,8 +53,8 @@ export default function InquiryDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to update status');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || (res.status === 401 ? 'Your session expired. Sign in again.' : `Could not update the status (error ${res.status}).`));
       setInquiry(data.inquiry);
       toast.success('Status updated');
     } catch (err: any) {
@@ -72,8 +72,8 @@ export default function InquiryDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ internalNote: note }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save note');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || (res.status === 401 ? 'Your session expired. Sign in again.' : `Could not save the note (error ${res.status}).`));
       setInquiry(data.inquiry);
       toast.success('Note saved');
     } catch (err: any) {
