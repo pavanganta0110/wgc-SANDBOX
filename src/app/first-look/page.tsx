@@ -3,7 +3,7 @@ import Link from "next/link";
 import FirstLookForm from "@/components/marketing/FirstLookForm";
 import GatewayIcon from "@/components/ui/GatewayIcon";
 
-const CALENDLY_URL = "https://calendly.com/collinsansom/1-on-1-wgc-first-look";
+const CALENDLY_URL = "https://calendly.com/waypoint-gateway-collective/1-1-wgc-first-look-2";
 
 export const metadata = {
   title: "First Look | WGC Payments",
