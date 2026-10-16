@@ -33,6 +33,8 @@ const reverse = vi.fn();
 const attach = vi.fn();
 vi.mock("../syncReversals", () => ({ reverseChangedGifts: (...a: unknown[]) => reverse(...a) }));
 vi.mock("../syncAttach", () => ({ attachPendingPeople: (...a: unknown[]) => attach(...a) }));
+const profiles = vi.fn();
+vi.mock("../profileSync", () => ({ syncProfilesForChurch: (...a: unknown[]) => profiles(...a) }));
 let platformOn = true;
 vi.mock("../config", () => ({ isPlanningCenterSyncEnabled: () => platformOn }));
 
@@ -59,6 +61,38 @@ beforeEach(() => {
   state.payments = [];
   state.donationRecords = [];
   platformOn = true;
+  profiles.mockReset();
+  profiles.mockResolvedValue({ updated: 3, unchanged: 1, unmatched: 0, failed: 0, stoppedForTime: false });
+});
+
+describe("runSyncForChurch: people only", () => {
+  beforeEach(() => {
+    state.configs = [{ churchId: "c1", syncMode: "LIVE", syncTarget: "PROFILE_FIELDS", sendTiming: "ON_PAYMENT", enabledAt: ago(5), syncVersion: 1, autoCommitBatches: false }];
+    state.settlements = [settlement("s1", 1)];
+    state.payments = [{ id: "p1", churchId: "c1", status: "SUCCEEDED", createdAt: ago(1) }];
+  });
+
+  it("refreshes people and sends NO gifts: no day batch, no deposit, no reversals", async () => {
+    const r = await runSyncForChurch("c1", { now });
+    expect(profiles).toHaveBeenCalledTimes(1);
+    expect(r.profilesUpdated).toBe(3);
+    expect(dayEngine).not.toHaveBeenCalled();
+    expect(engine).not.toHaveBeenCalled();
+    expect(reverse).not.toHaveBeenCalled();
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  it("a preview writes nothing to Planning Center", async () => {
+    state.configs[0].syncMode = "DRY_RUN";
+    await runSyncForChurch("c1", { now });
+    expect(profiles).not.toHaveBeenCalled();
+    expect(dayEngine).not.toHaveBeenCalled();
+  });
+
+  it("reports when it ran out of time", async () => {
+    profiles.mockResolvedValue({ updated: 1, unchanged: 0, unmatched: 0, failed: 0, stoppedForTime: true });
+    expect((await runSyncForChurch("c1", { now })).stoppedForTime).toBe(true);
+  });
 });
 
 describe("needsAttention", () => {

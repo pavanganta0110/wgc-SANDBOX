@@ -4,6 +4,7 @@ import { DEFAULT_TIME_BUDGET_MS, processDaySync, processSettlementSync, type Eng
 import { DAY_PLAN_STATUSES, dateKeyOf, parseDayUnitKey } from "./giftPlan";
 import { reverseChangedGifts } from "./syncReversals";
 import { attachPendingPeople } from "./syncAttach";
+import { syncProfilesForChurch } from "./profileSync";
 
 /**
  * Finds the settled deposits that need work and hands them to the engine, one
@@ -23,6 +24,8 @@ export interface RunSummary {
   /** "Send as paid" sweep only: gifts reversed in Planning Center, and people attached to gifts sent without one. */
   reversed?: number;
   attached?: number;
+  /** "People only" sweep: how many people's "WGC Giving" section was updated. */
+  profilesUpdated?: number;
 }
 
 const empty = (): RunSummary => ({ churchesChecked: 0, settlementsProcessed: 0, outcomes: {}, stoppedForTime: false });
@@ -33,6 +36,7 @@ function merge(into: RunSummary, from: RunSummary) {
   into.stoppedForTime = into.stoppedForTime || from.stoppedForTime;
   if (from.reversed) into.reversed = (into.reversed ?? 0) + from.reversed;
   if (from.attached) into.attached = (into.attached ?? 0) + from.attached;
+  if (from.profilesUpdated) into.profilesUpdated = (into.profilesUpdated ?? 0) + from.profilesUpdated;
   for (const [k, v] of Object.entries(from.outcomes)) into.outcomes[k as SyncOutcome] = (into.outcomes[k as SyncOutcome] ?? 0) + (v ?? 0);
 }
 
@@ -71,6 +75,16 @@ export async function runSyncForChurch(
   if (!config || (config.syncMode !== "DRY_RUN" && config.syncMode !== "LIVE")) return summary;
   const mode = config.syncMode as "DRY_RUN" | "LIVE";
   summary.churchesChecked = 1;
+
+  // "People only": nothing is sent as a donation. A preview (DRY_RUN) writes nothing at all; LIVE refreshes the people.
+  if (config.syncTarget === "PROFILE_FIELDS") {
+    if (mode === "LIVE") {
+      const profiles = await syncProfilesForChurch(churchId, { client: options.client, now, deadlineMs: options.deadlineMs, timeBudgetMs: options.timeBudgetMs });
+      summary.profilesUpdated = profiles.updated;
+      summary.stoppedForTime = profiles.stoppedForTime;
+    }
+    return summary;
+  }
 
   // "As soon as it's paid" churches are swept by day, not by settlement.
   if (config.sendTiming === "ON_PAYMENT") return sweepDays(churchId, config, mode, options, summary, now);

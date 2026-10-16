@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { isPlanningCenterSyncEnabled } from "./config";
 import { computeStoredGivingReadiness } from "./syncConfig";
 import { effectivePaymentStatuses } from "./giftOutcomes";
-import { describePaymentChange, HELD_MESSAGES, SKIP_MESSAGES, type SkipReason, type SendTiming, type SyncMode, type SyncOverview, type UnmatchedDonorPolicy } from "./syncTypes";
+import { getGiftActivity } from "./giftActivity";
+import { describePaymentChange, HELD_MESSAGES, SKIP_MESSAGES, type SkipReason, type SendTiming, type SyncMode, type SyncOverview, type SyncTarget, type UnmatchedDonorPolicy } from "./syncTypes";
 
 const LIST_LIMIT = 50;
 const PAYMENT_CHANGED = ["REFUNDED", "PARTIALLY_REFUNDED", "RETURNED", "FAILED", "CANCELED"];
@@ -10,12 +11,21 @@ const PAYMENT_CHANGED = ["REFUNDED", "PARTIALLY_REFUNDED", "RETURNED", "FAILED",
 /** Everything the gift-sync panel shows, from our own database. No Planning Center calls. */
 export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
   const config = await prisma.planningCenterSyncConfig.findUnique({ where: { churchId } });
-  const [readiness, dryRuns, records] = await Promise.all([
+  const [readiness, dryRuns, records, linkedPeople, updatedPeople, lastProfile, connection, activity] = await Promise.all([
     computeStoredGivingReadiness(churchId),
     prisma.planningCenterSyncAttempt.count({ where: { churchId, outcome: "DRY_RUN" } }),
     // Only the current sync generation: records from a previous Planning Center organization aren't shown.
     prisma.planningCenterSyncRecord.findMany({ where: { churchId, syncVersion: config?.syncVersion ?? 1 }, orderBy: { updatedAt: "desc" }, take: 25 }),
+    prisma.planningCenterPersonLink.count({ where: { churchId, status: "LINKED" } }),
+    prisma.planningCenterPersonLink.count({ where: { churchId, status: "LINKED", profileSyncedAt: { not: null } } }),
+    prisma.planningCenterPersonLink.findFirst({ where: { churchId, profileSyncedAt: { not: null } }, orderBy: { profileSyncedAt: "desc" }, select: { profileSyncedAt: true } }),
+    prisma.planningCenterConnection.findUnique({ where: { churchId }, select: { status: true } }),
+    getGiftActivity(churchId),
   ]);
+  const syncTarget = (config?.syncTarget ?? "GIFTS") as SyncTarget;
+  // "People only" needs no Giving setup at all: just a working connection.
+  const ready = syncTarget === "PROFILE_FIELDS" ? connection?.status === "CONNECTED" : readiness.ready;
+  const readinessReasons = syncTarget === "PROFILE_FIELDS" ? (ready ? [] : ["Reconnect Planning Center first."]) : readiness.reasons;
 
   const recordIds = records.map((r) => r.id);
   const donations = recordIds.length ? await prisma.planningCenterDonationRecord.findMany({ where: { syncRecordId: { in: recordIds } } }) : [];
@@ -97,12 +107,13 @@ export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
     settings: {
       syncMode: (config?.syncMode ?? "OFF") as SyncMode,
       sendTiming: (config?.sendTiming ?? "ON_PAYMENT") as SendTiming,
+      syncTarget,
       unmatchedDonorPolicy: (config?.unmatchedDonorPolicy ?? "HOLD_FOR_REVIEW") as UnmatchedDonorPolicy,
       autoCommitBatches: config?.autoCommitBatches ?? false,
       enabledAt: config?.enabledAt ? config.enabledAt.toISOString() : null,
     },
-    ready: readiness.ready,
-    readinessReasons: readiness.reasons,
+    ready,
+    readinessReasons,
     hasDryRun: dryRuns > 0,
     records: recordRows,
     needsReview,
@@ -119,6 +130,8 @@ export async function getSyncOverview(churchId: string): Promise<SyncOverview> {
       })),
     },
     needsAttention,
+    activity,
+    profile: { linkedPeople, updatedPeople, lastUpdatedAt: lastProfile?.profileSyncedAt ? lastProfile.profileSyncedAt.toISOString() : null },
     skipped: {
       total: skippedTotal,
       items: skippedAll.map((d) => ({

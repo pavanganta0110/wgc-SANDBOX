@@ -13,6 +13,6 @@ export async function POST(req: Request) {
     const body = await parseJsonBody(req, bodySchema);
     if (!body.ok) return body.response;
     const summary = await syncNow(auth.churchId, { userId: auth.userId, email: auth.email, role: auth.role, req }, { recomputeDryRun: body.data.recomputePreview });
-    return NextResponse.json({ success: true, processed: summary.settlementsProcessed, stoppedForTime: summary.stoppedForTime });
+    return NextResponse.json({ success: true, processed: summary.settlementsProcessed, profilesUpdated: summary.profilesUpdated ?? 0, stoppedForTime: summary.stoppedForTime });
   });
 }

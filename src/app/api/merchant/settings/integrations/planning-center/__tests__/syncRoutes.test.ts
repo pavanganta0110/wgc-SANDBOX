@@ -22,6 +22,8 @@ vi.mock("@/lib/integrations/planningcenter/syncActions", () => ({
 }));
 const overview = vi.fn();
 vi.mock("@/lib/integrations/planningcenter/syncOverview", () => ({ getSyncOverview: (...a: unknown[]) => overview(...a) }));
+const preview = vi.fn();
+vi.mock("@/lib/integrations/planningcenter/profilePreview", () => ({ getProfilePreview: (...a: unknown[]) => preview(...a) }));
 const people = { getPeopleOverview: vi.fn() };
 vi.mock("@/lib/integrations/planningcenter/peopleOverview", () => ({ getPeopleOverview: (...a: unknown[]) => people.getPeopleOverview(...a) }));
 const jobs = { startPeopleJob: vi.fn(), processPeopleJob: vi.fn() };
@@ -41,6 +43,7 @@ import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import { PlanningCenterSetupError } from "@/lib/integrations/planningcenter/errors";
 import { GET as getSync } from "../sync/route";
 import { PUT as putSettings } from "../sync/settings/route";
+import { GET as getProfilePreview } from "../sync/profile-preview/route";
 import { POST as postRun } from "../sync/run/route";
 import { POST as postRetry } from "../sync/records/[recordId]/retry/route";
 import { POST as postResolve } from "../sync/donations/[donationId]/resolve/route";
@@ -65,6 +68,7 @@ beforeEach(() => {
 describe("guard on every sync and people route", () => {
   const calls: Array<[string, () => Promise<Response>]> = [
     ["GET sync", () => getSync()],
+    ["GET sync/profile-preview", () => getProfilePreview()],
     ["PUT sync/settings", () => putSettings(json("PUT", { syncMode: "OFF" }))],
     ["POST sync/run", () => postRun(json("POST", {}))],
     ["POST retry", () => postRetry(json("POST"), params({ recordId: "r1" }))],
@@ -121,7 +125,24 @@ describe("sync routes", () => {
 
   it("sync now reports how much it did", async () => {
     actions.syncNow.mockResolvedValue({ settlementsProcessed: 3, stoppedForTime: false });
-    expect(await (await postRun(json("POST", {}))).json()).toEqual({ success: true, processed: 3, stoppedForTime: false });
+    expect(await (await postRun(json("POST", {}))).json()).toEqual({ success: true, processed: 3, profilesUpdated: 0, stoppedForTime: false });
+  });
+
+  it("sync now reports how many people were updated in people-only mode", async () => {
+    actions.syncNow.mockResolvedValue({ settlementsProcessed: 0, profilesUpdated: 7, stoppedForTime: false });
+    expect(await (await postRun(json("POST", {}))).json()).toMatchObject({ profilesUpdated: 7 });
+  });
+
+  it("settings accept what to send, and nothing else", async () => {
+    expect((await putSettings(json("PUT", { syncTarget: "EVERYTHING" }))).status).toBe(400);
+    expect((await putSettings(json("PUT", { syncTarget: "PROFILE_FIELDS" }))).status).toBe(200);
+    expect(actions.updateSyncSettings).toHaveBeenLastCalledWith(session.churchId, { syncTarget: "PROFILE_FIELDS" }, expect.anything());
+  });
+
+  it("the profile preview needs a manager of integrations and returns the preview", async () => {
+    preview.mockResolvedValue({ sectionName: "WGC Giving", fields: [], samples: [], counts: { matched: 0, notMatched: 0, anonymous: 0 } });
+    expect(await (await getProfilePreview()).json()).toMatchObject({ sectionName: "WGC Giving" });
+    expect(preview).toHaveBeenCalledWith(session.churchId); // always the signed-in church, never one the caller names
   });
 });
 

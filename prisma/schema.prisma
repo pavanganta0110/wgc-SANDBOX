@@ -4856,6 +4856,12 @@ model PlanningCenterSyncConfig {
   // When gifts are sent: ON_PAYMENT = as soon as the payment succeeds, into that day's batch (default) |
   // ON_SETTLEMENT = after the bank deposit settles, one batch per deposit.
   sendTiming String @default("ON_PAYMENT")
+  // What WGC sends to Planning Center: GIFTS = every gift as a Giving donation (the church pays Planning Center's
+  // Giving subscription) | PROFILE_FIELDS = no donations; each matched person's profile gets a "WGC Giving" section.
+  syncTarget String @default("GIFTS")
+  // The "WGC Giving" profile tab and its fields, created once in the church's Planning Center (key -> field definition id).
+  pcoProfileTabId    String?
+  pcoProfileFieldIds Json?
   // Commit batches in Planning Center automatically. Off by default so the
   // church's finance admin can review a batch before donors see the gifts.
   autoCommitBatches    Boolean   @default(false)
@@ -4908,6 +4914,11 @@ model PlanningCenterPersonLink {
   candidatesJson       Json?
   // People the church said are NOT this donor — never offered or auto-linked again.
   rejectedPcoPersonIds String[] @default([])
+
+  // PROFILE_FIELDS: a fingerprint of what was last written to this person's "WGC Giving" section, and when. Nothing is
+  // written again until the summary changes.
+  profileDigest   String?
+  profileSyncedAt DateTime?
 
   linkedByUserId String?
   matchedAt      DateTime?
