@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 // Same booking embed as /time-back.
-const CALENDLY_EMBED_URL = "https://calendly.com/collinsansom/1-1-wgc-first-look-2?hide_gdpr_banner=1&primary_color=ca8a04";
+const CALENDLY_EMBED_URL = "https://calendly.com/waypoint-gateway-collective/1-1-wgc-first-look-2?hide_gdpr_banner=1&primary_color=ca8a04";
 
 export default function PlanningCenterPage() {
   return (

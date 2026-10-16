@@ -156,7 +156,7 @@ export default function SixMonthsFreePage() {
           </div>
           <div className="demo-cta">
             <p>Still need more info?</p>
-            <a className="btn-outline" href="https://calendly.com/collinsansom/1-on-1-wgc-first-look" target="_blank" rel="noopener noreferrer">Get a live demo →</a>
+            <a className="btn-outline" href="https://calendly.com/waypoint-gateway-collective/1-1-wgc-first-look-2" target="_blank" rel="noopener noreferrer">Get a live demo →</a>
           </div>
         </section>
 

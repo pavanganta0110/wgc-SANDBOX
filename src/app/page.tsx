@@ -166,7 +166,7 @@ export default function Home() {
                   <Link href="/start" className="bg-wgc-gold-500 text-wgc-navy-950 inline-flex items-center justify-center px-8 py-4 text-[13px] font-bold rounded-2xl shadow-[0_20px_40px_rgba(234,179,8,0.2)] transform transition-all hover:scale-105 hover:bg-white uppercase tracking-widest w-full sm:w-auto">
                     Get Started
                   </Link>
-                  <a href="https://calendly.com/collinsansom/1-on-1-wgc-first-look" target="_blank" rel="noopener noreferrer" className="bg-white/10 text-white inline-flex items-center justify-center px-8 py-4 text-[13px] font-bold rounded-2xl border border-white/20 transition-all hover:bg-white hover:text-wgc-navy-950 uppercase tracking-widest w-full sm:w-auto">
+                  <a href="https://calendly.com/waypoint-gateway-collective/1-1-wgc-first-look-2" target="_blank" rel="noopener noreferrer" className="bg-white/10 text-white inline-flex items-center justify-center px-8 py-4 text-[13px] font-bold rounded-2xl border border-white/20 transition-all hover:bg-white hover:text-wgc-navy-950 uppercase tracking-widest w-full sm:w-auto">
                     Book Live Demo
                   </a>
                 </div>
