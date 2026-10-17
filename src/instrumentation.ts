@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { isExpectedGuardrailError, routeWithoutQuery } from "./lib/monitoring/expectedErrors";
 
 // Next.js calls register() once per runtime at startup. Sentry's own Next.js
 // SDK convention (as of the instrumentation-hook-based setup, replacing the
@@ -37,6 +38,9 @@ export async function onRequestError(
   request: { path: string; method: string; headers: Record<string, string | string[] | undefined> },
   errorContext: { routerKind: string; routePath: string; routeType: string }
 ) {
+  // Intentional stops (billing not finished, staff account without support access) are not problems: don't report them.
+  if (isExpectedGuardrailError(error)) return;
+
   Sentry.captureRequestError(error, request, errorContext);
 
   // recordHealthEvent() imports the Prisma client, which only works in the
@@ -48,7 +52,7 @@ export async function onRequestError(
       await recordHealthEvent({
         service: "WGC API",
         operation: errorContext.routeType,
-        route: request.path,
+        route: routeWithoutQuery(request.path),
         status: "FAILED",
         severity: "ERROR",
         message: error instanceof Error ? error.message : "Unknown server error",

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { prisma } from "@/lib/prisma";
 import { requireFundraiserSession, FundraiserAuthError } from "@/lib/fundraiserPortal/fundraiserAuth";
 
@@ -36,6 +37,8 @@ export async function PATCH(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const { displayName, personalStory, imageUrl, goalAmountCents } = body;
+  const goalProblem = goalAmountCentsError(goalAmountCents);
+  if (goalProblem) return NextResponse.json({ error: goalProblem }, { status: 400 });
 
   if (displayName !== undefined && (typeof displayName !== "string" || !displayName.trim())) {
     return NextResponse.json({ error: "Display name is required." }, { status: 400 });
