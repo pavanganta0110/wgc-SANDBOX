@@ -136,6 +136,23 @@ describe("Admin ticket actions (PATCH)", () => {
     );
   });
 
+  it("resolve without a written summary is refused with a clear message (the page must collect one first)", async () => {
+    const { PATCH } = await loadDetailRoute();
+    const res = await PATCH(req({ action: "resolve" }, "PATCH"), { params: Promise.resolve({ ticketId: "t1" }) });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/resolutionSummary/);
+    expect(mockPrisma.supportTicket.update).not.toHaveBeenCalled();
+  });
+
+  it("a saved change still reports success when the timeline note can't be written", async () => {
+    mockPrisma.supportTicketMessage.create.mockRejectedValueOnce(new Error("timeline down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { PATCH } = await loadDetailRoute();
+    const res = await PATCH(req({ action: "close" }, "PATCH"), { params: Promise.resolve({ ticketId: "t1" }) });
+    expect(res.status).toBe(200);
+    expect(mockPrisma.supportTicket.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "CLOSED" }) }));
+  });
+
   it("reopen is only allowed from RESOLVED or CLOSED, and does not silently happen on its own", async () => {
     const { PATCH } = await loadDetailRoute();
     const res = await PATCH(req({ action: "reopen" }, "PATCH"), { params: Promise.resolve({ ticketId: "t1" }) });
