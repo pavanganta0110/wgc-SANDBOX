@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -49,6 +50,8 @@ export async function POST(req: Request) {
 
   const body = await req.json();
   const { name, description, imageUrl, startDate, endDate, goalAmountCents, leaderboardEnabled, publiclyIndexable } = body;
+  const goalProblem = goalAmountCentsError(goalAmountCents);
+  if (goalProblem) return NextResponse.json({ error: goalProblem }, { status: 400 });
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "Campaign name is required" }, { status: 400 });
