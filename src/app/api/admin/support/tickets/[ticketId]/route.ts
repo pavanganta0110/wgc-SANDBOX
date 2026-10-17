@@ -181,26 +181,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ ticket
     await notifyTicketStatusChange(updated, isReopen);
   }
 
-  await prisma.supportTicketMessage.create({
-    data: {
-      ticketId: ticket.id,
-      senderRole: "system",
-      body: describeAction(action, body),
-      isSystemEvent: true,
-      isInternalNote: !merchantVisibleActions.has(action),
-    },
-  });
+  // The change above is already saved. The timeline note and audit record are best-effort so a failure in either can't
+  // make a saved change look failed (which left staff retrying changes that had already gone through).
+  try {
+    await prisma.supportTicketMessage.create({
+      data: {
+        ticketId: ticket.id,
+        senderRole: "system",
+        body: describeAction(action, body),
+        isSystemEvent: true,
+        isInternalNote: !merchantVisibleActions.has(action),
+      },
+    });
 
-  await logDashboardAction({
-    churchId: ticket.churchId,
-    actorUserId: session.userId,
-    actorEmail: session.email,
-    actorRole: session.role,
-    action: auditAction,
-    entityType: "support_ticket",
-    entityId: ticket.id,
-    metadata: { ticketNumber: ticket.ticketNumber, previousValue, newValue },
-  });
+    await logDashboardAction({
+      churchId: ticket.churchId,
+      actorUserId: session.userId,
+      actorEmail: session.email,
+      actorRole: session.role,
+      action: auditAction,
+      entityType: "support_ticket",
+      entityId: ticket.id,
+      metadata: { ticketNumber: ticket.ticketNumber, previousValue, newValue },
+    });
+  } catch (err) {
+    console.error("support ticket follow-up (timeline/audit) failed:", err instanceof Error ? err.message : err);
+  }
 
   return NextResponse.json({ ticket: updated });
 }

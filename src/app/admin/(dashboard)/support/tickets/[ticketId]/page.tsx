@@ -44,6 +44,10 @@ export default function AdminTicketDetailPage() {
   const [isInternalNote, setIsInternalNote] = useState(false);
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Resolving needs a written summary (the organization is emailed it), so it is collected before anything is sent.
+  const [resolving, setResolving] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,17 +65,35 @@ export default function AdminTicketDetailPage() {
     load();
   }, [load]);
 
-  const patch = async (action: string, extra: Record<string, unknown> = {}) => {
+  const patch = async (action: string, extra: Record<string, unknown> = {}): Promise<boolean> => {
     setSaving(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/admin/support/tickets/${ticketId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...extra }),
       });
-      if (res.ok) await load();
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error || (res.status === 401 ? 'Your session expired. Sign in again.' : `That change could not be saved (error ${res.status}).`));
+        return false;
+      }
+      await load();
+      return true;
+    } catch {
+      setActionError('That change could not be saved. Check your connection and try again.');
+      return false;
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmResolve = async () => {
+    if (!summary.trim()) return;
+    if (await patch('resolve', { resolutionSummary: summary.trim() })) {
+      setResolving(false);
+      setSummary('');
     }
   };
 
@@ -177,12 +199,17 @@ export default function AdminTicketDetailPage() {
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <h3 className="text-sm font-bold text-slate-900">Manage</h3>
+          {actionError && <p role="alert" className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{actionError}</p>}
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
             <select
               value={ticket.status}
               disabled={saving}
-              onChange={(e) => patch('set_status', { status: e.target.value })}
+              onChange={(e) => {
+                // Resolving needs a summary: ask for it instead of sending a request the server would refuse.
+                if (e.target.value === 'RESOLVED') setResolving(true);
+                else patch('set_status', { status: e.target.value });
+              }}
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
             >
               {TICKET_STATUSES.map((s) => (
@@ -216,9 +243,26 @@ export default function AdminTicketDetailPage() {
               ))}
             </select>
           </div>
+          {resolving && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+              <label htmlFor="resolution-summary" className="block text-xs font-semibold text-slate-700">What was done? This is emailed to the organization.</label>
+              <textarea
+                id="resolution-summary"
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                rows={3}
+                autoFocus
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm"
+              />
+              <div className="flex gap-2">
+                <button onClick={confirmResolve} disabled={saving || !summary.trim()} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold disabled:opacity-50">Resolve ticket</button>
+                <button onClick={() => { setResolving(false); setSummary(''); }} disabled={saving} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-white disabled:opacity-50">Cancel</button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 pt-2">
             {!isClosed && (
-              <button onClick={() => patch('resolve')} disabled={saving} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50">Mark Resolved</button>
+              <button onClick={() => { setActionError(null); setResolving(true); }} disabled={saving} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50">Mark Resolved</button>
             )}
             {isClosed && (
               <button onClick={() => patch('reopen')} disabled={saving} className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50">Reopen</button>
@@ -231,9 +275,11 @@ export default function AdminTicketDetailPage() {
             ) : (
               <button
                 onClick={async () => {
-                  const meRes = await fetch('/api/admin/profile');
-                  const me = await meRes.json().catch(() => null);
+                  setActionError(null);
+                  const meRes = await fetch('/api/admin/profile').catch(() => null);
+                  const me = await meRes?.json().catch(() => null);
                   if (me?.user?.id) await patch('assign', { adminUserId: me.user.id });
+                  else setActionError('Could not find your admin account. Sign in again and retry.');
                 }}
                 disabled={saving}
                 className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
