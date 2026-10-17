@@ -21,11 +21,16 @@ import { NOTIFICATION_EVENTS, resolveNotificationDefault } from "@/lib/settings/
  *      primaryContactEmail field that can be unset or stale. This is the
  *      right default for events with no specific actor (a donor's own
  *      self-service gift, a dispute Finix opened, a settlement funding).
+ *   A WGC staff account (wgc_admin / wgc_super_admin, or any user from another organization) never counts as the
+ *   recipient in step 1: a church's notices must reach the church. This is what stops a gift through a giving link
+ *   that a WGC admin owns (e.g. while setting a church up) from notifying that admin instead of the church's owner.
  *   3. That old contact-email chain, only for churches not yet backfilled
  *      with a primaryOwnerUserId (nullable during migration — see Church's
  *      own field comment) or whose owner/recipientUserId account is
  *      disabled.
  */
+const INTERNAL_ROLES = new Set(["wgc_admin", "wgc_super_admin"]);
+
 export async function notifyEvent(params: {
   churchId: string;
   eventKey: string;
@@ -56,7 +61,7 @@ export async function notifyEvent(params: {
         where: { churchId_eventKey: { churchId: params.churchId, eventKey: params.eventKey } },
       }),
       params.recipientUserId
-        ? prisma.user.findUnique({ where: { id: params.recipientUserId }, select: { email: true, disabledAt: true } })
+        ? prisma.user.findUnique({ where: { id: params.recipientUserId }, select: { email: true, disabledAt: true, role: true, churchId: true } })
         : Promise.resolve(null),
     ]);
     if (!church) return;
@@ -65,11 +70,17 @@ export async function notifyEvent(params: {
     const emailEnabled = preference ? preference.emailEnabled : resolveNotificationDefault(eventDef ?? {}).emailEnabled;
     if (!emailEnabled) return;
 
-    const owner = !params.recipientUserId && church.primaryOwnerUserId
+    // A WGC staff account (set up or testing the church, or acting through "View as Merchant") is not the church's
+    // own staff: a church's notices must reach the church, so it never counts as the recipient. Staff are recognised
+    // by role, and also by not belonging to this church.
+    const staffRecipient = Boolean(recipientUser) && (INTERNAL_ROLES.has(recipientUser!.role) || (recipientUser!.churchId !== null && recipientUser!.churchId !== params.churchId));
+    const usableRecipient = recipientUser && !recipientUser.disabledAt && !staffRecipient ? recipientUser : null;
+
+    const owner = !usableRecipient && church.primaryOwnerUserId
       ? await prisma.user.findUnique({ where: { id: church.primaryOwnerUserId }, select: { email: true, disabledAt: true } })
       : null;
     const to =
-      (recipientUser && !recipientUser.disabledAt ? recipientUser.email : null) ||
+      (usableRecipient ? usableRecipient.email : null) ||
       (owner && !owner.disabledAt ? owner.email : null) ||
       church.supportEmail ||
       church.financeEmail ||
