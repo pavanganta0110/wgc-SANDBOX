@@ -134,7 +134,7 @@ export default function PlanningCenterPeople() {
           className={buttonSecondary}
           disabled={disabled}
           onClick={() => {
-            if (window.confirm("Import people from Planning Center as contacts?\n\nThis adds a WGC contact for each active adult who has an email or phone and isn't already a donor. Existing donors are never overwritten. It can't be undone in one click.")) runJob("IMPORT_PEOPLE");
+            if (window.confirm("Import people from Planning Center as contacts?\n\nThis adds a WGC contact for each active adult who has an email or phone and isn't already a donor. Children and inactive people are skipped. Existing donors are never overwritten. It can't be undone in one click.\n\nThese contacts become your organization's own records in WGC. Make sure your organization has the right to add these people to WGC and to contact them.")) runJob("IMPORT_PEOPLE");
           }}
         >
           {busy === "IMPORT_PEOPLE" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />} Import people as contacts
