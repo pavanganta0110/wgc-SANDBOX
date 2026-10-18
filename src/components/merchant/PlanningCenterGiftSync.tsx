@@ -171,7 +171,7 @@ export default function PlanningCenterGiftSync() {
                 onClick={() => {
                   if (selected) return;
                   const msg = t.value === "PROFILE_FIELDS"
-                    ? "Switch to people only? WGC will stop sending donations to Planning Center and will fill a \"WGC Giving\" section on each matched person instead. Gifts already sent stay where they are."
+                    ? "Switch to people only?\n\nWGC will stop sending donations to Planning Center and will fill a \"WGC Giving\" section on each matched person instead (what they have given, their last gift, and a link to their giving in WGC). Gifts already sent stay where they are.\n\nPrivacy: these amounts will show on people's Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can't see your giving reports. Check who can see it in Planning Center before you continue. Only people you have already matched are affected, and donors who asked to stay anonymous are never written."
                     : "Switch to sending every gift? Only gifts paid from now on are sent. Gifts paid while you were on people only are not added to Planning Center Giving.";
                   if (window.confirm(msg)) putSettings({ syncTarget: t.value }, "Saved.");
                 }}
@@ -469,6 +469,9 @@ function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boo
       <div>
         <h4 id="pco-people-only" className="text-sm font-semibold text-slate-900">What your team will see in Planning Center</h4>
         <p className="text-xs text-slate-500 mt-0.5">A &quot;{preview?.sectionName ?? "WGC Giving"}&quot; section on each matched person, updated when they give. It shows totals, not individual gifts: open the link on the profile for the full detail in WGC.</p>
+        <p className="text-xs text-amber-800 bg-amber-50 rounded-lg p-2 mt-2">
+          <strong>Who can see this.</strong> These amounts appear on people&apos;s Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can&apos;t see your giving reports. Check those settings in Planning Center. Donors who asked to stay anonymous are never written.
+        </p>
       </div>
 
       {data.settings.syncMode === "LIVE" && (
