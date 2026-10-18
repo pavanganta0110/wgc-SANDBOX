@@ -31,7 +31,7 @@ vi.mock("../config", () => ({ isPlanningCenterSyncEnabled: () => platformOn }));
 vi.mock("../giftOutcomes", () => ({ effectivePaymentStatuses: async (_c: string, payments: any[]) => new Map(payments.map((p) => [p.id, db.payments.find((x) => x.id === p.id)?.effective ?? p.status])) }));
 vi.mock("../syncConfig", () => ({ computeStoredGivingReadiness: async () => ({ ready: false, reasons: ["Choose a default fund."], notes: [] }) }));
 
-vi.mock("../giftActivity", () => ({ getGiftActivity: async () => ({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, estimatedPlanningCenterFeeCents: 12345 }) }));
+vi.mock("../giftActivity", () => ({ getGiftActivity: async () => ({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, giftTotalCents: 900000, wgcFeesCents: 20000, wgcFeesPaidByChurchCents: 5000, estimatedPlanningCenterFeeCents: 12345 }) }));
 
 import { getSyncOverview } from "../syncOverview";
 
@@ -82,7 +82,7 @@ describe("getSyncOverview: people only", () => {
   });
 
   it("includes the last 30 days of gifts and what Planning Center would have charged", async () => {
-    expect((await getSyncOverview("c1")).activity).toEqual({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, estimatedPlanningCenterFeeCents: 12345 });
+    expect((await getSyncOverview("c1")).activity).toEqual({ days: 30, gifts: 84, cardGifts: 70, bankGifts: 14, giftTotalCents: 900000, wgcFeesCents: 20000, wgcFeesPaidByChurchCents: 5000, estimatedPlanningCenterFeeCents: 12345 });
   });
 
   it("a gifts church still asks for the Giving setup", async () => {

@@ -398,24 +398,43 @@ export default function PlanningCenterGiftSync() {
   );
 }
 
-/** What taking gifts through WGC saves, in plain words, using the church's own last 30 days. */
+/**
+ * What processing cost on the church's own last 30 days, with Planning Center's published rates beside it. It states
+ * both sides and makes no claim of a saving: whether WGC is cheaper depends on who covers the fee.
+ */
 function SavingsNote({ activity }: { activity: SyncOverview["activity"] }) {
+  const hasGifts = activity.gifts > 0;
+  const feesKnown = activity.wgcFeesPaidByChurchCents !== null && activity.wgcFeesCents !== null;
+  const donorCovered = feesKnown ? Math.max((activity.wgcFeesCents as number) - (activity.wgcFeesPaidByChurchCents as number), 0) : 0;
   return (
-    <div className="rounded-xl bg-green-50 border border-green-100 p-3 mb-3 text-xs text-green-900 space-y-1.5">
+    <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mb-3 text-xs text-slate-700 space-y-2">
       <p>
-        <strong>You&apos;re already saving on fees.</strong> Gifts taken through WGC aren&apos;t charged Planning Center&apos;s payment fees (2.15% + $0.30 for each card gift, $0.30 for each bank gift). Both choices below keep that saving.
+        <strong>Payment fees.</strong> Gifts taken through WGC are processed by WGC, so Planning Center&apos;s payment fees don&apos;t apply to them. Both choices below work the same way for this.
       </p>
-      {activity.gifts > 0 ? (
-        <p>
-          In the last {activity.days} days you received <strong>{activity.gifts}</strong> {activity.gifts === 1 ? "gift" : "gifts"}. Had Planning Center processed them, its fees would have been about <strong>{money(activity.estimatedPlanningCenterFeeCents)}</strong>.
-        </p>
+      {hasGifts ? (
+        <div>
+          <p className="mb-1">Your last {activity.days} days: <strong>{activity.gifts}</strong> {activity.gifts === 1 ? "gift" : "gifts"}, <strong>{money(activity.giftTotalCents)}</strong> given.</p>
+          <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5">
+            <dt>Fees your church paid through WGC</dt>
+            <dd className="text-right font-semibold">{feesKnown ? money(activity.wgcFeesPaidByChurchCents as number) : "Not available yet"}</dd>
+            {feesKnown && donorCovered > 0 && (
+              <>
+                <dt className="text-slate-500">Fees your donors covered</dt>
+                <dd className="text-right text-slate-500">{money(donorCovered)}</dd>
+              </>
+            )}
+            <dt>About what Planning Center would have charged on the same gifts if your church paid the fees</dt>
+            <dd className="text-right font-semibold">{money(activity.estimatedPlanningCenterFeeCents)}</dd>
+          </dl>
+          <p className="text-slate-500 mt-1">Planning Center&apos;s rates: 2.15% + $0.30 per card gift and $0.30 per bank gift. Planning Center also lets donors cover the fee, so your own result depends on who pays it.</p>
+        </div>
       ) : (
-        <p>Once gifts come in, this shows what Planning Center&apos;s fees would have cost on the same gifts.</p>
+        <p>Once gifts come in, this shows what processing cost your church next to Planning Center&apos;s published rates.</p>
       )}
       <p>
-        Planning Center&apos;s separate monthly Giving fee depends on how many gifts it records each month (the first 10 are free). Choosing <strong>Send people only</strong> avoids it. Check your price on{" "}
+        Planning Center also charges a separate monthly Giving fee. It depends on how many gifts it records each month (the first 10 are free). <strong>Send people only</strong> records no gifts there. Check your price on{" "}
         <a href="https://www.planningcenter.com/pricing" target="_blank" rel="noreferrer" className="underline font-medium">Planning Center&apos;s pricing page</a>
-        {activity.gifts > 0 ? `, using about ${activity.gifts} gifts a month.` : "."}
+        {hasGifts ? `, using about ${activity.gifts} gifts a month.` : "."}
       </p>
     </div>
   );

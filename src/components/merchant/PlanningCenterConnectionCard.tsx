@@ -39,6 +39,10 @@ export default function PlanningCenterConnectionCard() {
       .catch(() => setData({ enabled: false, configured: false, connection: null }));
   }, []);
 
+  const [confirmingDisconnect, setConfirmingDisconnect] = useState(false);
+  // Default on: a church that disconnects should not leave its congregation's contact details behind.
+  const [deleteData, setDeleteData] = useState(true);
+
   useEffect(() => {
     load();
     // Surface the callback route's redirect result once, then clean the URL.
@@ -55,13 +59,16 @@ export default function PlanningCenterConnectionCard() {
   }, [load]);
 
   const call = async (action: "disconnect" | "test") => {
-    if (action === "disconnect" && !window.confirm("Disconnect Planning Center? WGC will stop being able to reach your Planning Center account.")) return;
     setBusy(action);
     try {
-      const res = await fetch(`/api/merchant/settings/integrations/planning-center/${action}`, { method: "POST" });
+      const res = await fetch(`/api/merchant/settings/integrations/planning-center/${action}`, {
+        method: "POST",
+        ...(action === "disconnect" ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deleteStoredData: deleteData }) } : {}),
+      });
       const result = await res.json();
       if (!res.ok || result.success === false) throw new Error(result.error || result.message || "Something went wrong.");
-      toast.success(action === "disconnect" ? "Disconnected." : result.message || "Connection is healthy.");
+      toast.success(action === "disconnect" ? (deleteData ? "Disconnected. The people data WGC stored was deleted." : "Disconnected.") : result.message || "Connection is healthy.");
+      if (action === "disconnect") setConfirmingDisconnect(false);
       load();
       window.dispatchEvent(new Event("pco-connection-changed"));
     } catch (err) {
@@ -147,12 +154,32 @@ export default function PlanningCenterConnectionCard() {
               <button onClick={() => call("test")} disabled={busy !== null} className="px-5 py-2.5 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 flex items-center gap-2 text-sm">
                 {busy === "test" ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Test Connection
               </button>
-              <button onClick={() => call("disconnect")} disabled={busy !== null} className="px-5 py-2.5 rounded-xl font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-sm">
+              <button onClick={() => setConfirmingDisconnect(true)} disabled={busy !== null || confirmingDisconnect} className="px-5 py-2.5 rounded-xl font-bold text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 text-sm">
                 {busy === "disconnect" ? <Loader2 className="w-4 h-4 animate-spin" /> : null} Disconnect
               </button>
             </>
           )}
         </div>
+
+        {confirmingDisconnect && (
+          <div role="alertdialog" aria-labelledby="pco-disconnect-title" className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-slate-700 space-y-3">
+            <p id="pco-disconnect-title" className="font-semibold text-slate-900">Disconnect Planning Center?</p>
+            <p>WGC will stop sending anything to Planning Center and can no longer reach your account. Gifts already sent stay where they are.</p>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <input type="checkbox" className="mt-0.5" checked={deleteData} onChange={(e) => setDeleteData(e.target.checked)} />
+              <span>
+                <span className="font-medium text-slate-900">Also delete the Planning Center people data WGC stored</span>
+                <span className="block text-slate-500">This removes the matches between your donors and Planning Center people (names, emails and phone numbers kept for matching) and the match history. Donors already in WGC, their gifts and receipts are not deleted. If you reconnect later, WGC matches again.</span>
+              </span>
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => call("disconnect")} disabled={busy !== null} className="px-4 py-2 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 text-sm">
+                {busy === "disconnect" ? <Loader2 className="w-4 h-4 animate-spin inline mr-1" /> : null}Disconnect
+              </button>
+              <button onClick={() => setConfirmingDisconnect(false)} disabled={busy !== null} className="px-4 py-2 rounded-xl font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-50 text-sm">Cancel</button>
+            </div>
+          </div>
+        )}
 
         <p className="text-xs text-slate-400 mt-4">
           Having trouble connecting? <Link href="/merchant/support/tickets/new" className="text-blue-600 hover:underline">Contact Support</Link>.

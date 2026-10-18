@@ -628,3 +628,12 @@ Planning Center's own giving screens, reports and any "has given" list are built
 - Whether a text field renders a URL as a clickable link.
 - Whether custom-field tabs are visible to the staff who need them under the church's own People permissions.
 - Rate limits at scale: one read plus up to ten writes per person on first fill; the sweep is resumable and stops on a rate limit.
+
+## 14. Disconnect: delete stored people data; neutral fee comparison
+
+**Disconnect** always revokes the Planning Center token, clears our copy, and turns sending OFF (so nothing resumes by surprise on a later reconnect). The church can also tick **"Also delete the Planning Center people data WGC stored"** (on by default). That runs `purgePlanningCenterPeopleData` (`purge.ts`), for this church only:
+- DELETED: every matched-person record (Planning Center person id and name, the candidate names/emails/phones kept while a match awaited review, the profile-write fingerprint), the match/import job history, and the stored ids of the "WGC Giving" profile section.
+- KEPT on purpose: donors already in WGC, including any created by "Import people" (they carry payments and tax receipts; deleting a donor is a separate, deliberate action), the record of gifts sent (amounts, dates, Planning Center donation ids), and the church's fund choices.
+- The audit entry records whether data was deleted and how many rows.
+
+**Fee comparison in the app** no longer claims a saving. For the last 30 days it shows what the church paid in WGC fees (exact, from the rate saved on each payment; a gift whose donor covered the fee costs the church nothing) next to about what Planning Center's published rates (2.15% + $0.30 card, $0.30 bank) would have been if the church paid the fee, and says Planning Center also lets donors cover the fee. It is "not available" rather than a guess when a payment has no saved rate. This is the same like-for-like standard the legal risk assessment (R1) asks of the landing page.
