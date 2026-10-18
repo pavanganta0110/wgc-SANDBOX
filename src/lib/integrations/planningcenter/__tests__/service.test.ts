@@ -31,8 +31,14 @@ const update = vi.fn(async (args: Args) => {
   return { ...row };
 });
 
+const configUpdateMany = vi.fn(async (_a: unknown) => ({ count: 1 }));
+const purge = vi.fn(async (_c: string) => ({ deletedLinks: 3, deletedJobs: 1 }));
+vi.mock("../purge", () => ({ purgePlanningCenterPeopleData: (c: string) => purge(c) }));
 vi.mock("@/lib/prisma", () => ({
-  prisma: { planningCenterConnection: { findUnique: (a: Args) => findUnique(a), findMany: () => findMany(), updateMany: (a: Args) => updateMany(a), upsert: (a: Args) => upsert(a), update: (a: Args) => update(a) } },
+  prisma: {
+    planningCenterConnection: { findUnique: (a: Args) => findUnique(a), findMany: () => findMany(), updateMany: (a: Args) => updateMany(a), upsert: (a: Args) => upsert(a), update: (a: Args) => update(a) },
+    planningCenterSyncConfig: { updateMany: (a: Args) => configUpdateMany(a) },
+  },
 }));
 const mockAudit = vi.fn<(...args: unknown[]) => Promise<void>>(async () => {});
 vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: (...a: unknown[]) => mockAudit(...a) }));
@@ -223,6 +229,36 @@ describe("completePlanningCenterConnection", () => {
 });
 
 describe("disconnectPlanningCenter", () => {
+  it("turns sending OFF so nothing resumes by surprise on a later reconnect", async () => {
+    row = connectedRow();
+    configUpdateMany.mockClear();
+    await disconnectPlanningCenter({ churchId: "church1", actorUserId: "u1" });
+    expect(configUpdateMany).toHaveBeenCalledWith({ where: { churchId: "church1" }, data: { syncMode: "OFF", enabledAt: null } });
+  });
+
+  it("does NOT delete stored people data unless the church asks", async () => {
+    row = connectedRow();
+    purge.mockClear();
+    await disconnectPlanningCenter({ churchId: "church1", actorUserId: "u1" });
+    expect(purge).not.toHaveBeenCalled();
+  });
+
+  it("deletes the stored people data, for this church only, when asked", async () => {
+    row = connectedRow();
+    purge.mockClear();
+    await disconnectPlanningCenter({ churchId: "church1", actorUserId: "u1", deleteStoredData: true });
+    expect(purge).toHaveBeenCalledTimes(1);
+    expect(purge).toHaveBeenCalledWith("church1");
+  });
+
+  it("still deletes the stored data when revocation at Planning Center failed (it's our copy)", async () => {
+    row = connectedRow();
+    purge.mockClear();
+    mockRevoke.mockRejectedValueOnce(new Error("pco down"));
+    await disconnectPlanningCenter({ churchId: "church1", actorUserId: "u1", deleteStoredData: true });
+    expect(purge).toHaveBeenCalledTimes(1);
+  });
+
   it("revokes best-effort, clears tokens and the org link, keeps the row", async () => {
     row = connectedRow();
     const conn = await disconnectPlanningCenter({ churchId: "church1", actorUserId: "u1" });

@@ -21,8 +21,12 @@ export async function POST(req: Request) {
     throw err;
   }
 
+  // Optional body: { deleteStoredData: true } also removes the people data WGC stored from Planning Center.
+  const body = await req.json().catch(() => ({}));
+  const deleteStoredData = body?.deleteStoredData === true;
+
   try {
-    const connection = await disconnectPlanningCenter({ churchId: auth.churchId, actorUserId: auth.userId, actorEmail: auth.email, actorRole: auth.role, req });
+    const connection = await disconnectPlanningCenter({ churchId: auth.churchId, actorUserId: auth.userId, actorEmail: auth.email, actorRole: auth.role, req, deleteStoredData });
     return NextResponse.json({ success: true, connection: { status: connection.status } });
   } catch (err) {
     if (err instanceof PlanningCenterConnectionError) return NextResponse.json({ error: err.message }, { status: 404 });

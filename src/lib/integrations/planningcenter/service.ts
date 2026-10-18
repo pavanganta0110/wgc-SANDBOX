@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { purgePlanningCenterPeopleData } from "./purge";
 import { prisma } from "@/lib/prisma";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { isPlanningCenterIntegrationConfigured, isPlanningCenterIntegrationEnabled } from "./config";
@@ -245,7 +246,15 @@ export async function getClientForChurch(churchId: string): Promise<PlanningCent
  * the stored tokens and the organization link so another WGC church could
  * connect that Planning Center organization. Never deletes anything else.
  */
-export async function disconnectPlanningCenter(params: { churchId: string; actorUserId: string; actorEmail?: string | null; actorRole?: string | null; req?: Request }) {
+export async function disconnectPlanningCenter(params: {
+  churchId: string;
+  actorUserId: string;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  req?: Request;
+  /** Also delete the people data WGC stored from Planning Center (see purgePlanningCenterPeopleData). */
+  deleteStoredData?: boolean;
+}) {
   const existing = await prisma.planningCenterConnection.findUnique({ where: { churchId: params.churchId } });
   if (!existing) throw new PlanningCenterConnectionError("This organization has no Planning Center connection.");
 
@@ -257,6 +266,9 @@ export async function disconnectPlanningCenter(params: { churchId: string; actor
       // Key mismatch or a Planning Center outage must never block disconnecting on our side.
     }
   }
+
+  // Sending can't continue without a connection: switch it off now so nothing resumes by surprise on a later reconnect.
+  await prisma.planningCenterSyncConfig.updateMany({ where: { churchId: params.churchId }, data: { syncMode: "OFF", enabledAt: null } });
 
   const connection = await prisma.planningCenterConnection.update({
     where: { churchId: params.churchId },
@@ -271,6 +283,8 @@ export async function disconnectPlanningCenter(params: { churchId: string; actor
     },
   });
 
+  const purged = params.deleteStoredData ? await purgePlanningCenterPeopleData(params.churchId) : null;
+
   await logDashboardAction({
     churchId: params.churchId,
     actorUserId: params.actorUserId,
@@ -279,6 +293,7 @@ export async function disconnectPlanningCenter(params: { churchId: string; actor
     action: "planningcenter.disconnected",
     entityType: "PlanningCenterConnection",
     entityId: connection.id,
+    metadata: { dataDeleted: Boolean(purged), ...(purged ?? {}) },
     req: params.req,
   });
 
