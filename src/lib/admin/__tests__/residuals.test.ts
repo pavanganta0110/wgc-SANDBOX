@@ -2,74 +2,72 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockPrisma = {
   $queryRaw: vi.fn(),
-  finixResidualPayout: { findMany: vi.fn() },
+  finixResidualSettlement: { findMany: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 
 const { loadResidualLedger } = await import("../residuals");
 
-const row = (month: string, charged: number, cost: number, payments = 10) => ({
-  month: new Date(`${month}-01T00:00:00Z`),
-  payments: BigInt(payments),
-  charged,
-  cost,
-  missing: BigInt(0),
-});
-const payout = (month: string, amountCents: number) => ({
-  id: `p-${month}`,
-  periodMonth: new Date(`${month}-01T00:00:00Z`),
-  amountCents,
-  receivedAt: new Date("2026-09-01T00:00:00Z"),
-  finixBillingSettlementId: null,
-  note: null,
-  recordedByEmail: "admin@wgc.test",
-});
+const charged = (month: string, cents: number, payments = 10) => ({ month: new Date(`${month}-01T00:00:00Z`), payments: BigInt(payments), charged: cents });
+const statement = (month: string, fees: number, costs: number, residual: number, extra: Record<string, unknown> = {}) => {
+  const start = new Date(`${month}-01T00:00:00Z`);
+  return {
+    id: `s-${month}`,
+    finixBillingSettlementId: `billing_settlement_${month}`,
+    windowStart: start,
+    windowEnd: new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)),
+    merchantFeesCents: fees,
+    costsCents: costs,
+    totalResidualCents: residual,
+    revSharePercent: 100,
+    state: "APPROVED",
+    depositReceivedAt: null,
+    depositNote: null,
+    updatedAt: new Date("2026-10-20T00:00:00Z"),
+    ...extra,
+  };
+};
 
 describe("loadResidualLedger", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("flags every past-due month as unpaid when Finix has never paid", async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([row("2026-06", 10_000, 4_000), row("2026-07", 20_000, 8_000), row("2026-09", 5_000, 2_000), row("2026-10", 1_000, 400)]);
-    mockPrisma.finixResidualPayout.findMany.mockResolvedValue([]);
+  it("uses Finix's statements for WGC's real Jul–Sep 2026 numbers", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([charged("2026-08", 3100), charged("2026-09", 9053), charged("2026-10", 2114, 6)]);
+    mockPrisma.finixResidualSettlement.findMany.mockResolvedValue([
+      statement("2026-07", 154, 457.485, -303),
+      statement("2026-08", 3560, 2833.603, 726, { depositReceivedAt: new Date("2026-09-16T00:00:00Z") }),
+      statement("2026-09", 9795, 5669.617, 4125),
+    ]);
 
     const ledger = await loadResidualLedger(new Date("2026-10-20T12:00:00Z"));
 
     expect(ledger.months.map((m) => [m.label, m.status])).toEqual([
-      ["Jun 2026", "OVERDUE"],
-      ["Jul 2026", "OVERDUE"],
-      ["Aug 2026", "NOTHING_OWED"], // no payments that month: gap is filled, nothing owed
-      ["Sep 2026", "NOT_DUE"], // expected by Nov 1
+      ["Jul 2026", "NEGATIVE"],
+      ["Aug 2026", "RECEIVED"],
+      ["Sep 2026", "PAID_UNCONFIRMED"],
       ["Oct 2026", "IN_PROGRESS"],
     ]);
-    expect(ledger.dueCents).toBe(6_000 + 12_000);
-    expect(ledger.paidCents).toBe(0);
-    expect(ledger.outstandingCents).toBe(18_000);
-    expect(ledger.upcomingCents).toBe(3_000 + 600);
-    expect(ledger.oldestOverdueMonth).toBe("2026-06-01T00:00:00.000Z");
-    expect(ledger.daysOverdue).toBe(80); // expected by Aug 1, now Oct 20
+    expect(ledger.totals).toEqual({ feesCents: 13509, costsCents: 8961, residualCents: 4548, receivedCents: 726, unconfirmedCents: 4125 });
+    expect(ledger.months[2].feeDifferenceCents).toBe(9795 - 9053);
+    expect(ledger.missingStatementMonths).toEqual([]);
   });
 
-  it("marks months paid or partly paid from recorded payouts", async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([row("2026-06", 10_000, 4_000), row("2026-07", 20_000, 8_000)]);
-    mockPrisma.finixResidualPayout.findMany.mockResolvedValue([payout("2026-06", 6_000), payout("2026-07", 5_000)]);
+  it("flags a finished month with WGC payments but no Finix statement after the 20th", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([charged("2026-09", 9053)]);
+    mockPrisma.finixResidualSettlement.findMany.mockResolvedValue([]);
 
-    const ledger = await loadResidualLedger(new Date("2026-10-20T12:00:00Z"));
-    const byLabel = Object.fromEntries(ledger.months.map((m) => [m.label, m]));
-
-    expect(byLabel["Jun 2026"].status).toBe("PAID");
-    expect(byLabel["Jul 2026"].status).toBe("PARTIAL");
-    expect(ledger.outstandingCents).toBe(18_000 - 11_000);
-    expect(ledger.oldestOverdueMonth).toBe("2026-07-01T00:00:00.000Z");
+    expect((await loadResidualLedger(new Date("2026-10-10T00:00:00Z"))).months[0].status).toBe("WAITING_ON_FINIX");
+    const late = await loadResidualLedger(new Date("2026-10-21T00:00:00Z"));
+    expect(late.months[0].status).toBe("STATEMENT_MISSING");
+    expect(late.missingStatementMonths).toEqual(["2026-09-01T00:00:00.000Z"]);
   });
 
-  it("treats a month where Finix cost exceeds what WGC charged as nothing owed", async () => {
-    mockPrisma.$queryRaw.mockResolvedValue([row("2026-06", 1_000, 1_500)]);
-    mockPrisma.finixResidualPayout.findMany.mockResolvedValue([]);
+  it("shows a statement that isn't approved yet as pending", async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([]);
+    mockPrisma.finixResidualSettlement.findMany.mockResolvedValue([statement("2026-09", 9795, 5669.6, 4125, { state: "PENDING" })]);
 
-    const ledger = await loadResidualLedger(new Date("2026-10-20T12:00:00Z"));
-
-    expect(ledger.months[0].status).toBe("NOTHING_OWED");
-    expect(ledger.months[0].expectedCents).toBe(-500);
-    expect(ledger.outstandingCents).toBe(0);
+    const ledger = await loadResidualLedger(new Date("2026-10-20T00:00:00Z"));
+    expect(ledger.months[0].status).toBe("PENDING");
+    expect(ledger.totals.residualCents).toBe(0);
   });
 });

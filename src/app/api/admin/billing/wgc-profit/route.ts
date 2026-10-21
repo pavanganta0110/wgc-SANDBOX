@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { resolveWgcAdminBillingPermissions } from "@/lib/auth/billingAdminPermissions";
 import { getWgcProfitSummary } from "@/lib/reports/wgcProfit";
+import { loadStatementsForRange } from "@/lib/admin/residuals";
 
 /**
  * Admin -> Billing & Subscriptions -> WGC Profit. Read-only, gated behind
@@ -35,6 +36,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Invalid from/to date." }, { status: 400 });
   }
 
-  const summary = await getWgcProfitSummary({ from, to });
-  return NextResponse.json({ summary });
+  // Finix's real cost only exists in its monthly residual statements: the
+  // per-transfer Fees API returns just the fee charged to the merchant
+  // (WGC's PLATFORM_FEE), so summary.finixCostCents is always ~$0.
+  const [summary, statements] = await Promise.all([getWgcProfitSummary({ from, to }), loadStatementsForRange(from, to)]);
+  return NextResponse.json({ summary, statements });
 }

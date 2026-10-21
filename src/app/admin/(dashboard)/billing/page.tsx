@@ -1955,6 +1955,18 @@ interface WgcProfitSummaryResponse {
   byOrganization: WgcProfitByOrg[];
 }
 
+interface WgcProfitStatementsResponse {
+  statementCount: number;
+  feesCents: number;
+  costsCents: number;
+  residualCents: number;
+  firstMonth: string | null;
+  lastMonth: string | null;
+  monthsWithoutStatement: string[];
+}
+
+const statementMonth = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
 function isoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -1967,6 +1979,7 @@ function isoDate(d: Date) {
  */
 function WgcProfitTab() {
   const [summary, setSummary] = useState<WgcProfitSummaryResponse | null>(null);
+  const [statements, setStatements] = useState<WgcProfitStatementsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState(() => isoDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [to, setTo] = useState(() => isoDate(new Date()));
@@ -1977,7 +1990,10 @@ function WgcProfitTab() {
     setLoading(true);
     fetch(`/api/admin/billing/wgc-profit?from=${f}&to=${t}`)
       .then((r) => r.json())
-      .then((d) => setSummary(d.summary || null))
+      .then((d) => {
+        setSummary(d.summary || null);
+        setStatements(d.statements || null);
+      })
       .catch(() => toast.error("Failed to load WGC profit report"))
       .finally(() => setLoading(false));
   };
@@ -2019,9 +2035,9 @@ function WgcProfitTab() {
   return (
     <div>
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-4">
-        Internal only — never shown to organizations. Finix cost is only as complete as what&apos;s been synced from Finix&apos;s Fees
-        API; payments with no synced fee data yet count as $0 Finix cost below (see the missing-data count), which overstates profit
-        until that data lands.
+        Internal only — never shown to organizations. Finix&apos;s costs (card network fees, Finix&apos;s processing, payout and verification fees) only
+        appear in Finix&apos;s monthly residual statements, so cost and profit below come from those statements, imported on the admin Dashboard
+        under Finix residuals. Statements cover whole months.
       </div>
 
       <div className="flex flex-wrap gap-2 mb-3">
@@ -2051,59 +2067,66 @@ function WgcProfitTab() {
         </button>
       </div>
 
-      {summary && (
+      {summary && statements && (
         <>
-          <div className={`rounded-xl p-3 text-xs mb-4 border ${summary.isFullyReconciled ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-orange-50 border-orange-200 text-orange-800"}`}>
-            {summary.isFullyReconciled ? (
-              <>
-                <strong>Reconciled.</strong> Every payment in this range is from a month whose Finix fee data has fully landed
-                (reconciled through {new Date(summary.reconciledThrough).toLocaleDateString()}) — these numbers are final.
-              </>
-            ) : (
-              <>
-                <strong>Preliminary — not yet reconciled.</strong> This range includes payments from a month whose Finix
-                interchange/dues data isn&apos;t final yet (only reconciled through {new Date(summary.reconciledThrough).toLocaleDateString()}
-                ; the rest finalizes on the 16th of next month). Finix Cost and Profit below will change once that data lands.
-              </>
-            )}
-          </div>
+          {(() => {
+            const hasAll = statements.monthsWithoutStatement.length === 0;
+            const span = statements.firstMonth && statements.lastMonth
+              ? statements.firstMonth === statements.lastMonth
+                ? statementMonth(statements.firstMonth)
+                : `${statementMonth(statements.firstMonth)} – ${statementMonth(statements.lastMonth)}`
+              : null;
+            return (
+              <div className={`rounded-xl p-3 text-xs mb-4 border ${hasAll ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-orange-50 border-orange-200 text-orange-800"}`}>
+                {hasAll ? (
+                  <>
+                    <strong>Final.</strong> Finix statements cover every month in this range ({span}). Fees, costs and profit below are Finix&apos;s own numbers.
+                  </>
+                ) : (
+                  <>
+                    <strong>Incomplete.</strong> No Finix statement imported for {statements.monthsWithoutStatement.map(statementMonth).join(", ")}
+                    {span ? `; costs and profit below only cover ${span}` : ", so Finix's costs are unknown"}. Finix issues each month&apos;s statement
+                    around the middle of the next month.
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-              <div className="text-xs text-slate-500 mb-1">WGC Charged</div>
+              <div className="text-xs text-slate-500 mb-1">WGC Charged (WGC records)</div>
               <div className="text-xl font-bold text-slate-900">{cents(summary.wgcChargedCents)}</div>
-            </div>
-            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-slate-100" : "border-orange-200"}`}>
-              <div className="text-xs text-slate-500 mb-1">Finix Cost{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}</div>
-              <div className={`text-xl font-bold ${summary.isFullyReconciled ? "text-slate-900" : "text-orange-700"}`}>
-                {!summary.isFullyReconciled && "~"}{cents(summary.finixCostCents)}
-              </div>
-            </div>
-            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-slate-100" : "border-orange-200"}`}>
-              <div className="text-xs text-slate-500 mb-1">WGC Profit{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}</div>
-              <div className={`text-xl font-bold ${summary.isFullyReconciled ? (summary.profitCents >= 0 ? "text-emerald-700" : "text-red-600") : "text-orange-700"}`}>
-                {!summary.isFullyReconciled && "~"}{cents(summary.profitCents)}
-              </div>
+              <div className="text-xs text-slate-400 mt-0.5">Transaction fees on {summary.paymentCount} payments</div>
             </div>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
-              <div className="text-xs text-slate-500 mb-1">Payments / Missing Fee Data</div>
-              <div className="text-xl font-bold text-slate-900">
-                {summary.paymentCount} <span className="text-sm font-normal text-slate-400">/ {summary.paymentsMissingFeeDataCount}</span>
+              <div className="text-xs text-slate-500 mb-1">Fees Charged (Finix)</div>
+              <div className="text-xl font-bold text-slate-900">{statements.statementCount ? cents(statements.feesCents) : "—"}</div>
+              <div className="text-xs text-slate-400 mt-0.5">Incl. $0.50 payout and other service fees</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">Finix Cost</div>
+              <div className="text-xl font-bold text-slate-900">{statements.statementCount ? cents(statements.costsCents) : "—"}</div>
+              <div className="text-xs text-slate-400 mt-0.5">Network + Finix fees, per statements</div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+              <div className="text-xs text-slate-500 mb-1">WGC Profit on Fees</div>
+              <div className={`text-xl font-bold ${statements.residualCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                {statements.statementCount ? cents(statements.residualCents) : "—"}
               </div>
+              <div className="text-xs text-slate-400 mt-0.5">Finix residuals</div>
             </div>
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
               <div className="text-xs text-slate-500 mb-1">Subscription Revenue</div>
               <div className="text-xl font-bold text-slate-900">{cents(summary.subscriptionRevenueCents)}</div>
-              <div className="text-xs text-slate-400 mt-0.5">$10/mo platform fees — no offsetting cost tracked</div>
+              <div className="text-xs text-slate-400 mt-0.5">$10/mo platform fees — processing cost not tracked</div>
             </div>
-            <div className={`bg-emerald-50 rounded-2xl border shadow-sm p-4 ${summary.isFullyReconciled ? "border-emerald-200" : "border-orange-200"}`}>
-              <div className="text-xs text-slate-600 mb-1">
-                Total WGC Revenue{!summary.isFullyReconciled && <span className="text-orange-600 font-semibold"> (preliminary)</span>}
+            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-4">
+              <div className="text-xs text-slate-600 mb-1">Total WGC Revenue</div>
+              <div className={`text-xl font-bold ${statements.residualCents + summary.subscriptionRevenueCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                {cents(statements.residualCents + summary.subscriptionRevenueCents)}
               </div>
-              <div className={`text-xl font-bold ${summary.isFullyReconciled ? (summary.combinedProfitCents >= 0 ? "text-emerald-700" : "text-red-600") : "text-orange-700"}`}>
-                {!summary.isFullyReconciled && "~"}{cents(summary.combinedProfitCents)}
-              </div>
-              <div className="text-xs text-slate-500 mt-0.5">Transaction-fee margin + subscription revenue</div>
+              <div className="text-xs text-slate-500 mt-0.5">Fee profit + subscription revenue</div>
             </div>
           </div>
 
@@ -2113,11 +2136,9 @@ function WgcProfitTab() {
                 <tr>
                   <th className="text-left px-4 py-3">Organization</th>
                   <th className="text-right px-4 py-3">Payments</th>
-                  <th className="text-right px-4 py-3">WGC Charged</th>
-                  <th className="text-right px-4 py-3">Finix Cost{!summary.isFullyReconciled && " (prelim.)"}</th>
-                  <th className="text-right px-4 py-3">Txn Profit{!summary.isFullyReconciled && " (prelim.)"}</th>
+                  <th className="text-right px-4 py-3">Fees Charged</th>
                   <th className="text-right px-4 py-3">Subscription Rev.</th>
-                  <th className="text-right px-4 py-3">Total Revenue{!summary.isFullyReconciled && " (prelim.)"}</th>
+                  <th className="text-right px-4 py-3">Total Charged</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -2126,18 +2147,20 @@ function WgcProfitTab() {
                     <td className="px-4 py-2 font-medium text-slate-800">{o.churchName}</td>
                     <td className="px-4 py-2 text-right">{o.paymentCount}</td>
                     <td className="px-4 py-2 text-right">{cents(o.wgcChargedCents)}</td>
-                    <td className="px-4 py-2 text-right">{cents(o.finixCostCents)}</td>
-                    <td className={`px-4 py-2 text-right ${o.profitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.profitCents)}</td>
                     <td className="px-4 py-2 text-right">{cents(o.subscriptionRevenueCents)}</td>
-                    <td className={`px-4 py-2 text-right font-semibold ${o.combinedProfitCents >= 0 ? "text-emerald-700" : "text-red-600"}`}>{cents(o.combinedProfitCents)}</td>
+                    <td className="px-4 py-2 text-right font-semibold">{cents(o.wgcChargedCents + o.subscriptionRevenueCents)}</td>
                   </tr>
                 ))}
                 {summary.byOrganization.length === 0 && (
-                  <tr><td colSpan={7} className="py-6 text-center text-slate-400">No successful payments or subscription charges in this range.</td></tr>
+                  <tr><td colSpan={5} className="py-6 text-center text-slate-400">No successful payments or subscription charges in this range.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Finix&apos;s summary export doesn&apos;t split costs by organization. For that, download the &ldquo;Residual Breakdown By Merchant&rdquo;
+            report from a billing settlement in Finix.
+          </p>
         </>
       )}
     </div>

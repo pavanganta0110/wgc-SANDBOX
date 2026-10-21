@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
 /**
+ * NOTE: finixCostCents here is effectively always ~$0. Finix's per-transfer
+ * Fees API only returns the fee charged to the merchant (WGC's own
+ * PLATFORM_FEE, excluded below as revenue); Finix's real costs (interchange,
+ * dues and assessments, processor, payout and verification fees) only appear
+ * in its monthly residual statements. The admin profit UI therefore takes
+ * cost and profit from FinixResidualSettlement (src/lib/admin/residuals.ts,
+ * loadStatementsForRange); this module still supplies what WGC charged and
+ * subscription revenue.
+ *
  * WGC-admin-only profit reporting: (what WGC charged) minus (what Finix
  * actually charged WGC). Deliberately separate from
  * Payment.actualFinixFeesCents — that field is already relied on by

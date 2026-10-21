@@ -1482,28 +1482,36 @@ model InvoiceUsageEvent {
 /// separate from DashboardAuditLog since many of these actions are WGC-admin
 /// actions not tied to a single organization user, and financial-override
 /// actions need explicit previous/new-value + reason tracking.
-// A Finix platform-residual payout to WGC, recorded by a WGC billing admin.
-// Finix pays WGC's fee revenue monthly (merchant fees minus Finix costs) as a
-// "billing settlement" that's only visible in the Finix dashboard. There's
-// no API for it, so each payout is entered here by hand and compared
-// against the residual WGC expected for that month
-// (src/lib/admin/residuals.ts). Read-only bookkeeping: never moves money and
-// never touches Payment/FinixTransfer.
-model FinixResidualPayout {
-  id                       String   @id @default(cuid())
-  // First day (UTC) of the month whose residual this payout covers.
-  periodMonth              DateTime
-  amountCents              Int
-  receivedAt               DateTime
-  // Finix billing settlement id / bank reference, when known.
-  finixBillingSettlementId String?
-  note                     String?
-  recordedByUserId         String
-  recordedByEmail          String
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+// One Finix platform-residual billing settlement: Finix's own monthly
+// statement of WGC's fee revenue (merchant fees charged to organizations,
+// minus network and Finix costs). Finix has no API for billing settlements,
+// so rows are imported from the dashboard's "Residual Settlements" export
+// (src/lib/admin/residualSettlementImport.ts). This is the only reliable
+// source of Finix's real cost: the per-transfer Fees API only returns the
+// fee charged to the merchant (WGC's PLATFORM_FEE), never Finix's costs.
+// Read-only bookkeeping: never moves money.
+model FinixResidualSettlement {
+  id                       String    @id @default(cuid())
+  finixBillingSettlementId String    @unique
+  windowStart              DateTime
+  windowEnd                DateTime
+  type                     String?
+  applicationName          String?
+  merchantFeesCents        Int
+  // Finix reports these to fractions of a cent (e.g. $56.69617).
+  costsCents               Float
+  residualSubtotalCents    Float
+  revSharePercent          Float
+  totalResidualCents       Int
+  state                    String
+  // Set by an admin once the payout is seen in WGC's bank account.
+  depositReceivedAt        DateTime?
+  depositNote              String?
+  importedByEmail          String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  @@index([periodMonth])
+  @@index([windowStart])
 }
 
 model WgcBillingAuditLog {

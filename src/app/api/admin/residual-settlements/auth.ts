@@ -5,7 +5,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { resolveWgcAdminBillingPermissions } from "@/lib/auth/billingAdminPermissions";
 import type { AdminSession } from "@/lib/auth/session";
 
-/** Recording residual payouts changes WGC's own revenue books: billing managers only, MFA-verified. */
+/** Importing residual statements changes WGC's own revenue books: billing managers only, MFA-verified. */
 export async function requireResidualManager(): Promise<{ session: AdminSession } | { error: NextResponse }> {
   let session;
   try {
