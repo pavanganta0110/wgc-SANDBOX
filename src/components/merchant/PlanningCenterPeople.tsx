@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { Loader2, RefreshCw, UserPlus, Users } from "lucide-react";
 import type { PeopleJobSummary, PeopleOverview } from "@/lib/integrations/planningcenter/peopleTypes";
 import { buttonSecondary, PcoApiError, pcoFetch } from "./planningCenterApi";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 
 const MAX_JOB_STEPS = 2000; // a runaway guard, not a limit anyone should reach
 
@@ -32,6 +33,7 @@ export default function PlanningCenterPeople() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [live, setLive] = useState<PeopleJobSummary | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(() => {
     return pcoFetch<PeopleOverview>("/people")
@@ -108,6 +110,7 @@ export default function PlanningCenterPeople() {
 
   return (
     <div id="planning-center-people" className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-5">
+      {confirmDialog}
       <div>
         <h3 className="text-sm font-bold text-slate-900">People</h3>
         <p className="text-xs text-slate-500 mt-0.5">Link each WGC donor to the right person in Planning Center so their gifts land on their own giving record. WGC never links on a name alone.</p>
@@ -133,8 +136,17 @@ export default function PlanningCenterPeople() {
         <button
           className={buttonSecondary}
           disabled={disabled}
-          onClick={() => {
-            if (window.confirm("Import people from Planning Center as contacts?\n\nThis adds a WGC contact for each active adult who has an email or phone and isn't already a donor. Children and inactive people are skipped. Existing donors are never overwritten. It can't be undone in one click.\n\nThese contacts become your organization's own records in WGC. Make sure your organization has the right to add these people to WGC and to contact them.")) runJob("IMPORT_PEOPLE");
+          onClick={async () => {
+            const ok = await confirm({
+              title: "Import people from Planning Center as contacts?",
+              body: "This adds a WGC contact for each active adult who has an email or phone and isn't already a donor. Children and inactive people are skipped, and existing donors are never overwritten.",
+              callout: {
+                title: "Before you import",
+                body: "This can't be undone in one click.\n\nThese contacts become your organization's own records in WGC. Make sure your organization has the right to add these people to WGC and to contact them.",
+              },
+              confirmLabel: "Import people",
+            });
+            if (ok) runJob("IMPORT_PEOPLE");
           }}
         >
           {busy === "IMPORT_PEOPLE" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />} Import people as contacts
@@ -172,9 +184,14 @@ export default function PlanningCenterPeople() {
                             <button
                               className={buttonSecondary}
                               disabled={disabled}
-                              onClick={() => {
-                                if (window.confirm(`Merge "${item.donorName ?? "this donor"}" into "${c.alreadyLinkedDonorName ?? "the other donor"}"?\n\nAll giving history moves to one donor, and the other is archived (not deleted). Only do this if they are the same person.`))
-                                  link(item.donorId, "MERGE", c.pcoPersonId, "Merged into one donor.");
+                              onClick={async () => {
+                                const ok = await confirm({
+                                  title: `Merge "${item.donorName ?? "this donor"}" into "${c.alreadyLinkedDonorName ?? "the other donor"}"?`,
+                                  body: "All giving history moves to one donor, and the other is archived (not deleted). Only do this if they are the same person.",
+                                  confirmLabel: "Merge donors",
+                                  tone: "danger",
+                                });
+                                if (ok) link(item.donorId, "MERGE", c.pcoPersonId, "Merged into one donor.");
                               }}
                             >
                               Yes, same person — merge

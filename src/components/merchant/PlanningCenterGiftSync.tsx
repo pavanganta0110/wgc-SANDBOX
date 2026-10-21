@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 import { describeSyncUnit, SYNC_STATUS_LABELS, type SendTiming, type SyncMode, type SyncOverview, type SyncTarget, type UnmatchedDonorPolicy } from "@/lib/integrations/planningcenter/syncTypes";
 import type { ProfilePreview } from "@/lib/integrations/planningcenter/profilePreview";
+import { useConfirm } from "@/components/common/ConfirmDialog";
 import { buttonDanger, buttonPrimary, buttonSecondary, money, PcoApiError, pcoFetch } from "./planningCenterApi";
 
 const TONE: Record<string, string> = {
@@ -65,6 +66,7 @@ export default function PlanningCenterGiftSync() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showSkipped, setShowSkipped] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(() => {
     return pcoFetch<SyncOverview>("/sync")
@@ -137,6 +139,7 @@ export default function PlanningCenterGiftSync() {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
+      {confirmDialog}
       <div>
         <h3 className="text-sm font-bold text-slate-900">{isPeople ? "People sync" : "Gift sync"}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{isPeople ? "Your donors are matched to people in Planning Center, and their giving is shown on their profile. No donations are sent to Planning Center Giving." : "Every gift given through WGC is added to Planning Center Giving automatically, so your donors' giving stays in one place."}</p>
@@ -168,12 +171,26 @@ export default function PlanningCenterGiftSync() {
                 role="radio"
                 aria-checked={selected}
                 disabled={disabled}
-                onClick={() => {
+                onClick={async () => {
                   if (selected) return;
-                  const msg = t.value === "PROFILE_FIELDS"
-                    ? "Switch to people only?\n\nWGC will stop sending donations to Planning Center and will fill a \"WGC Giving\" section on each matched person instead (what they have given, their last gift, and a link to their giving in WGC). Gifts already sent stay where they are.\n\nPrivacy: these amounts will show on people's Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can't see your giving reports. Check who can see it in Planning Center before you continue. Only people you have already matched are affected, and donors who asked to stay anonymous are never written."
-                    : "Switch to sending every gift? Only gifts paid from now on are sent. Gifts paid while you were on people only are not added to Planning Center Giving.";
-                  if (window.confirm(msg)) putSettings({ syncTarget: t.value }, "Saved.");
+                  const ok = await confirm(
+                    t.value === "PROFILE_FIELDS"
+                      ? {
+                          title: "Switch to people only?",
+                          body: "WGC will stop sending donations to Planning Center and will fill a \"WGC Giving\" section on each matched person instead: what they have given, their last gift, and a link to their giving in WGC.\n\nGifts already sent stay where they are. Only people you have already matched are affected, and donors who asked to stay anonymous are never written.",
+                          callout: {
+                            title: "Check who can see it first",
+                            body: "These amounts will show on people's Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can't see your giving reports.",
+                          },
+                          confirmLabel: "Switch to people only",
+                        }
+                      : {
+                          title: "Switch to sending every gift?",
+                          body: "Only gifts paid from now on are sent. Gifts paid while you were on people only are not added to Planning Center Giving.",
+                          confirmLabel: "Send every gift",
+                        },
+                  );
+                  if (ok) putSettings({ syncTarget: t.value }, "Saved.");
                 }}
                 className={`text-left rounded-xl border p-3 transition disabled:opacity-60 ${selected ? "border-slate-900 bg-slate-50" : "border-slate-200 hover:border-slate-300"}`}
               >
@@ -300,8 +317,8 @@ export default function PlanningCenterGiftSync() {
                 )}
                 {item.status === "NEEDS_REVIEW" && item.code !== "REVERSAL_NOT_APPLIED" && (
                   <div className="flex gap-2 shrink-0">
-                    <button className={buttonSecondary} disabled={disabled} onClick={() => {
-                      if (window.confirm("Only choose this if you checked Planning Center and this gift is NOT in the batch. WGC will then send it.")) run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "It will be sent."; });
+                    <button className={buttonSecondary} disabled={disabled} onClick={async () => {
+                      if (await confirm({ title: "Send this gift to Planning Center?", body: "Only choose this if you checked Planning Center and this gift is NOT in the batch. WGC will then send it.", confirmLabel: "Send it" })) run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "It will be sent."; });
                     }}>It&apos;s not there — send it</button>
                     <button className={buttonDanger} disabled={disabled} onClick={() => run(`s-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "SKIP" }) }); return "Skipped."; })}>Don&apos;t send</button>
                   </div>
