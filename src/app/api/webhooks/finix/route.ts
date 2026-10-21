@@ -607,7 +607,13 @@ export async function syncFinixDataFromWebhookEvent(
             }
           }
         } catch (err) {
-          console.error("Failed to auto-create Payment record for subscription transfer:", err);
+          // A concurrent delivery for the same transfer recorded it first:
+          // Payment.finixTransferId is unique, so this one is a no-op.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            console.info("Subscription transfer already recorded by a concurrent delivery:", data.id);
+          } else {
+            console.error("Failed to auto-create Payment record for subscription transfer:", err);
+          }
         }
       }
 
