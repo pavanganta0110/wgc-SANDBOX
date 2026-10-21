@@ -33,6 +33,8 @@ import {
   UploadCloud,
   MessageSquare,
   CalendarDays,
+  PlusCircle,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
@@ -50,6 +52,29 @@ export interface NavItem {
    * previous visible item's section — keeps the 20+ item nav scannable
    * instead of one long undifferentiated list. */
   section: "Overview" | "Money" | "Giving" | "Back Office" | "Organization";
+  /** Shown only when the signed-in user has this access (see NavAccess). The
+   * page and API enforce it either way; this keeps the nav from showing a
+   * link that just bounces the user back to Home. */
+  access?: keyof NavAccess;
+}
+
+/** Per-user access the layout resolves server-side and passes to the nav. */
+export interface NavAccess {
+  canViewEvents: boolean;
+  canViewFundraisingCampaigns: boolean;
+  /** Mirrors the take-payment API: every role except VIEWER. */
+  canTakePayment: boolean;
+  canViewFunds: boolean;
+}
+
+/** Shared by the desktop and mobile sidebars. */
+export function visibleNavItems(role: string | undefined, access?: NavAccess): NavItem[] {
+  const isOrgLevelRole = role === "owner" || role === "admin" || role === "church_admin" || !role;
+  return NAV_ITEMS.filter((item) => {
+    if (item.organizationOnly && !isOrgLevelRole) return false;
+    if (item.access && access && !access[item.access]) return false;
+    return true;
+  });
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -95,8 +120,16 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { name: "Subscriptions", href: "/merchant/subscriptions", icon: RefreshCw, section: "Money" },
+  {
+    name: "Take a Payment",
+    href: "/merchant/transactions/payments?takePayment=1",
+    icon: PlusCircle,
+    section: "Giving",
+    access: "canTakePayment",
+  },
   { name: "Donors", href: "/merchant/donors", icon: Users, section: "Giving" },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake, section: "Giving" },
+  { name: "Funds", href: "/merchant/funds", icon: Layers, section: "Giving", access: "canViewFunds" },
   { name: "Giving Campaigns", href: "/merchant/giving-campaigns", icon: Send, section: "Giving" },
   { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins, section: "Giving" },
   {
@@ -109,8 +142,8 @@ export const NAV_ITEMS: NavItem[] = [
       { name: "Campaigns", href: "/merchant/pledge-campaigns" },
     ],
   },
-  { name: "Fundraising Campaigns", href: "/merchant/campaigns", icon: Megaphone, section: "Giving" },
-  { name: "Events", href: "/merchant/events", icon: CalendarDays, organizationOnly: true, section: "Giving" },
+  { name: "Fundraising Campaigns", href: "/merchant/campaigns", icon: Megaphone, section: "Giving", access: "canViewFundraisingCampaigns" },
+  { name: "Events", href: "/merchant/events", icon: CalendarDays, section: "Giving", access: "canViewEvents" },
   { name: "Text to Give", href: "/merchant/text-to-give", icon: MessageSquare, section: "Giving" },
   { name: "Migration Center", href: "/merchant/migrations", icon: UploadCloud, organizationOnly: true, section: "Giving" },
   {
@@ -144,14 +177,14 @@ export const NAV_ITEMS: NavItem[] = [
 
 const STORAGE_KEY = "wgc_merchant_sidebar_collapsed";
 
-export default function Sidebar({ role }: { role?: string } = {}) {
+export default function Sidebar({ role, access }: { role?: string; access?: NavAccess } = {}) {
   const pathname = usePathname();
   // Role navigation: FUNDRAISER/VIEWER get only their own links,
   // transactions, donors, and recurring gifts — organization-level
   // sections (settlements, deposits, disputes, billing, compliance,
-  // settings, company) are hidden rather than shown-but-denied.
-  const isOrgLevelRole = role === "owner" || role === "admin" || role === "church_admin" || !role;
-  const visibleItems = isOrgLevelRole ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.organizationOnly);
+  // settings, company) are hidden rather than shown-but-denied, as are
+  // sections the user's permissions don't cover.
+  const visibleItems = visibleNavItems(role, access);
   const [collapsed, setCollapsed] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 

@@ -115,6 +115,12 @@ export default async function MerchantDashboardLayout({
   }
 
   const isDemoMode = (await cookies()).has("wgc_demo_mode");
+  const navAccess = {
+    canViewEvents: hasPermission(auth, "canViewEvents"),
+    canViewFundraisingCampaigns: hasPermission(auth, "canViewFundraisingCampaigns"),
+    canTakePayment: auth.role !== "viewer",
+    canViewFunds: hasPermission(auth, "canViewDonors"),
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -122,11 +128,11 @@ export default async function MerchantDashboardLayout({
       <ComplianceBanner status={complianceStatus} />
       {billingGateActive && <BillingGateBanner state={auth.orgAccessState ?? "NO_GATE"} />}
       <div className="flex-grow flex">
-        <Sidebar role={auth.role ?? undefined} />
+        <Sidebar role={auth.role ?? undefined} access={navAccess} />
         <div className="flex-grow flex flex-col min-w-0">
           <div className="flex items-center justify-between px-4 md:px-10 py-6 border-b border-slate-100 bg-white">
             <div className="flex items-center gap-2">
-              <MobileSidebar role={auth.role ?? undefined} />
+              <MobileSidebar role={auth.role ?? undefined} access={navAccess} />
               <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
                 <div>
                 <h1 className="text-lg font-bold text-slate-900">
