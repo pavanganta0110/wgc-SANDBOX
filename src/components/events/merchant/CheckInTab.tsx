@@ -353,7 +353,7 @@ function DoorSales({
           addOns: activeAddOns.filter((a) => (qty[a.id as string] ?? 0) > 0).map((a) => ({ addOnId: a.id, quantity: qty[a.id as string] })),
         }),
       });
-      if (!res.ok) return setError(await readApiError(res, "Couldn't complete the sale."));
+      if (!res.ok) return setError(await readApiError(res, "Couldn't complete the gift."));
       const data = await res.json();
       // Card: straight to the payment page with these details and tickets
       // already filled in — no second form.
@@ -365,7 +365,7 @@ function DoorSales({
       reset();
       onChange();
     } catch {
-      setError("Couldn't complete the sale. Check your connection and try again.");
+      setError("Couldn't complete the gift. Check your connection and try again.");
     } finally {
       setSaving(false);
     }
@@ -381,10 +381,10 @@ function DoorSales({
   return (
     <form onSubmit={sell} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-4">
       <div>
-        <h3 className="text-base font-semibold text-slate-900">Sell tickets at the door</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Walk-up buyers are checked in as soon as the sale completes, and the ticket is emailed to them.</p>
+        <h3 className="text-base font-semibold text-slate-900">Door tickets and gifts</h3>
+        <p className="text-xs text-slate-500 mt-0.5">Walk-up guests are checked in as soon as the gift completes, and the ticket is emailed to them.</p>
       </div>
-      {!isActive && <p className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Set the event to Active in Settings before selling at the door.</p>}
+      {!isActive && <p className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Set the event to Active in Settings before taking gifts at the door.</p>}
 
       {done && (
         <div role="status" className="rounded-xl border-2 border-green-400 bg-green-100 px-4 py-3 text-green-900">
@@ -464,7 +464,7 @@ function DoorSales({
             </button>
           ))}
         </div>
-        {method === "CARD" && <p className="text-xs text-slate-500 mt-2">Card sales continue to the secure payment page with these details already filled in. The payment runs through Finix and is reconciled like any online registration, and the buyer is checked in automatically once it&apos;s paid.</p>}
+        {method === "CARD" && <p className="text-xs text-slate-500 mt-2">Card gifts continue to the secure payment page with these details already filled in. The payment runs through Finix and is reconciled like any online registration, and the buyer is checked in automatically once it&apos;s paid.</p>}
         {(method === "CASH" || method === "CHECK") && <p className="text-xs text-slate-500 mt-2">Cash and checks are recorded on the registration only — they don&apos;t go through Finix, so they appear under &ldquo;Door cash/check&rdquo;, not Revenue.</p>}
       </div>
 
@@ -480,7 +480,7 @@ function DoorSales({
           ) : saving ? (
             "Please wait…"
           ) : (
-            `Complete ${method === "COMPLIMENTARY" ? "free" : method === "CHECK" ? "check" : "cash"} sale`
+            `Complete ${method === "COMPLIMENTARY" ? "free" : method === "CHECK" ? "check" : "cash"} gift`
           )}
         </button>
       </div>
@@ -515,7 +515,7 @@ export default function CheckInTab({
         <div className="grid grid-cols-3 gap-3">
           {[
             ["Checked in", `${stats.checkedIn} of ${stats.attendees}`],
-            ["Door sales", String(stats.doorSales)],
+            ["Door gifts", String(stats.doorSales)],
             ["Door cash/check", formatCents(stats.doorCashCents)],
           ].map(([label, value]) => (
             <div key={label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3">
@@ -525,7 +525,7 @@ export default function CheckInTab({
           ))}
         </div>
       )}
-      {!canManageAttendees && <p className="text-sm text-slate-500">You can view this page, but only team members who can manage attendees can check people in or sell tickets.</p>}
+      {!canManageAttendees && <p className="text-sm text-slate-500">You can view this page, but only team members who can manage attendees can check people in or take door gifts.</p>}
       <Scanner eventId={eventId} canManage={canManageAttendees} onChange={onChange} />
       <DoorSales
         eventId={eventId}

@@ -161,8 +161,8 @@ export async function getPaymentsInsights(
 
   const summary = [
     { label: "Total Transaction Volume", value: formatCents(totalVolumeCents) },
-    { label: "Successful Sales", value: formatCents(totalVolumeCents) },
-    { label: "Failed Sales", value: formatCents(failedVolumeCents) },
+    { label: "Successful Gifts", value: formatCents(totalVolumeCents) },
+    { label: "Failed Gifts", value: formatCents(failedVolumeCents) },
     { label: "Avg. Transaction Amount", value: formatCents(avgCents) },
   ];
 

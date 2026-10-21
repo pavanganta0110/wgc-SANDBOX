@@ -85,18 +85,27 @@ describe("own event, scoped queries", () => {
 });
 
 describe("permissions", () => {
-  it("denies viewers and fundraisers by default on every event route", async () => {
+  it("denies viewers every event route, and fundraisers everything but viewing", async () => {
     const list = await import("@/app/api/merchant/events/route");
     const exp = await import("@/app/api/merchant/events/[eventId]/export/route");
     const checkin = await import("@/app/api/merchant/events/[eventId]/attendees/[attendeeId]/route");
     for (const role of ["viewer", "fundraiser"]) {
       signIn(role);
-      expect((await list.GET()).status).toBe(403);
+      if (role === "viewer") expect((await list.GET()).status).toBe(403);
       expect((await list.POST(req("POST", {}))).status).toBe(403);
       expect((await exp.GET(req(), ctx())).status).toBe(403);
       expect((await checkin.PATCH(req("PATCH", { checkedIn: true }), { params: Promise.resolve({ eventId: "e", attendeeId: "a" }) })).status).toBe(403);
     }
     expect(eventFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("lets fundraisers view events by default, read-only", async () => {
+    signIn("fundraiser");
+    const { guardEventsRoute } = await import("@/lib/eventRegistration/merchantGuard");
+    expect("auth" in (await guardEventsRoute("canViewEvents"))).toBe(true);
+    for (const key of ["canManageEvents", "canManageEventAttendees", "canExportEvents"] as const) {
+      expect("auth" in (await guardEventsRoute(key))).toBe(false);
+    }
   });
 
   it("allows owners and admins to reach the routes", async () => {

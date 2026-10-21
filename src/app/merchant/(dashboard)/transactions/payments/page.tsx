@@ -33,6 +33,7 @@ export default async function PaymentsListPage({
     id?: string;
     fund?: string;
     source?: string;
+    takePayment?: string;
   }>;
 }) {
   const auth = await requireMerchantSession();
@@ -43,7 +44,7 @@ export default async function PaymentsListPage({
   // (see that helper's comment). Organization scope still includes
   // unattributed transfers, matching the approved payment-scope policy.
   const transferScope = await buildFinixTransferScope(auth, viewScope);
-  const { state, last4, buyer, range, from, to, id, fund, source } = await searchParams;
+  const { state, last4, buyer, range, from, to, id, fund, source, takePayment } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
@@ -199,6 +200,8 @@ export default async function PaymentsListPage({
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-bold text-slate-900">Payments</h2>
         <PaymentsHeaderActions
+          key={takePayment ?? "closed"}
+          openOnLoad={takePayment === "1" && auth.role !== "viewer"}
           finixMerchantId={church?.finixMerchantId || ""}
           churchName={church?.name || ""}
           pricing={{
