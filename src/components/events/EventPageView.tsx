@@ -50,7 +50,7 @@ export default function EventPageView({ event, addOns, organization, checkout, l
     )}
     {doorSale && (
       <div className="bg-indigo-600 text-white text-sm text-center py-2 px-4">
-        <strong>Door sale mode.</strong> Whoever registers here is checked in automatically.{" "}
+        <strong>Door gift mode.</strong> Whoever registers here is checked in automatically.{" "}
         <Link href="/merchant/events" className="underline font-semibold">Back to events</Link>
       </div>
     )}

@@ -53,7 +53,7 @@ export default function DoorPayment({
       </div>
       <div className="max-w-xl mx-auto rounded-2xl shadow-sm border p-6 sm:p-8" style={{ borderColor: light.borderColor, backgroundColor: light.headerBackground }}>
         <h1 className="text-xl font-bold mb-1" style={{ color: light.headingColor }}>{event.name}</h1>
-        <p className="text-sm mb-4" style={{ color: light.bodyTextColor }}>Door sale · {event.dateLabel}</p>
+        <p className="text-sm mb-4" style={{ color: light.bodyTextColor }}>Door gift · {event.dateLabel}</p>
 
         {outcome ? (
           <div role="status" className="text-center py-6">
@@ -72,7 +72,7 @@ export default function DoorPayment({
         ) : closedMessage ? (
           <p role="alert" className="text-sm text-red-600">{closedMessage}</p>
         ) : registration.status !== "PENDING" ? (
-          <p role="alert" className="text-sm text-red-600">This sale is no longer open for payment. Start a new door sale from the Check-in tab.</p>
+          <p role="alert" className="text-sm text-red-600">This gift is no longer open for payment. Start a new door gift from the Check-in tab.</p>
         ) : checkout && organization.finixMerchantId ? (
           <>
             <div className="rounded-xl border p-4 mb-5 text-sm" style={{ borderColor: light.borderColor, color: light.bodyTextColor }}>
