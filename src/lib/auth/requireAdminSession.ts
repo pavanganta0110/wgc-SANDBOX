@@ -1,3 +1,4 @@
+import { isAdminMfaEnforced } from "@/lib/auth/adminMfaPolicy";
 import { getAdminSession, type AdminSession } from "@/lib/auth/session";
 import { UnauthorizedError, ForbiddenError } from "@/lib/auth/errors";
 
@@ -40,6 +41,8 @@ export async function requireMfaVerifiedAdminSession(): Promise<AdminSession> {
   if (session.role !== "wgc_admin" && session.role !== "wgc_super_admin") {
     throw new UnauthorizedError("Admin authentication required.");
   }
+  // Sandbox only (see adminMfaPolicy.ts): no SMS provider, so 2FA is off.
+  if (!isAdminMfaEnforced()) return session;
   if (!session.mfaEnabled) {
     throw new ForbiddenError("This action requires two-factor authentication to be enabled on your admin account.");
   }
