@@ -1482,6 +1482,30 @@ model InvoiceUsageEvent {
 /// separate from DashboardAuditLog since many of these actions are WGC-admin
 /// actions not tied to a single organization user, and financial-override
 /// actions need explicit previous/new-value + reason tracking.
+// A Finix platform-residual payout to WGC, recorded by a WGC billing admin.
+// Finix pays WGC's fee revenue monthly (merchant fees minus Finix costs) as a
+// "billing settlement" that's only visible in the Finix dashboard. There's
+// no API for it, so each payout is entered here by hand and compared
+// against the residual WGC expected for that month
+// (src/lib/admin/residuals.ts). Read-only bookkeeping: never moves money and
+// never touches Payment/FinixTransfer.
+model FinixResidualPayout {
+  id                       String   @id @default(cuid())
+  // First day (UTC) of the month whose residual this payout covers.
+  periodMonth              DateTime
+  amountCents              Int
+  receivedAt               DateTime
+  // Finix billing settlement id / bank reference, when known.
+  finixBillingSettlementId String?
+  note                     String?
+  recordedByUserId         String
+  recordedByEmail          String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([periodMonth])
+}
+
 model WgcBillingAuditLog {
   id                   String   @id @default(cuid())
   organizationId       String?
