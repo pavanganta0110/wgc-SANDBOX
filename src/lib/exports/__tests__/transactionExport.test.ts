@@ -13,8 +13,16 @@ const mockPrisma = {
   bankReturn: { findMany: vi.fn() },
   finixSettlement: { findMany: vi.fn() },
   finixFundingTransferAttempt: { findMany: vi.fn() },
+  finixFee: { findMany: vi.fn() },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
+
+// How Finix really reports WGC's fee: separate PLATFORM_FEE Fee rows (with
+// fractions of a cent), never on the transfer. 30 + 56.6 rounds to 87.
+const PLATFORM_FEE_ROWS_87 = [
+  { linkedToId: "tr-1", feeSubtype: "PLATFORM_FEE", feeCategory: null, amountCents: 30 },
+  { linkedToId: "tr-1", feeSubtype: "PLATFORM_FEE", feeCategory: null, amountCents: 56.6 },
+];
 
 async function loadModule() {
   vi.resetModules();
@@ -37,7 +45,7 @@ const CANONICAL_HEADERS = [
   "Fund / Designation",
   "WGC Payment ID", "Processor Transaction ID", "Created At", "Currency", "Donor Name", "Donor Email", "Donor Phone",
   "Payment Method", "Instrument Type", "Card Brand or Bank Type", "Last Four", "Transaction Status", "Refund Status",
-  "Dispute Status", "ACH Return Status", "Donation Amount", "Donor Processing Fee", "Total Charged to Donor",
+  "Dispute Status", "ACH Return Status", "Donation Amount", "Donor Covered Fee", "Donor Processing Fee", "Total Charged to Donor",
   "Processor Fee", "WGC Supplemental Fee", "Other Processor Fees", "Total Fees", "Refund Amount", "Dispute Amount",
   "ACH Return Amount", "Expected Net to Organization", "Actual Net to Organization", "Settlement Included?",
   "Settlement Allocation Amount", "Settlement ID", "Settlement Status", "Settlement Created At", "Settlement Processed At",
@@ -219,7 +227,8 @@ describe("resolveTransactionExportRows", () => {
       { id: "p1", churchId: "c1", attributedUserId: null, givingLinkId: null, donorId: null, finixTransferId: "tr-1", paymentMethodType: "PAYMENT_CARD", amountCents: 1000, status: "SUCCEEDED", createdAt: new Date(), donationAmountCents: null, feeCoveredCents: null, donorCoversFee: false, merchantExpectedNetCents: null, currency: "USD" },
     ]);
     mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
-    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 87, finixSettlementId: null, finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue(PLATFORM_FEE_ROWS_87);
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: null, finixPaymentInstrumentId: null }]);
 
     const { resolveTransactionExportRows } = await loadModule();
     const rows = await resolveTransactionExportRows({ churchId: "c1" }, metadata);
@@ -269,7 +278,8 @@ describe("resolveTransactionExportRows", () => {
       { id: "p1", churchId: "c1", attributedUserId: null, givingLinkId: null, donorId: null, finixTransferId: "tr-1", paymentMethodType: "PAYMENT_CARD", amountCents: 1000, status: "SUCCEEDED", createdAt: new Date(), donationAmountCents: null, feeCoveredCents: null, donorCoversFee: false, merchantExpectedNetCents: null, currency: "USD" },
     ]);
     mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
-    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 87, finixSettlementId: null, finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue(PLATFORM_FEE_ROWS_87);
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: null, finixPaymentInstrumentId: null }]);
 
     const { resolveTransactionExportRows } = await loadModule();
     const rows = await resolveTransactionExportRows({ churchId: "c1" }, metadata);
@@ -298,7 +308,8 @@ describe("resolveTransactionExportRows", () => {
       { id: "p1", churchId: "c1", attributedUserId: null, givingLinkId: null, donorId: null, finixTransferId: "tr-1", paymentMethodType: "PAYMENT_CARD", amountCents: 1000, status: "SUCCEEDED", createdAt: new Date(), donationAmountCents: null, feeCoveredCents: null, donorCoversFee: false, merchantExpectedNetCents: null, currency: "USD" },
     ]);
     mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
-    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 87, finixSettlementId: "stl-1", finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue(PLATFORM_FEE_ROWS_87);
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: "stl-1", finixPaymentInstrumentId: null }]);
     mockPrisma.finixSettlement.findMany.mockResolvedValue([{ finixSettlementId: "stl-1", state: "SETTLED", createdAtFinix: new Date("2026-01-01"), settledAt: new Date("2026-01-03") }]);
 
     const { resolveTransactionExportRows } = await loadModule();
@@ -314,7 +325,8 @@ describe("resolveTransactionExportRows", () => {
       { id: "p1", churchId: "c1", attributedUserId: null, givingLinkId: null, donorId: null, finixTransferId: "tr-1", paymentMethodType: "PAYMENT_CARD", amountCents: 1000, status: "SUCCEEDED", createdAt: new Date(), donationAmountCents: null, feeCoveredCents: null, donorCoversFee: false, merchantExpectedNetCents: null, currency: "USD" },
     ]);
     mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
-    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 87, finixSettlementId: "stl-1", finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue(PLATFORM_FEE_ROWS_87);
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: "stl-1", finixPaymentInstrumentId: null }]);
     mockPrisma.finixSettlement.findMany.mockResolvedValue([{ finixSettlementId: "stl-1", state: "SETTLED", createdAtFinix: new Date("2026-01-01"), settledAt: new Date("2026-01-03") }]);
     mockPrisma.finixFundingTransferAttempt.findMany.mockResolvedValue([
       { finixFundingTransferAttemptId: "fta-1", finixSettlementId: "stl-1", state: "PAID", sentAt: new Date("2026-01-04"), arrivedAt: new Date("2026-01-05"), bankAccountLast4: "4321", traceId: "trace-abc" },
@@ -339,7 +351,7 @@ describe("renderTransactionCsv / CSV escaping and safety", () => {
       organizationName: "", organizationId: "", teamMemberName: "", teamMemberEmail: "", givingLinkName: "", givingLinkId: "",
       wgcPaymentId: "p1", finixTransferId: "", createdAt: new Date(), currency: "USD", donorName: 'Smith, "Jane"', donorEmail: "",
       donorPhone: "", paymentMethod: "CARD", instrumentType: "", cardBrandOrBankType: "", lastFour: "", transactionStatus: "SUCCEEDED",
-      refundStatus: "NONE", disputeStatus: "NONE", achReturnStatus: "NONE", donationAmountCents: 1000, donorProcessingFeeCents: 0,
+      refundStatus: "NONE", disputeStatus: "NONE", achReturnStatus: "NONE", donationAmountCents: 1000, donorCoveredFee: "No", donorProcessingFeeCents: 0,
       totalChargedToDonorCents: 1000, finixProcessingFeeCents: null, wgcSupplementalFeeCents: null, otherProcessorFeesCents: 0,
       totalFeesCents: null, refundAmountCents: 0, disputeAmountCents: 0, achReturnAmountCents: 0, expectedNetToOrganizationCents: null,
       actualNetToOrganizationCents: null, settlementIncluded: "NO", settlementAllocationAmountCents: null, settlementId: "",
@@ -349,5 +361,80 @@ describe("renderTransactionCsv / CSV escaping and safety", () => {
     };
     const csv = renderTransactionCsv([row]);
     expect(csv).toContain('"Smith, ""Jane"""');
+  });
+});
+
+describe("fee breakdown and chosen columns", () => {
+  const metadata = {
+    reportType: "Organization Transaction Report",
+    reportScope: "ENTIRE_ORGANIZATION",
+    ownerName: "Entire Organization",
+    ownerEmail: "",
+    ownerUserId: "",
+    ownerRole: "",
+    generatedByName: "owner@x.com",
+    generatedByEmail: "owner@x.com",
+    generatedAt: new Date("2026-07-19"),
+    periodStart: null,
+    periodEnd: null,
+    appliedFilters: "None",
+  };
+  const payment = (over: Record<string, unknown> = {}) => ({
+    id: "p1", churchId: "c1", attributedUserId: null, givingLinkId: null, donorId: null, finixTransferId: "tr-1",
+    paymentMethodType: "PAYMENT_CARD", amountCents: 2060, status: "SUCCEEDED", createdAt: new Date(),
+    donationAmountCents: 2000, feeCoveredCents: 60, donorCoversFee: true, merchantExpectedNetCents: 2000, currency: "USD", ...over,
+  });
+
+  it("a donor-covered gift: fee from Finix's supplemental fee row, net equals the donation, Donor Covered Fee = Yes", async () => {
+    mockPrisma.payment.findMany.mockResolvedValue([payment()]);
+    mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: null, finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue([{ linkedToId: "tr-1", feeSubtype: "PLATFORM_FEE", feeCategory: null, amountCents: 60 }]);
+    const { resolveTransactionExportRows } = await loadModule();
+    const [row] = await resolveTransactionExportRows({ churchId: "c1" }, metadata);
+    expect(row.donorCoveredFee).toBe("Yes");
+    expect(row.finixProcessingFeeCents).toBe(60);
+    expect(row.actualNetToOrganizationCents).toBe(2000);
+  });
+
+  it("Finix's $0 transfer fee is never shown as the processing fee: no fee rows yet means pending", async () => {
+    mockPrisma.payment.findMany.mockResolvedValue([payment()]);
+    mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
+    mockPrisma.finixTransfer.findMany.mockResolvedValue([{ finixTransferId: "tr-1", feeCents: 0, finixSettlementId: null, finixPaymentInstrumentId: null }]);
+    mockPrisma.finixFee.findMany.mockResolvedValue([{ linkedToId: "tr-1", feeSubtype: "OTHER", feeCategory: null, amountCents: 12 }]);
+    const { resolveTransactionExportRows } = await loadModule();
+    const [row] = await resolveTransactionExportRows({ churchId: "c1" }, metadata);
+    expect(row.finixProcessingFeeCents).toBeNull();
+    expect(row.actualNetToOrganizationCents).toBeNull();
+  });
+
+  it("renders only the chosen column groups, in the canonical order", async () => {
+    mockPrisma.payment.findMany.mockResolvedValue([payment()]);
+    mockPrisma.church.findUnique.mockResolvedValue({ id: "c1", name: "Test Church" });
+    const { resolveTransactionExportRows, renderTransactionCsv } = await loadModule();
+    const rows = await resolveTransactionExportRows({ churchId: "c1" }, metadata);
+    const header = renderTransactionCsv(rows, ["fees", "donor"]).split("\n")[0];
+    expect(header).toBe(
+      "Donor Name,Donor Email,Donor Phone,Donation Amount,Donor Covered Fee,Donor Processing Fee,Total Charged to Donor,Processor Fee,WGC Supplemental Fee,Other Processor Fees,Total Fees,Expected Net to Organization,Actual Net to Organization",
+    );
+    expect(renderTransactionCsv(rows).split("\n")[0].split(",")).toHaveLength(61);
+  });
+});
+
+describe("transactionExportOptions", () => {
+  it("every export column belongs to exactly one group", async () => {
+    const { TRANSACTION_EXPORT_COLUMNS } = await loadModule();
+    const { CSV_COLUMN_GROUPS } = await import("@/lib/exports/transactionExportOptions");
+    const grouped = CSV_COLUMN_GROUPS.flatMap((g) => [...g.headers]);
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect([...grouped].sort()).toEqual(TRANSACTION_EXPORT_COLUMNS.map((c) => c.header).sort());
+  });
+
+  it("parses only whitelisted keys; absent means everything", async () => {
+    const { parseCsvColumnGroups, parsePdfSections } = await import("@/lib/exports/transactionExportOptions");
+    expect(parseCsvColumnGroups(null)).toBeNull();
+    expect(parseCsvColumnGroups("fees,donor,../../etc,fees")).toEqual(["fees", "donor"]);
+    expect(parseCsvColumnGroups("nope")).toEqual([]);
+    expect(parsePdfSections("summary,transactions")).toEqual(["summary", "transactions"]);
   });
 });
