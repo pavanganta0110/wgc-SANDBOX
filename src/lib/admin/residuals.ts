@@ -230,27 +230,3 @@ export async function loadResidualLedger(now: Date = new Date()): Promise<Residu
     lastImportedAt: statements.length ? new Date(Math.max(...statements.map((s) => s.updatedAt.getTime()))).toISOString() : null,
   };
 }
-
-/**
- * Finix's real numbers for the whole months a date range touches, used by
- * the WGC profit report. Statements are monthly, so a range that starts or
- * ends mid-month is reported for the whole months it touches.
- */
-export async function loadStatementsForRange(from: Date, to: Date) {
-  const statements = await prisma.finixResidualSettlement.findMany({
-    where: { windowStart: { lt: to }, windowEnd: { gt: from } },
-    orderBy: { windowStart: "asc" },
-  });
-  const monthsInRange: string[] = [];
-  for (let m = new Date(monthKey(from)); m <= to; m = addMonths(m, 1)) monthsInRange.push(m.toISOString());
-  const covered = new Set(statements.map((s) => monthKey(s.windowStart)));
-  return {
-    statementCount: statements.length,
-    feesCents: statements.reduce((t, s) => t + s.merchantFeesCents, 0),
-    costsCents: Math.round(statements.reduce((t, s) => t + s.costsCents, 0)),
-    residualCents: statements.reduce((t, s) => t + s.totalResidualCents, 0),
-    firstMonth: statements[0] ? monthKey(statements[0].windowStart) : null,
-    lastMonth: statements.length ? monthKey(statements[statements.length - 1].windowStart) : null,
-    monthsWithoutStatement: monthsInRange.filter((m) => !covered.has(m)),
-  };
-}
