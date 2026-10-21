@@ -129,3 +129,81 @@ export function parseResidualSettlementsExport(text: string): ParseResult {
   if (rows.length === 0 && errors.length === 0) errors.push("No settlement rows found under the header.");
   return { rows, errors };
 }
+
+// ---------------------------------------------------------------------------
+// Billing Transfers export: the actual payouts (CREDIT) and collections
+// (DEBIT) for residuals, e.g.
+//   id,createdAt,updatedAt,amount,currency,depositType,state,paymentInstrumentId,linkedTo
+//   billing_transfer_cE4m…,2026-09-15T01:24:37.72Z,…,7.26,USD,CREDIT,SUCCEEDED,PI639…,APjM…
+// ---------------------------------------------------------------------------
+
+export interface ParsedBillingTransfer {
+  finixBillingTransferId: string;
+  createdAtFinix: Date;
+  amountCents: number;
+  currency: string;
+  depositType: "CREDIT" | "DEBIT";
+  state: string;
+  paymentInstrumentId: string | null;
+  linkedTo: string | null;
+}
+
+export type ExportKind = "RESIDUAL_SETTLEMENTS" | "BILLING_TRANSFERS" | null;
+
+/** Which Finix export this is, from its header row. */
+export function detectExportKind(text: string): ExportKind {
+  const header = text.split(/\r?\n/).find((l) => l.trim())?.toLowerCase() ?? "";
+  if (/billing window start/.test(header)) return "RESIDUAL_SETTLEMENTS";
+  if (/deposittype/.test(header.replace(/[\s_]/g, ""))) return "BILLING_TRANSFERS";
+  // Header may be preceded by a title line; look further.
+  if (/billing window start/i.test(text)) return "RESIDUAL_SETTLEMENTS";
+  if (/deposit\s*_?type/i.test(text)) return "BILLING_TRANSFERS";
+  return null;
+}
+
+export function parseBillingTransfersExport(text: string): { rows: ParsedBillingTransfer[]; errors: string[] } {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/^﻿/, "")).filter((l) => l.trim());
+  const headerIndex = lines.findIndex((l) => /deposit\s*_?type/i.test(l));
+  if (headerIndex === -1) return { rows: [], errors: ["Couldn't find the header row. Upload Finix's Billing Transfers export as-is."] };
+  const delimiter = lines[headerIndex].includes("\t") ? "\t" : ",";
+  const norm = (h: string) => h.toLowerCase().replace(/[\s_]/g, "");
+  const header = splitLine(lines[headerIndex], delimiter).map(norm);
+  const idx = (name: string) => header.indexOf(name);
+  const col = { id: idx("id"), created: idx("createdat"), amount: idx("amount"), currency: idx("currency"), type: idx("deposittype"), state: idx("state"), pi: idx("paymentinstrumentid"), linked: idx("linkedto") };
+  const missing = (["id", "created", "amount", "type", "state"] as const).filter((k) => col[k] === -1);
+  if (missing.length) return { rows: [], errors: [`Missing column(s): ${missing.join(", ")}.`] };
+
+  const rows: ParsedBillingTransfer[] = [];
+  const errors: string[] = [];
+  for (const [n, line] of lines.slice(headerIndex + 1).entries()) {
+    const cells = splitLine(line, delimiter);
+    const get = (i: number) => (i >= 0 ? cells[i] ?? "" : "");
+    const id = get(col.id);
+    if (!id) continue;
+    const label = `Row ${n + 1} (${id})`;
+    if (!/^billing_transfer_/i.test(id)) {
+      errors.push(`${label}: ID doesn't look like a Finix billing transfer.`);
+      continue;
+    }
+    const createdAtFinix = new Date(get(col.created));
+    const amount = parseMoneyCents(get(col.amount));
+    const depositType = get(col.type).toUpperCase();
+    const state = get(col.state).toUpperCase();
+    if (Number.isNaN(createdAtFinix.getTime()) || amount === null || (depositType !== "CREDIT" && depositType !== "DEBIT") || !state) {
+      errors.push(`${label}: date, amount, deposit type or state couldn't be read.`);
+      continue;
+    }
+    rows.push({
+      finixBillingTransferId: id,
+      createdAtFinix,
+      amountCents: Math.round(Math.abs(amount)),
+      currency: get(col.currency) || "USD",
+      depositType,
+      state,
+      paymentInstrumentId: get(col.pi) || null,
+      linkedTo: get(col.linked) || null,
+    });
+  }
+  if (rows.length === 0 && errors.length === 0) errors.push("No billing transfer rows found under the header.");
+  return { rows, errors };
+}

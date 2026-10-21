@@ -1514,6 +1514,30 @@ model FinixResidualSettlement {
   @@index([windowStart])
 }
 
+// One Finix billing transfer: the actual money movement for a residual
+// (CREDIT = Finix paid WGC; DEBIT = Finix collected a negative residual).
+// Imported from the Finix dashboard's "Billing Transfers" export. The export
+// doesn't name the billing settlement, so src/lib/admin/residuals.ts matches
+// each transfer to a FinixResidualSettlement by amount, sign and date.
+model FinixBillingTransfer {
+  id                     String   @id @default(cuid())
+  finixBillingTransferId String   @unique
+  createdAtFinix         DateTime
+  amountCents            Int
+  currency               String
+  // CREDIT | DEBIT
+  depositType            String
+  state                  String
+  paymentInstrumentId    String?
+  // Finix application id the transfer belongs to.
+  linkedTo               String?
+  importedByEmail        String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([createdAtFinix])
+}
+
 model WgcBillingAuditLog {
   id                   String   @id @default(cuid())
   organizationId       String?

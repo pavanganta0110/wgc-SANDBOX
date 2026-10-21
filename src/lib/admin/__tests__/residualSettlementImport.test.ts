@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseMoneyCents, parseResidualSettlementsExport } from "../residualSettlementImport";
+import { detectExportKind, parseBillingTransfersExport, parseMoneyCents, parseResidualSettlementsExport } from "../residualSettlementImport";
 
 // Finix's dashboard export, exactly as pasted from the Residual Settlements list.
 const PASTED = [
@@ -54,5 +54,44 @@ describe("parseResidualSettlementsExport", () => {
     const { rows, errors } = parseResidualSettlementsExport(bad);
     expect(rows).toHaveLength(1);
     expect(errors).toHaveLength(2);
+  });
+});
+
+// Finix's Billing Transfers export for the August 2026 settlement, as downloaded.
+const TRANSFERS_CSV = [
+  "id,createdAt,updatedAt,amount,currency,depositType,state,paymentInstrumentId,linkedTo",
+  "billing_transfer_cE4moLUyzrwi6GrdGexgq,2026-09-15T01:24:37.72Z,2026-09-15T01:24:37.72Z,7.26,USD,CREDIT,SUCCEEDED,PI639MACzJkiTeauA3Lwh3dG,APjMsw3pEqpcnZ9dT4WYkogp",
+].join("\n");
+
+describe("detectExportKind", () => {
+  it("tells the two Finix exports apart", () => {
+    expect(detectExportKind(PASTED)).toBe("RESIDUAL_SETTLEMENTS");
+    expect(detectExportKind(TRANSFERS_CSV)).toBe("BILLING_TRANSFERS");
+    expect(detectExportKind("name,amount\nx,1")).toBeNull();
+  });
+});
+
+describe("parseBillingTransfersExport", () => {
+  it("parses the real export", () => {
+    const { rows, errors } = parseBillingTransfersExport(TRANSFERS_CSV);
+    expect(errors).toEqual([]);
+    expect(rows).toEqual([
+      {
+        finixBillingTransferId: "billing_transfer_cE4moLUyzrwi6GrdGexgq",
+        createdAtFinix: new Date("2026-09-15T01:24:37.720Z"),
+        amountCents: 726,
+        currency: "USD",
+        depositType: "CREDIT",
+        state: "SUCCEEDED",
+        paymentInstrumentId: "PI639MACzJkiTeauA3Lwh3dG",
+        linkedTo: "APjMsw3pEqpcnZ9dT4WYkogp",
+      },
+    ]);
+  });
+
+  it("skips rows with an unknown deposit type", () => {
+    const { rows, errors } = parseBillingTransfersExport(TRANSFERS_CSV.replace(",CREDIT,", ",REFUND,"));
+    expect(rows).toEqual([]);
+    expect(errors[0]).toMatch(/deposit type/);
   });
 });

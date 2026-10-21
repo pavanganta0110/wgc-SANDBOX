@@ -19,8 +19,59 @@ export type ResidualStatus =
   | "STATEMENT_MISSING"
   | "PENDING"
   | "NEGATIVE"
-  | "PAID_UNCONFIRMED"
-  | "RECEIVED";
+  | "COLLECTED"
+  | "AWAITING_PAYOUT"
+  | "PAYOUT_MISSING"
+  | "PAYOUT_FAILED"
+  | "PAID"
+  | "RECEIVED"
+  | "NOTHING_OWED";
+
+export interface TransferLike {
+  id: string;
+  finixBillingTransferId: string;
+  createdAtFinix: Date;
+  amountCents: number;
+  depositType: string;
+  state: string;
+}
+
+export interface StatementLike {
+  id: string;
+  windowEnd: Date;
+  totalResidualCents: number;
+}
+
+/** How long after a month closes Finix normally pays (statement mid-month, payout within ~30 days). */
+const PAYOUT_GRACE_DAYS = 45;
+/** A transfer more than this long after the month closed isn't matched to it. */
+const MATCH_WINDOW_DAYS = 120;
+
+/**
+ * Pairs Finix billing transfers with the statements they pay (or collect).
+ * The export doesn't name the settlement, so a transfer matches the
+ * earliest-closing unmatched statement with the same signed amount (CREDIT
+ * = positive residual, DEBIT = negative) that closed before the transfer was
+ * created. Pure, so it's unit-tested directly.
+ */
+export function matchTransfersToStatements<T extends TransferLike, S extends StatementLike>(transfers: T[], statements: S[]) {
+  const byStatement = new Map<string, T>();
+  const unmatched: T[] = [];
+  const ordered = [...statements].sort((a, b) => a.windowEnd.getTime() - b.windowEnd.getTime());
+  for (const t of [...transfers].sort((a, b) => a.createdAtFinix.getTime() - b.createdAtFinix.getTime())) {
+    const signed = t.depositType === "DEBIT" ? -t.amountCents : t.amountCents;
+    const match = ordered.find(
+      (st) =>
+        !byStatement.has(st.id) &&
+        st.totalResidualCents === signed &&
+        st.windowEnd.getTime() <= t.createdAtFinix.getTime() &&
+        t.createdAtFinix.getTime() - st.windowEnd.getTime() <= MATCH_WINDOW_DAYS * 86_400_000,
+    );
+    if (match) byStatement.set(match.id, t);
+    else unmatched.push(t);
+  }
+  return { byStatement, unmatched };
+}
 
 export interface ResidualMonth {
   /** ISO date of the first day (UTC) of the month. */
@@ -40,6 +91,8 @@ export interface ResidualMonth {
     depositReceivedAt: string | null;
     depositNote: string | null;
   } | null;
+  /** The Finix billing transfer matched to this month's statement, if imported. */
+  payout: { finixBillingTransferId: string; createdAt: string; amountCents: number; depositType: string; state: string } | null;
   /** Finix merchant fees minus WGC's own charged total (payout and other service fees show up here). */
   feeDifferenceCents: number | null;
   status: ResidualStatus;
@@ -51,10 +104,17 @@ export interface ResidualLedger {
     feesCents: number;
     costsCents: number;
     residualCents: number;
+    /** Succeeded Finix billing transfers (CREDIT) matched to a statement. */
+    paidByFinixCents: number;
     receivedCents: number;
-    /** Approved, positive residuals not yet confirmed in the bank. */
+    /** Paid by Finix (or approved) but not yet confirmed in the bank. */
     unconfirmedCents: number;
   };
+  /** Approved positive months with no payout seen, past when Finix normally pays. */
+  payoutMissingMonths: string[];
+  /** Imported transfers that didn't match any statement (e.g. a statement not imported yet). */
+  unmatchedTransfers: { finixBillingTransferId: string; createdAt: string; amountCents: number; depositType: string; state: string }[];
+  hasTransfers: boolean;
   /** Finished months with WGC payments but no Finix statement imported, past when Finix normally issues one. */
   missingStatementMonths: string[];
   firstMonth: string | null;
@@ -67,7 +127,7 @@ const addMonths = (d: Date, n: number) => new Date(Date.UTC(d.getUTCFullYear(), 
 const STATEMENT_GRACE_DAY = 20;
 
 export async function loadResidualLedger(now: Date = new Date()): Promise<ResidualLedger> {
-  const [charged, statements] = await Promise.all([
+  const [charged, statements, transfers] = await Promise.all([
     prisma.$queryRaw<{ month: Date; payments: bigint; charged: number | null }[]>`
       SELECT date_trunc('month', p."createdAt") AS month,
              COUNT(*) AS payments,
@@ -79,7 +139,19 @@ export async function loadResidualLedger(now: Date = new Date()): Promise<Residu
       ORDER BY 1
     `,
     prisma.finixResidualSettlement.findMany({ orderBy: { windowStart: "asc" } }),
+    prisma.finixBillingTransfer.findMany({ orderBy: { createdAtFinix: "asc" } }),
   ]);
+
+  const approvedStatements = statements.filter((st) => st.state === "APPROVED");
+  const { byStatement: payoutByStatement, unmatched } = matchTransfersToStatements(transfers, approvedStatements);
+  const hasTransfers = transfers.length > 0;
+  const toPayout = (t: TransferLike) => ({
+    finixBillingTransferId: t.finixBillingTransferId,
+    createdAt: t.createdAtFinix.toISOString(),
+    amountCents: t.amountCents,
+    depositType: t.depositType,
+    state: t.state,
+  });
 
   const chargedByMonth = new Map(charged.map((r) => [monthKey(new Date(r.month)), r]));
   const statementByMonth = new Map(statements.map((s) => [monthKey(s.windowStart), s]));
@@ -95,13 +167,21 @@ export async function loadResidualLedger(now: Date = new Date()): Promise<Residu
     const wgcChargedCents = Math.round(c?.charged ?? 0);
     const issueBy = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, STATEMENT_GRACE_DAY));
 
+    const payout = s ? payoutByStatement.get(s.id) : undefined;
+    const payoutOk = payout?.state === "SUCCEEDED";
+    const payoutDue = s ? now.getTime() > s.windowEnd.getTime() + PAYOUT_GRACE_DAYS * 86_400_000 : false;
+
     let status: ResidualStatus;
     if (k === current.toISOString()) status = "IN_PROGRESS";
     else if (!s) status = now < issueBy || wgcChargedCents === 0 ? "WAITING_ON_FINIX" : "STATEMENT_MISSING";
     else if (s.state !== "APPROVED") status = "PENDING";
-    else if (s.totalResidualCents < 0) status = "NEGATIVE";
+    else if (s.totalResidualCents < 0) status = payoutOk ? "COLLECTED" : "NEGATIVE";
+    else if (s.totalResidualCents === 0) status = "NOTHING_OWED";
     else if (s.depositReceivedAt) status = "RECEIVED";
-    else status = "PAID_UNCONFIRMED";
+    else if (payout && !payoutOk && payout.state !== "PENDING") status = "PAYOUT_FAILED";
+    else if (payoutOk) status = "PAID";
+    else if (hasTransfers && payoutDue) status = "PAYOUT_MISSING";
+    else status = "AWAITING_PAYOUT";
 
     // No statement and no WGC activity: skip the empty month entirely.
     if (!s && !c && status !== "IN_PROGRESS") continue;
@@ -124,22 +204,28 @@ export async function loadResidualLedger(now: Date = new Date()): Promise<Residu
             depositNote: s.depositNote,
           }
         : null,
+      payout: payout ? toPayout(payout) : null,
       feeDifferenceCents: s ? s.merchantFeesCents - wgcChargedCents : null,
       status,
     });
   }
 
-  const approved = statements.filter((s) => s.state === "APPROVED");
+  const approved = approvedStatements;
+  const positive = approved.filter((st) => st.totalResidualCents > 0);
   return {
     months,
     totals: {
-      feesCents: statements.reduce((t, s) => t + s.merchantFeesCents, 0),
-      costsCents: Math.round(statements.reduce((t, s) => t + s.costsCents, 0)),
-      residualCents: approved.reduce((t, s) => t + s.totalResidualCents, 0),
-      receivedCents: approved.filter((s) => s.depositReceivedAt && s.totalResidualCents > 0).reduce((t, s) => t + s.totalResidualCents, 0),
-      unconfirmedCents: approved.filter((s) => !s.depositReceivedAt && s.totalResidualCents > 0).reduce((t, s) => t + s.totalResidualCents, 0),
+      feesCents: statements.reduce((t, st) => t + st.merchantFeesCents, 0),
+      costsCents: Math.round(statements.reduce((t, st) => t + st.costsCents, 0)),
+      residualCents: approved.reduce((t, st) => t + st.totalResidualCents, 0),
+      paidByFinixCents: positive.filter((st) => payoutByStatement.get(st.id)?.state === "SUCCEEDED").reduce((t, st) => t + st.totalResidualCents, 0),
+      receivedCents: positive.filter((st) => st.depositReceivedAt).reduce((t, st) => t + st.totalResidualCents, 0),
+      unconfirmedCents: positive.filter((st) => !st.depositReceivedAt).reduce((t, st) => t + st.totalResidualCents, 0),
     },
     missingStatementMonths: months.filter((mo) => mo.status === "STATEMENT_MISSING").map((mo) => mo.month),
+    payoutMissingMonths: months.filter((mo) => mo.status === "PAYOUT_MISSING" || mo.status === "PAYOUT_FAILED").map((mo) => mo.month),
+    unmatchedTransfers: unmatched.map(toPayout),
+    hasTransfers,
     firstMonth: first?.toISOString() ?? null,
     lastImportedAt: statements.length ? new Date(Math.max(...statements.map((s) => s.updatedAt.getTime()))).toISOString() : null,
   };

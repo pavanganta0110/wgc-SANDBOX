@@ -14,9 +14,14 @@ const STATUS: Record<ResidualStatus, { label: string; className: string }> = {
   WAITING_ON_FINIX: { label: "Waiting on Finix", className: "bg-sky-50 text-sky-700" },
   STATEMENT_MISSING: { label: "No statement", className: "bg-amber-50 text-amber-800" },
   PENDING: { label: "Pending at Finix", className: "bg-sky-50 text-sky-700" },
-  NEGATIVE: { label: "WGC owed Finix", className: "bg-rose-50 text-rose-700" },
-  PAID_UNCONFIRMED: { label: "Paid · confirm in bank", className: "bg-amber-50 text-amber-800" },
+  NEGATIVE: { label: "WGC owes Finix", className: "bg-rose-50 text-rose-700" },
+  COLLECTED: { label: "Collected by Finix", className: "bg-slate-100 text-slate-600" },
+  AWAITING_PAYOUT: { label: "Approved · payout pending", className: "bg-sky-50 text-sky-700" },
+  PAYOUT_MISSING: { label: "No payout seen", className: "bg-rose-50 text-rose-700" },
+  PAYOUT_FAILED: { label: "Payout failed", className: "bg-rose-50 text-rose-700" },
+  PAID: { label: "Paid · confirm in bank", className: "bg-amber-50 text-amber-800" },
   RECEIVED: { label: "Received", className: "bg-emerald-50 text-emerald-700" },
+  NOTHING_OWED: { label: "Nothing owed", className: "bg-slate-100 text-slate-500" },
 };
 
 const monthLabel = (iso: string) => new Date(iso).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -45,7 +50,8 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Couldn't import the statements.");
       const skipped = data.errors?.length ? `, ${data.errors.length} row(s) skipped` : "";
-      toast.success(`Imported: ${data.created} new, ${data.updated} updated${skipped}.`);
+      const what = data.kind === "BILLING_TRANSFERS" ? "payouts" : "statements";
+      toast.success(`Imported ${what}: ${data.created} new, ${data.updated} updated${skipped}.`);
       if (data.errors?.length) data.errors.slice(0, 3).forEach((m: string) => toast.error(m));
       onDone();
       router.refresh();
@@ -59,8 +65,9 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
   return (
     <div className="mb-4 space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
       <p className="text-xs text-slate-600">
-        In Finix, open <span className="font-semibold">Residuals</span>, export the <span className="font-semibold">Residual Settlements</span> list, and upload it
-        here or paste the table. Re-importing is safe: existing months are updated, never duplicated.
+        Upload either Finix export: the <span className="font-semibold">Residual Settlements</span> list (monthly statements) or a settlement&apos;s{" "}
+        <span className="font-semibold">Billing Transfers</span> (the actual payouts). WGC detects which one it is. Re-importing is safe: rows are
+        updated, never duplicated.
       </p>
       <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
         <FileUp className="h-4 w-4" aria-hidden />
@@ -86,7 +93,7 @@ function ImportPanel({ onDone }: { onDone: () => void }) {
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
         >
           {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-          Import statements
+          Import
         </button>
       </div>
     </div>
@@ -122,12 +129,18 @@ function DepositCell({ m, canManage }: { m: ResidualMonth; canManage: boolean })
 
   const pill = (
     <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS[m.status].className}`}>
-      {m.status === "RECEIVED" && s?.depositReceivedAt ? `Received ${shortDate(s.depositReceivedAt)}` : STATUS[m.status].label}
+      {m.status === "RECEIVED" && s?.depositReceivedAt
+        ? `Received ${shortDate(s.depositReceivedAt)}`
+        : m.status === "PAID" && m.payout
+          ? `Paid ${shortDate(m.payout.createdAt)} · confirm in bank`
+          : m.status === "COLLECTED" && m.payout
+            ? `Collected ${shortDate(m.payout.createdAt)}`
+            : STATUS[m.status].label}
     </span>
   );
 
   if (!canManage || !s) return pill;
-  if (m.status === "PAID_UNCONFIRMED") {
+  if (m.status === "PAID" || m.status === "AWAITING_PAYOUT" || m.status === "PAYOUT_MISSING") {
     return editing ? (
       <span className="inline-flex items-center gap-1">
         <input
@@ -182,7 +195,7 @@ export default function ResidualPayouts({ ledger, canManage }: { ledger: Residua
         className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
       >
         <FileUp className="h-3.5 w-3.5" aria-hidden />
-        Import Finix statements
+        Import from Finix
       </button>
     ) : undefined;
 
@@ -206,12 +219,34 @@ export default function ResidualPayouts({ ledger, canManage }: { ledger: Residua
           </p>
         </div>
       )}
+      {ledger.payoutMissingMonths.length > 0 && (
+        <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" aria-hidden />
+          <p>
+            <span className="font-semibold">No successful Finix payout for {ledger.payoutMissingMonths.map(monthLabel).join(", ")}.</span> Finix approved the
+            residual, and it&apos;s been more than 45 days since the month closed, but no matching billing transfer has been imported. Import that settlement&apos;s Billing
+            Transfers, or ask Finix where the payout went.
+          </p>
+        </div>
+      )}
+      {ledger.unmatchedTransfers.length > 0 && (
+        <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" aria-hidden />
+          <p>
+            {ledger.unmatchedTransfers.length} imported payout{ledger.unmatchedTransfers.length === 1 ? "" : "s"} didn&apos;t match a statement (
+            {ledger.unmatchedTransfers
+              .map((t) => `${t.depositType === "DEBIT" ? "−" : ""}${formatCents(t.amountCents)} on ${shortDate(t.createdAt)}`)
+              .join(", ")}
+            ). Import the Residual Settlements list so each payout can be paired with its month.
+          </p>
+        </div>
+      )}
       {totals.unconfirmedCents > 0 && (
         <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
           <Landmark className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" aria-hidden />
           <p>
-            Finix approved <span className="font-semibold">{formatCents(totals.unconfirmedCents)}</span> that isn&apos;t marked as received yet. Check WGC&apos;s bank
-            account for the deposits, then mark each month received.
+            <span className="font-semibold">{formatCents(totals.unconfirmedCents)}</span> in approved residuals isn&apos;t confirmed in WGC&apos;s bank yet. Check the
+            account Finix pays residuals to, then mark each month received.
           </p>
         </div>
       )}
@@ -239,11 +274,11 @@ export default function ResidualPayouts({ ledger, canManage }: { ledger: Residua
           hint="Approved residuals"
         />
         <KpiTile
-          label="Received in bank"
-          value={formatCents(totals.receivedCents)}
+          label="Paid by Finix"
+          value={ledger.hasTransfers ? formatCents(totals.paidByFinixCents) : "—"}
           icon={<Landmark className={icon} />}
-          tip="Residual payouts an admin has confirmed arrived in WGC's bank account."
-          hint={totals.unconfirmedCents > 0 ? `${formatCents(totals.unconfirmedCents)} to confirm` : "All confirmed"}
+          tip="Residual payouts Finix sent successfully, from imported Billing Transfers. Confirm each one in WGC's bank with Mark received."
+          hint={ledger.hasTransfers ? `${formatCents(totals.receivedCents)} confirmed in bank` : "Import Billing Transfers"}
         />
       </div>
 
