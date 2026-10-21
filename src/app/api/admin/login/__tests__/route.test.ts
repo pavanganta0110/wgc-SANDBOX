@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Sandbox repo: admin 2FA is opt-in (adminMfaPolicy.ts). These tests cover
+// the enforced behavior, so switch it on for them.
+process.env.ADMIN_MFA_ENFORCEMENT = "on";
+
 const mockFindUnique = vi.fn();
 const mockUpdate = vi.fn().mockResolvedValue({});
 const mockAuditCreate = vi.fn().mockResolvedValue({});
