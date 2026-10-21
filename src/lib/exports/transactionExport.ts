@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveDisputeDisplayStatus, type DisputeStatusInput } from "@/lib/finix/disputeStatus";
 import { buildCsvExport, csvResponse, type CsvColumn } from "@/lib/csvExport";
+import { platformFeeCents } from "@/lib/payments/platformFee";
+import { headersForGroups, type CsvColumnGroupKey } from "@/lib/exports/transactionExportOptions";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Canonical transaction-export schema — the single row shape every
@@ -83,6 +85,8 @@ export interface TransactionExportRow {
   disputeStatus: string;
   achReturnStatus: NormalizedAchReturnStatus;
   donationAmountCents: number;
+  /** "Yes" when the donor chose to cover the processing fee. */
+  donorCoveredFee: "Yes" | "No";
   donorProcessingFeeCents: number;
   totalChargedToDonorCents: number;
   finixProcessingFeeCents: number | null;
@@ -232,6 +236,7 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Dispute Status", value: (r) => r.disputeStatus },
   { header: "ACH Return Status", value: (r) => r.achReturnStatus },
   { header: "Donation Amount", value: (r) => formatMoneyOrEmpty(r.donationAmountCents) },
+  { header: "Donor Covered Fee", value: (r) => r.donorCoveredFee },
   { header: "Donor Processing Fee", value: (r) => formatMoneyOrEmpty(r.donorProcessingFeeCents) },
   { header: "Total Charged to Donor", value: (r) => formatMoneyOrEmpty(r.totalChargedToDonorCents) },
   { header: "Processor Fee", value: (r) => formatMoneyOrEmpty(r.finixProcessingFeeCents) },
@@ -259,8 +264,10 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Data Notes", value: (r) => r.dataNotes },
 ];
 
-export function renderTransactionCsv(rows: TransactionExportRow[]): string {
-  return buildCsvExport(rows, TRANSACTION_EXPORT_COLUMNS);
+/** `groups` limits the columns to the ones the merchant chose (null = all). */
+export function renderTransactionCsv(rows: TransactionExportRow[], groups: CsvColumnGroupKey[] | null = null): string {
+  const keep = headersForGroups(groups);
+  return buildCsvExport(rows, keep ? TRANSACTION_EXPORT_COLUMNS.filter((c) => keep.has(c.header)) : TRANSACTION_EXPORT_COLUMNS);
 }
 
 export { csvResponse };
@@ -343,7 +350,7 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
   const instrumentIds = [...new Set(transfers.map((t) => t.finixPaymentInstrumentId).filter((id): id is string => Boolean(id)))];
   const settlementIds = [...new Set(transfers.map((t) => t.finixSettlementId).filter((id): id is string => Boolean(id)))];
 
-  const [instruments, refunds, disputes, bankReturns, settlements] = await Promise.all([
+  const [instruments, refunds, disputes, bankReturns, settlements, feeRows] = await Promise.all([
     instrumentIds.length
       ? prisma.finixPaymentInstrumentSnapshot.findMany({ where: { finixPaymentInstrumentId: { in: instrumentIds } } })
       : Promise.resolve([]),
@@ -368,7 +375,22 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
           select: { finixSettlementId: true, state: true, createdAtFinix: true, settledAt: true },
         })
       : Promise.resolve([]),
+    // The processing fee lives in Finix Fee rows (PLATFORM_FEE), not on the
+    // transfer — see platformFee.ts. transferIds are already church-scoped.
+    transferIds.length
+      ? prisma.finixFee.findMany({
+          where: { linkedToId: { in: transferIds } },
+          select: { linkedToId: true, feeSubtype: true, feeCategory: true, amountCents: true },
+        })
+      : Promise.resolve([]),
   ]);
+  const feeRowsByTransfer = new Map<string, typeof feeRows>();
+  for (const f of feeRows) {
+    if (!f.linkedToId) continue;
+    const list = feeRowsByTransfer.get(f.linkedToId) ?? [];
+    list.push(f);
+    feeRowsByTransfer.set(f.linkedToId, list);
+  }
 
   const instrumentMap = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
   const settlementMap = new Map(settlements.map((s) => [s.finixSettlementId, s]));
@@ -432,11 +454,12 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
     const donorProcessingFeeCents = p.donorCoversFee ? p.feeCoveredCents ?? 0 : 0;
     const totalChargedToDonorCents = donationAmountCents + donorProcessingFeeCents;
 
-    // Finix's own reported fee — only ever the actual reconciled value
-    // (FinixTransfer.feeCents), never the pre-transaction estimate
-    // (Payment.fixedFeeCents/percentageBps). Empty (not 0.00) until Finix
-    // reports it.
-    const finixProcessingFeeCents = transfer?.feeCents ?? null;
+    // Finix's own reported fee — only ever the actual value Finix recorded
+    // (its PLATFORM_FEE Fee rows; FinixTransfer.feeCents is always 0 for
+    // fee-profile pricing), never the pre-transaction estimate
+    // (Payment.fixedFeeCents/percentageBps). Empty (not 0.00) until Finix's
+    // fee rows have synced.
+    const finixProcessingFeeCents = p.finixTransferId ? platformFeeCents(feeRowsByTransfer.get(p.finixTransferId) ?? []) : null;
     // No distinct "WGC platform fee" ledger exists separate from the
     // donor-covered-fee mechanic in the current schema — left empty
     // rather than fabricated. See final report.
@@ -521,6 +544,7 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
       disputeStatus,
       achReturnStatus,
       donationAmountCents,
+      donorCoveredFee: p.donorCoversFee ? "Yes" : "No",
       donorProcessingFeeCents,
       totalChargedToDonorCents,
       finixProcessingFeeCents,

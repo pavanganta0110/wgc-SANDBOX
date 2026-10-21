@@ -1,5 +1,7 @@
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Font, Image } from "@react-pdf/renderer";
 import type { TransactionExportRow, TransactionReportSummary } from "@/lib/exports/transactionExport";
+import type { OrganizationBranding } from "@/lib/exports/organizationBranding";
+import type { PdfSectionKey } from "@/lib/exports/transactionExportOptions";
 
 // react-pdf hyphenates any word that doesn't fit its remaining line width
 // by default (e.g. "Completed" -> "Com-" / "pleted") — exactly the kind of
@@ -34,7 +36,6 @@ const A = {
 const B = {
   txnId: 140,
   processorFee: 62,
-  wgcFee: 62,
   totalFees: 62,
   refund: 62,
   expectedNet: 65,
@@ -45,13 +46,17 @@ const B = {
   settlementProcessed: 65,
   depositStatus: 55,
   depositCompleted: 76,
-  reconciliation: 92,
+  reconciliation: 154,
 };
 
 const styles = StyleSheet.create({
   page: { padding: PAGE_MARGIN, paddingBottom: 76, fontSize: 8, fontFamily: "Helvetica" },
   header: { marginBottom: 10, borderBottom: 1, borderBottomColor: "#e2e8f0", paddingBottom: 8 },
-  brand: { fontSize: 12, fontWeight: 700, color: "#0f172a" },
+  orgRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  orgLogo: { width: 40, height: 40, objectFit: "contain", marginRight: 10 },
+  orgName: { fontSize: 13, fontWeight: 700, color: "#0f172a" },
+  orgLine: { fontSize: 8, color: "#64748b", marginTop: 1 },
+  poweredBy: { fontSize: 7, color: "#cbd5e1", marginTop: 2 },
   reportTitle: { fontSize: 11, fontWeight: 700, color: "#0f172a", marginTop: 2 },
   headerLine: { fontSize: 8, color: "#475569", marginTop: 1 },
   sectionTitle: { fontSize: 10, fontWeight: 700, marginTop: 10, marginBottom: 4, color: "#0f172a" },
@@ -100,14 +105,22 @@ function KV({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Header({ rows }: { rows: TransactionExportRow[] }) {
+/** The organization's own branding leads the report; WGC appears only as a small "Powered by" line in the footer. */
+function Header({ rows, branding }: { rows: TransactionExportRow[]; branding: OrganizationBranding | null }) {
   const first = rows[0];
   if (!first) return null;
   return (
     <View style={styles.header} fixed>
-      <Text style={styles.brand}>WGC Payments</Text>
+      <View style={styles.orgRow}>
+        {/* eslint-disable-next-line jsx-a11y/alt-text -- @react-pdf Image has no alt; this is a PDF, not HTML */}
+        {branding?.logo && <Image src={branding.logo} style={styles.orgLogo} />}
+        <View>
+          <Text style={styles.orgName}>{branding?.name || first.organizationName}</Text>
+          {branding?.address && <Text style={styles.orgLine}>{branding.address}</Text>}
+          {branding?.contact && <Text style={styles.orgLine}>{branding.contact}</Text>}
+        </View>
+      </View>
       <Text style={styles.reportTitle}>{first.reportType}</Text>
-      <Text style={styles.headerLine}>Organization: {first.organizationName}</Text>
       {first.reportScope === "ENTIRE_ORGANIZATION" ? (
         <Text style={styles.headerLine}>Report Owner: Entire Organization</Text>
       ) : (
@@ -191,6 +204,10 @@ function groupBySettlement(rows: TransactionExportRow[]): SettlementGroup[] {
 export interface TransactionReportPdfProps {
   rows: TransactionExportRow[];
   summary: TransactionReportSummary;
+  /** Organization name/logo/address shown at the top. */
+  branding?: OrganizationBranding | null;
+  /** Sections chosen in the export dialog; null/undefined = all. */
+  sections?: PdfSectionKey[] | null;
 }
 
 /**
@@ -203,14 +220,19 @@ export interface TransactionReportPdfProps {
  * every column — 24 columns of financial/settlement data never fit
  * legibly on a single line at a readable font size.
  */
-export function TransactionReportPdf({ rows, summary }: TransactionReportPdfProps) {
+export function TransactionReportPdf({ rows, summary, branding = null, sections = null }: TransactionReportPdfProps) {
   const settlementGroups = groupBySettlement(rows);
   const first = rows[0];
+  const show = (k: PdfSectionKey) => !sections || sections.includes(k);
+  const showSummary = show("summary");
+  const showSettlements = show("settlements") && settlementGroups.length > 0;
+  const showTransactions = show("transactions");
+  const showFees = show("fees");
 
   return (
     <Document>
       <Page size={PAGE_SIZE} orientation="landscape" style={styles.page}>
-        <Header rows={rows} />
+        <Header rows={rows} branding={branding} />
 
         {first && (
           <>
@@ -225,27 +247,30 @@ export function TransactionReportPdf({ rows, summary }: TransactionReportPdfProp
           </>
         )}
 
-        <Text style={styles.sectionTitle}>Summary</Text>
-        <View style={styles.kpiGrid}>
-          <KpiCard label="Total Transactions" value={String(summary.transactionCount)} />
-          <KpiCard label="Gross Donation Amount" value={money(summary.grossDonationAmountCents)} />
-          <KpiCard label="Donor-Covered Fees" value={money(summary.donorProcessingFeesCents)} />
-          <KpiCard label="Total Charged to Donors" value={money(summary.totalChargedToDonorsCents)} />
-          <KpiCard label="Processor Fees" value={money(summary.finixProcessingFeesCents)} />
-          <KpiCard label="WGC Supplemental Fees" value={money(summary.wgcSupplementalFeesCents)} />
-          <KpiCard label="Other Processing Fees" value={money(summary.otherProcessorFeesCents)} />
-          <KpiCard label="Total Fees" value={money(summary.totalFeesCents)} />
-          <KpiCard label="Refund Amount" value={money(summary.refundAmountCents)} />
-          <KpiCard label="Dispute Amount" value={money(summary.disputeAmountCents)} />
-          <KpiCard label="ACH Return Amount" value={money(summary.achReturnAmountCents)} />
-          <KpiCard label="Expected Net to Organization" value={money(summary.expectedNetToOrganizationCents)} />
-          <KpiCard label="Actual Reconciled Net" value={money(summary.actualNetToOrganizationCents)} />
-          <KpiCard label="Settlement Allocation Total" value={money(summary.settlementAllocationTotalCents)} />
-          <KpiCard label="Unsettled Amount" value={money(summary.unsettledAmountCents)} />
-          <KpiCard label="Unmatched Amount" value={money(summary.unmatchedAmountCents)} />
-        </View>
+        {showSummary && (
+          <>
+            <Text style={styles.sectionTitle}>Summary</Text>
+            <View style={styles.kpiGrid}>
+              <KpiCard label="Total Transactions" value={String(summary.transactionCount)} />
+              <KpiCard label="Gross Donation Amount" value={money(summary.grossDonationAmountCents)} />
+              <KpiCard label="Donor-Covered Fees" value={money(summary.donorProcessingFeesCents)} />
+              <KpiCard label="Total Charged to Donors" value={money(summary.totalChargedToDonorsCents)} />
+              <KpiCard label="Processor Fees" value={money(summary.finixProcessingFeesCents)} />
+              <KpiCard label="Other Processing Fees" value={money(summary.otherProcessorFeesCents)} />
+              <KpiCard label="Total Fees" value={money(summary.totalFeesCents)} />
+              <KpiCard label="Refund Amount" value={money(summary.refundAmountCents)} />
+              <KpiCard label="Dispute Amount" value={money(summary.disputeAmountCents)} />
+              <KpiCard label="ACH Return Amount" value={money(summary.achReturnAmountCents)} />
+              <KpiCard label="Expected Net to Organization" value={money(summary.expectedNetToOrganizationCents)} />
+              <KpiCard label="Actual Reconciled Net" value={money(summary.actualNetToOrganizationCents)} />
+              <KpiCard label="Settlement Allocation Total" value={money(summary.settlementAllocationTotalCents)} />
+              <KpiCard label="Unsettled Amount" value={money(summary.unsettledAmountCents)} />
+              <KpiCard label="Unmatched Amount" value={money(summary.unmatchedAmountCents)} />
+            </View>
+          </>
+        )}
 
-        {settlementGroups.length > 0 && (
+        {showSettlements && (
           <>
             <Text style={styles.sectionTitle}>Settlement Summary</Text>
             {settlementGroups.map((g) => (
@@ -271,92 +296,99 @@ export function TransactionReportPdf({ rows, summary }: TransactionReportPdfProp
           </>
         )}
 
-        <Text style={styles.sectionTitle} break>Transaction Summary</Text>
-        <View style={styles.table}>
-          <View style={styles.tableHeaderRow} fixed>
-            <Text style={{ width: A.date, ...styles.cell }}>Date</Text>
-            <Text style={{ width: A.donor, ...styles.cell }}>Donor</Text>
-            <Text style={{ width: A.givingLink, ...styles.cell }}>Giving Link</Text>
-            <Text style={{ width: A.fund, ...styles.cell }}>Fund / Designation</Text>
-            <Text style={{ width: A.teamMember, ...styles.cell }}>Team Member</Text>
-            <Text style={{ width: A.method, ...styles.cell }}>Payment Method</Text>
-            <Text style={{ width: A.txnId, ...styles.cell }}>Processor Transaction ID</Text>
-            <Text style={{ width: A.donation, ...styles.cellRight }}>Donation</Text>
-            <Text style={{ width: A.donorFee, ...styles.cellRight }}>Donor Fee</Text>
-            <Text style={{ width: A.totalCharged, ...styles.cellRight }}>Total Charged</Text>
-            <Text style={{ width: A.status, ...styles.cell }}>Status</Text>
-          </View>
-          {rows.map((r) => {
-            const showEmailLine = Boolean(r.teamMemberEmail) && r.teamMemberEmail !== r.teamMemberName;
-            return (
-              <View style={styles.tableRow} key={r.wgcPaymentId} wrap={false}>
-                <Text style={{ width: A.date, ...styles.cell }}>{dateStr(r.createdAt)}</Text>
-                <Text style={{ width: A.donor, ...styles.cell }}>{r.donorName}</Text>
-                <Text style={{ width: A.givingLink, ...styles.cell }}>{r.givingLinkName || "—"}</Text>
-                <Text style={{ width: A.fund, ...styles.cell }}>{r.fundName || "Unspecified"}</Text>
-                <View style={{ width: A.teamMember, ...styles.cell }}>
-                  <Text>{r.teamMemberName || "—"}</Text>
-                  {showEmailLine && <Text style={styles.cellSub}>{r.teamMemberEmail}</Text>}
-                </View>
-                <Text style={{ width: A.method, ...styles.cell }}>{r.paymentMethod}</Text>
-                <Text style={{ width: A.txnId, ...styles.cellMono }}>{r.finixTransferId || "—"}</Text>
-                <Text style={{ width: A.donation, ...styles.cellRight }}>{money(r.donationAmountCents)}</Text>
-                <Text style={{ width: A.donorFee, ...styles.cellRight }}>{money(r.donorProcessingFeeCents)}</Text>
-                <Text style={{ width: A.totalCharged, ...styles.cellRight }}>{money(r.totalChargedToDonorCents)}</Text>
-                <Text style={{ width: A.status, ...styles.cell }}>{r.transactionStatus}</Text>
+        {showTransactions && (
+          <>
+            <Text style={styles.sectionTitle} break={showSummary || showSettlements}>Transaction Summary</Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeaderRow} fixed>
+                <Text style={{ width: A.date, ...styles.cell }}>Date</Text>
+                <Text style={{ width: A.donor, ...styles.cell }}>Donor</Text>
+                <Text style={{ width: A.givingLink, ...styles.cell }}>Giving Link</Text>
+                <Text style={{ width: A.fund, ...styles.cell }}>Fund / Designation</Text>
+                <Text style={{ width: A.teamMember, ...styles.cell }}>Team Member</Text>
+                <Text style={{ width: A.method, ...styles.cell }}>Payment Method</Text>
+                <Text style={{ width: A.txnId, ...styles.cell }}>Processor Transaction ID</Text>
+                <Text style={{ width: A.donation, ...styles.cellRight }}>Donation</Text>
+                <Text style={{ width: A.donorFee, ...styles.cellRight }}>Donor Fee</Text>
+                <Text style={{ width: A.totalCharged, ...styles.cellRight }}>Total Charged</Text>
+                <Text style={{ width: A.status, ...styles.cell }}>Status</Text>
               </View>
-            );
-          })}
-        </View>
-
-        <Text style={styles.sectionTitle} break>Fees and Settlement Details</Text>
-        <Text style={{ ...styles.headerLine, marginBottom: 4 }}>Use Processor Transaction ID to match each row back to its Transaction Summary row above.</Text>
-        <View style={styles.table}>
-          <View style={styles.tableHeaderRow} fixed>
-            <Text style={{ width: B.txnId, ...styles.cell }}>Processor Transaction ID</Text>
-            <Text style={{ width: B.processorFee, ...styles.cellRight }}>Processor Fees</Text>
-            <Text style={{ width: B.wgcFee, ...styles.cellRight }}>WGC Supp. Fees</Text>
-            <Text style={{ width: B.totalFees, ...styles.cellRight }}>Total Fees</Text>
-            <Text style={{ width: B.refund, ...styles.cellRight }}>Refund</Text>
-            <Text style={{ width: B.expectedNet, ...styles.cellRight }}>Expected Net</Text>
-            <Text style={{ width: B.actualNet, ...styles.cellRight }}>Actual Net</Text>
-            <Text style={{ width: B.settlementIncluded, ...styles.cell }}>Settlement Included</Text>
-            <Text style={{ width: B.settlementAllocation, ...styles.cellRight }}>Settlement Allocation</Text>
-            <Text style={{ width: B.settlementId, ...styles.cell }}>Settlement ID</Text>
-            <Text style={{ width: B.settlementProcessed, ...styles.cell }}>Settlement Processed</Text>
-            <Text style={{ width: B.depositStatus, ...styles.cell }}>Deposit Status</Text>
-            <Text style={{ width: B.depositCompleted, ...styles.cell }}>Deposit Completed</Text>
-            <Text style={{ width: B.reconciliation, ...styles.cell }}>Reconciliation Status</Text>
-          </View>
-          {rows.map((r) => (
-            <View style={styles.tableRow} key={r.wgcPaymentId} wrap={false}>
-              <Text style={{ width: B.txnId, ...styles.cellMono }}>{r.finixTransferId || "—"}</Text>
-              <Text style={{ width: B.processorFee, ...styles.cellRight }}>{money(r.finixProcessingFeeCents)}</Text>
-              <Text style={{ width: B.wgcFee, ...styles.cellRight }}>{money(r.wgcSupplementalFeeCents)}</Text>
-              <Text style={{ width: B.totalFees, ...styles.cellRight }}>{money(r.totalFeesCents)}</Text>
-              <Text style={{ width: B.refund, ...styles.cellRight }}>{money(r.refundAmountCents)}</Text>
-              <Text style={{ width: B.expectedNet, ...styles.cellRight }}>{money(r.expectedNetToOrganizationCents)}</Text>
-              <Text style={{ width: B.actualNet, ...styles.cellRight }}>{money(r.actualNetToOrganizationCents)}</Text>
-              <Text style={{ width: B.settlementIncluded, ...styles.cell }}>{r.settlementIncluded}</Text>
-              <Text style={{ width: B.settlementAllocation, ...styles.cellRight }}>{money(r.settlementAllocationAmountCents)}</Text>
-              <Text style={{ width: B.settlementId, ...styles.cellMono }}>{r.settlementId || "—"}</Text>
-              <Text style={{ width: B.settlementProcessed, ...styles.cell }}>{dateOrPending(r.settlementProcessedAt)}</Text>
-              <Text style={{ width: B.depositStatus, ...styles.cell }}>{r.depositStatus || "Pending"}</Text>
-              <Text style={{ width: B.depositCompleted, ...styles.cell }}>{dateOrPending(r.depositCompletedAt)}</Text>
-              <Text style={{ width: B.reconciliation, ...styles.cell }}>{r.reconciliationStatus}</Text>
+              {rows.map((r) => {
+                const showEmailLine = Boolean(r.teamMemberEmail) && r.teamMemberEmail !== r.teamMemberName;
+                return (
+                  <View style={styles.tableRow} key={r.wgcPaymentId} wrap={false}>
+                    <Text style={{ width: A.date, ...styles.cell }}>{dateStr(r.createdAt)}</Text>
+                    <Text style={{ width: A.donor, ...styles.cell }}>{r.donorName}</Text>
+                    <Text style={{ width: A.givingLink, ...styles.cell }}>{r.givingLinkName || "—"}</Text>
+                    <Text style={{ width: A.fund, ...styles.cell }}>{r.fundName || "Unspecified"}</Text>
+                    <View style={{ width: A.teamMember, ...styles.cell }}>
+                      <Text>{r.teamMemberName || "—"}</Text>
+                      {showEmailLine && <Text style={styles.cellSub}>{r.teamMemberEmail}</Text>}
+                    </View>
+                    <Text style={{ width: A.method, ...styles.cell }}>{r.paymentMethod}</Text>
+                    <Text style={{ width: A.txnId, ...styles.cellMono }}>{r.finixTransferId || "—"}</Text>
+                    <Text style={{ width: A.donation, ...styles.cellRight }}>{money(r.donationAmountCents)}</Text>
+                    <Text style={{ width: A.donorFee, ...styles.cellRight }}>{money(r.donorProcessingFeeCents)}</Text>
+                    <Text style={{ width: A.totalCharged, ...styles.cellRight }}>{money(r.totalChargedToDonorCents)}</Text>
+                    <Text style={{ width: A.status, ...styles.cell }}>{r.transactionStatus}</Text>
+                  </View>
+                );
+              })}
             </View>
-          ))}
-        </View>
+          </>
+        )}
+
+        {showFees && (
+          <>
+            <Text style={styles.sectionTitle} break={showSummary || showSettlements || showTransactions}>Fees and Settlement Details</Text>
+            <Text style={{ ...styles.headerLine, marginBottom: 4 }}>{showTransactions ? "Use Processor Transaction ID to match each row back to its Transaction Summary row above." : "Each row is one gift, identified by its Processor Transaction ID."}</Text>
+            <View style={styles.table}>
+              <View style={styles.tableHeaderRow} fixed>
+                <Text style={{ width: B.txnId, ...styles.cell }}>Processor Transaction ID</Text>
+                <Text style={{ width: B.processorFee, ...styles.cellRight }}>Processor Fees</Text>
+                <Text style={{ width: B.totalFees, ...styles.cellRight }}>Total Fees</Text>
+                <Text style={{ width: B.refund, ...styles.cellRight }}>Refund</Text>
+                <Text style={{ width: B.expectedNet, ...styles.cellRight }}>Expected Net</Text>
+                <Text style={{ width: B.actualNet, ...styles.cellRight }}>Actual Net</Text>
+                <Text style={{ width: B.settlementIncluded, ...styles.cell }}>Settlement Included</Text>
+                <Text style={{ width: B.settlementAllocation, ...styles.cellRight }}>Settlement Allocation</Text>
+                <Text style={{ width: B.settlementId, ...styles.cell }}>Settlement ID</Text>
+                <Text style={{ width: B.settlementProcessed, ...styles.cell }}>Settlement Processed</Text>
+                <Text style={{ width: B.depositStatus, ...styles.cell }}>Deposit Status</Text>
+                <Text style={{ width: B.depositCompleted, ...styles.cell }}>Deposit Completed</Text>
+                <Text style={{ width: B.reconciliation, ...styles.cell }}>Reconciliation Status</Text>
+              </View>
+              {rows.map((r) => (
+                <View style={styles.tableRow} key={r.wgcPaymentId} wrap={false}>
+                  <Text style={{ width: B.txnId, ...styles.cellMono }}>{r.finixTransferId || "—"}</Text>
+                  <Text style={{ width: B.processorFee, ...styles.cellRight }}>{money(r.finixProcessingFeeCents)}</Text>
+                  <Text style={{ width: B.totalFees, ...styles.cellRight }}>{money(r.totalFeesCents)}</Text>
+                  <Text style={{ width: B.refund, ...styles.cellRight }}>{money(r.refundAmountCents)}</Text>
+                  <Text style={{ width: B.expectedNet, ...styles.cellRight }}>{money(r.expectedNetToOrganizationCents)}</Text>
+                  <Text style={{ width: B.actualNet, ...styles.cellRight }}>{money(r.actualNetToOrganizationCents)}</Text>
+                  <Text style={{ width: B.settlementIncluded, ...styles.cell }}>{r.settlementIncluded}</Text>
+                  <Text style={{ width: B.settlementAllocation, ...styles.cellRight }}>{money(r.settlementAllocationAmountCents)}</Text>
+                  <Text style={{ width: B.settlementId, ...styles.cellMono }}>{r.settlementId || "—"}</Text>
+                  <Text style={{ width: B.settlementProcessed, ...styles.cell }}>{dateOrPending(r.settlementProcessedAt)}</Text>
+                  <Text style={{ width: B.depositStatus, ...styles.cell }}>{r.depositStatus || "Pending"}</Text>
+                  <Text style={{ width: B.depositCompleted, ...styles.cell }}>{dateOrPending(r.depositCompletedAt)}</Text>
+                  <Text style={{ width: B.reconciliation, ...styles.cell }}>{r.reconciliationStatus}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
         <View style={styles.footer} fixed>
           <Text style={styles.footerPara}>
-            This report was generated by WGC Payments for the organization and report scope identified above. Team-member amounts represent WGC
+            This report was generated for the organization and report scope identified above. Team-member amounts represent
             transaction attribution and do not represent a separate merchant account, bank account, or settlement destination.
           </Text>
           <Text>
             Expected values may differ from actual reconciled values. Pending or empty fields indicate that confirmed payment or settlement
             information was unavailable when this report was generated.
           </Text>
+          <Text style={styles.poweredBy}>Powered by WGC Payments</Text>
         </View>
         <Text style={styles.pageNumber} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} fixed />
       </Page>

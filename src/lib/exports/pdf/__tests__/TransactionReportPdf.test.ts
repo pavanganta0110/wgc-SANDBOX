@@ -104,6 +104,7 @@ function makeRow(overrides: Partial<TransactionExportRow> = {}): TransactionExpo
     disputeStatus: "NONE",
     achReturnStatus: "NONE",
     donationAmountCents: 5000,
+    donorCoveredFee: "No",
     donorProcessingFeeCents: 150,
     totalChargedToDonorCents: 5150,
     finixProcessingFeeCents: 175,
