@@ -1,4 +1,5 @@
 import { renderToBuffer } from "@react-pdf/renderer";
+import { loadPdfImage } from "@/lib/pdf/pdfImage";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
 import { resolveInvoiceBranding, applyInvoiceOverrides } from "./invoiceBranding";
@@ -41,7 +42,7 @@ export async function generateInvoicePdf(invoiceId: string, payUrlToken?: string
 
   const props: InvoicePdfProps = {
     organizationName: branding.organizationDisplayName,
-    organizationLogoUrl: branding.logoUrl,
+    organizationLogo: await loadPdfImage(branding.logoUrl),
     organizationAddress: branding.organizationAddress,
     organizationEmail: branding.organizationSupportEmail,
     organizationPhone: branding.organizationPhone,

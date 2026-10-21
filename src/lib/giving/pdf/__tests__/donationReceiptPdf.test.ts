@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
+import { renderToBuffer } from "@react-pdf/renderer";
 import { DonationReceiptPdf, type DonationReceiptPdfProps } from "../DonationReceiptPdf";
 
 // Collects every text node in the element tree the component returns, so we can assert on what a donor would read.
@@ -19,7 +20,7 @@ function texts(node: unknown, out: string[] = []): string[] {
 
 const base: DonationReceiptPdfProps = {
   organizationName: "Grace Fellowship",
-  organizationLogoUrl: null,
+  organizationLogo: null,
   organizationAddress: null,
   organizationEmail: null,
   organizationPhone: null,
@@ -64,3 +65,16 @@ describe("DonationReceiptPdf covered fee", () => {
     }
   });
 });
+
+describe("DonationReceiptPdf logo", () => {
+  // 1x1 transparent PNG
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+
+  it("renders a real PDF with a PNG logo and without one", async () => {
+    for (const organizationLogo of [{ data: png, format: "png" as const }, null]) {
+      const pdf = await renderToBuffer(DonationReceiptPdf({ ...base, organizationLogo }));
+      expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
+    }
+  });
+});
+
