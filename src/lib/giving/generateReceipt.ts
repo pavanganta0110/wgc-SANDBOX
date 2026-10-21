@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { sendWgcEmail } from "@/lib/email";
@@ -217,24 +218,34 @@ export async function sendDonationReceipt(
     },
   });
 
-  await prisma.donationReceipt.create({
-    data: {
-      paymentId,
-      churchId,
-      version: nextVersion,
-      receiptNumber,
-      paymentAmountCentsSnapshot: paymentAmountCents,
-      goodsServicesProvidedSnapshot: goodsServicesProvided,
-      goodsServicesDescriptionSnapshot: goodsServicesDescription,
-      goodsServicesFairMarketValueCentsSnapshot: goodsServicesFairMarketValueCents,
-      recordedContributionAmountCentsSnapshot: recordedContributionAmountCents,
-      acknowledgmentTextSnapshot: acknowledgmentText,
-      recipientEmail: donorEmail,
-      sentAt: result.success ? new Date() : null,
-      failureReason: result.success ? null : String((result as any).error ?? "Email send failed"),
-      createdByUserId: actorUserId,
-    },
-  });
+  try {
+    await prisma.donationReceipt.create({
+      data: {
+        paymentId,
+        churchId,
+        version: nextVersion,
+        receiptNumber,
+        paymentAmountCentsSnapshot: paymentAmountCents,
+        goodsServicesProvidedSnapshot: goodsServicesProvided,
+        goodsServicesDescriptionSnapshot: goodsServicesDescription,
+        goodsServicesFairMarketValueCentsSnapshot: goodsServicesFairMarketValueCents,
+        recordedContributionAmountCentsSnapshot: recordedContributionAmountCents,
+        acknowledgmentTextSnapshot: acknowledgmentText,
+        recipientEmail: donorEmail,
+        sentAt: result.success ? new Date() : null,
+        failureReason: result.success ? null : String((result as any).error ?? "Email send failed"),
+        createdByUserId: actorUserId,
+      },
+    });
+  } catch (err) {
+    // Another send for this payment recorded the same version first
+    // (DonationReceipt(paymentId, version) is unique). Keep theirs.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      console.info(`Receipt v${nextVersion} for payment ${paymentId} was already recorded by a concurrent send`);
+    } else {
+      throw err;
+    }
+  }
 
   await prisma.payment.update({
     where: { id: payment.id },
