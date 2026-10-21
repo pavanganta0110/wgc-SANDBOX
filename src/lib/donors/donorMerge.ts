@@ -1,3 +1,4 @@
+import { moveLinkOnDonorMerge } from "@/lib/integrations/planningcenter/personMatching";
 import { prisma } from "@/lib/prisma";
 import { loadDonorAggregatesBatch } from "@/lib/donors/donorAggregates";
 
@@ -316,6 +317,10 @@ export async function mergeDonors(
       statementConflicts,
     };
   });
+
+  // Planning Center link follows the surviving donor. Best-effort and
+  // isolated: it can never fail or roll back the merge above.
+  await moveLinkOnDonorMerge(churchId, duplicateDonorId, primaryDonorId);
 
   return result;
 }

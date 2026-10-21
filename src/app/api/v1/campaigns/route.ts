@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { withApiAuth } from "@/lib/api/withApiAuth";
 import { apiSuccess, apiError, parsePagination, paginationMeta } from "@/lib/api/response";
 import { findIdempotentReplay, storeIdempotentResponse } from "@/lib/api/idempotency";
@@ -34,6 +35,8 @@ export const POST = withApiAuth("campaigns:write", async (req, auth, requestId) 
 
   const body = await req.json().catch(() => ({}));
   const { name, description, goalAmountCents } = body;
+  const goalProblem = goalAmountCentsError(goalAmountCents);
+  if (goalProblem) return apiError("validation_error", goalProblem, requestId);
   if (!name || typeof name !== "string" || !name.trim()) {
     return apiError("validation_error", "`name` is required.", requestId);
   }

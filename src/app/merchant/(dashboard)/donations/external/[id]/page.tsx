@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/format";
 import { EXTERNAL_PAYMENT_METHOD_LABELS, SOURCE_LABELS, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import ExternalDonationDetailPanel from "@/components/merchant/ExternalDonationDetailPanel";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
+import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function ExternalDonationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -62,7 +63,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           <p className="text-sm text-slate-700">Anonymous</p>
         ) : donor ? (
           <div className="text-sm">
-            <p className="font-medium text-slate-900">{donor.name || "Unnamed donor"}</p>
+            <p className="font-medium"><DonorNameLink donorId={donor.id} name={donor.name || "Unnamed donor"} /></p>
             {donor.email && <p className="text-slate-500">{donor.email}</p>}
           </div>
         ) : (

@@ -16,8 +16,10 @@ const mockCreateFileResource = vi.fn();
 const mockUploadFileContent = vi.fn();
 const mockCreateVerification = vi.fn();
 const mockUpdateIdentity = vi.fn();
+const mockCreatePaymentInstrument = vi.fn();
 vi.mock("@/lib/finix/client", () => ({
   finixClient: {
+    createPaymentInstrument: (...a: unknown[]) => mockCreatePaymentInstrument(...a),
     createFileResource: (...a: unknown[]) => mockCreateFileResource(...a),
     uploadFileContent: (...a: unknown[]) => mockUploadFileContent(...a),
     createVerification: (...a: unknown[]) => mockCreateVerification(...a),
@@ -78,6 +80,7 @@ beforeEach(() => {
   mockCreateFileResource.mockResolvedValue({ id: "FI123" });
   mockCreateVerification.mockResolvedValue({ id: "VI123" });
   mockUpdateIdentity.mockResolvedValue({ id: "ID123" });
+  mockCreatePaymentInstrument.mockResolvedValue({ id: "PIbank123", enabled: true });
   void TOKEN_HASH; // token hashing is exercised implicitly via findFirst's where clause
 });
 
@@ -225,5 +228,124 @@ describe("POST /api/onboarding/upload — multiple, distinctly-typed document up
     expect(mockUpdateIdentity).toHaveBeenCalledWith("ID123", { entity: { mcc: "8661" } });
     expect(mockCreateFileResource).toHaveBeenCalledTimes(2);
     expect(mockCreateVerification).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /api/onboarding/upload — website, phone, principal SSN/address, ownership and note", () => {
+  it("maps every extra field to Finix's entity fields in one updateIdentity call and triggers one verification", async () => {
+    const { POST } = await load();
+    const res = await POST(
+      postReq({
+        website: "lighthousebaptist.org",
+        businessPhone: "(816) 555-0142",
+        principalSsn: "123-45-6789",
+        addressLine1: "12 Elm St",
+        city: "Kansas City",
+        state: "mo",
+        postalCode: "64101",
+        removeOwnership: "true",
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(mockUpdateIdentity).toHaveBeenCalledTimes(1);
+    expect(mockUpdateIdentity).toHaveBeenCalledWith("ID123", {
+      entity: {
+        url: "https://lighthousebaptist.org",
+        business_phone: "8165550142",
+        tax_id: "123456789",
+        personal_address: { line1: "12 Elm St", city: "Kansas City", region: "MO", postal_code: "64101", country: "USA" },
+        principal_percentage_ownership: null,
+      },
+    });
+    expect(mockCreateVerification).toHaveBeenCalledTimes(1);
+  });
+
+  it("never puts the SSN in the admin email, the merchant email, the database or the response", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq({ principalSsn: "123-45-6789", website: "lighthousebaptist.org" }));
+    const everything = JSON.stringify([await res.json(), mockSendWgcEmail.mock.calls, mockSendWgcAdminEmail.mock.calls, mockPrisma.onboardingApplication.update.mock.calls, mockPrisma.merchantDocument.create.mock.calls]);
+    expect(everything).not.toContain("123-45-6789");
+    expect(everything).not.toContain("123456789");
+    expect(everything).toContain("Principal SSN"); // the field NAME is audited, never the value
+  });
+
+  it("rejects an EIN-shaped value in the SSN field and sends nothing to Finix", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq({ principalSsn: "12-3456789" }));
+    expect(res.status).toBe(400);
+    expect(mockUpdateIdentity).not.toHaveBeenCalled();
+    expect(mockCreateVerification).not.toHaveBeenCalled();
+  });
+
+  it("redacts an SSN echoed back in a Finix error before it can be returned or logged", async () => {
+    mockUpdateIdentity.mockRejectedValue(new Error("tax_id 123456789 is invalid"));
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { POST } = await load();
+    const res = await POST(postReq({ principalSsn: "123-45-6789" }));
+    const body = JSON.stringify(await res.json());
+    expect(res.status).toBe(500);
+    expect(body).not.toContain("123456789");
+    expect(JSON.stringify(errSpy.mock.calls)).not.toContain("123456789");
+    errSpy.mockRestore();
+  });
+
+  it("accepts a note-only submission (no Finix identity change), escapes it in the admin email and still triggers verification", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq({ note: "Our <b>treasurer</b> changed" }));
+    expect(res.status).toBe(200);
+    expect(mockUpdateIdentity).not.toHaveBeenCalled();
+    expect(mockCreateVerification).toHaveBeenCalledTimes(1);
+    const admin = JSON.stringify(mockSendWgcAdminEmail.mock.calls);
+    expect(admin).toContain("&lt;b&gt;treasurer&lt;/b&gt;");
+    expect(admin).not.toContain("<b>treasurer</b>");
+  });
+});
+
+describe("POST /api/onboarding/upload — replacement payout bank account", () => {
+  const bank = { bankHolderName: "Lighthouse Baptist Church", bankAccountType: "CHECKING", bankRoutingNumber: "021000021", bankAccountNumber: "123456789012", bankAccountNumberConfirm: "123456789012" };
+
+  it("creates a BANK_ACCOUNT instrument on the identity, stores only the new id and last 4, and triggers one verification", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq(bank));
+    expect(res.status).toBe(200);
+    expect(mockCreatePaymentInstrument).toHaveBeenCalledWith({ type: "BANK_ACCOUNT", name: "Lighthouse Baptist Church", account_type: "CHECKING", bank_code: "021000021", account_number: "123456789012", identity: "ID123" });
+    expect(mockPrisma.onboardingApplication.update).toHaveBeenCalledWith({
+      where: { id: "app-1" },
+      data: { finixPaymentInstrumentId: "PIbank123", bankInstrumentEnabled: true, bankLast4: "9012", bankAccountType: "CHECKING" },
+    });
+    expect(mockCreateVerification).toHaveBeenCalledTimes(1);
+  });
+
+  it("never lets the full account or routing number reach emails, the database, the response or the logs", async () => {
+    const { POST } = await load();
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await POST(postReq(bank));
+    const everything = JSON.stringify([await res.json(), mockSendWgcEmail.mock.calls, mockSendWgcAdminEmail.mock.calls, mockPrisma.onboardingApplication.update.mock.calls, mockPrisma.merchantDocument.create.mock.calls, logSpy.mock.calls]);
+    expect(everything).not.toContain("123456789012");
+    expect(everything).not.toContain("021000021");
+    expect(everything).toContain("Payout bank account"); // the NAME is audited, never the numbers
+    logSpy.mockRestore();
+  });
+
+  it("rejects a bad routing number or mismatched account numbers before calling Finix", async () => {
+    const { POST } = await load();
+    expect((await POST(postReq({ ...bank, bankRoutingNumber: "123456789" }))).status).toBe(400);
+    expect((await POST(postReq({ ...bank, bankAccountNumberConfirm: "000000000000" }))).status).toBe(400);
+    expect(mockCreatePaymentInstrument).not.toHaveBeenCalled();
+    expect(mockCreateVerification).not.toHaveBeenCalled();
+  });
+
+  it("fails the whole submission cleanly (nothing else changed) and echoes no numbers when Finix rejects the account", async () => {
+    mockCreatePaymentInstrument.mockRejectedValue(new Error("account_number 123456789012 is invalid"));
+    const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { POST } = await load();
+    const res = await POST(postReq({ ...bank, website: "lighthousebaptist.org" }));
+    const body = JSON.stringify(await res.json());
+    expect(res.status).toBe(400);
+    expect(body).not.toContain("123456789012");
+    expect(JSON.stringify(logSpy.mock.calls)).not.toContain("123456789012");
+    expect(mockUpdateIdentity).not.toHaveBeenCalled();
+    expect(mockCreateVerification).not.toHaveBeenCalled();
+    logSpy.mockRestore();
   });
 });

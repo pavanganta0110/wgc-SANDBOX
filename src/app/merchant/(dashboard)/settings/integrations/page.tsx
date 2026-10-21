@@ -6,6 +6,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { isSmsConfigured } from "@/lib/sms/sendText";
 import { INTEGRATION_CATALOG, CATEGORY_ORDER } from "@/lib/integrations/catalog";
+import { isPlanningCenterIntegrationEnabled } from "@/lib/integrations/planningcenter/config";
 
 function IntegrationRow({ name, description, enabled }: { name: string; description: string; enabled: boolean }) {
   return (
@@ -43,6 +44,13 @@ export default async function IntegrationsSettingsPage() {
   const quickBooksStatus = auth
     ? (await prisma.quickBooksConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
     : "NOT_CONNECTED";
+  // Planning Center is a live card only where the integration is enabled;
+  // otherwise it keeps its "Coming Soon" catalog row (see catalog.ts).
+  const planningCenterEnabled = isPlanningCenterIntegrationEnabled();
+  const planningCenterStatus =
+    auth && planningCenterEnabled
+      ? (await prisma.planningCenterConnection.findUnique({ where: { churchId: auth.churchId }, select: { status: true } }))?.status ?? "NOT_CONNECTED"
+      : "NOT_CONNECTED";
 
   return (
     <div className="space-y-6">
@@ -150,12 +158,28 @@ export default async function IntegrationsSettingsPage() {
       </div>
 
       {CATEGORY_ORDER.map((category) => {
-        const items = INTEGRATION_CATALOG.filter((i) => i.category === category);
-        if (items.length === 0) return null;
+        const items = INTEGRATION_CATALOG.filter((i) => i.category === category && !(planningCenterEnabled && i.name === "Planning Center"));
+        const showPlanningCenter = planningCenterEnabled && category === "Church Management";
+        if (items.length === 0 && !showPlanningCenter) return null;
         return (
           <div key={category}>
             <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3 px-1">{category}</h4>
             <div className="space-y-3">
+              {showPlanningCenter && (
+                <Link
+                  href="/merchant/settings/integrations/planning-center"
+                  className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 shadow-sm p-6 hover:border-slate-300 transition"
+                >
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">Planning Center</div>
+                    <p className="text-xs text-slate-500 mt-0.5 max-w-lg">Connect your Planning Center account to sync people and giving records with WGC Payments.</p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <StateBadge state={planningCenterStatus} />
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  </div>
+                </Link>
+              )}
               {items.map((item) => (
                 <div key={item.name} className="flex items-center justify-between bg-white rounded-2xl border border-slate-100 shadow-sm p-6 opacity-75">
                   <div>

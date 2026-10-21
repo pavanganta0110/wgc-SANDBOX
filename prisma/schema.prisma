@@ -1495,6 +1495,62 @@ model InvoiceUsageEvent {
 /// separate from DashboardAuditLog since many of these actions are WGC-admin
 /// actions not tied to a single organization user, and financial-override
 /// actions need explicit previous/new-value + reason tracking.
+// One Finix platform-residual billing settlement: Finix's own monthly
+// statement of WGC's fee revenue (merchant fees charged to organizations,
+// minus network and Finix costs). Finix has no API for billing settlements,
+// so rows are imported from the dashboard's "Residual Settlements" export
+// (src/lib/admin/residualSettlementImport.ts). This is the only reliable
+// source of Finix's real cost: the per-transfer Fees API only returns the
+// fee charged to the merchant (WGC's PLATFORM_FEE), never Finix's costs.
+// Read-only bookkeeping: never moves money.
+model FinixResidualSettlement {
+  id                       String    @id @default(cuid())
+  finixBillingSettlementId String    @unique
+  windowStart              DateTime
+  windowEnd                DateTime
+  type                     String?
+  applicationName          String?
+  merchantFeesCents        Int
+  // Finix reports these to fractions of a cent (e.g. $56.69617).
+  costsCents               Float
+  residualSubtotalCents    Float
+  revSharePercent          Float
+  totalResidualCents       Int
+  state                    String
+  // Set by an admin once the payout is seen in WGC's bank account.
+  depositReceivedAt        DateTime?
+  depositNote              String?
+  importedByEmail          String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([windowStart])
+}
+
+// One Finix billing transfer: the actual money movement for a residual
+// (CREDIT = Finix paid WGC; DEBIT = Finix collected a negative residual).
+// Imported from the Finix dashboard's "Billing Transfers" export. The export
+// doesn't name the billing settlement, so src/lib/admin/residuals.ts matches
+// each transfer to a FinixResidualSettlement by amount, sign and date.
+model FinixBillingTransfer {
+  id                     String   @id @default(cuid())
+  finixBillingTransferId String   @unique
+  createdAtFinix         DateTime
+  amountCents            Int
+  currency               String
+  // CREDIT | DEBIT
+  depositType            String
+  state                  String
+  paymentInstrumentId    String?
+  // Finix application id the transfer belongs to.
+  linkedTo               String?
+  importedByEmail        String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([createdAtFinix])
+}
+
 model WgcBillingAuditLog {
   id                   String   @id @default(cuid())
   organizationId       String?
@@ -4782,6 +4838,317 @@ model QuickBooksConnection {
 
   @@index([status])
   @@index([automaticSyncEnabled])
+}
+
+/// A church's connection to Planning Center (People + Giving). One active
+/// connection per church. Phase 1 only stores/refreshes the OAuth grant —
+/// nothing is written to the church's Planning Center account yet. See
+/// docs/integrations/planning-center-phase-1.md.
+model PlanningCenterConnection {
+  id       String @id @default(cuid())
+  churchId String @unique // one active connection per church
+
+  status String @default("NOT_CONNECTED") // NOT_CONNECTED | CONNECTED | REAUTHENTICATION_REQUIRED | ERROR | DISCONNECTED
+
+  // Planning Center's own organization id. Unique so one Planning Center
+  // organization can never feed two WGC churches (later phases write gifts
+  // into it). Cleared on disconnect so another church may then connect it.
+  pcoOrganizationId    String?  @unique
+  pcoOrganizationName  String?
+  pcoConnectedUserId   String?
+  pcoConnectedUserName String?
+
+  // Versioned encrypted-envelope JSON strings — never plaintext, never
+  // returned to the client.
+  accessTokenEncrypted     String?
+  refreshTokenEncrypted    String?
+  encryptionKeyFingerprint String?
+  tokenExpiresAt           DateTime? // access token: ~2h
+  refreshTokenExpiresAt    DateTime? // refresh honored ~90d after issue
+  scopesJson               Json?
+
+  // Connect-time permission probe. The integration acts with the
+  // authorizing Planning Center user's permissions.
+  canReadPeople  Boolean?
+  canReadGiving  Boolean?
+  canWriteGiving Boolean? // unknown (null) until a phase that first writes
+
+  connectedByUserId    String?
+  connectedAt          DateTime?
+  disconnectedAt       DateTime?
+  lastConnectionTestAt DateTime?
+  lastErrorAt          DateTime?
+  lastErrorCode        String?
+  lastErrorMessage     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([refreshTokenExpiresAt])
+}
+
+/// Per-church Planning Center Giving setup (phase 3): the "WGC Payments"
+/// payment source and the default fund. Separate from PlanningCenterConnection
+/// so connection state (tokens, health) and sync policy never share a row.
+/// Only valid for the Planning Center organization recorded here — if the
+/// church reconnects to a DIFFERENT organization the setup is reset and
+/// syncVersion is bumped so nothing from the old account is ever reused.
+/// See docs/integrations/planning-center-phase-2-4.md.
+model PlanningCenterSyncConfig {
+  id       String @id @default(cuid())
+  churchId String @unique
+
+  // The Planning Center organization this setup belongs to.
+  pcoOrganizationId String
+
+  // The payment source WGC gifts will be recorded under. Planning Center
+  // requires one on every API-created donation; the built-in "Planning
+  // Center" source is reserved and cannot be used.
+  pcoPaymentSourceId   String?
+  pcoPaymentSourceName String?
+  paymentSourceReadyAt DateTime?
+
+  // Used for gifts whose WGC fund has no explicit mapping.
+  defaultPcoFundId   String?
+  defaultPcoFundName String?
+
+  syncVersion Int @default(1)
+
+  // Gift sync policy (phase 4). OFF = nothing happens. DRY_RUN = builds and
+  // stores what WOULD be sent, with zero writes to Planning Center. LIVE =
+  // pushes settled gifts. Always OFF until a church deliberately changes it,
+  // and LIVE additionally requires the platform kill switch.
+  syncMode             String    @default("OFF") // OFF | DRY_RUN | LIVE
+  // Watermark: only settlements that settled on/after this moment are pushed,
+  // so enabling sync never back-posts history a church may have keyed in by
+  // hand. Set the first time the church goes LIVE.
+  enabledAt            DateTime?
+  // What to do with a gift whose donor can't be matched to a Planning Center
+  // person: HOLD_FOR_REVIEW (safest) | ATTACH_LATER (send now without a person, attach them once matched) |
+  // CREATE_PERSON | ANONYMOUS (send without a person, never attach).
+  unmatchedDonorPolicy String    @default("HOLD_FOR_REVIEW")
+  // When gifts are sent: ON_PAYMENT = as soon as the payment succeeds, into that day's batch (default) |
+  // ON_SETTLEMENT = after the bank deposit settles, one batch per deposit.
+  sendTiming String @default("ON_PAYMENT")
+  // What WGC sends to Planning Center: GIFTS = every gift as a Giving donation (the church pays Planning Center's
+  // Giving subscription) | PROFILE_FIELDS = no donations; each matched person's profile gets a "WGC Giving" section.
+  syncTarget String @default("GIFTS")
+  // The "WGC Giving" profile tab and its fields, created once in the church's Planning Center (key -> field definition id).
+  pcoProfileTabId    String?
+  pcoProfileFieldIds Json?
+  // Commit batches in Planning Center automatically. Off by default so the
+  // church's finance admin can review a batch before donors see the gifts.
+  autoCommitBatches    Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Maps one of a church's WGC funds to a Planning Center Giving fund.
+/// Many WGC funds may map to the same Planning Center fund (consolidation),
+/// but each WGC fund maps to at most one. Modeled on AplosPurposeMapping.
+model PlanningCenterFundMapping {
+  id       String @id @default(cuid())
+  churchId String
+  fundId   String // WGC Fund.id
+
+  pcoFundId   String
+  pcoFundName String // snapshot for display; the live name is re-read from Planning Center
+
+  mappedByUserId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([churchId, fundId])
+  @@index([churchId])
+}
+
+/// A durable link between a WGC Donor and a Planning Center person, used only
+/// to attribute pushed gifts. Never auto-links when more than one Planning
+/// Center person matches (spouses commonly share an email) and never matches
+/// on name alone. See docs/integrations/planning-center-phase-2-4.md.
+model PlanningCenterPersonLink {
+  id       String @id @default(cuid())
+  churchId String
+  donorId  String
+
+  // The Planning Center organization this link was made against.
+  pcoOrganizationId String
+
+  // LINKED = pcoPersonId is the match | NEEDS_REVIEW = several candidates (or
+  // the only candidate is already linked to another donor) and a human must
+  // choose | NO_MATCH = searched, nobody found (re-checked after a while).
+  status String @default("NO_MATCH") // LINKED | NEEDS_REVIEW | NO_MATCH
+
+  pcoPersonId          String?
+  pcoPersonName        String?
+  // EMAIL | PHONE | MANUAL | CREATED
+  matchMethod          String?
+  // [{ pcoPersonId, name, emails[], phones[] }] while NEEDS_REVIEW.
+  candidatesJson       Json?
+  // People the church said are NOT this donor — never offered or auto-linked again.
+  rejectedPcoPersonIds String[] @default([])
+
+  // PROFILE_FIELDS: a fingerprint of what was last written to this person's "WGC Giving" section, and when. Nothing is
+  // written again until the summary changes.
+  profileDigest   String?
+  profileSyncedAt DateTime?
+
+  linkedByUserId String?
+  matchedAt      DateTime?
+  lastCheckedAt  DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // One link per donor, and one donor per Planning Center person.
+  @@unique([churchId, donorId])
+  @@unique([churchId, pcoPersonId])
+  @@index([churchId, status])
+}
+
+/// Resumable, chunked bulk job over a church's donors or Planning Center
+/// people, in the style of QuickBooksBackfillJob / BulkReceiptJob: created
+/// once, then the UI calls .../process repeatedly until COMPLETED.
+model PlanningCenterPeopleJob {
+  id       String @id @default(cuid())
+  churchId String
+
+  type   String // MATCH_DONORS | IMPORT_PEOPLE
+  status String @default("PENDING") // PENDING | RUNNING | COMPLETED | FAILED
+
+  // Where the next chunk resumes (donor id for MATCH_DONORS, offset for IMPORT_PEOPLE).
+  cursorJson Json?
+
+  totalCount     Int?
+  processedCount Int  @default(0)
+  linkedCount    Int  @default(0)
+  reviewCount    Int  @default(0)
+  noMatchCount   Int  @default(0)
+  createdCount   Int  @default(0)
+  skippedCount   Int  @default(0)
+  failedCount    Int  @default(0)
+
+  lastError       String?
+  createdByUserId String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([churchId, type, status])
+}
+
+/// One gift sync per settlement per syncVersion: one Planning Center batch
+/// per WGC settlement. Mirrors AplosSyncRecord and its state machine.
+model PlanningCenterSyncRecord {
+  id           String @id @default(cuid())
+  churchId     String
+  settlementId String // FinixSettlement.finixSettlementId
+  syncVersion  Int    @default(1)
+
+  // PENDING | PROCESSING (actively claimed; heartbeat in lastAttemptAt) |
+  // IN_PROGRESS (more gifts remain, released between cron ticks) |
+  // BLOCKED | BLOCKED_AWAITING_FEES | DRY_RUN | SYNCED | PARTIAL (all
+  // pushable gifts done, some held for a donor match) | RETRY_SCHEDULED |
+  // FAILED | NEEDS_REVIEW | CANCELLED
+  status        String  @default("PENDING")
+  blockedReason String?
+
+  pcoBatchId       String?
+  batchDescription String?
+  // NOT_COMMITTED | COMMITTING | COMMITTED | N_A
+  commitStatus     String  @default("N_A")
+
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime?
+  startedAt     DateTime?
+  lastAttemptAt DateTime? // heartbeat while PROCESSING
+  syncedAt      DateTime?
+
+  lastErrorCode        String?
+  lastErrorMessage     String?
+  requiresManualReview Boolean @default(false)
+  // Last status a notification was sent for, so a state is announced once.
+  lastNotifiedStatus   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  donations PlanningCenterDonationRecord[]
+  attempts  PlanningCenterSyncAttempt[]
+
+  // The settlement-level duplicate guarantee, enforced by the database.
+  @@unique([churchId, settlementId, syncVersion])
+  @@index([churchId, status])
+  @@index([status, nextAttemptAt])
+}
+
+/// One row per WGC payment, ever. The unique constraint is the core
+/// duplicate guarantee: a payment can be pushed to Planning Center at most
+/// once regardless of retries, a bumped syncVersion or a backfill.
+/// (Planning Center has no idempotency key and no field for our own id.)
+model PlanningCenterDonationRecord {
+  id           String  @id @default(cuid())
+  syncRecordId String
+  churchId     String
+  paymentId    String
+  donorId      String?
+
+  // PENDING | SENDING (a write is in flight or its outcome is unknown) |
+  // CREATED | REVERSED (refunded/returned/failed after it was sent) | SKIPPED | HELD (waiting on a donor
+  // match) | NEEDS_REVIEW | FAILED
+  status        String  @default("PENDING")
+  skippedReason String?
+
+  amountCents Int
+  fundId      String? // WGC Fund.id
+  pcoFundId   String?
+  pcoPersonId String?
+  receivedOn  String // YYYY-MM-DD, the original donation date
+  payloadHash String?
+  // What would be / was sent, ids only (no names, no card data).
+  payloadJson Json?
+
+  pcoDonationId    String?
+  sendingStartedAt DateTime?
+  // Sent without a person because the donor wasn't matched yet; the person is attached once they are.
+  attachPersonPending Boolean   @default(false)
+  // Set when the gift was later refunded/returned/failed and Planning Center was updated to match.
+  reversedAt          DateTime?
+  attemptCount     Int       @default(0)
+  lastErrorCode    String?
+  lastErrorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncRecord PlanningCenterSyncRecord @relation(fields: [syncRecordId], references: [id], onDelete: Cascade)
+
+  @@unique([churchId, paymentId])
+  @@index([syncRecordId, status])
+  @@index([churchId, status])
+}
+
+/// Append-only audit of every attempt. Never stores tokens, authorization
+/// headers or card/bank data.
+model PlanningCenterSyncAttempt {
+  id            String   @id @default(cuid())
+  syncRecordId  String
+  churchId      String
+  attemptNumber Int
+  outcome       String // e.g. SYNCED | PARTIAL | IN_PROGRESS | BLOCKED | RETRY_SCHEDULED | FAILED | NEEDS_REVIEW | DRY_RUN
+  createdCount  Int      @default(0)
+  skippedCount  Int      @default(0)
+  heldCount     Int      @default(0)
+  errorCode     String?
+  errorMessage  String?
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+
+  syncRecord PlanningCenterSyncRecord @relation(fields: [syncRecordId], references: [id], onDelete: Cascade)
+
+  @@index([syncRecordId])
 }
 
 model QuickBooksSyncRecord {

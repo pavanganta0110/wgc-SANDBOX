@@ -15,7 +15,7 @@
  * "net" and "gross" are the same number for cash/check/external/in-kind.
  */
 import { prisma } from "@/lib/prisma";
-import { externalDonationEligibilityWhere, type DateRangeFilter } from "@/lib/donors/donorAggregates";
+import { externalDonationEligibilityWhere, loadTransferIdsForGivingLinks, type DateRangeFilter } from "@/lib/donors/donorAggregates";
 
 export interface PaymentMethodBreakdown {
   cardGivingCents: number;
@@ -51,7 +51,10 @@ export async function loadPaymentMethodBreakdownBatch(
   churchId: string,
   dateFilter?: DateRangeFilter,
   attributedUserId?: string,
+  givingLinkIds?: string[],
 ): Promise<Map<string, PaymentMethodBreakdown>> {
+  const byGivingLink = Boolean(givingLinkIds && givingLinkIds.length > 0);
+  const allowedTransferIds = byGivingLink ? await loadTransferIdsForGivingLinks(churchId, givingLinkIds!, attributedUserId) : null;
   const result = new Map<string, PaymentMethodBreakdown>(donorIds.map((id) => [id, { ...EMPTY_BREAKDOWN }]));
   if (donorIds.length === 0) return result;
 
@@ -62,7 +65,7 @@ export async function loadPaymentMethodBreakdownBatch(
   const instrumentMeta = new Map(instruments.map((i) => [i.finixPaymentInstrumentId, i]));
   const instrumentIds = [...instrumentMeta.keys()];
 
-  const transfers = instrumentIds.length
+  const allTransfers = instrumentIds.length
     ? await prisma.finixTransfer.findMany({
         where: {
           churchId,
@@ -73,6 +76,7 @@ export async function loadPaymentMethodBreakdownBatch(
         select: { finixTransferId: true, finixPaymentInstrumentId: true, amountCents: true },
       })
     : [];
+  const transfers = allowedTransferIds ? allTransfers.filter((t) => allowedTransferIds.has(t.finixTransferId)) : allTransfers;
   const transferIds = transfers.map((t) => t.finixTransferId);
 
   const [refunds, returns, externalRows] = await Promise.all([
@@ -82,8 +86,9 @@ export async function loadPaymentMethodBreakdownBatch(
     transferIds.length
       ? prisma.bankReturn.findMany({ where: { churchId, originalTransferId: { in: transferIds } }, select: { originalTransferId: true, amountCents: true } })
       : Promise.resolve([]),
+    // External donations have no giving link, so they never match a giving-link filter.
     prisma.externalDonation.findMany({
-      where: externalDonationEligibilityWhere(churchId, { donorIds, dateFilter, attributedUserId }),
+      where: byGivingLink ? { id: { in: [] } } : externalDonationEligibilityWhere(churchId, { donorIds, dateFilter, attributedUserId }),
       select: { donorId: true, donationAmountCents: true, paymentMethod: true, otherPaymentMethodName: true, donationPurpose: true, depositStatus: true },
     }),
   ]);
@@ -133,7 +138,9 @@ export async function loadPaymentMethodBreakdownBatch(
  * is computed separately here rather than modifying that shared, heavily-
  * relied-on function for one extra Reporting-only column.
  */
-export async function loadSmallestDonationBatch(donorIds: string[], churchId: string, dateFilter?: DateRangeFilter): Promise<Map<string, number>> {
+export async function loadSmallestDonationBatch(donorIds: string[], churchId: string, dateFilter?: DateRangeFilter, givingLinkIds?: string[]): Promise<Map<string, number>> {
+  const byGivingLink = Boolean(givingLinkIds && givingLinkIds.length > 0);
+  const allowedTransferIds = byGivingLink ? await loadTransferIdsForGivingLinks(churchId, givingLinkIds!) : null;
   const result = new Map<string, number>();
   if (donorIds.length === 0) return result;
 
@@ -148,11 +155,11 @@ export async function loadSmallestDonationBatch(donorIds: string[], churchId: st
     instrumentIds.length
       ? prisma.finixTransfer.findMany({
           where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: "SUCCEEDED", ...(dateFilter ? { createdAtFinix: dateFilter } : {}) },
-          select: { finixPaymentInstrumentId: true, amountCents: true },
+          select: { finixTransferId: true, finixPaymentInstrumentId: true, amountCents: true },
         })
       : Promise.resolve([]),
     prisma.externalDonation.findMany({
-      where: externalDonationEligibilityWhere(churchId, { donorIds, dateFilter }),
+      where: byGivingLink ? { id: { in: [] } } : externalDonationEligibilityWhere(churchId, { donorIds, dateFilter }),
       select: { donorId: true, donationAmountCents: true, depositStatus: true },
     }),
   ]);
@@ -164,6 +171,7 @@ export async function loadSmallestDonationBatch(donorIds: string[], churchId: st
   };
 
   for (const t of transfers) {
+    if (allowedTransferIds && !allowedTransferIds.has(t.finixTransferId)) continue;
     if (!t.finixPaymentInstrumentId) continue;
     consider(instrumentToDonor.get(t.finixPaymentInstrumentId), t.amountCents);
   }

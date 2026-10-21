@@ -93,4 +93,15 @@ describe("errorNormalizer", () => {
     
     logSpy.mockRestore();
   });
+
+  it("keeps HTTP status codes and other plain numbers readable in strings", () => {
+    expect(redactSensitiveData("Finix API error 403 for /merchants/MU123")).toBe("Finix API error 403 for /merchants/MU123");
+    expect(redactSensitiveData("retry 3 of 5 on port 8080")).toBe("retry 3 of 5 on port 8080");
+  });
+
+  it("still redacts labelled CVVs and card numbers inside strings", () => {
+    expect(redactSensitiveData("declined, cvv: 123")).toBe("declined, cvv: [REDACTED_CVV]");
+    expect(redactSensitiveData("security code 4567 invalid")).toBe("security code [REDACTED_CVV] invalid");
+    expect(redactSensitiveData("card 4111 1111 1111 1111 failed")).toContain("[REDACTED_CARD]");
+  });
 });

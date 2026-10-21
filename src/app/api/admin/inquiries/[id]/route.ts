@@ -41,13 +41,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const updated = await prisma.contactInquiry.update({ where: { id }, data });
 
-  await prisma.auditLog.create({
-    data: {
-      action: "status" in body ? "INQUIRY_STATUS_UPDATED" : "INQUIRY_NOTE_UPDATED",
-      actorEmail: session.email,
-      metadata: { inquiryId: id, ...data, reviewedBy: undefined },
-    },
-  });
+  // The audit record is best-effort: the change above is already saved, so a failure here must not make the save look failed.
+  try {
+    await prisma.auditLog.create({
+      data: {
+        action: "status" in body ? "INQUIRY_STATUS_UPDATED" : "INQUIRY_NOTE_UPDATED",
+        actorEmail: session.email,
+        metadata: { inquiryId: id, ...data, reviewedBy: undefined },
+      },
+    });
+  } catch (err) {
+    console.error("inquiry audit log failed:", err instanceof Error ? err.message : err);
+  }
 
   return NextResponse.json({ inquiry: updated });
 }

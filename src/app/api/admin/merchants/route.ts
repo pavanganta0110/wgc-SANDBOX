@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth/session";
 import { createAuditLog } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
+import { parseCreatedDateRange, parseSearchField } from "@/lib/admin/merchantFilters";
 
 export async function GET(req: Request) {
   try {
@@ -28,8 +29,14 @@ export async function GET(req: Request) {
     const createdDateStart = searchParams.get("createdDateStart");
     const createdDateEnd = searchParams.get("createdDateEnd");
     
-    // Search
-    const search = searchParams.get("search") || searchParams.get("q") || "";
+    // Search ("name" = merchant name only; default keeps the original broad search)
+    const search = (searchParams.get("search") || searchParams.get("q") || "").trim();
+    const searchField = parseSearchField(searchParams.get("searchField"));
+
+    const dateRange = parseCreatedDateRange(createdDateStart, createdDateEnd);
+    if (dateRange.error) {
+      return NextResponse.json({ error: dateRange.error }, { status: 400 });
+    }
 
     // Base WHERE conditions
     const conditions: Prisma.Sql[] = [Prisma.sql`1=1`];
@@ -46,15 +53,18 @@ export async function GET(req: Request) {
       conditions.push(Prisma.sql`fms."merchantState" = ${merchantActivationStatus}`);
     }
     
-    if (createdDateStart) {
-      conditions.push(Prisma.sql`c."createdAt" >= ${new Date(createdDateStart)}`);
-    }
-    
-    if (createdDateEnd) {
-      conditions.push(Prisma.sql`c."createdAt" <= ${new Date(createdDateEnd)}`);
+    if (dateRange.start) {
+      conditions.push(Prisma.sql`c."createdAt" >= ${dateRange.start}`);
     }
 
-    if (search) {
+    // Exclusive upper bound: a date-only end day is included in full.
+    if (dateRange.endExclusive) {
+      conditions.push(Prisma.sql`c."createdAt" < ${dateRange.endExclusive}`);
+    }
+
+    if (search && searchField === "name") {
+      conditions.push(Prisma.sql`c.name ILIKE ${`%${search}%`}`);
+    } else if (search) {
       const searchPattern = `%${search}%`;
       conditions.push(Prisma.sql`(
         c.name ILIKE ${searchPattern} OR

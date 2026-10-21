@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
@@ -214,7 +215,14 @@ export default async function PaymentFullDetailPage({
               </div>
             )}
             <p className="text-sm text-slate-600">
-              Donor: <span className="font-semibold text-slate-900">{formatPersonName(contactName, instrument?.accountHolderName)}</span>
+              Donor:{" "}
+              {donor ? (
+                <Link href={`/merchant/donors/${donor.id}`} className="font-semibold text-blue-600 hover:underline">
+                  {formatPersonName(contactName, instrument?.accountHolderName)}
+                </Link>
+              ) : (
+                <span className="font-semibold text-slate-900">{formatPersonName(contactName, instrument?.accountHolderName)}</span>
+              )}
               {" · "}
               Payment Instrument:{" "}
               <span className="font-semibold text-slate-900">
@@ -513,7 +521,18 @@ export default async function PaymentFullDetailPage({
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
-            <Row label="Name" value={formatPersonName(contactName, instrument?.accountHolderName)} />
+            <Row
+              label="Name"
+              value={
+                donor ? (
+                  <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">
+                    {formatPersonName(contactName, instrument?.accountHolderName)}
+                  </Link>
+                ) : (
+                  formatPersonName(contactName, instrument?.accountHolderName)
+                )
+              }
+            />
             <Row label="Email" value={contactEmail || "—"} />
             <Row label="Phone" value={contactPhone || "—"} />
           </div>
@@ -575,7 +594,7 @@ export default async function PaymentFullDetailPage({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between text-sm py-1">
       <span className="text-slate-500">{label}</span>

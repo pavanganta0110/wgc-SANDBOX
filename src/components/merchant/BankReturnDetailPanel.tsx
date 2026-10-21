@@ -9,6 +9,7 @@ import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadBankReturnDetail } from "@/lib/finix/bankReturnDetail";
 import { formatAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
+import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function BankReturnDetailPanel({
   bankReturnId,
@@ -54,7 +55,7 @@ export default async function BankReturnDetailPanel({
           <StateBadge state={state} />
         </div>
         <p className="text-sm text-slate-600 mt-2">
-          Buyer: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
+          Buyer: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
           {" · "}
           Instrument:{" "}
           <span className="font-semibold text-slate-900">
@@ -117,7 +118,7 @@ export default async function BankReturnDetailPanel({
       <div className="px-5 py-4 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Buyer</h4>
         <div className="space-y-0.5">
-          <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
+          <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
           <Row label="Email" value={donor?.email || "—"} />
           <Row label="Phone" value={donor?.phone || "—"} />
         </div>

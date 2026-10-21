@@ -21,6 +21,7 @@ export default async function LapsedDonorReportPage() {
         fixedDateRange={{ key: "all" }}
         canManageSavedReports={hasPermission(auth, "canManageSavedReports")}
         canExportReports={hasPermission(auth, "canExportReports")}
+        canEmailDonors={hasPermission(auth, "canResendEmails")}
         header={{
           current: "Lapsed Donors",
           title: "Lapsed Donors",

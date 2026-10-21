@@ -1,38 +1,38 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import TakePaymentDialog from "@/components/merchant/TakePaymentDialog";
 
+/**
+ * Take a Payment is launched from the sidebar (Giving → Take a Payment),
+ * which links here with ?takePayment=1. Closing the dialog drops the param so
+ * a refresh doesn't reopen it.
+ */
 export default function PaymentsHeaderActions({
+  openOnLoad,
   finixMerchantId,
   churchName,
   pricing,
 }: {
+  openOnLoad: boolean;
   finixMerchantId: string;
   churchName: string;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
 }) {
-  const [showTakePayment, setShowTakePayment] = useState(false);
+  const router = useRouter();
+  const [showTakePayment, setShowTakePayment] = useState(openOnLoad);
 
+  if (!showTakePayment) return null;
   return (
-    <>
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => setShowTakePayment(true)}
-          className="px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-        >
-          Take a Payment
-        </button>
-      </div>
-
-      {showTakePayment && (
-        <TakePaymentDialog
-          finixMerchantId={finixMerchantId}
-          churchName={churchName}
-          pricing={pricing}
-          onClose={() => setShowTakePayment(false)}
-        />
-      )}
-    </>
+    <TakePaymentDialog
+      finixMerchantId={finixMerchantId}
+      churchName={churchName}
+      pricing={pricing}
+      onClose={() => {
+        setShowTakePayment(false);
+        router.replace("/merchant/transactions/payments", { scroll: false });
+      }}
+    />
   );
 }

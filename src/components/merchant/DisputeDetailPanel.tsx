@@ -15,6 +15,7 @@ import { buildDisputeTimeline } from "@/lib/finix/disputeTimeline";
 import { resolveDisputeDisplayStatus } from "@/lib/finix/disputeStatus";
 import DisputeDeadlineBanner from "@/components/merchant/DisputeDeadlineBanner";
 import DisputeFinancialImpactCard from "@/components/merchant/DisputeFinancialImpactCard";
+import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function DisputeDetailPanel({
   disputeId,
@@ -72,7 +73,7 @@ export default async function DisputeDetailPanel({
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Donor</span>
             <span className="font-semibold text-slate-700">
-              {formatPersonName(donor?.name, instrument?.accountHolderName)}
+              <DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />
             </span>
           </div>
           {dispute.finixTransferId && (

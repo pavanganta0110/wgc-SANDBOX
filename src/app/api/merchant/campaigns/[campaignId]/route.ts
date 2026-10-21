@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -47,6 +48,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
 
   const body = await req.json();
   const { name, description, imageUrl, startDate, endDate, goalAmountCents, status, leaderboardEnabled, publiclyIndexable, fundraiserSelfEditEnabled } = body;
+  const goalProblem = goalAmountCentsError(goalAmountCents);
+  if (goalProblem) return NextResponse.json({ error: goalProblem }, { status: 400 });
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });

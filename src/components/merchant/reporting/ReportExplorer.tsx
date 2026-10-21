@@ -25,6 +25,7 @@ import {
   Filter,
 } from "lucide-react";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
+import FollowUpEmailDialog from "./FollowUpEmailDialog";
 import PageHeader from "./ui/PageHeader";
 import SummaryStrip from "./ui/SummaryStrip";
 import Avatar from "./ui/Avatar";
@@ -111,7 +112,7 @@ const COLUMN_LABELS: Record<Column, string> = {
   isRecurringDonor: "Recurring Donor",
   recurringAmountCents: "Recurring Amount",
   givingFrequency: "Giving Frequency",
-  givingPage: "Giving Page",
+  givingPage: "Giving Link",
   fund: "Fund",
   purpose: "Purpose",
   attributedUserName: "Assigned Fundraiser",
@@ -251,6 +252,7 @@ export default function ReportExplorer({
   fixedDateRange,
   canManageSavedReports,
   canExportReports,
+  canEmailDonors = false,
   header,
   afterHeader,
 }: {
@@ -258,6 +260,8 @@ export default function ReportExplorer({
   fixedDateRange?: { key: string; year?: number };
   canManageSavedReports: boolean;
   canExportReports: boolean;
+  /** Lets the Lapsed report's Email button open the in-app composer; otherwise it falls back to a mailto: link. */
+  canEmailDonors?: boolean;
   header: ReportHeader;
   /** Optional content rendered between the page header and the summary strip (e.g. the Top Donors leaderboard). */
   afterHeader?: React.ReactNode;
@@ -268,6 +272,7 @@ export default function ReportExplorer({
   const [year, setYear] = useState<number>(
     fixedDateRange?.year ?? new Date().getFullYear(),
   );
+  const [emailTarget, setEmailTarget] = useState<{ donorId: string; donorName: string } | null>(null);
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [sources, setSources] = useState<SourceToggles>(DEFAULT_SOURCES);
@@ -279,6 +284,8 @@ export default function ReportExplorer({
   const [minAmount, setMinAmount] = useState("");
   const [maxAmount, setMaxAmount] = useState("");
   const [segment, setSegment] = useState("");
+  const [givingLinkIds, setGivingLinkIds] = useState<string[]>([]);
+  const [givingLinks, setGivingLinks] = useState<{ id: string; name: string }[]>([]);
   const [lapsedDays, setLapsedDays] = useState(90);
   const [sortBy, setSortBy] = useState("DATE");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -297,6 +304,26 @@ export default function ReportExplorer({
   >("PRIVATE");
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+
+  // Giving links available for the "Giving link" filter (server-scoped to what this user may see).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/giving-links")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.links) return;
+        setGivingLinks(
+          (data.links as { id: string; internalName?: string | null; publicTitle?: string | null }[]).map((l) => ({
+            id: l.id,
+            name: l.internalName || l.publicTitle || "Untitled link",
+          })),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reportType]);
 
   const definition = useMemo(() => {
     const dateRange: Record<string, unknown> =
@@ -323,6 +350,7 @@ export default function ReportExplorer({
           ? Math.round(Number(maxAmount) * 100)
           : undefined,
         segment: segment || undefined,
+        givingLinkIds: givingLinkIds.length ? givingLinkIds : undefined,
         segmentParams:
           segment === "LAPSED" || reportType === "LAPSED"
             ? { lapsedDays }
@@ -347,6 +375,7 @@ export default function ReportExplorer({
     minAmount,
     maxAmount,
     segment,
+    givingLinkIds,
     lapsedDays,
     sortBy,
     sortDirection,
@@ -440,6 +469,7 @@ export default function ReportExplorer({
   ).filter((k) => sources[k] !== DEFAULT_SOURCES[k]).length;
   const activeFilterCount =
     [search, minAmount, maxAmount, segment].filter(Boolean).length +
+    (givingLinkIds.length > 0 ? 1 : 0) +
     sourcesChanged;
 
   const totalPages = result
@@ -632,6 +662,7 @@ export default function ReportExplorer({
     setMinAmount("");
     setMaxAmount("");
     setSegment("");
+    setGivingLinkIds([]);
     setSources(DEFAULT_SOURCES);
   };
   const noRows =
@@ -762,6 +793,16 @@ export default function ReportExplorer({
                 onClear={() => setMaxAmount("")}
               />
             )}
+            {givingLinkIds.length > 0 && (
+              <FilterChip
+                label={`Giving link: ${
+                  givingLinkIds.length === 1
+                    ? (givingLinks.find((l) => l.id === givingLinkIds[0])?.name ?? "1 selected")
+                    : `${givingLinkIds.length} selected`
+                }`}
+                onClear={() => setGivingLinkIds([])}
+              />
+            )}
             {sourcesChanged > 0 && (
               <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
                 Some sources hidden
@@ -774,6 +815,7 @@ export default function ReportExplorer({
                 setMinAmount("");
                 setMaxAmount("");
                 setSegment("");
+                setGivingLinkIds([]);
                 setSources(DEFAULT_SOURCES);
               }}
               className={`rounded px-1 font-semibold text-indigo-700 underline-offset-2 hover:underline ${FOCUS}`}
@@ -918,6 +960,15 @@ export default function ReportExplorer({
                               <FollowUp
                                 email={row.email as string | null | undefined}
                                 donorId={row.donorId}
+                                onCompose={
+                                  canEmailDonors
+                                    ? () =>
+                                        setEmailTarget({
+                                          donorId: row.donorId,
+                                          donorName: String(row.donorName ?? "this donor"),
+                                        })
+                                    : undefined
+                                }
                               />
                             </Td>
                           )}
@@ -1075,6 +1126,38 @@ export default function ReportExplorer({
                 <option value="IN_KIND_DONOR">In-Kind Donors</option>
               </SelectField>
             </div>
+            <fieldset>
+              <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                Giving link
+              </legend>
+              <p className="mb-2 text-xs text-slate-500">
+                Only gifts made through the selected link(s) are counted, and only donors with such a gift are listed. Leave empty for all donors. The export uses the same filter.
+              </p>
+              {givingLinks.length === 0 ? (
+                <p className="text-xs text-slate-500">No giving links yet.</p>
+              ) : (
+                <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                  {givingLinks.map((l) => (
+                    <label
+                      key={l.id}
+                      className={`flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${givingLinkIds.includes(l.id) ? "bg-indigo-50 text-indigo-900" : "text-slate-700 hover:bg-slate-50"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-indigo-600"
+                        checked={givingLinkIds.includes(l.id)}
+                        onChange={(e) =>
+                          setGivingLinkIds((prev) =>
+                            e.target.checked ? [...prev, l.id] : prev.filter((id) => id !== l.id),
+                          )
+                        }
+                      />
+                      <span className="truncate">{l.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </fieldset>
             <PrimaryButton
               className="w-full justify-center"
               onClick={() => {
@@ -1086,6 +1169,14 @@ export default function ReportExplorer({
             </PrimaryButton>
           </div>
         </Drawer>
+      )}
+
+      {emailTarget && (
+        <FollowUpEmailDialog
+          donorId={emailTarget.donorId}
+          donorName={emailTarget.donorName}
+          onClose={() => setEmailTarget(null)}
+        />
       )}
 
       {/* Column customizer */}
@@ -1328,13 +1419,24 @@ function DonorCell({ name, donorId }: { name: string; donorId: string }) {
 function FollowUp({
   email,
   donorId,
+  onCompose,
 }: {
   email: string | null | undefined;
   donorId: string;
+  onCompose?: () => void;
 }) {
   return (
     <span className="inline-flex items-center gap-2">
-      {email ? (
+      {email && onCompose ? (
+        <button
+          type="button"
+          onClick={onCompose}
+          className={`inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 ${FOCUS}`}
+        >
+          <Mail className="h-3.5 w-3.5" aria-hidden />
+          Email
+        </button>
+      ) : email ? (
         <a
           href={`mailto:${email}`}
           className={`inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-xs font-semibold text-indigo-800 hover:bg-indigo-100 ${FOCUS}`}

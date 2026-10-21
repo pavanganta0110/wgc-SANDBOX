@@ -5,6 +5,8 @@ import Link from "next/link";
 import { 
   Search, 
   Filter, 
+  X,
+  CalendarRange,
   ChevronLeft, 
   ChevronRight, 
   MoreHorizontal, 
@@ -35,6 +37,31 @@ interface MerchantData {
   createdAt: string;
 }
 
+const ONBOARDING_OPTIONS = [
+  { value: "ALL", label: "All onboarding" },
+  { value: "UNDER_REVIEW", label: "Under review" },
+  { value: "MORE_INFORMATION_REQUIRED", label: "More information required" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
+];
+
+// Local-date YYYY-MM-DD (what <input type="date"> uses), not UTC, so "today" matches the admin's calendar.
+const toDateInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return toDateInput(d);
+};
+
+const DATE_PRESETS: { key: string; label: string; range: () => { from: string; to: string } }[] = [
+  { key: "today", label: "Today", range: () => ({ from: toDateInput(new Date()), to: toDateInput(new Date()) }) },
+  { key: "7d", label: "Last 7 days", range: () => ({ from: daysAgo(6), to: toDateInput(new Date()) }) },
+  { key: "30d", label: "Last 30 days", range: () => ({ from: daysAgo(29), to: toDateInput(new Date()) }) },
+  { key: "90d", label: "Last 90 days", range: () => ({ from: daysAgo(89), to: toDateInput(new Date()) }) },
+  { key: "mtd", label: "This month", range: () => { const n = new Date(); return { from: toDateInput(new Date(n.getFullYear(), n.getMonth(), 1)), to: toDateInput(n) }; } },
+  { key: "ytd", label: "This year", range: () => { const n = new Date(); return { from: toDateInput(new Date(n.getFullYear(), 0, 1)), to: toDateInput(n) }; } },
+];
+
 export default function MerchantsDirectoryPage() {
   const [merchants, setMerchants] = useState<MerchantData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,7 +74,11 @@ export default function MerchantsDirectoryPage() {
   
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchField, setSearchField] = useState<"name" | "any">("name");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [onboardingFilter, setOnboardingFilter] = useState("ALL");
+  const [createdFrom, setCreatedFrom] = useState("");
+  const [createdTo, setCreatedTo] = useState("");
 
   const fetchMerchants = useCallback(async () => {
     setLoading(true);
@@ -61,18 +92,28 @@ export default function MerchantsDirectoryPage() {
       if (statusFilter !== "ALL") {
         query.append("status", statusFilter);
       }
+      if (onboardingFilter !== "ALL") {
+        query.append("onboardingStatus", onboardingFilter);
+      }
+      if (createdFrom) query.append("createdDateStart", createdFrom);
+      if (createdTo) query.append("createdDateEnd", createdTo);
+      if (searchQuery) query.append("searchField", searchField);
       const res = await fetch(`/api/admin/merchants?${query}`);
-      if (!res.ok) throw new Error("Failed to load merchants");
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "Failed to load merchants");
+      }
       const json = await res.json();
       setMerchants(json.data || []);
       setTotalPages(json.pagination?.totalPages || 1);
-      setTotal(json.pagination?.total || 0);
+      // The API returns totalCount (the page used to read `total`, so the footer always said "of 0").
+      setTotal(json.pagination?.totalCount ?? json.pagination?.total ?? 0);
     } catch (err: any) {
       setError(err.message || "Something went wrong.");
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchQuery, statusFilter]);
+  }, [page, pageSize, searchQuery, searchField, statusFilter, onboardingFilter, createdFrom, createdTo]);
 
   useEffect(() => {
     fetchMerchants();
@@ -81,7 +122,37 @@ export default function MerchantsDirectoryPage() {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    setSearchQuery(searchInput);
+    setSearchQuery(searchInput.trim());
+  };
+
+  // Search as you type (debounced) so a name filter doesn't need Enter.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery((prev) => {
+        const next = searchInput.trim();
+        if (prev !== next) setPage(1);
+        return next;
+      });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const activePreset = DATE_PRESETS.find((p) => {
+    const r = p.range();
+    return r.from === createdFrom && r.to === createdTo;
+  })?.key;
+
+  const activeFilterCount =
+    (searchQuery ? 1 : 0) + (statusFilter !== "ALL" ? 1 : 0) + (onboardingFilter !== "ALL" ? 1 : 0) + (createdFrom || createdTo ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setSearchInput("");
+    setSearchQuery("");
+    setStatusFilter("ALL");
+    setOnboardingFilter("ALL");
+    setCreatedFrom("");
+    setCreatedTo("");
+    setPage(1);
   };
 
   const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -141,25 +212,41 @@ export default function MerchantsDirectoryPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {/* Filters and Search Bar */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row gap-4 items-center justify-between">
-          <form onSubmit={handleSearchSubmit} className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search merchants by name, ID, or email..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-sm transition-shadow"
-            />
-          </form>
-          
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="h-4 w-4 text-slate-400" />
-              <select 
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+            <form onSubmit={handleSearchSubmit} className="flex w-full lg:max-w-xl gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  aria-label="Search merchants"
+                  placeholder={searchField === "name" ? "Search by merchant name..." : "Search by name, ID, owner or email..."}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-sm transition-shadow"
+                />
+              </div>
+              <select
+                aria-label="Search in"
+                value={searchField}
+                onChange={(e) => {
+                  setSearchField(e.target.value as "name" | "any");
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2 pl-3 pr-8 shadow-sm cursor-pointer"
+              >
+                <option value="name">Name only</option>
+                <option value="any">Name, ID, owner, email</option>
+              </select>
+            </form>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Filter className="h-4 w-4 text-slate-400" aria-hidden />
+              <select
+                aria-label="Platform status"
                 value={statusFilter}
                 onChange={handleStatusChange}
-                className="w-full md:w-auto bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2 pl-3 pr-8 shadow-sm cursor-pointer"
+                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2 pl-3 pr-8 shadow-sm cursor-pointer"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="ACTIVE">Active</option>
@@ -167,7 +254,83 @@ export default function MerchantsDirectoryPage() {
                 <option value="DISABLED">Disabled</option>
                 <option value="TERMINATED">Terminated</option>
               </select>
+              <select
+                aria-label="Onboarding status"
+                value={onboardingFilter}
+                onChange={(e) => {
+                  setOnboardingFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2 pl-3 pr-8 shadow-sm cursor-pointer"
+              >
+                {ONBOARDING_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          {/* Created date: quick ranges + custom from/to */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 mr-1">
+              <CalendarRange className="h-4 w-4" aria-hidden />
+              Created
+            </span>
+            {DATE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                aria-pressed={activePreset === p.key}
+                onClick={() => {
+                  const r = p.range();
+                  setCreatedFrom(r.from);
+                  setCreatedTo(r.to);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                  activePreset === p.key
+                    ? "bg-indigo-600 border-indigo-600 text-white"
+                    : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+            <div className="flex items-center gap-1.5 ml-1">
+              <input
+                type="date"
+                aria-label="Created from"
+                value={createdFrom}
+                max={createdTo || undefined}
+                onChange={(e) => {
+                  setCreatedFrom(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg py-1.5 px-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                aria-label="Created to"
+                value={createdTo}
+                min={createdFrom || undefined}
+                onChange={(e) => {
+                  setCreatedTo(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-300 text-slate-700 text-xs rounded-lg py-1.5 px-2 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden />
+                Clear all filters ({activeFilterCount})
+              </button>
+            )}
           </div>
         </div>
 

@@ -6,9 +6,7 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
 import {
   PanelNavArrows,
-  PaymentMoreMenu,
   PinButton,
-  ComingSoonAction,
 } from "@/components/merchant/PaymentDetailActions";
 import ViewAllDetailsLink from "@/components/merchant/ViewAllDetailsLink";
 import IssueRefundButton from "@/components/merchant/IssueRefundButton";
@@ -225,7 +223,6 @@ export default async function PaymentDetailPanel({
           </div>
           <StateBadge state={displayStatus} />
         </div>
-        <PaymentMoreMenu />
         <div className="mt-3 space-y-1.5 text-sm">
           {refund.refundStatus !== "NONE" && (
             <>
@@ -255,7 +252,13 @@ export default async function PaymentDetailPanel({
           <div className="flex items-center justify-between">
             <span className="text-slate-500">Donor</span>
             <span className="font-semibold text-slate-700">
-              {formatPersonName(contactName, instrument?.accountHolderName)}
+              {donor ? (
+                <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">
+                  {formatPersonName(contactName, instrument?.accountHolderName)}
+                </Link>
+              ) : (
+                formatPersonName(contactName, instrument?.accountHolderName)
+              )}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -435,7 +438,18 @@ export default async function PaymentDetailPanel({
       </Section>
 
       <Section title="Donor">
-        <Row label="Name" value={formatPersonName(contactName, instrument?.accountHolderName)} />
+        <Row
+          label="Name"
+          value={
+            donor ? (
+              <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">
+                {formatPersonName(contactName, instrument?.accountHolderName)}
+              </Link>
+            ) : (
+              formatPersonName(contactName, instrument?.accountHolderName)
+            )
+          }
+        />
         <Row label="Email" value={contactEmail || "—"} />
         <Row label="Phone" value={contactPhone || "—"} />
       </Section>
@@ -609,7 +623,6 @@ export default async function PaymentDetailPanel({
 
       <Section
         title="Tags"
-        action={<ComingSoonAction label="Edit" feature="Tag editing" className="text-sm font-semibold text-blue-600 hover:underline" />}
         last
       >
         {transfer.tagsJson && typeof transfer.tagsJson === "object" && !Array.isArray(transfer.tagsJson) && Object.keys(transfer.tagsJson).length > 0 ? (
@@ -651,7 +664,7 @@ function Section({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between text-sm py-1">
       <span className="text-slate-500">{label}</span>

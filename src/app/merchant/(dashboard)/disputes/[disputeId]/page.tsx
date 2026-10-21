@@ -24,6 +24,7 @@ import DisputeDeadlineBanner from "@/components/merchant/DisputeDeadlineBanner";
 import DisputeFinancialImpactCard from "@/components/merchant/DisputeFinancialImpactCard";
 import DisputeAuditHistory from "@/components/merchant/DisputeAuditHistory";
 import DisputeInternalNote from "@/components/merchant/DisputeInternalNote";
+import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function DisputeFullDetailPage({
   params,
@@ -106,7 +107,7 @@ export default async function DisputeFullDetailPage({
               <StateBadge state={displayStatus} />
             </div>
             <p className="text-sm text-slate-600 mb-3">
-              Donor: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
+              Donor: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
               {" · "}
               Organization: <span className="font-semibold text-slate-900">{church?.name || "—"}</span>
             </p>
@@ -188,7 +189,7 @@ export default async function DisputeFullDetailPage({
           {/* Donor */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
-            <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
+            <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
             <Row label="Email" value={donor?.email || "—"} />
             <Row label="Phone" value={donor?.phone || "—"} />
           </div>

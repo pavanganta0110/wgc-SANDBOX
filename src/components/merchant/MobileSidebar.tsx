@@ -6,15 +6,14 @@ import { usePathname } from "next/navigation";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
-import { NAV_ITEMS, NavItem } from "./Sidebar";
+import { NavItem, visibleNavItems, type NavAccess } from "./Sidebar";
 
-export default function MobileSidebar({ role }: { role?: string }) {
+export default function MobileSidebar({ role, access }: { role?: string; access?: NavAccess }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
-  const isOrgLevelRole = role === "owner" || role === "admin" || role === "church_admin" || !role;
-  const visibleItems = isOrgLevelRole ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.organizationOnly);
+  const visibleItems = visibleNavItems(role, access);
 
   // Close menu on route change
   useEffect(() => {

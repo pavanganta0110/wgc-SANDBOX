@@ -53,6 +53,15 @@ describe("POST /api/merchant/campaigns", () => {
     expect(res.status).toBe(403);
   });
 
+  it("refuses a goal too large for the database with a clear message, never a 500", async () => {
+    const { POST } = await loadCollectionRoute();
+    mockAuth.mockResolvedValue(ownerAuth());
+    const res = await POST(req({ name: "Spring Gala", goalAmountCents: 3_200_000_000 }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/too large/);
+    expect(mockPrisma.fundraisingCampaign.create).not.toHaveBeenCalled();
+  });
+
   it("requires a campaign name", async () => {
     const { POST } = await loadCollectionRoute();
     mockAuth.mockResolvedValue(ownerAuth());
@@ -103,6 +112,15 @@ describe("GET/PATCH /api/merchant/campaigns/[campaignId] (tenant isolation)", ()
     mockAuth.mockResolvedValue(viewerAuth());
     const res = await PATCH(req({ name: "New name" }), { params: Promise.resolve({ campaignId: "camp1" }) });
     expect(res.status).toBe(403);
+  });
+
+  it("PATCH refuses a goal too large for the database with a clear message", async () => {
+    const { PATCH } = await loadDetailRoute();
+    mockAuth.mockResolvedValue(ownerAuth());
+    mockPrisma.fundraisingCampaign.findFirst.mockResolvedValue({ id: "camp1", churchId: "church-a" });
+    const res = await PATCH(req({ goalAmountCents: 3_200_000_000 }), { params: Promise.resolve({ campaignId: "camp1" }) });
+    expect(res.status).toBe(400);
+    expect(mockPrisma.fundraisingCampaign.update).not.toHaveBeenCalled();
   });
 
   it("PATCH rejects an invalid status value", async () => {

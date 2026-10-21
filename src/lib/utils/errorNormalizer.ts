@@ -35,8 +35,10 @@ export function redactSensitiveData(obj: any): any {
   if (typeof obj === "string") {
     // Redact credit cards (13-19 digits)
     let s = obj.replace(/\b(?:\d[ -]*?){13,19}\b/g, "[REDACTED_CARD]");
-    // Redact CVV (3-4 digits in standard context)
-    s = s.replace(/\b\d{3,4}\b/g, "[REDACTED_CVV]");
+    // Redact a CVV only when the text labels it (e.g. "cvv: 123", "security code 1234").
+    // Redacting every bare 3-4 digit number also masked HTTP status codes, ports and
+    // counts, which made upstream errors like "Finix API error 403" unreadable.
+    s = s.replace(/\b(cvv2?|cvc2?|cid|security[ _-]?code)(\W{0,3})\d{3,4}\b/gi, "$1$2[REDACTED_CVV]");
     return s;
   }
 

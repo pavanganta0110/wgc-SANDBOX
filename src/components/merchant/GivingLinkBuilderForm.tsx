@@ -111,7 +111,10 @@ function defaultState(): BuilderState {
     internalName: "",
     publicTitle: "",
     description: "",
-    amountType: "FIXED",
+    // New pages default to donor-chosen amounts, every payment method, and
+    // recurring giving on. Editing an existing page always loads its saved
+    // values instead (see the edit page's `initial`).
+    amountType: "VARIABLE",
     fixedAmount: "",
     minAmount: "",
     maxAmount: "",
@@ -125,12 +128,12 @@ function defaultState(): BuilderState {
     maxCollectedAmount: "",
     fundName: "",
     fundSelectionEnabled: false,
-    allowedPaymentMethods: ["CARD"],
+    allowedPaymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
     collectMailingAddress: true,
     feeCoverEnabled: true,
     feeCoverDefaultOn: true,
-    recurringEnabled: false,
+    recurringEnabled: true,
     allowedFrequencies: ["MONTHLY"],
     defaultDonationType: "ONE_TIME",
     defaultRecurringAmount: "",

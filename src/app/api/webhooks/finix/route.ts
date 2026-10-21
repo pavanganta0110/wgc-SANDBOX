@@ -21,6 +21,7 @@ import { describeAchReturnReason } from "@/lib/finix/achReturnReasonCodes";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { upsertComplianceFormFromFinix } from "@/lib/finix/sync/complianceForms";
 import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
+import { triggerPlanningCenterSync, triggerPlanningCenterSyncForTransfer } from "@/lib/integrations/planningcenter/syncTrigger";
 import { deriveFundingSpeedFromOperationKey } from "@/lib/depositColumns";
 import { isSettlementTerminalStatus } from "@/lib/finix/settlementStatus";
 import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
@@ -426,6 +427,8 @@ export async function syncFinixDataFromWebhookEvent(
           } catch (err) {
             console.error("Failed to sync payment to QuickBooks:", err);
           }
+          // Planning Center: send the gift now (after the response; never affects this webhook).
+          triggerPlanningCenterSync(priorPayment.id);
           try {
             await emitEvent({ type: "donation.created", churchId, data: { paymentId: priorPayment.id, donorId: priorPayment.donorId } });
           } catch (err) {
@@ -570,6 +573,7 @@ export async function syncFinixDataFromWebhookEvent(
                 } catch (err) {
                   console.error("Failed to sync payment to QuickBooks:", err);
                 }
+                triggerPlanningCenterSync(newRecurringPayment.id);
                 // Same gap as the QuickBooks sync above: a recurring charge
                 // created already-SUCCEEDED (never PENDING first) never hit
                 // the priorPayment status-transition block elsewhere in this
@@ -678,6 +682,9 @@ export async function syncFinixDataFromWebhookEvent(
           lastSyncedAt: new Date(),
         },
       });
+
+      // Planning Center: a gift already sent that was refunded is refunded (or removed) there too.
+      triggerPlanningCenterSyncForTransfer(churchId, data.parent_transfer);
 
       // Attribute the refund back to the Giving Link that generated the
       // original donation, so the link's refundedCents total (and its Net
@@ -795,6 +802,8 @@ export async function syncFinixDataFromWebhookEvent(
         } catch (err) {
           console.error("Failed to sync event registration with bank return:", err);
         }
+        // Planning Center: a gift already sent that the bank returned is marked failed there.
+        triggerPlanningCenterSyncForTransfer(churchId, originalTransferId);
 
         const wasSucceeded = (priorReturn?.state || "").toUpperCase() === "SUCCEEDED";
         const isSucceeded = (data.state || "").toUpperCase() === "SUCCEEDED";

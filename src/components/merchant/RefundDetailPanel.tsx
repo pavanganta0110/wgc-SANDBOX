@@ -8,6 +8,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadRefundDetail } from "@/lib/finix/refundDetail";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
+import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function RefundDetailPanel({
   refundId,
@@ -67,7 +68,7 @@ export default async function RefundDetailPanel({
           <p className="text-xs text-red-500 mt-1">{refund.failureCode}: {refund.failureMessage}</p>
         )}
         <p className="text-sm text-slate-600 mt-2">
-          Donor: <span className="font-semibold text-slate-900">{formatPersonName(donor?.name, instrument?.accountHolderName)}</span>
+          Donor: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
           {" · "}
           Instrument:{" "}
           <span className="font-semibold text-slate-900">
@@ -122,7 +123,7 @@ export default async function RefundDetailPanel({
       <div className="px-5 py-4 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Donor</h4>
         <div className="space-y-0.5">
-          <Row label="Name" value={formatPersonName(donor?.name, instrument?.accountHolderName)} />
+          <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
           <Row label="Email" value={donor?.email || "—"} />
           <Row label="Phone" value={donor?.phone || "—"} />
         </div>

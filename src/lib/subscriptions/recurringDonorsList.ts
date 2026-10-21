@@ -5,6 +5,8 @@ export interface RecurringDonorsListFilters {
   status?: string;
   frequency?: string;
   givingLinkId?: string;
+  /** Several links at once; unlike givingLinkId, totals then count only the matching subscriptions. */
+  givingLinkIds?: string[];
   fundId?: string;
   minMonthlyValueCents?: number;
   maxMonthlyValueCents?: number;
@@ -33,7 +35,11 @@ export async function loadRecurringDonorsList(
   page: number,
   pageSize: number,
 ): Promise<RecurringDonorsListResult> {
-  const subscriptions = await loadSubscriptionCandidates(churchId, { attributedUserId: filters.attributedUserId });
+  const allSubscriptions = await loadSubscriptionCandidates(churchId, { attributedUserId: filters.attributedUserId });
+  // Filtering subscriptions *before* grouping means each donor's monthly/annual/lifetime
+  // figures cover only the selected giving links, not their whole recurring giving.
+  const linkIds = filters.givingLinkIds ?? [];
+  const subscriptions = linkIds.length ? allSubscriptions.filter((s) => s.givingLinkId && linkIds.includes(s.givingLinkId)) : allSubscriptions;
   let donors = groupSubscriptionsByDonor(subscriptions);
 
   if (filters.search) {

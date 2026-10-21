@@ -477,10 +477,15 @@ export const ROLE_PERMISSIONS: Record<NormalizedOrgRole, PermissionMatrix> = {
     canViewPledges: true,
     canCreatePledge: true, // same rationale as canCreateExternalDonation — front-line entry for pledge cards/phone calls
     canRecordPledgeFulfillment: true,
+    // Fundraisers work campaigns and events, so they can see them by default
+    // (read-only). Creating/editing/archiving, roster management, check-in,
+    // door gifts and export stay off — each is its own permission, enforced
+    // by every write route — and are override-able per user.
+    canViewFundraisingCampaigns: true,
+    canViewEvents: true,
     // No pledge campaign creation/management, no editing/canceling an
     // existing pledge, no export by default — override-able. Same for
-    // fundraising campaigns: no create/edit/archive/roster-management, and
-    // canViewFundraisingCampaigns is false by default too — override-able.
+    // fundraising campaigns: no create/edit/archive/roster-management.
     // canViewEmailLogs/canResendEmails: false by default, override-able —
     // no existing "owns donor communications" precedent for this role
     // (unlike invoices, which fundraisers create themselves, these emails

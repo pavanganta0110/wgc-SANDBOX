@@ -58,6 +58,11 @@ All configuration is via environment variables (no separate config-file system b
 | `QUICKBOOKS_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` / `_SCOPES` / `_ENVIRONMENT` | QuickBooks Online OAuth |
 | `QUICKBOOKS_CREDENTIAL_ENCRYPTION_KEY` | Encrypts stored QuickBooks OAuth tokens at rest |
 | `QUICKBOOKS_INTEGRATION_ENABLED` / `QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN` | Feature flag + webhook auth |
+| `PLANNING_CENTER_CLIENT_ID` / `_CLIENT_SECRET` / `_REDIRECT_URI` | WGC's single Planning Center OAuth application (shared by every church). Redirect URI must be `https://<host>/api/merchant/settings/integrations/planning-center/callback` |
+| `PLANNING_CENTER_CREDENTIAL_ENCRYPTION_KEY` | Encrypts stored Planning Center OAuth tokens at rest (`openssl rand -base64 32`) |
+| `PLANNING_CENTER_INTEGRATION_ENABLED` | Feature flag, **defaults to off**. Set `true` to show the live Planning Center card and allow connecting |
+| `PLANNING_CENTER_USER_AGENT` | Optional contact string sent as the User-Agent on every Planning Center request |
+| `PLANNING_CENTER_SYNC_ENABLED` | Platform kill switch for **gift sync**, separate from `PLANNING_CENTER_INTEGRATION_ENABLED`. **Defaults to off.** While off, the `planning-center-sync` cron does nothing and no church can turn sync on (preview or live) |
 | `APLOS_API_BASE_URL` / `APLOS_CREDENTIAL_ENCRYPTION_KEY` / `APLOS_SYNC_ENABLED` | Aplos accounting integration |
 | `PRINTFUL_ACCESS_TOKEN` / `_API_BASE_URL` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_CREDENTIAL_ENCRYPTION_KEY` / `_MODE` / `_WEBHOOK_SECRET` / `_INTEGRATION_ENABLED` | Printful merchandise fulfillment |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth (donor/merchant sign-in or integration, per call site) |

@@ -35,7 +35,7 @@ export const DONOR_COLUMN_LABELS: Record<DonorReportColumn, string> = {
   isRecurringDonor: "Recurring Donor",
   recurringAmountCents: "Recurring Amount",
   givingFrequency: "Giving Frequency",
-  givingPage: "Giving Page",
+  givingPage: "Giving Link",
   fund: "Fund",
   purpose: "Purpose/Designation",
   attributedUserName: "Assigned Fundraiser",

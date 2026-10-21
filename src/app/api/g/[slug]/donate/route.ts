@@ -10,6 +10,7 @@ import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { sendReceiptEmail } from "@/lib/giving/sendReceiptEmail";
 import { sendDonationReceipt, notifyMerchantOfNewDonation } from "@/lib/giving/generateReceipt";
 import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
+import { triggerPlanningCenterSync } from "@/lib/integrations/planningcenter/syncTrigger";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
 import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
@@ -995,6 +996,8 @@ async function handleDonate(req: Request, slug: string) {
       } catch (err) {
         console.error("Failed to sync payment to QuickBooks:", err);
       }
+      // Planning Center: send the gift now. Runs after the response and can never affect this payment.
+      triggerPlanningCenterSync(newPayment.id);
     }
 
     if (succeeded) {

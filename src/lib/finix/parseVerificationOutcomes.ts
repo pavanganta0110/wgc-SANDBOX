@@ -102,3 +102,86 @@ export function extractFileUploadRequests(verification: unknown): FileUploadRequ
 export function extractRequestedFileType(verification: unknown): string | null {
   return extractFileUploadRequests(verification)[0]?.fileType ?? null;
 }
+
+export interface UpdateDataRequest {
+  /** Finix Identity field Finix asked to be corrected, e.g. "entity.url" or "tax_id" (remediation_details.field_name). Empty when Finix gave only a message. */
+  fieldName: string;
+  /** The underwriter's note for this correction, when Finix provided one. */
+  message: string | null;
+}
+
+/**
+ * Extracts every non-file outcome (an "update this" request) so the merchant form can show exactly the inputs
+ * Finix asked about and list the rest. Outcomes with only an underwriter message and no field_name are kept too
+ * (fieldName "") so they are mapped by keyword or surfaced for the note box, never silently dropped.
+ * Deduped because Finix can repeat the same note (e.g. once per owner).
+ */
+export function extractUpdateDataRequests(verification: unknown): UpdateDataRequest[] {
+  const outcomesRaw = (verification as { outcomes?: unknown })?.outcomes;
+  const outcomes: unknown[] = Array.isArray(outcomesRaw) ? outcomesRaw : [];
+  const seen = new Set<string>();
+  const out: UpdateDataRequest[] = [];
+  for (const o of outcomes) {
+    const outcome = o as { outcome_message?: unknown; remediation_details?: { type?: unknown; field_name?: unknown } };
+    const rd = outcome?.remediation_details;
+    if (rd?.type === "FILE_UPLOAD") continue;
+    const fieldName = typeof rd?.field_name === "string" ? rd.field_name : "";
+    const message = typeof outcome?.outcome_message === "string" ? outcome.outcome_message.trim().replace(/\s+/g, " ") || null : null;
+    if (!fieldName && !message) continue;
+    const key = `${fieldName}|${message ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ fieldName, message });
+  }
+  return out;
+}
+
+/** Which of this form's inputs a request maps to (null when the form has no input for it). */
+export type FormFieldKey = "dba" | "businessType" | "mcc" | "email" | "website" | "businessPhone" | "ssn" | "address" | "ownership" | "bank";
+const FIELD_TO_FORM: Record<string, FormFieldKey> = {
+  doing_business_as: "dba",
+  business_type: "businessType",
+  mcc: "mcc",
+  email: "email",
+  url: "website",
+  business_phone: "businessPhone",
+  phone: "businessPhone",
+  tax_id: "ssn",
+  personal_address: "address",
+  principal_percentage_ownership: "ownership",
+  ownership_type: "ownership",
+  bank_code: "bank",
+  account_number: "bank",
+  account_type: "bank",
+  payment_instrument: "bank",
+  bank_account: "bank",
+};
+
+/** Keyword fallback for outcomes that carry only the underwriter's note. Order matters: most specific first. */
+const MESSAGE_RULES: [RegExp, FormFieldKey][] = [
+  [/social security|\bssn\b/i, "ssn"],
+  [/residential|home address|personal address/i, "address"],
+  [/ownership|\bowners?\b/i, "ownership"],
+  [/routing number|account number|bank account/i, "bank"],
+  [/phone/i, "businessPhone"],
+  [/website|social link|facebook|\burl\b/i, "website"],
+  [/\bdba\b|doing business as/i, "dba"],
+  [/\bmcc\b|merchant category/i, "mcc"],
+  [/business email|email address/i, "email"],
+];
+
+export function formFieldForRequest(req: UpdateDataRequest): FormFieldKey | null {
+  if (req.fieldName) {
+    const last = req.fieldName.split(".").pop() ?? req.fieldName;
+    const byField = FIELD_TO_FORM[last];
+    if (byField) return byField;
+  }
+  const text = req.message ?? "";
+  for (const [re, key] of MESSAGE_RULES) if (re.test(text)) return key;
+  return null;
+}
+
+/** Back-compat helper for callers that only have a Finix field name. */
+export function formFieldForFinixField(fieldName: string): FormFieldKey | null {
+  return formFieldForRequest({ fieldName, message: null });
+}
