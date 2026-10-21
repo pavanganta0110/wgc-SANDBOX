@@ -22,9 +22,10 @@ import { redactFinixPayload } from "@/lib/finix/redact";
  * feeType is a per-card-network string (VISA_ACQUIRER_PROCESSING_FIXED,
  * MASTERCARD_*, etc.) — never used alone to classify a fee as "WGC's own"
  * vs "real processor cost," since that would require enumerating every
- * network's naming. category/feeSubtype are Finix's own network-agnostic
- * classification and are what admin-only profit reporting relies on
- * instead (see src/lib/reports/wgcProfit.ts). This function intentionally
+ * network's naming; category/feeSubtype are Finix's own network-agnostic
+ * classification. Finix's real costs are not in this API at all: they only
+ * appear in its monthly residual statements (see src/lib/admin/residuals.ts).
+ * This function intentionally
  * does NOT change how Payment.actualFinixFeesCents gets computed
  * (src/app/api/webhooks/finix/route.ts) — that field already flows into
  * merchant-facing Aplos exports (contributionBuilder.ts,

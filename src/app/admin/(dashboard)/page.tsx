@@ -17,6 +17,9 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/auth/session";
 import { loadPlatformMetrics, parseAdminRange, resolveAdminPeriod } from "@/lib/admin/platformMetrics";
 import { loadAdminOpsSummary } from "@/lib/admin/opsSummary";
+import { loadResidualLedger } from "@/lib/admin/residuals";
+import { resolveWgcAdminBillingPermissions } from "@/lib/auth/billingAdminPermissions";
+import { prisma } from "@/lib/prisma";
 import { computeDelta } from "@/lib/reporting/reportingPeriod";
 import KpiTile from "@/components/merchant/reporting/overview/KpiTile";
 import DeltaPill from "@/components/merchant/reporting/overview/DeltaPill";
@@ -28,6 +31,7 @@ import RangeSelect from "@/components/admin/dashboard/RangeSelect";
 import MethodBreakdown from "@/components/admin/dashboard/MethodBreakdown";
 import MonthlyVolume from "@/components/admin/dashboard/MonthlyVolume";
 import TopMerchants from "@/components/admin/dashboard/TopMerchants";
+import ResidualPayouts from "@/components/admin/dashboard/ResidualPayouts";
 
 function GroupLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
@@ -91,7 +95,13 @@ export default async function AdminDashboardHome({ searchParams }: { searchParam
 
   const { range: rangeParam } = await searchParams;
   const period = resolveAdminPeriod(parseAdminRange(rangeParam), new Date());
-  const [m, ops] = await Promise.all([loadPlatformMetrics(period), loadAdminOpsSummary()]);
+  const adminUser = await prisma.user.findUnique({ where: { id: session.userId }, select: { permissionsJson: true } });
+  const billingPerms = resolveWgcAdminBillingPermissions(session.role, adminUser?.permissionsJson);
+  const [m, ops, residuals] = await Promise.all([
+    loadPlatformMetrics(period),
+    loadAdminOpsSummary(),
+    billingPerms.canViewBilling ? loadResidualLedger() : Promise.resolve(null),
+  ]);
 
   const icon = "h-4 w-4";
   const delta = m.previousProcessedCents === null ? null : computeDelta(m.processed.amountCents, m.previousProcessedCents);
@@ -180,6 +190,13 @@ export default async function AdminDashboardHome({ searchParams }: { searchParam
           />
         </div>
       </section>
+
+      {residuals && (
+        <section aria-label="Finix residuals">
+          <GroupLabel hint="WGC's fee revenue, paid by Finix monthly · all time">Finix residuals</GroupLabel>
+          <ResidualPayouts ledger={residuals} canManage={billingPerms.canManageBilling} />
+        </section>
+      )}
 
       <section aria-label="Merchants">
         <GroupLabel hint="Live account counts">Merchants</GroupLabel>

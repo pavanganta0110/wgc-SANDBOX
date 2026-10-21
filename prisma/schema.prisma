@@ -1482,6 +1482,62 @@ model InvoiceUsageEvent {
 /// separate from DashboardAuditLog since many of these actions are WGC-admin
 /// actions not tied to a single organization user, and financial-override
 /// actions need explicit previous/new-value + reason tracking.
+// One Finix platform-residual billing settlement: Finix's own monthly
+// statement of WGC's fee revenue (merchant fees charged to organizations,
+// minus network and Finix costs). Finix has no API for billing settlements,
+// so rows are imported from the dashboard's "Residual Settlements" export
+// (src/lib/admin/residualSettlementImport.ts). This is the only reliable
+// source of Finix's real cost: the per-transfer Fees API only returns the
+// fee charged to the merchant (WGC's PLATFORM_FEE), never Finix's costs.
+// Read-only bookkeeping: never moves money.
+model FinixResidualSettlement {
+  id                       String    @id @default(cuid())
+  finixBillingSettlementId String    @unique
+  windowStart              DateTime
+  windowEnd                DateTime
+  type                     String?
+  applicationName          String?
+  merchantFeesCents        Int
+  // Finix reports these to fractions of a cent (e.g. $56.69617).
+  costsCents               Float
+  residualSubtotalCents    Float
+  revSharePercent          Float
+  totalResidualCents       Int
+  state                    String
+  // Set by an admin once the payout is seen in WGC's bank account.
+  depositReceivedAt        DateTime?
+  depositNote              String?
+  importedByEmail          String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  @@index([windowStart])
+}
+
+// One Finix billing transfer: the actual money movement for a residual
+// (CREDIT = Finix paid WGC; DEBIT = Finix collected a negative residual).
+// Imported from the Finix dashboard's "Billing Transfers" export. The export
+// doesn't name the billing settlement, so src/lib/admin/residuals.ts matches
+// each transfer to a FinixResidualSettlement by amount, sign and date.
+model FinixBillingTransfer {
+  id                     String   @id @default(cuid())
+  finixBillingTransferId String   @unique
+  createdAtFinix         DateTime
+  amountCents            Int
+  currency               String
+  // CREDIT | DEBIT
+  depositType            String
+  state                  String
+  paymentInstrumentId    String?
+  // Finix application id the transfer belongs to.
+  linkedTo               String?
+  importedByEmail        String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([createdAtFinix])
+}
+
 model WgcBillingAuditLog {
   id                   String   @id @default(cuid())
   organizationId       String?
