@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
+import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
 import { resolveInvoicePublicToken } from "@/lib/invoices/invoicePublicToken";
 import { checkInvoicePaymentRateLimit } from "@/lib/invoices/invoicePublicRateLimit";
 import { calculateInvoiceBalance } from "@/lib/invoices/invoiceMoney";
@@ -206,6 +207,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (!instrumentId) {
     return toSafePaymentErrorResponse(new Error("Failed to create payment instrument"), "PAYMENT_FAILED", "Could not process payment instrument. No charge was made.", true, { action: "createPaymentInstrument" });
   }
+  await linkBankInstrumentToMerchant({ instrument, merchantId: church.finixMerchantId, source: "invoice-pay" });
 
   // The payer's checkbox selection is only ever advisory — if the merchant
   // has turned fee coverage off for this invoice (allowFeeCoverage: false),

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
+import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { hashSetupLinkToken } from "@/lib/subscriptions/setupLinkToken";
@@ -72,6 +73,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
     const instrument = await finixClient.createPaymentInstrument({ identity: identityId, token: finixToken, type: "TOKEN" });
     const instrumentId = instrument?.id;
     if (!instrumentId) throw new Error("Failed to create payment instrument");
+    await linkBankInstrumentToMerchant({ instrument, merchantId: church.finixMerchantId, source: "recurring-setup" });
 
     const donorRecord = await prisma.donor.upsert({
       where: { finixIdentityId: identityId },

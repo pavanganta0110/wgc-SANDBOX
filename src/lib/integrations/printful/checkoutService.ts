@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { finixClient } from "@/lib/finix/client";
+import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
 import { resolveProcessingMerchant, buildIdempotencyKey } from "@/lib/billing/paymentRouting";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { sendDonationReceipt } from "@/lib/giving/generateReceipt";
@@ -192,6 +193,7 @@ export async function processCombinedCheckout(input: CheckoutInput) {
     const instrument = await finixClient.createPaymentInstrument({ identity: identityId, token: input.token, type: "TOKEN" });
     instrumentId = instrument?.id;
     if (!instrumentId) throw new CheckoutValidationError("Could not process payment instrument.");
+    await linkBankInstrumentToMerchant({ instrument, merchantId: church.finixMerchantId, source: "merchandise" });
     cardBrand = instrument?.brand || null;
   } else {
     throw new CheckoutValidationError("Missing payment token.");
