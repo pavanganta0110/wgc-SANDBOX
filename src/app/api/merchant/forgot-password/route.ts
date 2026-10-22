@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { sendWgcEmail } from "@/lib/email";
 import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
+import { normalizeMerchantRole } from "@/lib/auth/roles";
 
 const GENERIC_MESSAGE =
   "If an account exists for that email, we've sent a link to reset your password.";
@@ -27,7 +28,13 @@ export async function POST(req: Request) {
 
     // Always respond the same way whether or not the account exists, so
     // this endpoint can't be used to enumerate registered emails.
-    if (!user || user.role !== "church_admin") {
+    // Every merchant org role may reset (owner/admin/fundraiser/viewer plus
+    // the legacy church_admin) — this used to compare against the literal
+    // "church_admin", which silently excluded everyone migrated to the
+    // normalized roles. wgc_admin/wgc_super_admin normalize to null and have
+    // their own /api/admin/forgot-password. Disabled accounts are skipped
+    // here rather than emailed a link /api/merchant/set-password would refuse.
+    if (!user || !normalizeMerchantRole(user.role) || user.disabledAt) {
       return NextResponse.json({ success: true, message: GENERIC_MESSAGE });
     }
 
