@@ -6,6 +6,7 @@ import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { buildTransactionReportData, renderTransactionReportCsv, renderTransactionReportPdf, resolveUserIdentity, type ReportScope } from "@/lib/exports/transactionReportData";
 import { buildTransactionExportFilename, csvResponse } from "@/lib/exports/transactionExport";
+import { parseCsvColumnGroups, parsePdfSections } from "@/lib/exports/transactionExportOptions";
 
 /**
  * Organization-scoped canonical transaction export — the same shared
@@ -28,6 +29,13 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const format = searchParams.get("format") === "pdf" ? "pdf" : "csv";
+  // What to include, chosen in the export dialog. Absent = everything (the
+  // original export); anything not on the whitelist is ignored.
+  const columnGroups = parseCsvColumnGroups(searchParams.get("columns"));
+  const pdfSections = parsePdfSections(searchParams.get("sections"));
+  if ((format === "csv" && columnGroups?.length === 0) || (format === "pdf" && pdfSections?.length === 0)) {
+    return NextResponse.json({ error: "Choose at least one thing to export." }, { status: 400 });
+  }
   const state = searchParams.get("state") || undefined;
   const last4 = searchParams.get("last4") || undefined;
   const buyer = searchParams.get("buyer") || undefined;
@@ -88,9 +96,9 @@ export async function GET(req: Request) {
   const filename = buildTransactionExportFilename("organization", filenameBase, format);
 
   if (format === "pdf") {
-    const pdf = await renderTransactionReportPdf(filteredData);
+    const pdf = await renderTransactionReportPdf(filteredData, pdfSections);
     return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` } });
   }
-  const csv = renderTransactionReportCsv(filteredData);
+  const csv = renderTransactionReportCsv(filteredData, columnGroups);
   return csvResponse(csv, filename);
 }

@@ -20,6 +20,9 @@ vi.mock("@react-pdf/renderer", async () => {
   };
 });
 
+vi.mock("@/lib/exports/organizationBranding", () => ({
+  loadOrganizationBranding: vi.fn(async () => ({ name: "Grace Church", logo: null, address: "1 Main St, Kansas City, MO 64105", contact: null })),
+}));
 vi.mock("@/lib/prisma", () => ({
   prisma: { user: { findUnique: vi.fn(async () => ({ email: "u1@x.com", role: "fundraiser" })) } },
 }));

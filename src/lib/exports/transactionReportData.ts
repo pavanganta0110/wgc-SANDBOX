@@ -10,6 +10,8 @@ import {
   type TransactionReportSummary,
 } from "@/lib/exports/transactionExport";
 import { TransactionReportPdf } from "@/lib/exports/pdf/TransactionReportPdf";
+import { loadOrganizationBranding, type OrganizationBranding } from "@/lib/exports/organizationBranding";
+import type { CsvColumnGroupKey, PdfSectionKey } from "@/lib/exports/transactionExportOptions";
 
 export type ReportScope = "ENTIRE_ORGANIZATION" | "MY_ACTIVITY" | "TEAM_MEMBER" | "GIVING_LINK" | "DONOR";
 
@@ -47,6 +49,8 @@ export interface TransactionReportData {
   metadata: ReportMetadata;
   rows: TransactionExportRow[];
   summary: TransactionReportSummary;
+  /** The organization's own name/logo/address for the PDF header. */
+  branding?: OrganizationBranding | null;
 }
 
 /**
@@ -72,18 +76,25 @@ export async function buildTransactionReportData(options: BuildTransactionReport
     appliedFilters: options.appliedFiltersDescription,
   };
 
-  const rows = await resolveTransactionExportRows({ churchId: options.churchId, ...options.filter }, metadata);
+  const [rows, branding] = await Promise.all([
+    resolveTransactionExportRows({ churchId: options.churchId, ...options.filter }, metadata),
+    loadOrganizationBranding(options.churchId),
+  ]);
   const summary = summarizeTransactionReport(rows);
 
-  return { metadata, rows, summary };
+  return { metadata, rows, summary, branding };
 }
 
-export function renderTransactionReportCsv(data: TransactionReportData): string {
-  return renderTransactionCsv(data.rows);
+/** `groups`: the column groups the merchant chose in the export dialog (null = all). */
+export function renderTransactionReportCsv(data: TransactionReportData, groups: CsvColumnGroupKey[] | null = null): string {
+  return renderTransactionCsv(data.rows, groups);
 }
 
-export async function renderTransactionReportPdf(data: TransactionReportData): Promise<Buffer> {
-  const buffer = await renderToBuffer(TransactionReportPdf({ rows: data.rows, summary: data.summary }));
+/** `sections`: the PDF sections the merchant chose in the export dialog (null = all). */
+export async function renderTransactionReportPdf(data: TransactionReportData, sections: PdfSectionKey[] | null = null): Promise<Buffer> {
+  const buffer = await renderToBuffer(
+    TransactionReportPdf({ rows: data.rows, summary: data.summary, branding: data.branding ?? null, sections }),
+  );
   return buffer as unknown as Buffer;
 }
 

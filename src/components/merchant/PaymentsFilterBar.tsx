@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Download, ChevronDown } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import PillFilterInput from "@/components/merchant/PillFilterInput";
+import ExportOptionsDialog from "@/components/merchant/ExportOptionsDialog";
 
 const STATES = [
   "SUCCEEDED",
@@ -27,6 +28,7 @@ const SOURCES = [
 export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSuggestions?: string[] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [exportFormat, setExportFormat] = useState<"csv" | "pdf" | null>(null);
   const state = searchParams.get("state") || "";
   const last4 = searchParams.get("last4") || "";
   const donorName = searchParams.get("buyer") || "";
@@ -163,20 +165,32 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
 
       <div className="h-6 w-px bg-slate-200" />
 
-      <a
-        href={`/api/merchant/transactions/payments/export?${searchParams.toString()}`}
+      <button
+        type="button"
+        onClick={() => setExportFormat("csv")}
         className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
       >
         <Download className="w-4 h-4" />
         Export CSV
-      </a>
-      <a
-        href={`/api/merchant/transactions/payments/export?${new URLSearchParams({ ...Object.fromEntries(searchParams), format: "pdf" }).toString()}`}
+      </button>
+      <button
+        type="button"
+        onClick={() => setExportFormat("pdf")}
         className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
       >
         <Download className="w-4 h-4" />
         Export PDF
-      </a>
+      </button>
+      {exportFormat && (
+        <ExportOptionsDialog
+          format={exportFormat}
+          exportUrl={`/api/merchant/transactions/payments/export?${new URLSearchParams({
+            ...Object.fromEntries(searchParams),
+            ...(exportFormat === "pdf" ? { format: "pdf" } : {}),
+          }).toString()}`}
+          onClose={() => setExportFormat(null)}
+        />
+      )}
     </div>
   );
 }

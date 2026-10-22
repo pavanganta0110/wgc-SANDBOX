@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { platformFeeCents } from "@/lib/payments/platformFee";
 import { formatCents } from "@/lib/format";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClosePanelButton from "@/components/merchant/ClosePanelButton";
@@ -337,13 +338,13 @@ export default async function PaymentDetailPanel({
 
           const grossCents = transfer.amountCents ?? 0;
 
-          // Processing fee: real DB field first, then tags fallback
-          const processingFeeCents =
-            transfer.feeCents !== null && transfer.feeCents !== undefined
-              ? transfer.feeCents
-              : tags.processing_fee_cents !== undefined
-                ? Number(tags.processing_fee_cents)
-                : null;
+          // Processing fee: what Finix actually recorded (its PLATFORM_FEE
+          // Fee rows — transfer.feeCents is always 0 for WGC's fee-profile
+          // pricing, see platformFee.ts), else WGC's own estimate from the
+          // transfer tags, labelled "Estimated" below until Finix's fees sync.
+          const actualFeeCents = platformFeeCents(fees);
+          const estimatedFeeCents = tags.processing_fee_cents !== undefined ? Number(tags.processing_fee_cents) : null;
+          const processingFeeCents = actualFeeCents ?? estimatedFeeCents;
 
           // supplementalFeeCents from payment record (donor-paid fee)
           const supplementalFeeCents =
@@ -363,7 +364,7 @@ export default async function PaymentDetailPanel({
                 : null;
 
           // Is the actual fee record available from the processor yet?
-          const feeIsActual = processingFeeCents !== null;
+          const feeIsActual = actualFeeCents !== null;
 
           if (donorCoversFee) {
             // Donor-covered path
