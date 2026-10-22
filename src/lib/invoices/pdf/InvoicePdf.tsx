@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import type { PdfImage } from "@/lib/pdf/pdfImage";
 
 const styles = StyleSheet.create({
   page: { padding: 36, fontSize: 10, fontFamily: "Helvetica" },
@@ -71,7 +72,8 @@ export interface InvoicePdfPayment {
 
 export interface InvoicePdfProps {
   organizationName: string;
-  organizationLogoUrl: string | null;
+  /** Pre-loaded via loadPdfImage — never a raw URL (@react-pdf can only draw PNG/JPEG). */
+  organizationLogo: PdfImage | null;
   organizationAddress: string | null;
   organizationEmail: string | null;
   organizationPhone: string | null;
@@ -113,7 +115,7 @@ export function InvoicePdf(props: InvoicePdfProps) {
       <Page size="LETTER" style={styles.page}>
         <View style={styles.header}>
           <View style={{ flexDirection: "row" }}>
-            {props.organizationLogoUrl && <Image src={props.organizationLogoUrl} style={styles.logo} />}
+            {props.organizationLogo && <Image src={props.organizationLogo} style={styles.logo} />}
             <View>
               <Text style={styles.orgName}>{props.organizationName}</Text>
               {props.organizationAddress && <Text style={{ color: "#64748b" }}>{props.organizationAddress}</Text>}

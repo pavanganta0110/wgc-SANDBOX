@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const mockPrisma = {
   church: { findUnique: vi.fn() },
@@ -193,6 +193,47 @@ describe("buildDonationReceiptPdfProps", () => {
       expect(coveredFeeForReceipt(true, 0)).toBe(0);
       expect(coveredFeeForReceipt(true, -5)).toBe(0);
       expect(coveredFeeForReceipt(true, null)).toBe(0);
+    });
+  });
+
+  describe("organization logo", () => {
+    const snapshot = {
+      receiptNumber: "TC-0001",
+      paymentAmountCents: 5000,
+      goodsServicesProvided: false,
+      goodsServicesDescription: null,
+      goodsServicesFairMarketValueCents: null,
+      recordedContributionAmountCents: 5000,
+      acknowledgmentText: "Thank you",
+    };
+    const logoUrl = "https://abc.supabase.co/storage/v1/object/public/branding/church-1/logo.png";
+    const fetchMock = vi.fn();
+    beforeEach(() => {
+      vi.stubEnv("SUPABASE_URL", "https://abc.supabase.co");
+      vi.stubGlobal("fetch", fetchMock);
+      mockPrisma.church.findUnique.mockResolvedValue({ ...church, logoUrl });
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+    });
+
+    it("passes a PNG/JPEG logo to the PDF as bytes, never as a URL", async () => {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+      fetchMock.mockResolvedValue(new Response(new Uint8Array(png)));
+      const { buildDonationReceiptPdfProps } = await loadModule();
+      const { props } = await buildDonationReceiptPdfProps(payment, "church-1", snapshot);
+      expect(props.organizationLogo).toEqual({ data: png, format: "png" });
+    });
+
+    it("drops a WebP or unreachable logo but still builds the receipt", async () => {
+      const { buildDonationReceiptPdfProps } = await loadModule();
+      fetchMock.mockResolvedValue(new Response(new Uint8Array(Buffer.from("RIFF\u0000\u0000\u0000\u0000WEBP", "latin1"))));
+      expect((await buildDonationReceiptPdfProps(payment, "church-1", snapshot)).props.organizationLogo).toBeNull();
+      fetchMock.mockRejectedValue(new Error("network down"));
+      const { props } = await buildDonationReceiptPdfProps(payment, "church-1", snapshot);
+      expect(props.organizationLogo).toBeNull();
+      expect(props.receiptNumber).toBe("TC-0001");
     });
   });
 });
