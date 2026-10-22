@@ -471,6 +471,22 @@ export class FinixClient {
     });
   }
 
+  /**
+   * Links a buyer's Payment Instrument to a Merchant "for fee assignment
+   * purposes" (POST /payment_instrument_associations). Fees from billing
+   * events on a buyer's instrument (e.g. the Plaid / account validation
+   * check on a bank account) can't be mapped to a merchant by Finix on its
+   * own and default to the Application; this link is how they get billed to
+   * the merchant's fee profile instead (docs.finix.com, Payment Instrument
+   * Association). A duplicate link answers with a generic 500, not a 409.
+   */
+  async createPaymentInstrumentAssociation(payload: { merchant_id: string; payment_instrument_id: string; tags?: Record<string, string> }) {
+    return this.fetchApi("/payment_instrument_associations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
   async getPaymentInstrument(instrumentId: string) {
     return this.fetchApi(`/payment_instruments/${instrumentId}`);
   }

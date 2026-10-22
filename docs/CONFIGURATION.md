@@ -30,6 +30,7 @@ All configuration is via environment variables (no separate config-file system b
 | `FINIX_VERSION` | `FINIX-VERSION` header value required on every request |
 | `FINIX_ENVIRONMENT` / `NEXT_PUBLIC_FINIX_ENV` | Environment label (sandbox/live) — client and server copies |
 | `FINIX_PROCESSOR` | Named processor config, where applicable |
+| `FINIX_BANK_INSTRUMENT_LINK_ENABLED` | Exactly `true` = after WGC creates a donor's bank-account instrument for a payment to a church, also create a Finix Payment Instrument Association to that church's merchant, so the bank account's validation fees (Plaid, account validation) are billed through the church's fee profile instead of defaulting to WGC's application. Best-effort (a failure never blocks a gift). Unset/anything else = off. |
 | `FINIX_WEBHOOK_SECRET` / `FINIX_WEBHOOK_SIGNING_KEY` | HMAC signature verification secret for inbound webhooks |
 | `FINIX_WEBHOOK_BASIC_USERNAME`/`PASSWORD` (and `_AUTH_` variants) | Alternative/additional Basic Auth gate on the webhook endpoint |
 | `FINIX_WEBHOOK_BEARER_TOKEN` | Alternative Bearer auth gate on the webhook endpoint |

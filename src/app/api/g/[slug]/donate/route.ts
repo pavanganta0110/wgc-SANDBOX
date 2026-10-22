@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
+import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
 import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
 import { resolveWgcTransferFeeStrategy } from "@/lib/giving/serverFeeStrategy";
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
@@ -522,6 +523,11 @@ async function handleDonate(req: Request, slug: string) {
       if (!instrumentId) {
         return toSafePaymentErrorResponse(new Error("Failed to create payment instrument"), "PAYMENT_FAILED", "Could not process payment instrument. No charge was made.", true, { action: "createPaymentInstrument" });
       }
+
+      // Bank accounts only: link the donor's account to this church's merchant
+      // so Finix bills its validation fees through the church's fee profile.
+      // Best-effort, never blocks the gift.
+      await linkBankInstrumentToMerchant({ instrument, merchantId: finixMerchantId, source: "donate" });
 
       // Finix's GET/POST /payment_instruments response has `brand` as a flat
       // top-level field, not nested under a `card` object — confirmed

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
+import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
 import { FEE_CALCULATION_VERSION } from "@/lib/giving/feeCalculator";
 import { resolveWgcTransferFeeStrategy } from "@/lib/giving/serverFeeStrategy";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
@@ -148,6 +149,7 @@ export async function POST(req: Request) {
     if (!instrumentId) {
       return toSafePaymentErrorResponse(new Error("Failed to create payment instrument"), "PAYMENT_FAILED", "Could not process payment instrument. No charge was made.", true, { action: "createPaymentInstrument" });
     }
+    await linkBankInstrumentToMerchant({ instrument, merchantId: church.finixMerchantId, source: "take-payment" });
 
     // Perform Fee Calculation
     let feeStrategy;
