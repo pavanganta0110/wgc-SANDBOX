@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { loadPdfImage } from "@/lib/pdf/pdfImage";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { sendWgcEmail } from "@/lib/email";
 import { formatCents } from "@/lib/format";
@@ -98,7 +99,7 @@ export async function buildDonationReceiptPdfProps(
 
   const props: DonationReceiptPdfProps = {
     organizationName: orgName,
-    organizationLogoUrl: church.logoUrl || null,
+    organizationLogo: await loadPdfImage(church.logoUrl),
     organizationAddress: settings.showAddress ? organizationAddress : null,
     organizationEmail: settings.showEmail ? church.supportEmail || church.primaryContactEmail || null : null,
     organizationPhone: settings.showPhone ? church.phone || null : null,

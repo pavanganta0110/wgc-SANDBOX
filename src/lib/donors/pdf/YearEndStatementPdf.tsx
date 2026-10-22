@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
+import type { PdfImage } from "@/lib/pdf/pdfImage";
 import { STATEMENT_DISCLAIMER } from "@/lib/donors/generateStatementDefaults";
 
 export { STATEMENT_DISCLAIMER };
@@ -42,7 +43,8 @@ function formatDate(d: Date) {
 
 export interface StatementPdfProps {
   organizationName: string;
-  organizationLogoUrl: string | null;
+  /** Pre-loaded via loadPdfImage — never a raw URL (@react-pdf can only draw PNG/JPEG). */
+  organizationLogo: PdfImage | null;
   organizationAddress: string | null;
   organizationEmail: string | null;
   organizationPhone: string | null;
@@ -80,7 +82,7 @@ export interface StatementPdfProps {
   disclaimer: string;
   signatureName: string | null;
   signatureTitle: string | null;
-  signatureImageUrl: string | null;
+  signatureImage: PdfImage | null;
   generatedAt: Date;
 }
 
@@ -89,7 +91,7 @@ export function YearEndStatementPage(props: StatementPdfProps) {
   return (
     <Page size="LETTER" style={styles.page}>
       <View style={styles.header}>
-        {props.organizationLogoUrl && <Image src={props.organizationLogoUrl} style={styles.logo} />}
+        {props.organizationLogo && <Image src={props.organizationLogo} style={styles.logo} />}
         <View>
           <Text style={styles.orgName}>{props.organizationName}</Text>
           {props.organizationAddress && <Text style={{ color: "#64748b" }}>{props.organizationAddress}</Text>}
@@ -171,9 +173,9 @@ export function YearEndStatementPage(props: StatementPdfProps) {
 
       <Text style={styles.acknowledgment}>{props.acknowledgmentText}</Text>
 
-      {(props.signatureName || props.signatureImageUrl) && (
+      {(props.signatureName || props.signatureImage) && (
         <View style={styles.signatureBlock}>
-          {props.signatureImageUrl && <Image src={props.signatureImageUrl} style={styles.signatureImage} />}
+          {props.signatureImage && <Image src={props.signatureImage} style={styles.signatureImage} />}
           <View style={styles.signatureLine}>
             {props.signatureName && <Text>{props.signatureName}</Text>}
             {props.signatureTitle && <Text style={{ color: "#64748b" }}>{props.signatureTitle}</Text>}

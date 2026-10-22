@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { loadPdfImage, type PdfImage } from "@/lib/pdf/pdfImage";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { computeYearEndStatement } from "@/lib/donors/yearEndStatements";
 import { YearEndStatementPdf, CombinedStatementsPdf, type StatementPdfProps } from "@/lib/donors/pdf/YearEndStatementPdf";
@@ -125,7 +126,11 @@ export async function generateYearEndStatement(
 }
 
 /** Everything the PDF shows for an already-generated statement — a pure function of its own immutable snapshot + lines, never re-reads live donor/org data. */
-export async function buildStatementPdfProps(statementId: string, churchId: string): Promise<StatementPdfProps> {
+export async function buildStatementPdfProps(
+  statementId: string,
+  churchId: string,
+  imageCache?: Map<string, Promise<PdfImage | null>>
+): Promise<StatementPdfProps> {
   const statement = await prisma.annualDonationStatement.findFirst({ where: { id: statementId, churchId } });
   if (!statement) throw new Error("Statement not found");
 
@@ -159,7 +164,7 @@ export async function buildStatementPdfProps(statementId: string, churchId: stri
 
   return {
     organizationName: statement.organizationNameSnapshot || church?.name || "Organization",
-    organizationLogoUrl: church?.logoUrl ?? null,
+    organizationLogo: await loadPdfImage(church?.logoUrl, imageCache),
     organizationAddress: orgAddress?.formatted ?? null,
     organizationEmail: church?.primaryContactEmail ?? null,
     organizationPhone: church?.phone ?? null,
@@ -202,7 +207,7 @@ export async function buildStatementPdfProps(statementId: string, churchId: stri
     disclaimer: settings.disclaimer,
     signatureName: settings.signatureName,
     signatureTitle: settings.signatureTitle,
-    signatureImageUrl: settings.signatureImageUrl,
+    signatureImage: await loadPdfImage(settings.signatureImageUrl, imageCache),
     generatedAt: statement.generatedAt || statement.createdAt,
   };
 }
@@ -217,8 +222,10 @@ export async function renderStatementPdf(statementId: string, churchId: string):
 /** One PDF holding many donors' statements back to back. Every id is re-verified against `churchId` by buildStatementPdfProps. */
 export async function renderCombinedStatementsPdf(statementIds: string[], churchId: string): Promise<Buffer> {
   const all: StatementPdfProps[] = [];
+  // Same church for every statement, so its logo/signature is fetched once.
+  const imageCache = new Map<string, Promise<PdfImage | null>>();
   for (const id of statementIds) {
-    all.push(await buildStatementPdfProps(id, churchId));
+    all.push(await buildStatementPdfProps(id, churchId, imageCache));
   }
   const buffer = await renderToBuffer(CombinedStatementsPdf(all));
   return buffer as unknown as Buffer;
