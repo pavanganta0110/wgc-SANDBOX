@@ -57,7 +57,11 @@ export default async function TeamSettingsPage() {
       <p className="text-xs text-slate-500 mb-6">
         Manage who has access to your WGC Payments dashboard, their role, and reporting scope. Multi-factor authentication is not currently supported.
       </p>
-      <TeamSettingsPanel initialMembers={members} canManageTeam={permissions.canManageTeam} />
+      <TeamSettingsPanel
+        initialMembers={members}
+        canManageTeam={permissions.canManageTeam}
+        canManageOwners={!auth.impersonation && auth.rawRole === "owner"}
+      />
     </div>
   );
 }

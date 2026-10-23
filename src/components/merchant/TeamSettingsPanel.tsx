@@ -8,7 +8,10 @@ import { isValidEmail } from "@/lib/donors/donorContact";
 import { formatCents } from "@/lib/format";
 
 type Role = "owner" | "admin" | "fundraiser" | "viewer" | "church_admin";
-const INVITABLE_ROLES: Exclude<Role, "owner" | "church_admin">[] = ["admin", "fundraiser", "viewer"];
+type AssignableRole = Exclude<Role, "church_admin">;
+const INVITABLE_ROLES: AssignableRole[] = ["admin", "fundraiser", "viewer"];
+// Only an owner may hand out the owner role (the API enforces this too).
+const OWNER_ASSIGNABLE_ROLES: AssignableRole[] = ["owner", ...INVITABLE_ROLES];
 const ROLE_LABELS: Record<string, string> = { owner: "Owner", admin: "Admin", fundraiser: "Fundraiser", viewer: "Viewer", church_admin: "Admin" };
 
 interface Member {
@@ -46,13 +49,16 @@ function memberStatus(member: Member): "PENDING" | "ACTIVE" | "DISABLED" {
 export default function TeamSettingsPanel({
   initialMembers,
   canManageTeam,
+  canManageOwners = false,
 }: {
   initialMembers: Member[];
   canManageTeam: boolean;
+  canManageOwners?: boolean;
 }) {
+  const assignableRoles = canManageOwners ? OWNER_ASSIGNABLE_ROLES : INVITABLE_ROLES;
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<(typeof INVITABLE_ROLES)[number]>("fundraiser");
+  const [inviteRole, setInviteRole] = useState<AssignableRole>("fundraiser");
   const [inviting, setInviting] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -207,7 +213,7 @@ export default function TeamSettingsPanel({
             onChange={(e) => setInviteRole(e.target.value as any)}
             className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
           >
-            {INVITABLE_ROLES.map((r) => (
+            {assignableRoles.map((r) => (
               <option key={r} value={r}>{ROLE_LABELS[r]}</option>
             ))}
           </select>
@@ -235,7 +241,8 @@ export default function TeamSettingsPanel({
           <tbody>
             {members.map((member) => {
               const status = memberStatus(member);
-              const isEditable = canManageTeam && !member.isPrimaryOwner && member.role !== "owner";
+              const isEditable =
+                canManageTeam && !member.isPrimaryOwner && (member.role !== "owner" || (canManageOwners && !member.isSelf));
               return (
                 <>
                   <tr key={member.id} className="border-b border-slate-50">
@@ -252,7 +259,7 @@ export default function TeamSettingsPanel({
                           onChange={(e) => updateRole(member, e.target.value)}
                           className="px-2 py-1 rounded-lg border border-slate-200 text-xs outline-none focus:border-slate-400 disabled:opacity-50"
                         >
-                          {INVITABLE_ROLES.map((r) => (
+                          {assignableRoles.map((r) => (
                             <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                           ))}
                         </select>

@@ -49,7 +49,7 @@ function teamMemberView(user: {
   };
 }
 
-const INVITABLE_ROLES = ["admin", "fundraiser", "viewer"] as const;
+const INVITABLE_ROLES = ["owner", "admin", "fundraiser", "viewer"] as const;
 
 export async function GET() {
   let auth;
@@ -96,7 +96,13 @@ export async function POST(req: Request) {
   }
   const requestedRole = typeof body.role === "string" ? body.role : "admin";
   if (!INVITABLE_ROLES.includes(requestedRole as any)) {
-    return NextResponse.json({ error: "Role must be one of: admin, fundraiser, viewer" }, { status: 400 });
+    return NextResponse.json({ error: "Role must be one of: owner, admin, fundraiser, viewer" }, { status: 400 });
+  }
+  // An organization can have several owners, but only an existing owner may
+  // create another one — otherwise any admin holding canManageTeam could
+  // invite themselves a second account with full owner access.
+  if (requestedRole === "owner" && (auth.impersonation || auth.rawRole !== "owner")) {
+    return NextResponse.json({ error: "Only an owner can invite another owner" }, { status: 403 });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
