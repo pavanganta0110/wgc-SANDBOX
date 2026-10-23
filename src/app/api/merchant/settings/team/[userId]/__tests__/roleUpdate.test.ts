@@ -46,6 +46,58 @@ describe("PATCH /api/merchant/settings/team/[userId] — role edit + grant-only 
     expect((vi.mocked(prisma.user.update).mock.calls[0][0] as any).data.role).toBe("admin");
   });
 
+  it("an owner can make a team member an additional owner (an organization may have several owners)", async () => {
+    const { PATCH, createSessionToken } = await loadModule();
+    const { prisma } = await import("@/lib/prisma");
+    mockCookieStore.get.mockReturnValue({ value: sessionCookie(createSessionToken, "owner", "owner-1") });
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(mockUser("owner-1", "owner") as never)
+      .mockResolvedValueOnce(mockUser("target-1", "admin") as never);
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ primaryOwnerUserId: "owner-1" } as never);
+    vi.mocked(prisma.user.update).mockResolvedValue({ id: "target-1", role: "owner" } as never);
+
+    const res = await PATCH(
+      new Request("http://x", { method: "PATCH", body: JSON.stringify({ action: "update_role", role: "owner" }) }),
+      { params: Promise.resolve({ userId: "target-1" }) }
+    );
+    expect(res.status).toBe(200);
+    expect((vi.mocked(prisma.user.update).mock.calls[0][0] as any).data.role).toBe("owner");
+  });
+
+  it("an admin with canManageTeam cannot promote anyone to owner", async () => {
+    const { PATCH, createSessionToken } = await loadModule();
+    const { prisma } = await import("@/lib/prisma");
+    mockCookieStore.get.mockReturnValue({ value: sessionCookie(createSessionToken, "admin", "admin-1") });
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(mockUser("admin-1", "admin", { permissionsJson: { canManageTeam: true } }) as never)
+      .mockResolvedValueOnce(mockUser("target-1", "viewer") as never);
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ primaryOwnerUserId: "owner-1" } as never);
+
+    const res = await PATCH(
+      new Request("http://x", { method: "PATCH", body: JSON.stringify({ action: "update_role", role: "owner" }) }),
+      { params: Promise.resolve({ userId: "target-1" }) }
+    );
+    expect(res.status).toBe(403);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("an admin with canManageTeam cannot change or disable an existing owner", async () => {
+    const { PATCH, createSessionToken } = await loadModule();
+    const { prisma } = await import("@/lib/prisma");
+    mockCookieStore.get.mockReturnValue({ value: sessionCookie(createSessionToken, "admin", "admin-1") });
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce(mockUser("admin-1", "admin", { permissionsJson: { canManageTeam: true } }) as never)
+      .mockResolvedValueOnce(mockUser("owner-2", "owner") as never);
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ primaryOwnerUserId: "owner-1" } as never);
+
+    const res = await PATCH(
+      new Request("http://x", { method: "PATCH", body: JSON.stringify({ action: "disable" }) }),
+      { params: Promise.resolve({ userId: "owner-2" }) }
+    );
+    expect(res.status).toBe(403);
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it("the primary owner's role cannot be changed through this route", async () => {
     const { PATCH, createSessionToken } = await loadModule();
     const { prisma } = await import("@/lib/prisma");

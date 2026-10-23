@@ -13,7 +13,7 @@ import { isValidEmail } from "@/lib/donors/donorContact";
 // who already had a User row (e.g. from onboarding). This fills that gap
 // using the same real invite-link email as every other invite path in this
 // codebase (merchant Team-invite route, onboarding's DASHBOARD_ACCESS send).
-const INVITABLE_ROLES = ["admin", "fundraiser", "viewer"] as const;
+const INVITABLE_ROLES = ["owner", "admin", "fundraiser", "viewer"] as const;
 
 export async function POST(req: Request, { params }: { params: Promise<{ churchId: string }> }) {
   const { churchId } = await params;
@@ -45,7 +45,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
     return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
   }
   if (!INVITABLE_ROLES.includes(role as any)) {
-    return NextResponse.json({ error: "Role must be one of: admin, fundraiser, viewer" }, { status: 400 });
+    return NextResponse.json({ error: "Role must be one of: owner, admin, fundraiser, viewer" }, { status: 400 });
   }
   if (!reason) {
     return NextResponse.json({ error: "Reason is required" }, { status: 400 });

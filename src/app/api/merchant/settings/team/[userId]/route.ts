@@ -11,7 +11,14 @@ import { isAuthError } from "@/lib/auth/errors";
 import { normalizeMerchantRole } from "@/lib/auth/roles";
 import { OVERRIDABLE_PERMISSION_KEYS, parsePermissionOverrides } from "@/lib/auth/permissions";
 
-const EDITABLE_ROLES = ["admin", "fundraiser", "viewer"] as const;
+const EDITABLE_ROLES = ["owner", "admin", "fundraiser", "viewer"] as const;
+
+// An organization can have several owners. Acting on an owner (change role,
+// disable, remove) or promoting someone to owner is limited to owners, so a
+// non-owner holding canManageTeam can't escalate or lock an owner out.
+function actorIsOwner(auth: { rawRole: string; impersonation?: unknown }): boolean {
+  return !auth.impersonation && auth.rawRole === "owner";
+}
 
 // Team-access Checkpoint 4: was `target.role !== "church_admin"`, which
 // rejected every user migrated to owner/admin/fundraiser/viewer in the
@@ -50,6 +57,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
 
   const target = await loadTargetInOrg(userId, auth.churchId);
   if (!target) return NextResponse.json({ error: "Team member not found" }, { status: 404 });
+  if (target.role === "owner" && !actorIsOwner(auth)) {
+    return NextResponse.json({ error: "Only an owner can change another owner" }, { status: 403 });
+  }
 
   const body = await req.json();
   const action = body.action as "disable" | "enable" | "update_role";
@@ -72,7 +82,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ userId
     }
     const role = body.role;
     if (!EDITABLE_ROLES.includes(role)) {
-      return NextResponse.json({ error: "Role must be one of: admin, fundraiser, viewer" }, { status: 400 });
+      return NextResponse.json({ error: "Role must be one of: owner, admin, fundraiser, viewer" }, { status: 400 });
+    }
+    if (role === "owner" && !actorIsOwner(auth)) {
+      return NextResponse.json({ error: "Only an owner can make someone an owner" }, { status: 403 });
     }
     // Grant-only overrides: an admin can hand a teammate extra access
     // beyond their role's defaults, but never use this endpoint to strip a
@@ -174,6 +187,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ userI
 
   const target = await loadTargetInOrg(userId, auth.churchId);
   if (!target) return NextResponse.json({ error: "Team member not found" }, { status: 404 });
+  if (target.role === "owner" && !actorIsOwner(auth)) {
+    return NextResponse.json({ error: "Only an owner can remove another owner" }, { status: 403 });
+  }
 
   if (target.id === auth.userId) {
     return NextResponse.json({ error: "You can't remove yourself" }, { status: 400 });
