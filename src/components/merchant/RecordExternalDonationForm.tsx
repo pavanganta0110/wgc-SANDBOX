@@ -53,6 +53,7 @@ export default function RecordExternalDonationForm() {
 
   const [includeInAnnualStatement, setIncludeInAnnualStatement] = useState(true);
   const [sendReceipt, setSendReceipt] = useState(false);
+  const [receiptCc, setReceiptCc] = useState("");
 
   // Optional/common
   const [funds, setFunds] = useState<{ id: string; name: string; isActive: boolean }[] | null>(null);
@@ -282,6 +283,7 @@ export default function RecordExternalDonationForm() {
         campaignTeamId: selectedTeamId || undefined,
         campaignFundraiserId: selectedFundraiserId || undefined,
         includeInAnnualStatement,
+        receiptAdditionalRecipients: sendReceipt ? receiptCc : undefined,
         sendReceipt: sendReceipt && (donorMode === "new" ? Boolean(donorEmail) : donorMode === "existing" ? Boolean(selectedDonor?.email) : false),
       };
 
@@ -771,6 +773,18 @@ export default function RecordExternalDonationForm() {
           />
           Send receipt now {!(donorMode === "new" ? donorEmail : donorMode === "existing" ? selectedDonor?.email : false) ? "(requires a donor email)" : ""}
         </label>
+        {sendReceipt && (
+          <div className="pl-6">
+            <label className="block text-xs text-slate-500 mb-1">Also send to others (optional)</label>
+            <input
+              type="text"
+              value={receiptCc}
+              onChange={(e) => setReceiptCc(e.target.value)}
+              placeholder="spouse@example.com, bookkeeper@example.com"
+              className="w-full max-w-md rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+            />
+          </div>
+        )}
       </section>
 
       <div className="flex gap-3 pt-2">
