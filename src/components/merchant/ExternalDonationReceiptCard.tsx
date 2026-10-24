@@ -81,6 +81,14 @@ export default function ExternalDonationReceiptCard({
           <button type="button" onClick={() => setShowCc((v) => !v)} className="text-xs text-slate-400 hover:text-slate-600 hover:underline">
             {showCc ? "hide" : "+ also send to others"}
           </button>
+          <a
+            href={`/api/merchant/donations/external/${id}/receipt?inline=1`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold text-slate-600 hover:underline"
+          >
+            View receipt
+          </a>
           {sentBefore && (
             <a href={`/api/merchant/donations/external/${id}/receipt`} className="text-xs font-semibold text-slate-600 hover:underline">
               Download receipt
