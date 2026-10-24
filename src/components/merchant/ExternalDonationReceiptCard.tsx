@@ -73,7 +73,7 @@ export default function ExternalDonationReceiptCard({
           <dd>{recipientEmail || "—"}</dd>
         </div>
       </dl>
-      {canSend && recipientEmail && (
+      {canSend && (
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <button onClick={send} disabled={busy} className="text-xs font-semibold text-indigo-600 hover:underline disabled:opacity-50">
             {busy ? "Sending…" : sentBefore ? "Resend receipt" : "Send receipt"}
@@ -105,7 +105,7 @@ export default function ExternalDonationReceiptCard({
           )}
         </div>
       )}
-      {canSend && !recipientEmail && <p className="mt-3 text-xs text-amber-600">Add a donor email to send a receipt.</p>}
+      {canSend && !recipientEmail && <p className="mt-3 text-xs text-amber-600">No donor email on file — use "+ also send to others" to send it to another address.</p>}
     </section>
   );
 }

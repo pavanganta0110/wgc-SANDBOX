@@ -54,6 +54,10 @@ export default function RecordExternalDonationForm() {
   const [includeInAnnualStatement, setIncludeInAnnualStatement] = useState(true);
   const [sendReceipt, setSendReceipt] = useState(false);
   const [receiptCc, setReceiptCc] = useState("");
+  // A receipt needs a matched/new donor (not anonymous/unmatched) and at least
+  // one address: the donor's own email or an extra one typed below.
+  const donorHasEmail = donorMode === "new" ? Boolean(donorEmail) : donorMode === "existing" ? Boolean(selectedDonor?.email) : false;
+  const canSendReceipt = (donorMode === "new" || donorMode === "existing") && (donorHasEmail || receiptCc.trim().length > 0);
 
   // Optional/common
   const [funds, setFunds] = useState<{ id: string; name: string; isActive: boolean }[] | null>(null);
@@ -284,7 +288,7 @@ export default function RecordExternalDonationForm() {
         campaignFundraiserId: selectedFundraiserId || undefined,
         includeInAnnualStatement,
         receiptAdditionalRecipients: sendReceipt ? receiptCc : undefined,
-        sendReceipt: sendReceipt && (donorMode === "new" ? Boolean(donorEmail) : donorMode === "existing" ? Boolean(selectedDonor?.email) : false),
+        sendReceipt: sendReceipt && canSendReceipt,
       };
 
       if (isDigitalProvider) {
@@ -764,27 +768,25 @@ export default function RecordExternalDonationForm() {
           <input type="checkbox" checked={includeInAnnualStatement} onChange={(e) => setIncludeInAnnualStatement(e.target.checked)} />
           Include in annual statement
         </label>
+        <div>
+          <label className="block text-sm mb-1">Send receipt to another email (optional)</label>
+          <input
+            type="text"
+            value={receiptCc}
+            onChange={(e) => setReceiptCc(e.target.value)}
+            placeholder="spouse@example.com, bookkeeper@example.com"
+            className="w-full max-w-md rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
+          />
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={sendReceipt}
             onChange={(e) => setSendReceipt(e.target.checked)}
-            disabled={!(donorMode === "new" ? donorEmail : donorMode === "existing" ? selectedDonor?.email : false)}
+            disabled={!canSendReceipt}
           />
-          Send receipt now {!(donorMode === "new" ? donorEmail : donorMode === "existing" ? selectedDonor?.email : false) ? "(requires a donor email)" : ""}
+          Send receipt now {!canSendReceipt ? "(enter a donor email or another email above)" : ""}
         </label>
-        {sendReceipt && (
-          <div className="pl-6">
-            <label className="block text-xs text-slate-500 mb-1">Also send to others (optional)</label>
-            <input
-              type="text"
-              value={receiptCc}
-              onChange={(e) => setReceiptCc(e.target.value)}
-              placeholder="spouse@example.com, bookkeeper@example.com"
-              className="w-full max-w-md rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-700"
-            />
-          </div>
-        )}
       </section>
 
       <div className="flex gap-3 pt-2">

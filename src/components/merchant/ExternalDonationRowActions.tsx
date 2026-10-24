@@ -95,12 +95,12 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
             Connect donor
           </button>
         )}
-        {canSendReceipt && hasDonorEmail && status !== "VOIDED" && (
+        {canSendReceipt && status !== "VOIDED" && (
           <button onClick={handleSendReceipt} disabled={busy} className="text-xs font-semibold text-slate-600 hover:underline">
             {receiptAlreadySent ? "Resend receipt" : "Send receipt"}
           </button>
         )}
-        {canSendReceipt && hasDonorEmail && status !== "VOIDED" && (
+        {canSendReceipt && status !== "VOIDED" && (
           <button type="button" onClick={() => setShowCc((v) => !v)} className="text-xs text-slate-400 hover:text-slate-600 hover:underline">
             {showCc ? "hide" : "+ also send to others"}
           </button>
