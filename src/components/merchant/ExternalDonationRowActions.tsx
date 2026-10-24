@@ -33,6 +33,8 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [showCc, setShowCc] = useState(false);
+  const [ccInput, setCcInput] = useState("");
 
   async function handleVoid() {
     if (!confirm("Void this donation? It will be excluded from totals and statements.")) return;
@@ -51,10 +53,16 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
   async function handleSendReceipt() {
     setBusy(true);
     try {
-      const res = await fetch(`/api/merchant/donations/external/${id}/receipt`, { method: "POST" });
+      const res = await fetch(`/api/merchant/donations/external/${id}/receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ additionalRecipients: ccInput }),
+      });
       const json = await res.json();
       if (!res.ok) return toast.error(json.error || "Could not send receipt");
       toast.success("Receipt sent");
+      setCcInput("");
+      setShowCc(false);
       router.refresh();
     } finally {
       setBusy(false);
@@ -91,6 +99,20 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
           <button onClick={handleSendReceipt} disabled={busy} className="text-xs font-semibold text-slate-600 hover:underline">
             {receiptAlreadySent ? "Resend receipt" : "Send receipt"}
           </button>
+        )}
+        {canSendReceipt && hasDonorEmail && status !== "VOIDED" && (
+          <button type="button" onClick={() => setShowCc((v) => !v)} className="text-xs text-slate-400 hover:text-slate-600 hover:underline">
+            {showCc ? "hide" : "+ also send to others"}
+          </button>
+        )}
+        {showCc && (
+          <input
+            type="text"
+            value={ccInput}
+            onChange={(e) => setCcInput(e.target.value)}
+            placeholder="spouse@example.com, bookkeeper@example.com"
+            className="w-56 rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700"
+          />
         )}
         {canSendReceipt && hasDonorEmail && receiptAlreadySent && (
           <a href={`/api/merchant/donations/external/${id}/receipt`} className="text-xs font-semibold text-slate-600 hover:underline">

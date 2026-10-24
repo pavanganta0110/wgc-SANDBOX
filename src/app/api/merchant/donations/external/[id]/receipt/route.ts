@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { sendExternalDonationReceiptEmail, renderExternalDonationReceiptPdf } from "@/lib/donations/sendExternalDonationReceiptEmail";
+import { parseAdditionalRecipients } from "@/lib/email";
 import { loadScopedExternalDonation } from "@/lib/donations/externalDonationScope";
 
 /** Downloads the receipt PDF — never sends an email, never mutates
@@ -51,8 +52,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const donation = await loadScopedExternalDonation(id, auth);
   if (!donation) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  let additionalRecipients: string[] = [];
   try {
-    const result = await sendExternalDonationReceiptEmail(id, auth.churchId, auth.userId);
+    const body = await req.json();
+    additionalRecipients = parseAdditionalRecipients(body?.additionalRecipients);
+  } catch {
+    // No JSON body — donor only, as before.
+  }
+
+  try {
+    const result = await sendExternalDonationReceiptEmail(id, auth.churchId, auth.userId, additionalRecipients);
     if (!result.success) {
       return NextResponse.json({ error: "Failed to send receipt" }, { status: 502 });
     }
