@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/format";
 import { EXTERNAL_PAYMENT_METHOD_LABELS, SOURCE_LABELS, type ExternalPaymentMethod } from "@/lib/donations/externalDonationTypes";
 import ExternalDonationDetailPanel from "@/components/merchant/ExternalDonationDetailPanel";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
+import ExternalDonationReceiptCard from "@/components/merchant/ExternalDonationReceiptCard";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
 
 export default async function ExternalDonationDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -32,6 +33,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
 
   const canEdit = hasPermission(auth, "canEditExternalDonation");
   const canVoid = hasPermission(auth, "canVoidExternalDonation");
+  const canSendReceipt = hasPermission(auth, "canSendExternalDonationReceipt");
   const canViewProof = hasPermission(auth, "canViewExternalDonationProof");
 
   const methodLabel =
@@ -70,6 +72,17 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           <p className="text-sm text-amber-600">Unmatched — connect a donor from the External Donations list</p>
         )}
       </section>
+
+      {!donation.isAnonymous && donation.status !== "VOIDED" && (
+        <ExternalDonationReceiptCard
+          id={donation.id}
+          receiptStatus={donation.receiptStatus}
+          receiptNumber={donation.receiptNumber}
+          receiptSentAt={donation.receiptSentAt ? donation.receiptSentAt.toISOString() : null}
+          recipientEmail={donor?.email ?? null}
+          canSend={canSendReceipt}
+        />
+      )}
 
       <ExternalDonationDetailPanel
         donation={{
