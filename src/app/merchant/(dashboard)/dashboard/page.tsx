@@ -35,7 +35,8 @@ import {
   getRecentActivity,
 } from "@/lib/reports/dashboardHome";
 import { getSourceTotals } from "@/lib/reports/moneySources";
-import { resolveScopedTransferIds } from "@/lib/reports/insightsData";
+import { resolveScopedTransferIds, getExternalDonationsTotal } from "@/lib/reports/insightsData";
+import { formatCents } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import KpiCard from "@/components/merchant/dashboard/KpiCard";
 import AttentionStrip from "@/components/merchant/dashboard/AttentionStrip";
@@ -323,6 +324,8 @@ export default async function MerchantDashboardPage({
     attentionCounts,
     church,
     pricing,
+    externalTotal,
+    externalPrevious,
   ] = await Promise.all([
     priorFilter
       ? Promise.all([
@@ -348,6 +351,8 @@ export default async function MerchantDashboardPage({
     ),
     prisma.church.findUnique({ where: { id: churchId }, select: { name: true, finixMerchantId: true } }),
     prisma.churchPricing.findUnique({ where: { churchId } }),
+    getExternalDonationsTotal(churchId, dateFilter, scopedUserId),
+    priorFilter ? getExternalDonationsTotal(churchId, priorFilter, scopedUserId) : Promise.resolve(null),
   ]);
 
   const currentInputs = { transfers, disputes, refunds, authorizations, deposits };
@@ -435,6 +440,28 @@ export default async function MerchantDashboardPage({
             );
           })}
         </div>
+      </section>
+
+      <section aria-label="Donations including external" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard
+          label={`External Donations (${externalTotal.count})`}
+          value={formatCents(externalTotal.totalCents)}
+          icon={<Landmark className="h-4 w-4" />}
+          delta={computeMetricDelta("cents", "good", externalTotal.totalCents, externalPrevious ? externalPrevious.totalCents : null)}
+          comparedTo="vs previous period"
+        />
+        <KpiCard
+          label="Total Donations (WGC + External)"
+          value={formatCents(metricNumbers.totalTransactionVolume + externalTotal.totalCents)}
+          icon={<DollarSign className="h-4 w-4" />}
+          delta={computeMetricDelta(
+            "cents",
+            "good",
+            metricNumbers.totalTransactionVolume + externalTotal.totalCents,
+            previousNumbers && externalPrevious ? previousNumbers.totalTransactionVolume + externalPrevious.totalCents : null
+          )}
+          comparedTo="vs previous period"
+        />
       </section>
 
       <AttentionStrip items={attentionItems} />

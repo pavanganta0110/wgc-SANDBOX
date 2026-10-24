@@ -20,6 +20,7 @@ import {
   getBankReturnsInsights,
   getDepositsInsights,
   getExternalDonationsInsights,
+  getExternalDonationsTotal,
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
@@ -234,14 +235,27 @@ async function PaymentsTab({
   trend: string;
   scopedUserId?: string;
 }) {
-  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources] = await Promise.all([
+  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external] = await Promise.all([
     getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
     getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),
+    getExternalDonationsTotal(churchId, dateFilter, scopedUserId),
   ]);
+  const wgcVolumeCents = moneySources.totalCents;
 
   return (
     <>
       <SummaryCards items={summary} />
+
+      <SummaryCards
+        items={[
+          { label: "WGC-Processed Donations", value: formatCents(wgcVolumeCents) },
+          { label: `External Donations (${external.count})`, value: formatCents(external.totalCents) },
+          { label: "Combined Total Donations", value: formatCents(wgcVolumeCents + external.totalCents) },
+        ]}
+      />
+      <p className="-mt-3 text-xs text-slate-500">
+        External donations are recorded outside WGC (cash, check, etc.) and are shown separately — they never count toward WGC-processed volume, settlements, or fees.
+      </p>
 
       <MoneySources data={moneySources} />
 

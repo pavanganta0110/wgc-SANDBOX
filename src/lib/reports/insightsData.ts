@@ -704,3 +704,29 @@ export async function getExternalDonationsInsights(
 
   return { summary, bySourceTable, byFundTable, totalWgcCents, totalExternalCents, hasData: active.length > 0 };
 }
+
+/**
+ * Total of externally recorded (offline / non-WGC-processed) donations in a
+ * date range, for the Home and Insights headline figures. Same inclusion
+ * rules as getExternalDonationsInsights (voided and bank-returned gifts are
+ * excluded; FUNDRAISER/VIEWER scope restricts to donations they recorded).
+ * Reporting only: never merged into Finix volume, settlements or fees.
+ */
+export async function getExternalDonationsTotal(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | { gte: Date; lt: Date } | undefined,
+  scopedUserId?: string
+): Promise<{ totalCents: number; count: number }> {
+  const agg = await prisma.externalDonation.aggregate({
+    where: {
+      churchId,
+      status: { not: "VOIDED" },
+      OR: [{ depositStatus: null }, { depositStatus: { not: "RETURNED" } }],
+      ...(dateFilter ? { donationDate: dateFilter } : {}),
+      ...(scopedUserId ? { createdByUserId: scopedUserId } : {}),
+    },
+    _sum: { donationAmountCents: true },
+    _count: { _all: true },
+  });
+  return { totalCents: agg._sum.donationAmountCents ?? 0, count: agg._count._all };
+}

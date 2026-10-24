@@ -363,6 +363,13 @@ export async function POST(req: Request) {
     req,
   });
 
+  try {
+    const { notifyMerchantOfExternalDonation } = await import("@/lib/donations/notifyExternalDonationRecorded");
+    await notifyMerchantOfExternalDonation(created.id, auth.churchId);
+  } catch {
+    // Best-effort org notification — never blocks the saved donation.
+  }
+
   if (sendReceipt && donorId && !isAnonymous) {
     try {
       const { sendExternalDonationReceiptEmail } = await import("@/lib/donations/sendExternalDonationReceiptEmail");
