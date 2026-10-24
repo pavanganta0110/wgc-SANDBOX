@@ -8,6 +8,9 @@ interface OrgBillingRow {
   id: string;
   name: string;
   finixMerchantId: string | null;
+  /** Church.status — ACTIVE | TERMINATED (set only when Finix reports the merchant terminated). */
+  status: string;
+  terminatedAt: string | null;
   billingSetupStatus: string | null;
   subscription: {
     id: string;
@@ -238,7 +241,17 @@ export default function AdminBillingPage() {
           <tbody className="divide-y divide-slate-100">
             {orgs.map((o) => (
               <tr key={o.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 font-medium text-slate-800">{o.name}</td>
+                <td className="px-4 py-3 font-medium text-slate-800">
+                  {o.name}
+                  {o.status === "TERMINATED" && (
+                    <span
+                      className="ml-2 rounded-full border border-rose-200 bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-800"
+                      title={o.terminatedAt ? `Terminated ${fmt(o.terminatedAt)}` : "Terminated"}
+                    >
+                      Terminated
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-500">{o.billingSetupStatus || "—"}</td>
                 <td className="px-4 py-3 text-slate-500">{o.subscription?.status || "None"}</td>
                 <td className="px-4 py-3 text-slate-500">{cents(o.subscription?.amountCents)}</td>
