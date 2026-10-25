@@ -11,6 +11,7 @@ import { classifySource, isExternalPaymentMethod } from "@/lib/donations/externa
 import { findPossibleDuplicateExternalDonation } from "@/lib/donations/checkExternalDonationDuplicate";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
+import { parseAdditionalRecipients } from "@/lib/email";
 import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
 
 export async function GET(req: Request) {
@@ -93,6 +94,7 @@ export async function POST(req: Request) {
     cardType,
     includeInAnnualStatement,
     sendReceipt,
+    receiptAdditionalRecipients,
     isTaxDeductible,
     deductibleAmountCents,
     goodsOrServicesProvided,
@@ -363,10 +365,17 @@ export async function POST(req: Request) {
     req,
   });
 
+  try {
+    const { notifyMerchantOfExternalDonation } = await import("@/lib/donations/notifyExternalDonationRecorded");
+    await notifyMerchantOfExternalDonation(created.id, auth.churchId);
+  } catch {
+    // Best-effort org notification — never blocks the saved donation.
+  }
+
   if (sendReceipt && donorId && !isAnonymous) {
     try {
       const { sendExternalDonationReceiptEmail } = await import("@/lib/donations/sendExternalDonationReceiptEmail");
-      await sendExternalDonationReceiptEmail(created.id, auth.churchId, auth.userId);
+      await sendExternalDonationReceiptEmail(created.id, auth.churchId, auth.userId, parseAdditionalRecipients(receiptAdditionalRecipients));
     } catch {
       // Receipt failure never blocks the donation record from being saved —
       // it's just not marked sent; the merchant can retry from the list.

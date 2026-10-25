@@ -18,7 +18,7 @@ export async function GET() {
   if (!perms.canViewBilling) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const churches = await prisma.church.findMany({
-    select: { id: true, name: true, finixMerchantId: true, status: true, billingSetupStatus: true, createdAt: true },
+    select: { id: true, name: true, finixMerchantId: true, status: true, terminatedAt: true, billingSetupStatus: true, createdAt: true },
     orderBy: { createdAt: "desc" },
     take: 200,
   });
@@ -45,6 +45,8 @@ export async function GET() {
       id: c.id,
       name: c.name,
       finixMerchantId: c.finixMerchantId,
+      status: c.status,
+      terminatedAt: c.terminatedAt,
       billingSetupStatus: c.billingSetupStatus,
       subscription: sub
         ? {

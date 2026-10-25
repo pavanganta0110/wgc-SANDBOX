@@ -13,6 +13,7 @@ export interface NotificationEventDef {
 /** Only events this codebase can actually detect and act on — no fabricated notification types. */
 export const NOTIFICATION_EVENTS: NotificationEventDef[] = [
   { key: "DONATION_RECEIVED", label: "Donation Received", description: "A donor completed a gift on one of your giving pages." },
+  { key: "EXTERNAL_DONATION_RECORDED", label: "External Donation Recorded", description: "A donation received outside WGC (cash, check, etc.) was recorded." },
   { key: "DISPUTE_OPENED", label: "New Dispute Opened", description: "A donor has disputed a payment and evidence may be required." },
   { key: "SUBSCRIPTION_PAYMENT_FAILED", label: "Recurring Payment Failed", description: "A scheduled recurring donation payment failed to process." },
   { key: "SETTLEMENT_FUNDED", label: "Settlement Funded", description: "Funds from a settlement batch have been deposited to your bank account." },

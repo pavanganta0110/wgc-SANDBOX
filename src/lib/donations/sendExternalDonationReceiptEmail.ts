@@ -42,10 +42,16 @@ export async function sendExternalDonationReceiptEmail(
     prisma.donor.findUnique({ where: { id: donation.donorId } }),
   ]);
   if (!church) throw new Error("Organization not found");
-  if (!donor?.email) {
+  // The donor's own address is the primary recipient. When the donor has no
+  // email on file, the first extra recipient becomes the primary one (the
+  // receipt is still the donor's receipt — it just goes to whoever the org
+  // named), so nothing is sent unless at least one address exists.
+  const recipients = [donor?.email, ...additionalRecipients].filter((e): e is string => Boolean(e));
+  if (!donor || recipients.length === 0) {
     await markReceiptOutcome(externalDonationId, "SUPPRESSED_MISSING_EMAIL", actorUserId, "No donor email on file");
     throw new Error("Donor is missing an email address — receipt not sent");
   }
+  const [primaryRecipient, ...ccRecipients] = recipients;
 
   const isResend = Boolean(donation.receiptSentAt);
   const settings = resolveReceiptSettings(church);
@@ -95,7 +101,7 @@ export async function sendExternalDonationReceiptEmail(
     organizationWebsite: settings.showWebsite ? church.website || null : null,
     organizationTaxId: settings.showTaxId ? church.taxId || null : null,
     donorName,
-    donorEmail: donor.email,
+    donorEmail: donor.email || primaryRecipient,
     donorAddress,
     receiptNumber,
     transactionReference: settings.showDonationReference ? externalReference || donation.id : donation.id,
@@ -135,8 +141,8 @@ export async function sendExternalDonationReceiptEmail(
   lines.push(`<p style="font-size:11px;color:#94a3b8;">${settings.disclaimer}</p>`);
 
   const result = await sendWgcEmail({
-    to: donor.email,
-    cc: additionalRecipients,
+    to: primaryRecipient,
+    cc: ccRecipients,
     subject,
     title: "Thank You for Your Gift",
     badgeText: "Receipt",
@@ -186,7 +192,7 @@ export async function sendExternalDonationReceiptEmail(
     metadata: { receiptNumber, isResend, success: result.success },
   });
 
-  return { ...result, receiptNumber, recipientEmail: donor.email };
+  return { ...result, receiptNumber, recipientEmail: primaryRecipient };
 }
 
 async function markReceiptOutcome(externalDonationId: string, receiptStatus: string, actorUserId: string | null, note: string) {
