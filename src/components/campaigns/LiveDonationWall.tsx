@@ -90,8 +90,12 @@ export default function LiveDonationWall({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={feed.logoUrl} alt={feed.organizationName} className="h-10 sm:h-14 w-auto" />
           )}
+          {feed.imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={feed.imageUrl} alt={feed.name} className="h-14 w-14 sm:h-20 sm:w-20 rounded-xl object-cover border border-white/10" />
+          )}
           <div>
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">{feed.name}</h1>
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white">{feed.name}</h1>
             <p className="text-sm sm:text-base text-white/50">{feed.organizationName}</p>
           </div>
         </div>

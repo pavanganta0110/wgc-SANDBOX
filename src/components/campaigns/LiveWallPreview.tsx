@@ -13,11 +13,13 @@ export default function LiveWallPreview({
   churchName,
   churchLogoUrl,
   name,
+  imageUrl,
   goalAmountCents,
 }: {
   churchName: string;
   churchLogoUrl?: string | null;
   name: string;
+  imageUrl?: string | null;
   goalAmountCents: number | null;
 }) {
   return (
@@ -28,8 +30,12 @@ export default function LiveWallPreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={churchLogoUrl} alt="" className="h-8 sm:h-10 w-auto" />
           )}
+          {imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt="" className="h-10 w-10 sm:h-14 sm:w-14 rounded-xl object-cover border border-white/10" />
+          )}
           <div>
-            <h1 className="text-lg sm:text-2xl font-bold tracking-tight">{name || "Your Campaign Name"}</h1>
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-white">{name || "Your Campaign Name"}</h1>
             <p className="text-xs sm:text-sm text-white/50">{churchName}</p>
           </div>
         </div>
