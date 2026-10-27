@@ -85,8 +85,12 @@ export async function loadPublicCampaignBySlug(slug: string, previewChurchId?: s
   const church = await prisma.church.findUnique({ where: { id: campaign.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  const isPreview = previewChurchId === campaign.churchId;
-  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
+  const isStaffViewer = previewChurchId === campaign.churchId;
+  const isUnavailable = campaign.status !== "ACTIVE" || Boolean(campaign.archivedAt);
+  // Staff only see the "Preview only" banner when the campaign genuinely isn't
+  // public; an Active campaign viewed by staff is just the real page.
+  const isPreview = isStaffViewer && isUnavailable;
+  if (!isStaffViewer && isUnavailable) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
@@ -110,8 +114,12 @@ export async function loadPublicTeamBySlug(slug: string, previewChurchId?: strin
   const church = await prisma.church.findUnique({ where: { id: team.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  const isPreview = previewChurchId === campaign.churchId;
-  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
+  const isStaffViewer = previewChurchId === campaign.churchId;
+  const isUnavailable = campaign.status !== "ACTIVE" || Boolean(campaign.archivedAt);
+  // Staff only see the "Preview only" banner when the campaign genuinely isn't
+  // public; an Active campaign viewed by staff is just the real page.
+  const isPreview = isStaffViewer && isUnavailable;
+  if (!isStaffViewer && isUnavailable) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
@@ -135,8 +143,12 @@ export async function loadPublicFundraiserBySlug(slug: string, previewChurchId?:
   const church = await prisma.church.findUnique({ where: { id: fundraiser.churchId }, select: { name: true, logoUrl: true } });
   if (!church) return { ok: false, notFound: true };
 
-  const isPreview = previewChurchId === campaign.churchId;
-  if (!isPreview && (campaign.status !== "ACTIVE" || campaign.archivedAt)) {
+  const isStaffViewer = previewChurchId === campaign.churchId;
+  const isUnavailable = campaign.status !== "ACTIVE" || Boolean(campaign.archivedAt);
+  // Staff only see the "Preview only" banner when the campaign genuinely isn't
+  // public; an Active campaign viewed by staff is just the real page.
+  const isPreview = isStaffViewer && isUnavailable;
+  if (!isStaffViewer && isUnavailable) {
     return { ok: false, notFound: false, message: describeUnavailableCampaign(campaign), church };
   }
 
