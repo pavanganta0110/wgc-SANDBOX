@@ -7,6 +7,7 @@ import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import CampaignSeriesControls from "@/components/merchant/CampaignSeriesControls";
+import CampaignDownloadMenu from "@/components/merchant/CampaignDownloadMenu";
 
 export default async function GivingCampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
@@ -44,7 +45,8 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
             {campaign.channel === "TEXT" ? "Text message" : campaign.emailSubject}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {permissions.canExport && <CampaignDownloadMenu id={campaign.id} />}
           <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{campaign.channel === "TEXT" ? "Text" : "Email"}</span>
           <StateBadge state={campaign.status} />
         </div>
