@@ -235,7 +235,7 @@ export default function NewFundraisingCampaignForm({
             endDate={endDate || undefined}
           />
         ) : (
-          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} goalAmountCents={goalAmountCents} />
+          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} imageUrl={imageUrl} goalAmountCents={goalAmountCents} />
         )}
       </div>
     </div>

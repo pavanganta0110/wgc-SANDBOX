@@ -730,6 +730,7 @@ export default function CampaignDetailClient({
                 churchName={churchName}
                 churchLogoUrl={churchLogoUrl}
                 name={detailsDraft.name}
+                imageUrl={detailsDraft.imageUrl}
                 goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
               />
             )}
