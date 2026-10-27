@@ -5,7 +5,7 @@ const { prismaMock, finixMock, emitEventMock } = vi.hoisted(() => ({
     donor: { findFirst: vi.fn(), findMany: vi.fn() },
     finixSubscription: { findFirst: vi.fn(), update: vi.fn() },
     finixPaymentInstrumentSnapshot: { findFirst: vi.fn() },
-    subscriptionAction: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    subscriptionAction: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     subscriptionSetupLink: { create: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
   },
@@ -79,14 +79,38 @@ describe("donorUpdateSubscriptionAmount", () => {
 
   it("replays a completed request without calling Finix again", async () => {
     prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
-    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", state: "COMPLETED", newValue: { amountCents: 7500 } });
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "UPDATE_AMOUNT", state: "COMPLETED", newValue: { amountCents: 7500 } });
     expect(await donorUpdateSubscriptionAmount(ctx, 7500)).toEqual({ amountCents: 7500 });
+    expect(finixMock.updateSubscription).not.toHaveBeenCalled();
+  });
+
+  it("lets the donor retry the same key after a failed attempt", async () => {
+    prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "UPDATE_AMOUNT", state: "FAILED" });
+    prismaMock.subscriptionAction.updateMany.mockResolvedValue({ count: 1 });
+    await donorUpdateSubscriptionAmount(ctx, 7500);
+    expect(prismaMock.subscriptionAction.updateMany.mock.calls[0][0].where).toEqual({ idempotencyKey: "key-1", state: "FAILED" });
+    expect(finixMock.updateSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run twice when two retries race for the same failed key", async () => {
+    prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "UPDATE_AMOUNT", state: "FAILED" });
+    prismaMock.subscriptionAction.updateMany.mockResolvedValue({ count: 0 });
+    await expect(donorUpdateSubscriptionAmount(ctx, 7500)).rejects.toMatchObject({ status: 409 });
+    expect(finixMock.updateSubscription).not.toHaveBeenCalled();
+  });
+
+  it("refuses a key that was already used for a different kind of action", async () => {
+    prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "CANCEL", state: "COMPLETED", newValue: {} });
+    await expect(donorUpdateSubscriptionAmount(ctx, 7500)).rejects.toMatchObject({ status: 409 });
     expect(finixMock.updateSubscription).not.toHaveBeenCalled();
   });
 
   it("reports 409 while the same key is still being processed", async () => {
     prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
-    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", state: "PENDING" });
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "UPDATE_AMOUNT", state: "PENDING" });
     await expect(donorUpdateSubscriptionAmount(ctx, 7500)).rejects.toMatchObject({ status: 409 });
   });
 

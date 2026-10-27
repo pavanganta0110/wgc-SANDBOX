@@ -53,8 +53,16 @@ async function beginAction(ctx: DonorActionContext, actionType: "UPDATE_AMOUNT" 
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       const existing = await prisma.subscriptionAction.findUnique({ where: { idempotencyKey: ctx.idempotencyKey } });
-      if (existing?.churchId === ctx.churchId && existing.finixSubscriptionId === finixSubscriptionId && existing.state === "COMPLETED") {
-        return { replay: existing.newValue ?? {} };
+      const sameRequest = existing?.churchId === ctx.churchId && existing.finixSubscriptionId === finixSubscriptionId && existing.actionType === actionType;
+      if (sameRequest && existing.state === "COMPLETED") return { replay: existing.newValue ?? {} };
+      if (sameRequest && existing.state === "FAILED") {
+        // The earlier attempt never changed anything, so the donor may retry with the same key.
+        // updateMany + count lets exactly one of two concurrent retries win the claim.
+        const claimed = await prisma.subscriptionAction.updateMany({
+          where: { idempotencyKey: ctx.idempotencyKey, state: "FAILED" },
+          data: { state: "PENDING", failureReason: null, oldValue, newValue: newValue ?? Prisma.JsonNull },
+        });
+        if (claimed.count === 1) return { replay: null as Prisma.JsonValue | null };
       }
       throw new DonorSubscriptionError("This request is already being processed.", 409);
     }

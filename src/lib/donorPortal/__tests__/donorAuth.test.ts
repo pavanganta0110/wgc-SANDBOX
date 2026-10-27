@@ -43,10 +43,17 @@ describe("issueDonorLoginCode", () => {
     await issue();
     expect(prismaMock.donor.findMany.mock.calls[0][0].where).toMatchObject({
       churchId: "church1",
-      normalizedEmail: "ann@example.com",
       archivedAt: null,
       mergedIntoDonorId: null,
     });
+  });
+
+  it("also matches legacy donors whose normalizedEmail was never backfilled", async () => {
+    await issue();
+    expect(prismaMock.donor.findMany.mock.calls[0][0].where.OR).toEqual([
+      { normalizedEmail: "ann@example.com" },
+      { normalizedEmail: null, email: { equals: "ann@example.com", mode: "insensitive" } },
+    ]);
   });
 
   it("issues nothing when no donor matches", async () => {

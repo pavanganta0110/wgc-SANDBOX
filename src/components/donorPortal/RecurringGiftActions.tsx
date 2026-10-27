@@ -28,7 +28,7 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // One key per intent: a double-click or retry of the same action can never apply twice.
-  const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const base = `/api/donor-portal/subscriptions/${subscriptionId}`;
 
   const run = async (fn: () => Promise<void>) => {
@@ -72,6 +72,8 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
             e.preventDefault();
             void run(async () => {
               await post(`${base}/update-amount`, { slug, idempotencyKey, newDonationAmountCents: Math.round(Number(amount) * 100), consentConfirmed: confirmed });
+              setIdempotencyKey(crypto.randomUUID()); // next change is a new intent
+              setConfirmed(false);
               setMode("IDLE");
               router.refresh();
             });

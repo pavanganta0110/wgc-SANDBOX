@@ -111,6 +111,20 @@ export default async function DonorAccountPage({
           )}
         </section>
 
+        {data.statements.length > 0 && (
+          <section className="rounded-xl border border-slate-100 bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-900 mb-3">Annual giving statements</h2>
+            <ul className="divide-y divide-slate-100">
+              {data.statements.map((st) => (
+                <li key={st.id} className="py-2 flex justify-between text-sm">
+                  <span className="text-slate-700">{st.taxYear} · {formatCents(st.eligibleAmountCents)}</span>
+                  <a href={`/api/donor-portal/statements/${st.id}?slug=${encodeURIComponent(slug)}`} className="text-indigo-600 hover:text-indigo-500">Download PDF</a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className="rounded-xl border border-slate-100 bg-white p-4">
           <h2 className="text-sm font-semibold text-slate-900 mb-3">Ways to give</h2>
           {data.waysToGive.length === 0 ? (

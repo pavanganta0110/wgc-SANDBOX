@@ -36,7 +36,14 @@ export async function findPortalDonorsByEmail(churchId: string, email: string) {
   const normalized = normalizeEmail(email);
   if (!normalized) return [];
   return prisma.donor.findMany({
-    where: { churchId, normalizedEmail: normalized, archivedAt: null, mergedIntoDonorId: null },
+    where: {
+      churchId,
+      archivedAt: null,
+      mergedIntoDonorId: null,
+      // Older donor rows can have `email` set but `normalizedEmail` never backfilled; matching only the
+      // normalized column would lock those donors (and their recurring gifts) out of the portal.
+      OR: [{ normalizedEmail: normalized }, { normalizedEmail: null, email: { equals: normalized, mode: "insensitive" } }],
+    },
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true, email: true, normalizedEmail: true },
   });

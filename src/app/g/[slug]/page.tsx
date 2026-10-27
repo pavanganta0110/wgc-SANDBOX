@@ -124,6 +124,12 @@ export default async function GivingLinkPublicPage({
           />
         )}
 
+        <p className="text-center mt-6 text-xs">
+          <a href={`/give/${church.slug}/account`} className="underline" style={{ color: light.bodyTextColor }}>
+            View my giving
+          </a>
+        </p>
+
         {branding.showPoweredByWgc !== false && <PoweredByWgc />}
       </div>
     </div>

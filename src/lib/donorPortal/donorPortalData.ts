@@ -35,6 +35,12 @@ export interface PortalRecurringGift {
   isPledge: boolean;
 }
 
+export interface PortalStatement {
+  id: string;
+  taxYear: number;
+  eligibleAmountCents: number;
+}
+
 export interface PortalWayToGive {
   kind: "GIVING_LINK" | "CAMPAIGN";
   title: string;
@@ -78,7 +84,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
   const now = new Date();
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
 
-  const [lifetimeMap, ytdMap, instruments, externalRows, subscriptions, givingLinks, campaigns, church] = await Promise.all([
+  const [lifetimeMap, ytdMap, instruments, externalRows, subscriptions, givingLinks, campaigns, church, statementRows] = await Promise.all([
     loadDonorAggregatesBatch(donorIds, churchId),
     loadDonorAggregatesBatch(donorIds, churchId, { gte: yearStart }),
     prisma.finixPaymentInstrumentSnapshot.findMany({
@@ -107,6 +113,12 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
       select: { slug: true, name: true },
     }),
     prisma.church.findUnique({ where: { id: churchId }, select: { name: true, slug: true, logoUrl: true } }),
+    // Only statements the church itself has already generated — a donor can't trigger generation, so the church's review step is never bypassed.
+    prisma.annualDonationStatement.findMany({
+      where: { churchId, donorId: { in: donorIds }, statementStatus: { in: ["READY", "GENERATED"] }, supersededAt: null, generatedAt: { not: null }, eligibleAmountCents: { gt: 0 } },
+      orderBy: { taxYear: "desc" },
+      select: { id: true, taxYear: true, eligibleAmountCents: true },
+    }),
   ]);
 
   const instrumentIds = instruments.map((i) => i.finixPaymentInstrumentId);
@@ -156,6 +168,8 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
     ...campaigns.map<PortalWayToGive>((c) => ({ kind: "CAMPAIGN", title: c.name, description: null, href: `/campaign/${c.slug}` })),
   ];
 
+  const statements: PortalStatement[] = statementRows;
+
   return {
     church,
     donorName: sessionDonor.name,
@@ -163,6 +177,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
     yearToDate: toTotals(sumAggregates([...ytdMap.values()])),
     gifts,
     recurring,
+    statements,
     waysToGive,
   };
 }
