@@ -234,8 +234,11 @@ describe("TransactionReportPdf — table layout", () => {
     });
     const cells = collectTextNodeContents(element);
     expect(cells).toContain("Pavan Ganta");
-    expect(cells).toContain("pavankumarreddi2@gmail.com");
-    expect(cells.some((c) => c === "Pavan Gantapavankumarreddi2@gmail.com")).toBe(false);
+    // The email is split before the "@" so a long address wraps inside its
+    // column instead of overflowing into Payment Method.
+    expect(cells).toContain("pavankumarreddi2");
+    expect(cells).toContain("@gmail.com");
+    expect(cells.some((c) => c.startsWith("Pavan Ganta") && c !== "Pavan Ganta")).toBe(false);
   });
 });
 

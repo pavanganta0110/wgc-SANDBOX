@@ -19,22 +19,41 @@ Font.registerHyphenationCallback((word) => [word]);
 const PAGE_SIZE = "TABLOID";
 const PAGE_MARGIN = 28;
 
+// An email address has no spaces, so react-pdf can never wrap it and a long
+// one spills into the next column. Break it before the "@" ourselves.
+function splitEmail(email: string | null | undefined): string[] {
+  if (!email) return [];
+  const at = email.indexOf("@");
+  return at > 0 ? [email.slice(0, at), email.slice(at)] : [email];
+}
+
+// react-pdf only wraps at spaces, so a single very long word (no spaces)
+// would run into the next column. Break such words into column-sized chunks;
+// ordinary text is returned untouched.
+function breakLongWords(text: string | null | undefined, maxChars: number): string {
+  if (!text) return "";
+  return text
+    .split(" ")
+    .map((word) => (word.length > maxChars ? (word.match(new RegExp(`.{1,${maxChars}}`, "g")) ?? [word]).join("\n") : word))
+    .join(" ");
+}
+
 const A = {
-  date: 55,
-  donor: 85,
-  givingLink: 85,
-  fund: 80,
-  teamMember: 115,
-  method: 65,
-  txnId: 140,
-  donation: 62,
-  donorFee: 62,
-  totalCharged: 62,
-  status: 68,
+  date: 60,
+  donor: 105,
+  givingLink: 105,
+  fund: 100,
+  teamMember: 160,
+  method: 85,
+  txnId: 205,
+  donation: 66,
+  donorFee: 66,
+  totalCharged: 70,
+  status: 78,
 };
 
 const B = {
-  txnId: 140,
+  txnId: 205,
   processorFee: 62,
   totalFees: 62,
   refund: 62,
@@ -318,14 +337,16 @@ export function TransactionReportPdf({ rows, summary, branding = null, sections 
                 return (
                   <View style={styles.tableRow} key={r.wgcPaymentId} wrap={false}>
                     <Text style={{ width: A.date, ...styles.cell }}>{dateStr(r.createdAt)}</Text>
-                    <Text style={{ width: A.donor, ...styles.cell }}>{r.donorName}</Text>
-                    <Text style={{ width: A.givingLink, ...styles.cell }}>{r.givingLinkName || "—"}</Text>
-                    <Text style={{ width: A.fund, ...styles.cell }}>{r.fundName || "Unspecified"}</Text>
+                    <Text style={{ width: A.donor, ...styles.cell }}>{breakLongWords(r.donorName, 17)}</Text>
+                    <Text style={{ width: A.givingLink, ...styles.cell }}>{breakLongWords(r.givingLinkName, 17) || "—"}</Text>
+                    <Text style={{ width: A.fund, ...styles.cell }}>{breakLongWords(r.fundName, 16) || "Unspecified"}</Text>
                     <View style={{ width: A.teamMember, ...styles.cell }}>
                       <Text>{r.teamMemberName || "—"}</Text>
-                      {showEmailLine && <Text style={styles.cellSub}>{r.teamMemberEmail}</Text>}
+                      {showEmailLine && splitEmail(r.teamMemberEmail).map((line, i) => (
+                        <Text key={i} style={styles.cellSub}>{line}</Text>
+                      ))}
                     </View>
-                    <Text style={{ width: A.method, ...styles.cell }}>{r.paymentMethod}</Text>
+                    <Text style={{ width: A.method, ...styles.cell }}>{(r.paymentMethod ?? "").replace(/_/g, " ")}</Text>
                     <Text style={{ width: A.txnId, ...styles.cellMono }}>{r.finixTransferId || "—"}</Text>
                     <Text style={{ width: A.donation, ...styles.cellRight }}>{money(r.donationAmountCents)}</Text>
                     <Text style={{ width: A.donorFee, ...styles.cellRight }}>{money(r.donorProcessingFeeCents)}</Text>
