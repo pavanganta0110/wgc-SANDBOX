@@ -6537,3 +6537,39 @@ model EventRegistrationAddOn {
   @@index([registrationId])
   @@index([churchId, eventId])
 }
+
+/// One-time sign-in proof for the donor portal (/give/[slug]/account). Holds
+/// both a 6-digit code (typed back on the same device) and a one-tap link
+/// token (emailed button) — either consumes the whole row. Scoped to a single
+/// church + donor: a code issued for one organization can never open another.
+/// Only hashes are stored; the code hash is an HMAC keyed by linkTokenHash.
+model DonorLoginCode {
+  id             String    @id @default(cuid())
+  churchId       String
+  donorId        String
+  codeHash       String
+  linkTokenHash  String    @unique
+  failedAttempts Int       @default(0)
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([churchId, donorId, createdAt])
+}
+
+/// The donor portal's own session — deliberately separate from every
+/// merchant/admin/fundraiser session so a donor cookie can never be mistaken
+/// for staff access. Bound to exactly one church; the portal re-checks that
+/// binding against the URL's org slug on every request.
+model DonorPortalSession {
+  id           String    @id @default(cuid())
+  churchId     String
+  donorId      String
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  lastActiveAt DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([churchId, donorId])
+}
