@@ -185,6 +185,9 @@ export default function NewFundraisingCampaignForm({
         <p className="text-xs text-slate-400">
           Campaigns start as a draft. You&apos;ll be able to add teams and fundraisers, then set the campaign to Active when you&apos;re ready to publish it.
         </p>
+        <p className="text-xs text-slate-400">
+          A giving link is created automatically when you click Create Campaign. It&apos;s what the &ldquo;Give Now&rdquo; button uses, and you&apos;ll find its URL on the campaign&apos;s Settings tab.
+        </p>
         <button
           type="submit"
           disabled={submitting}

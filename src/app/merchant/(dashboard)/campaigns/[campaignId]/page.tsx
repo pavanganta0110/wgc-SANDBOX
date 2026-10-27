@@ -21,6 +21,9 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
     prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true } }),
   ]);
   if (!campaign) notFound();
+  const givingLink = campaign.givingLinkId
+    ? await prisma.givingLink.findFirst({ where: { id: campaign.givingLinkId, churchId: auth.churchId }, select: { id: true, publicSlug: true } })
+    : null;
 
   return (
     <CampaignDetailClient
@@ -37,6 +40,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         leaderboardEnabled: campaign.leaderboardEnabled,
         fundraiserSelfEditEnabled: campaign.fundraiserSelfEditEnabled,
       }}
+      givingLink={givingLink}
       churchName={church?.name || "Your Organization"}
       churchLogoUrl={church?.logoUrl}
       canEdit={hasPermission(auth, "canEditFundraisingCampaign")}

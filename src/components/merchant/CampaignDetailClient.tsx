@@ -87,6 +87,7 @@ function StatCard({ label, value, sublabel }: { label: string; value: string; su
 
 export default function CampaignDetailClient({
   campaign: initialCampaign,
+  givingLink,
   churchName,
   churchLogoUrl,
   canEdit,
@@ -94,6 +95,8 @@ export default function CampaignDetailClient({
   canArchive,
 }: {
   campaign: CampaignSummary;
+  /** The giving link auto-created with the campaign (the page behind "Give Now"). */
+  givingLink?: { id: string; publicSlug: string } | null;
   churchName: string;
   churchLogoUrl?: string | null;
   canEdit: boolean;
@@ -522,6 +525,23 @@ export default function CampaignDetailClient({
       {tab === "settings" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
           <div className="space-y-6">
+            {givingLink && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-2">
+                <h3 className="text-sm font-semibold text-slate-900">Giving Link</h3>
+                <p className="text-xs text-slate-500">
+                  Created automatically with this campaign. This is where the campaign page&apos;s &ldquo;Give Now&rdquo; button sends donors, and every gift through it counts toward the campaign.
+                </p>
+                <p className="text-sm text-slate-700 break-all">wgcpayments.com/g/{givingLink.publicSlug}</p>
+                <div className="flex gap-4 text-sm font-semibold">
+                  <Link href={`/g/${givingLink.publicSlug}`} target="_blank" className="text-indigo-600 hover:underline">
+                    Open link &rarr;
+                  </Link>
+                  <Link href={`/merchant/giving-links/${givingLink.id}`} className="text-indigo-600 hover:underline">
+                    Manage giving link
+                  </Link>
+                </div>
+              </div>
+            )}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">Campaign Details</h3>
               <div>
