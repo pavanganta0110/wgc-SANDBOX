@@ -48,6 +48,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       organizationName: church.name,
       logoUrl: church.logoUrl,
       imageUrl: campaign.imageUrl,
+      background: campaign.wallBackground,
       goalAmountCents: campaign.goalAmountCents,
       raisedCents,
       donorCount,

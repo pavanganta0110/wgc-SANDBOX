@@ -4673,6 +4673,10 @@ model FundraisingCampaign {
   name        String
   description String?
   imageUrl    String?
+  // Background choices for the public campaign page / live wall — see
+  // src/lib/campaigns/backgrounds.ts for the allowed keys.
+  pageBackground String @default("light")
+  wallBackground String @default("navy")
 
   // Public-facing vanity slug (e.g. "spring-gala-2026"), globally unique
   // across the platform — human-readable, distinct from

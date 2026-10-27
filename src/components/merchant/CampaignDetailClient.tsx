@@ -7,6 +7,8 @@ import { Loader2 } from "lucide-react";
 import { formatCents } from "@/lib/format";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
 import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
+import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
+import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS } from "@/lib/campaigns/backgrounds";
 
 type Tab = "overview" | "teams" | "fundraisers" | "leaderboard" | "sharing" | "settings";
 
@@ -25,6 +27,8 @@ interface CampaignSummary {
   endDate: string | null;
   leaderboardEnabled: boolean;
   fundraiserSelfEditEnabled: boolean;
+  pageBackground: string;
+  wallBackground: string;
 }
 
 interface Overview {
@@ -88,6 +92,7 @@ function StatCard({ label, value, sublabel }: { label: string; value: string; su
 export default function CampaignDetailClient({
   campaign: initialCampaign,
   givingLink,
+  availableGivingLinks = [],
   churchName,
   churchLogoUrl,
   canEdit,
@@ -97,6 +102,8 @@ export default function CampaignDetailClient({
   campaign: CampaignSummary;
   /** The giving link auto-created with the campaign (the page behind "Give Now"). */
   givingLink?: { id: string; publicSlug: string } | null;
+  /** Active links the campaign could use instead (not tied to another campaign/team/fundraiser). */
+  availableGivingLinks?: { id: string; internalName: string; publicSlug: string }[];
   churchName: string;
   churchLogoUrl?: string | null;
   canEdit: boolean;
@@ -182,6 +189,8 @@ export default function CampaignDetailClient({
     goalAmount: campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "",
     startDate: campaign.startDate ?? "",
     endDate: campaign.endDate ?? "",
+    pageBackground: campaign.pageBackground,
+    wallBackground: campaign.wallBackground,
   });
   const [uploadingDetailsImage, setUploadingDetailsImage] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
@@ -194,7 +203,9 @@ export default function CampaignDetailClient({
     detailsDraft.imageUrl !== campaign.imageUrl ||
     detailsDraft.goalAmount !== (campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "") ||
     detailsDraft.startDate !== (campaign.startDate ?? "") ||
-    detailsDraft.endDate !== (campaign.endDate ?? "");
+    detailsDraft.endDate !== (campaign.endDate ?? "") ||
+    detailsDraft.pageBackground !== campaign.pageBackground ||
+    detailsDraft.wallBackground !== campaign.wallBackground;
 
   const resetDetailsDraft = () => {
     setDetailsDraft({
@@ -204,6 +215,8 @@ export default function CampaignDetailClient({
       goalAmount: campaign.goalAmountCents != null ? (campaign.goalAmountCents / 100).toString() : "",
       startDate: campaign.startDate ?? "",
       endDate: campaign.endDate ?? "",
+      pageBackground: campaign.pageBackground,
+      wallBackground: campaign.wallBackground,
     });
   };
 
@@ -247,9 +260,34 @@ export default function CampaignDetailClient({
         goalAmountCents: detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null,
         startDate: detailsDraft.startDate || null,
         endDate: detailsDraft.endDate || null,
+        pageBackground: detailsDraft.pageBackground,
+        wallBackground: detailsDraft.wallBackground,
       });
     } finally {
       setSavingDetails(false);
+    }
+  };
+
+  const [chosenGivingLinkId, setChosenGivingLinkId] = useState(givingLink?.id ?? "");
+  const [savingGivingLink, setSavingGivingLink] = useState(false);
+  const changeGivingLink = async () => {
+    if (!chosenGivingLinkId) return;
+    setSavingGivingLink(true);
+    try {
+      const res = await fetch(`/api/merchant/campaigns/${campaign.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ givingLinkId: chosenGivingLinkId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "Could not change the giving link");
+        return;
+      }
+      toast.success("Giving link updated");
+      window.location.reload();
+    } finally {
+      setSavingGivingLink(false);
     }
   };
 
@@ -540,6 +578,35 @@ export default function CampaignDetailClient({
                     Manage giving link
                   </Link>
                 </div>
+                {canEdit && availableGivingLinks.length > 1 && (
+                  <div className="pt-3 mt-2 border-t border-slate-100 space-y-2">
+                    <label className="block text-xs font-medium text-slate-700">Use a different giving link</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={chosenGivingLinkId}
+                        onChange={(e) => setChosenGivingLinkId(e.target.value)}
+                        className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                      >
+                        {availableGivingLinks.map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.internalName} (/g/{l.publicSlug})
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={chosenGivingLinkId === givingLink.id || savingGivingLink}
+                        onClick={changeGivingLink}
+                        className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                      >
+                        {savingGivingLink ? "Saving…" : "Use this link"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-400">
+                      &ldquo;Give Now&rdquo; will send donors to the chosen link, and everything that link has collected counts toward this campaign.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
             <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-4">
@@ -602,6 +669,22 @@ export default function CampaignDetailClient({
                   </>
                 )}
               </div>
+              <BackgroundPicker
+                label="Campaign page background"
+                options={PAGE_BACKGROUNDS}
+                value={detailsDraft.pageBackground}
+                onChange={(key) => setDetailsDraft((d) => ({ ...d, pageBackground: key }))}
+                hasImage={Boolean(detailsDraft.imageUrl)}
+                disabled={!canEdit}
+              />
+              <BackgroundPicker
+                label="Live wall background"
+                options={WALL_BACKGROUNDS}
+                value={detailsDraft.wallBackground}
+                onChange={(key) => setDetailsDraft((d) => ({ ...d, wallBackground: key }))}
+                hasImage={Boolean(detailsDraft.imageUrl)}
+                disabled={!canEdit}
+              />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
                 <input
@@ -744,6 +827,7 @@ export default function CampaignDetailClient({
                 imageUrl={detailsDraft.imageUrl}
                 goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
                 endDate={detailsDraft.endDate || undefined}
+                background={detailsDraft.pageBackground}
               />
             ) : (
               <LiveWallPreview
@@ -751,6 +835,7 @@ export default function CampaignDetailClient({
                 churchLogoUrl={churchLogoUrl}
                 name={detailsDraft.name}
                 imageUrl={detailsDraft.imageUrl}
+                background={detailsDraft.wallBackground}
                 goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
               />
             )}

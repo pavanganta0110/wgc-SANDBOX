@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { generateUniqueSlug } from "@/lib/campaigns/slugs";
+import { isValidPageBackground, isValidWallBackground } from "@/lib/campaigns/backgrounds";
 import { provisionCampaignGivingLink } from "@/lib/campaigns/campaignGivingLinks";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
 import { emitEvent } from "@/lib/events/emitEvent";
@@ -49,9 +50,16 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { name, description, imageUrl, startDate, endDate, goalAmountCents, leaderboardEnabled, publiclyIndexable } = body;
+  const { name, description, imageUrl, startDate, endDate, goalAmountCents, leaderboardEnabled, publiclyIndexable, pageBackground, wallBackground } = body;
   const goalProblem = goalAmountCentsError(goalAmountCents);
   if (goalProblem) return NextResponse.json({ error: goalProblem }, { status: 400 });
+
+  if (pageBackground !== undefined && !isValidPageBackground(pageBackground)) {
+    return NextResponse.json({ error: "Invalid page background" }, { status: 400 });
+  }
+  if (wallBackground !== undefined && !isValidWallBackground(wallBackground)) {
+    return NextResponse.json({ error: "Invalid live wall background" }, { status: 400 });
+  }
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "Campaign name is required" }, { status: 400 });
@@ -72,6 +80,8 @@ export async function POST(req: Request) {
       name: name.trim(),
       description: description?.trim() || null,
       imageUrl: imageUrl?.trim() || null,
+      ...(pageBackground !== undefined ? { pageBackground } : {}),
+      ...(wallBackground !== undefined ? { wallBackground } : {}),
       slug,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
