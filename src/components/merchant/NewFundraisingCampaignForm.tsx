@@ -7,6 +7,8 @@ import { Loader2 } from "lucide-react";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
 import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
 import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
+import OptionPicker from "@/components/campaigns/OptionPicker";
+import { DEFAULT_DISPLAY, FONT_STYLES, IMAGE_SIZES, QR_SIZES, TEXT_SIZES } from "@/lib/campaigns/display";
 import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS, DEFAULT_PAGE_BACKGROUND, DEFAULT_WALL_BACKGROUND } from "@/lib/campaigns/backgrounds";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
@@ -29,6 +31,7 @@ export default function NewFundraisingCampaignForm({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pageBackground, setPageBackground] = useState(DEFAULT_PAGE_BACKGROUND);
   const [wallBackground, setWallBackground] = useState(DEFAULT_WALL_BACKGROUND);
+  const [display, setDisplay] = useState(DEFAULT_DISPLAY);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [previewView, setPreviewView] = useState<"page" | "wall">("page");
@@ -87,6 +90,7 @@ export default function NewFundraisingCampaignForm({
           imageUrl: imageUrl || undefined,
           pageBackground,
           wallBackground,
+          ...display,
           goalAmountCents: goalAmount ? Math.round(parseFloat(goalAmount) * 100) : undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
@@ -158,6 +162,11 @@ export default function NewFundraisingCampaignForm({
         </div>
         <BackgroundPicker label="Campaign page background" options={PAGE_BACKGROUNDS} value={pageBackground} onChange={setPageBackground} hasImage={Boolean(imageUrl)} />
         <BackgroundPicker label="Live wall background" options={WALL_BACKGROUNDS} value={wallBackground} onChange={setWallBackground} hasImage={Boolean(imageUrl)} />
+
+        <OptionPicker label="Font style" options={FONT_STYLES} value={display.fontStyle} onChange={(key) => setDisplay((d) => ({ ...d, fontStyle: key }))} />
+        <OptionPicker label="Text size" options={TEXT_SIZES} value={display.textSize} onChange={(key) => setDisplay((d) => ({ ...d, textSize: key }))} />
+        <OptionPicker label="Campaign image size" options={IMAGE_SIZES} value={display.imageSize} onChange={(key) => setDisplay((d) => ({ ...d, imageSize: key }))} />
+        <OptionPicker label="Live wall QR code size" options={QR_SIZES} value={display.qrSize} onChange={(key) => setDisplay((d) => ({ ...d, qrSize: key }))} />
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
           <input
@@ -245,9 +254,10 @@ export default function NewFundraisingCampaignForm({
             goalAmountCents={goalAmountCents}
             endDate={endDate || undefined}
             background={pageBackground}
+            display={display}
           />
         ) : (
-          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} imageUrl={imageUrl} background={wallBackground} goalAmountCents={goalAmountCents} />
+          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} imageUrl={imageUrl} background={wallBackground} display={display} goalAmountCents={goalAmountCents} />
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { wallBackgroundStyle } from "@/lib/campaigns/backgrounds";
+import { DEFAULT_DISPLAY, fontVarStyle, qrPx, textZoomStyle, wallImagePx, type DisplaySettings } from "@/lib/campaigns/display";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { formatCents } from "@/lib/format";
@@ -19,6 +20,7 @@ interface WallFeed {
   logoUrl: string | null;
   imageUrl: string | null;
   background?: string | null;
+  display?: DisplaySettings;
   goalAmountCents: number | null;
   raisedCents: number;
   donorCount: number;
@@ -44,7 +46,7 @@ export default function LiveDonationWall({
   useEffect(() => {
     const donateUrl = typeof window !== "undefined" ? `${window.location.origin}/c/${slug}` : "";
     if (donateUrl) {
-      QRCode.toDataURL(donateUrl, { width: 220, margin: 1 }).then(setQrDataUrl).catch(() => {});
+      QRCode.toDataURL(donateUrl, { width: 480, margin: 1 }).then(setQrDataUrl).catch(() => {});
     }
   }, [slug]);
 
@@ -77,10 +79,12 @@ export default function LiveDonationWall({
     };
   }, [slug]);
 
+  const display = feed.display ?? DEFAULT_DISPLAY;
+  const textZoom = textZoomStyle(display.textSize);
   const percent = feed.goalAmountCents ? Math.min(100, Math.round((feed.raisedCents / feed.goalAmountCents) * 100)) : null;
 
   return (
-    <div className="min-h-screen text-white flex flex-col p-6 sm:p-10 lg:p-14" style={wallBackgroundStyle(feed.background, feed.imageUrl)}>
+    <div data-campaign-font className="min-h-screen text-white flex flex-col p-6 sm:p-10 lg:p-14" style={{ ...wallBackgroundStyle(feed.background, feed.imageUrl), ...fontVarStyle(display.fontStyle) }}>
       {previewMessage && (
         <div className="mb-6 rounded-xl bg-wgc-gold-500/10 border border-wgc-gold-500/30 text-wgc-gold-500 text-sm text-center py-2 px-4">
           <strong>Preview only.</strong> {previewMessage} Only your team can see this wall.
@@ -92,26 +96,31 @@ export default function LiveDonationWall({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={feed.logoUrl} alt={feed.organizationName} className="h-10 sm:h-14 w-auto" />
           )}
-          {feed.imageUrl && (
+          {feed.imageUrl && display.imageSize !== "hidden" && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={feed.imageUrl} alt={feed.name} className="h-14 w-14 sm:h-20 sm:w-20 rounded-xl object-cover border border-white/10" />
+            <img
+              src={feed.imageUrl}
+              alt={feed.name}
+              className="rounded-xl object-cover border border-white/10"
+              style={{ width: wallImagePx(display.imageSize), height: wallImagePx(display.imageSize) }}
+            />
           )}
-          <div>
+          <div style={textZoom}>
             <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white">{feed.name}</h1>
             <p className="text-sm sm:text-base text-white/50">{feed.organizationName}</p>
           </div>
         </div>
-        {qrDataUrl && (
+        {qrDataUrl && display.qrSize !== "hidden" && (
           <div className="hidden sm:flex flex-col items-center gap-2 bg-white p-3 rounded-2xl">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrDataUrl} alt="Scan to give" className="w-24 h-24" />
+            <img src={qrDataUrl} alt="Scan to give" style={{ width: qrPx(display.qrSize), height: qrPx(display.qrSize) }} />
             <span className="text-[10px] font-bold text-wgc-navy-950 uppercase tracking-widest">Scan to Give</span>
           </div>
         )}
       </div>
 
       <div className="grid lg:grid-cols-5 gap-8 flex-1 min-h-0">
-        <div className="lg:col-span-3 flex flex-col justify-center">
+        <div className="lg:col-span-3 flex flex-col justify-center" style={textZoom}>
           <p className="text-6xl sm:text-8xl font-black text-wgc-gold-500 tracking-tighter transition-all duration-500">
             {formatCents(feed.raisedCents)}
           </p>
@@ -129,7 +138,7 @@ export default function LiveDonationWall({
           <p className="text-base sm:text-xl text-white/50 mt-4">{feed.donorCount} {feed.donorCount === 1 ? "supporter" : "supporters"}</p>
         </div>
 
-        <div className="lg:col-span-2 bg-white/5 rounded-3xl p-6 sm:p-8 flex flex-col min-h-0">
+        <div className="lg:col-span-2 bg-white/5 rounded-3xl p-6 sm:p-8 flex flex-col min-h-0" style={textZoom}>
           <h2 className="text-sm font-bold uppercase tracking-widest text-white/50 mb-4">Recent Gifts</h2>
           <div className="space-y-3 overflow-y-auto flex-1">
             {feed.recentGifts.length === 0 && <p className="text-white/40 text-sm">Be the first to give!</p>}

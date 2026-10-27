@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveDisplay } from "@/lib/campaigns/display";
 import { loadPublicCampaignBySlug } from "@/lib/campaigns/loadPublicCampaignData";
 import { getPreviewChurchId } from "@/lib/campaigns/campaignPreviewSession";
 import { getFundraiserLeaderboard, getTeamLeaderboard } from "@/lib/campaigns/campaignTotals";
@@ -49,6 +50,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
       logoUrl: church.logoUrl,
       imageUrl: campaign.imageUrl,
       background: campaign.wallBackground,
+      display: resolveDisplay(campaign),
       goalAmountCents: campaign.goalAmountCents,
       raisedCents,
       donorCount,

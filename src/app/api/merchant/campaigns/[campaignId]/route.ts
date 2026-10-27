@@ -7,6 +7,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
 import { emitEvent } from "@/lib/events/emitEvent";
+import { parseDisplayUpdate } from "@/lib/campaigns/display";
 import { isValidPageBackground, isValidWallBackground } from "@/lib/campaigns/backgrounds";
 
 const VALID_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED"];
@@ -59,6 +60,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
     return NextResponse.json({ error: "Invalid live wall background" }, { status: 400 });
   }
 
+  const display = parseDisplayUpdate(body);
+  if (display.error) return NextResponse.json({ error: display.error }, { status: 400 });
+
   // Switching the campaign's "Give Now" link: it must be one of this
   // organization's own links and not already tied to another campaign, team
   // or fundraiser. It's tagged to this campaign so its gifts roll up here.
@@ -92,6 +96,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
       ...(description !== undefined ? { description: description?.trim() || null } : {}),
       ...(imageUrl !== undefined ? { imageUrl: imageUrl?.trim() || null } : {}),
       ...(newGivingLinkId ? { givingLinkId: newGivingLinkId } : {}),
+      ...display.data,
       ...(pageBackground !== undefined ? { pageBackground } : {}),
       ...(wallBackground !== undefined ? { wallBackground } : {}),
       ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),

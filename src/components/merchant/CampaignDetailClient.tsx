@@ -8,6 +8,8 @@ import { formatCents } from "@/lib/format";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
 import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
 import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
+import OptionPicker from "@/components/campaigns/OptionPicker";
+import { FONT_STYLES, IMAGE_SIZES, QR_SIZES, TEXT_SIZES } from "@/lib/campaigns/display";
 import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS } from "@/lib/campaigns/backgrounds";
 
 type Tab = "overview" | "teams" | "fundraisers" | "leaderboard" | "sharing" | "settings";
@@ -29,6 +31,10 @@ interface CampaignSummary {
   fundraiserSelfEditEnabled: boolean;
   pageBackground: string;
   wallBackground: string;
+  qrSize: string;
+  imageSize: string;
+  textSize: string;
+  fontStyle: string;
 }
 
 interface Overview {
@@ -191,6 +197,10 @@ export default function CampaignDetailClient({
     endDate: campaign.endDate ?? "",
     pageBackground: campaign.pageBackground,
     wallBackground: campaign.wallBackground,
+    qrSize: campaign.qrSize,
+    imageSize: campaign.imageSize,
+    textSize: campaign.textSize,
+    fontStyle: campaign.fontStyle,
   });
   const [uploadingDetailsImage, setUploadingDetailsImage] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
@@ -205,7 +215,11 @@ export default function CampaignDetailClient({
     detailsDraft.startDate !== (campaign.startDate ?? "") ||
     detailsDraft.endDate !== (campaign.endDate ?? "") ||
     detailsDraft.pageBackground !== campaign.pageBackground ||
-    detailsDraft.wallBackground !== campaign.wallBackground;
+    detailsDraft.wallBackground !== campaign.wallBackground ||
+    detailsDraft.qrSize !== campaign.qrSize ||
+    detailsDraft.imageSize !== campaign.imageSize ||
+    detailsDraft.textSize !== campaign.textSize ||
+    detailsDraft.fontStyle !== campaign.fontStyle;
 
   const resetDetailsDraft = () => {
     setDetailsDraft({
@@ -217,6 +231,10 @@ export default function CampaignDetailClient({
       endDate: campaign.endDate ?? "",
       pageBackground: campaign.pageBackground,
       wallBackground: campaign.wallBackground,
+      qrSize: campaign.qrSize,
+      imageSize: campaign.imageSize,
+      textSize: campaign.textSize,
+      fontStyle: campaign.fontStyle,
     });
   };
 
@@ -262,6 +280,10 @@ export default function CampaignDetailClient({
         endDate: detailsDraft.endDate || null,
         pageBackground: detailsDraft.pageBackground,
         wallBackground: detailsDraft.wallBackground,
+        qrSize: detailsDraft.qrSize,
+        imageSize: detailsDraft.imageSize,
+        textSize: detailsDraft.textSize,
+        fontStyle: detailsDraft.fontStyle,
       });
     } finally {
       setSavingDetails(false);
@@ -685,6 +707,11 @@ export default function CampaignDetailClient({
                 hasImage={Boolean(detailsDraft.imageUrl)}
                 disabled={!canEdit}
               />
+
+              <OptionPicker label="Font style" options={FONT_STYLES} value={detailsDraft.fontStyle} onChange={(key) => setDetailsDraft((d) => ({ ...d, fontStyle: key }))} disabled={!canEdit} />
+              <OptionPicker label="Text size" options={TEXT_SIZES} value={detailsDraft.textSize} onChange={(key) => setDetailsDraft((d) => ({ ...d, textSize: key }))} disabled={!canEdit} />
+              <OptionPicker label="Campaign image size" options={IMAGE_SIZES} value={detailsDraft.imageSize} onChange={(key) => setDetailsDraft((d) => ({ ...d, imageSize: key }))} disabled={!canEdit} />
+              <OptionPicker label="Live wall QR code size" options={QR_SIZES} value={detailsDraft.qrSize} onChange={(key) => setDetailsDraft((d) => ({ ...d, qrSize: key }))} disabled={!canEdit} />
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
                 <input
@@ -828,6 +855,7 @@ export default function CampaignDetailClient({
                 goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
                 endDate={detailsDraft.endDate || undefined}
                 background={detailsDraft.pageBackground}
+                display={detailsDraft}
               />
             ) : (
               <LiveWallPreview
@@ -836,6 +864,7 @@ export default function CampaignDetailClient({
                 name={detailsDraft.name}
                 imageUrl={detailsDraft.imageUrl}
                 background={detailsDraft.wallBackground}
+                display={detailsDraft}
                 goalAmountCents={detailsDraft.goalAmount ? Math.round(parseFloat(detailsDraft.goalAmount) * 100) : null}
               />
             )}
