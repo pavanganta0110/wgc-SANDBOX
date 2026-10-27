@@ -52,6 +52,10 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
         fundraiserSelfEditEnabled: campaign.fundraiserSelfEditEnabled,
         pageBackground: campaign.pageBackground,
         wallBackground: campaign.wallBackground,
+        qrSize: campaign.qrSize,
+        imageSize: campaign.imageSize,
+        textSize: campaign.textSize,
+        fontStyle: campaign.fontStyle,
       }}
       givingLink={givingLink}
       availableGivingLinks={availableGivingLinks}

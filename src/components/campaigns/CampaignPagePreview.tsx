@@ -12,6 +12,7 @@ import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
  * sections here since none can exist yet for a campaign that isn't created.
  */
 import { pageBackgroundStyle } from "@/lib/campaigns/backgrounds";
+import { DEFAULT_DISPLAY, fontVarStyle, pageImageHeightPx, textZoomStyle, type DisplaySettings } from "@/lib/campaigns/display";
 
 export default function CampaignPagePreview({
   churchName,
@@ -22,6 +23,7 @@ export default function CampaignPagePreview({
   goalAmountCents,
   endDate,
   background,
+  display = DEFAULT_DISPLAY,
 }: {
   churchName: string;
   churchLogoUrl?: string | null;
@@ -31,17 +33,18 @@ export default function CampaignPagePreview({
   goalAmountCents: number | null;
   endDate?: string;
   background?: string | null;
+  display?: DisplaySettings;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 overflow-hidden" style={pageBackgroundStyle(background, imageUrl)}>
+    <div data-campaign-font className="rounded-2xl border border-slate-200 overflow-hidden" style={{ ...pageBackgroundStyle(background, imageUrl), ...fontVarStyle(display.fontStyle) }}>
       <div className="py-10 px-4">
         <div className="max-w-md mx-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            {imageUrl && (
+            {imageUrl && display.imageSize !== "hidden" && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt={name || "Campaign image"} className="w-full h-48 object-cover" />
+              <img src={imageUrl} alt={name || "Campaign image"} className="w-full object-cover" style={{ height: pageImageHeightPx(display.imageSize, 0.75) }} />
             )}
-            <div className="p-8">
+            <div className="p-8" style={textZoomStyle(display.textSize)}>
             <OrganizationLogo logoUrl={churchLogoUrl ?? null} churchName={churchName} mode={imageUrl ? "embed" : "main"} />
             <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{name || "Your Campaign Name"}</h1>
             <p className="text-sm text-center text-slate-500 mb-6">{churchName}</p>
