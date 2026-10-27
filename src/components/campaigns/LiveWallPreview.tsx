@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCents } from "@/lib/format";
+import { wallBackgroundStyle } from "@/lib/campaigns/backgrounds";
 
 /**
  * Live, in-context preview of the public donation wall (LiveDonationWall.tsx)
@@ -14,16 +15,18 @@ export default function LiveWallPreview({
   churchLogoUrl,
   name,
   imageUrl,
+  background,
   goalAmountCents,
 }: {
   churchName: string;
   churchLogoUrl?: string | null;
   name: string;
   imageUrl?: string | null;
+  background?: string | null;
   goalAmountCents: number | null;
 }) {
   return (
-    <div className="rounded-2xl bg-wgc-navy-950 text-white overflow-hidden p-6 sm:p-8">
+    <div className="rounded-2xl text-white overflow-hidden p-6 sm:p-8" style={wallBackgroundStyle(background, imageUrl)}>
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           {churchLogoUrl && (

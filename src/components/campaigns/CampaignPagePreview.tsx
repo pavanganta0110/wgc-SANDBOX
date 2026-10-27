@@ -11,6 +11,8 @@ import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
  * unsaved values, not a saved DB row. No teams/fundraisers/recent-gifts
  * sections here since none can exist yet for a campaign that isn't created.
  */
+import { pageBackgroundStyle } from "@/lib/campaigns/backgrounds";
+
 export default function CampaignPagePreview({
   churchName,
   churchLogoUrl,
@@ -19,6 +21,7 @@ export default function CampaignPagePreview({
   imageUrl,
   goalAmountCents,
   endDate,
+  background,
 }: {
   churchName: string;
   churchLogoUrl?: string | null;
@@ -27,9 +30,10 @@ export default function CampaignPagePreview({
   imageUrl?: string | null;
   goalAmountCents: number | null;
   endDate?: string;
+  background?: string | null;
 }) {
   return (
-    <div className="rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden">
+    <div className="rounded-2xl border border-slate-200 overflow-hidden" style={pageBackgroundStyle(background, imageUrl)}>
       <div className="py-10 px-4">
         <div className="max-w-md mx-auto">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">

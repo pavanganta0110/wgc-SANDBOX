@@ -6,6 +6,8 @@ import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import CampaignPagePreview from "@/components/campaigns/CampaignPagePreview";
 import LiveWallPreview from "@/components/campaigns/LiveWallPreview";
+import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
+import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS, DEFAULT_PAGE_BACKGROUND, DEFAULT_WALL_BACKGROUND } from "@/lib/campaigns/backgrounds";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -25,6 +27,8 @@ export default function NewFundraisingCampaignForm({
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [pageBackground, setPageBackground] = useState(DEFAULT_PAGE_BACKGROUND);
+  const [wallBackground, setWallBackground] = useState(DEFAULT_WALL_BACKGROUND);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [previewView, setPreviewView] = useState<"page" | "wall">("page");
@@ -81,6 +85,8 @@ export default function NewFundraisingCampaignForm({
           name: name.trim(),
           description: description.trim() || undefined,
           imageUrl: imageUrl || undefined,
+          pageBackground,
+          wallBackground,
           goalAmountCents: goalAmount ? Math.round(parseFloat(goalAmount) * 100) : undefined,
           startDate: startDate || undefined,
           endDate: endDate || undefined,
@@ -150,6 +156,8 @@ export default function NewFundraisingCampaignForm({
             </p>
           )}
         </div>
+        <BackgroundPicker label="Campaign page background" options={PAGE_BACKGROUNDS} value={pageBackground} onChange={setPageBackground} hasImage={Boolean(imageUrl)} />
+        <BackgroundPicker label="Live wall background" options={WALL_BACKGROUNDS} value={wallBackground} onChange={setWallBackground} hasImage={Boolean(imageUrl)} />
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-1">Fundraising Goal (USD)</label>
           <input
@@ -184,6 +192,9 @@ export default function NewFundraisingCampaignForm({
         </div>
         <p className="text-xs text-slate-400">
           Campaigns start as a draft. You&apos;ll be able to add teams and fundraisers, then set the campaign to Active when you&apos;re ready to publish it.
+        </p>
+        <p className="text-xs text-slate-400">
+          A giving link is created automatically when you click Create Campaign. It&apos;s what the &ldquo;Give Now&rdquo; button uses, and you&apos;ll find its URL on the campaign&apos;s Settings tab.
         </p>
         <button
           type="submit"
@@ -233,9 +244,10 @@ export default function NewFundraisingCampaignForm({
             imageUrl={imageUrl}
             goalAmountCents={goalAmountCents}
             endDate={endDate || undefined}
+            background={pageBackground}
           />
         ) : (
-          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} imageUrl={imageUrl} goalAmountCents={goalAmountCents} />
+          <LiveWallPreview churchName={churchName} churchLogoUrl={churchLogoUrl} name={name} imageUrl={imageUrl} background={wallBackground} goalAmountCents={goalAmountCents} />
         )}
       </div>
     </div>

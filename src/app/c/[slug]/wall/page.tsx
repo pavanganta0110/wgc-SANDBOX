@@ -43,6 +43,7 @@ export default async function CampaignWallPage({ params }: { params: Promise<{ s
         organizationName: church.name,
         logoUrl: church.logoUrl,
         imageUrl: campaign.imageUrl,
+        background: campaign.wallBackground,
         goalAmountCents: campaign.goalAmountCents,
         raisedCents,
         donorCount,

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { pageBackgroundStyle } from "@/lib/campaigns/backgrounds";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -61,7 +62,7 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
   return (
     <>
       {isPreview && <CampaignPreviewBanner campaignId={campaign.id} message={describeUnavailableCampaign(campaign)} />}
-      <div className="min-h-screen py-12 px-4 bg-slate-50">
+      <div className="min-h-screen py-12 px-4" style={pageBackgroundStyle(campaign.pageBackground, campaign.imageUrl)}>
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
           {campaign.imageUrl && (

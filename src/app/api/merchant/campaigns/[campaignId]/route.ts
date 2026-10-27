@@ -7,6 +7,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
 import { emitEvent } from "@/lib/events/emitEvent";
+import { isValidPageBackground, isValidWallBackground } from "@/lib/campaigns/backgrounds";
 
 const VALID_STATUSES = ["DRAFT", "ACTIVE", "PAUSED", "COMPLETED"];
 
@@ -47,12 +48,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
   if (!existing) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
   const body = await req.json();
-  const { name, description, imageUrl, startDate, endDate, goalAmountCents, status, leaderboardEnabled, publiclyIndexable, fundraiserSelfEditEnabled } = body;
+  const { name, description, imageUrl, startDate, endDate, goalAmountCents, status, leaderboardEnabled, publiclyIndexable, fundraiserSelfEditEnabled, pageBackground, wallBackground, givingLinkId } = body;
   const goalProblem = goalAmountCentsError(goalAmountCents);
   if (goalProblem) return NextResponse.json({ error: goalProblem }, { status: 400 });
 
+  if (pageBackground !== undefined && !isValidPageBackground(pageBackground)) {
+    return NextResponse.json({ error: "Invalid page background" }, { status: 400 });
+  }
+  if (wallBackground !== undefined && !isValidWallBackground(wallBackground)) {
+    return NextResponse.json({ error: "Invalid live wall background" }, { status: 400 });
+  }
+
+  // Switching the campaign's "Give Now" link: it must be one of this
+  // organization's own links and not already tied to another campaign, team
+  // or fundraiser. It's tagged to this campaign so its gifts roll up here.
+  let newGivingLinkId: string | undefined;
+  if (givingLinkId !== undefined && givingLinkId !== existing.givingLinkId) {
+    if (typeof givingLinkId !== "string") return NextResponse.json({ error: "Invalid giving link" }, { status: 400 });
+    const link = await prisma.givingLink.findFirst({
+      where: { id: givingLinkId, churchId: auth.churchId },
+      select: { id: true, status: true, fundraisingCampaignId: true, campaignTeamId: true, campaignFundraiserId: true },
+    });
+    if (!link) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
+    if (link.status !== "ACTIVE") return NextResponse.json({ error: "Choose an active giving link" }, { status: 400 });
+    if ((link.fundraisingCampaignId && link.fundraisingCampaignId !== campaignId) || link.campaignTeamId || link.campaignFundraiserId) {
+      return NextResponse.json({ error: "That giving link already belongs to another campaign, team or fundraiser" }, { status: 400 });
+    }
+    newGivingLinkId = link.id;
+  }
+
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  if (newGivingLinkId) {
+    await prisma.givingLink.update({ where: { id: newGivingLinkId }, data: { fundraisingCampaignId: campaignId } });
   }
 
   const updated = await prisma.fundraisingCampaign.update({
@@ -61,6 +91,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ campai
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(description !== undefined ? { description: description?.trim() || null } : {}),
       ...(imageUrl !== undefined ? { imageUrl: imageUrl?.trim() || null } : {}),
+      ...(newGivingLinkId ? { givingLinkId: newGivingLinkId } : {}),
+      ...(pageBackground !== undefined ? { pageBackground } : {}),
+      ...(wallBackground !== undefined ? { wallBackground } : {}),
       ...(startDate !== undefined ? { startDate: startDate ? new Date(startDate) : null } : {}),
       ...(endDate !== undefined ? { endDate: endDate ? new Date(endDate) : null } : {}),
       ...(goalAmountCents !== undefined ? { goalAmountCents } : {}),

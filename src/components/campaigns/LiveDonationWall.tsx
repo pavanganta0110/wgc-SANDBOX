@@ -1,5 +1,6 @@
 "use client";
 
+import { wallBackgroundStyle } from "@/lib/campaigns/backgrounds";
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { formatCents } from "@/lib/format";
@@ -17,6 +18,7 @@ interface WallFeed {
   organizationName: string;
   logoUrl: string | null;
   imageUrl: string | null;
+  background?: string | null;
   goalAmountCents: number | null;
   raisedCents: number;
   donorCount: number;
@@ -78,7 +80,7 @@ export default function LiveDonationWall({
   const percent = feed.goalAmountCents ? Math.min(100, Math.round((feed.raisedCents / feed.goalAmountCents) * 100)) : null;
 
   return (
-    <div className="min-h-screen bg-wgc-navy-950 text-white flex flex-col p-6 sm:p-10 lg:p-14">
+    <div className="min-h-screen text-white flex flex-col p-6 sm:p-10 lg:p-14" style={wallBackgroundStyle(feed.background, feed.imageUrl)}>
       {previewMessage && (
         <div className="mb-6 rounded-xl bg-wgc-gold-500/10 border border-wgc-gold-500/30 text-wgc-gold-500 text-sm text-center py-2 px-4">
           <strong>Preview only.</strong> {previewMessage} Only your team can see this wall.
