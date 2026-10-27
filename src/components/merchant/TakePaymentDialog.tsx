@@ -221,8 +221,11 @@ export default function TakePaymentDialog({
           </button>
         </div>
 
-        {step === "form" && (
-          <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+        {/* Always mounted (just hidden on other steps): the Finix card form is an
+            iframe mounted once on load, and removing its container on the review
+            step destroyed it, so submit() never called back ("tokenization timed
+            out") and Back showed an empty form. */}
+        <div className={step === "form" ? "px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto" : "hidden"}>
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Amount ($) *</label>
               <input
@@ -447,8 +450,7 @@ export default function TakePaymentDialog({
             >
               Continue to Review
             </button>
-          </div>
-        )}
+        </div>
 
         {step === "review" && (
           <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
