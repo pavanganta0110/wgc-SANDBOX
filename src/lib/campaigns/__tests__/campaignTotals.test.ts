@@ -9,6 +9,7 @@ describe("campaignTotals", () => {
   describe("getCampaignRaisedCents", () => {
     it("sums GivingLink collected amounts minus refunds and returns across all links tagged to the campaign", async () => {
       const prismaMock = {
+        payment: { findMany: vi.fn().mockResolvedValue([]) },
         givingLink: {
           findMany: vi.fn().mockResolvedValue([
             { id: "link1", totalCollectedCents: 10000, refundedCents: 0, returnedCents: 0 },
@@ -30,8 +31,25 @@ describe("campaignTotals", () => {
       });
     });
 
+    it("does not count a donor-covered fee as money raised (gift $250 + fee $7.50 raises $250)", async () => {
+      const prismaMock = {
+        givingLink: {
+          findMany: vi.fn().mockResolvedValue([{ id: "link1", totalCollectedCents: 25750, refundedCents: 0, returnedCents: 0 }]),
+        },
+        payment: {
+          findMany: vi.fn().mockResolvedValue([{ givingLinkId: "link1", amountCents: 25750, donationAmountCents: 25000 }]),
+        },
+        externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
+      };
+      vi.doMock("@/lib/prisma", () => ({ prisma: prismaMock }));
+
+      const { getCampaignRaisedCents } = await import("../campaignTotals");
+      expect(await getCampaignRaisedCents("church1", "campaign1")).toBe(25000);
+    });
+
     it("reflects a refund immediately with no separate refund-handling code — a fully refunded link contributes zero", async () => {
       const prismaMock = {
+        payment: { findMany: vi.fn().mockResolvedValue([]) },
         givingLink: {
           findMany: vi.fn().mockResolvedValue([
             { id: "link1", totalCollectedCents: 10000, refundedCents: 10000, returnedCents: 0 },
@@ -49,6 +67,7 @@ describe("campaignTotals", () => {
 
     it("excludes RETURNED and VOIDED external donations from the total", async () => {
       const prismaMock = {
+        payment: { findMany: vi.fn().mockResolvedValue([]) },
         givingLink: { findMany: vi.fn().mockResolvedValue([]) },
         externalDonation: { findMany: vi.fn().mockResolvedValue([]) },
       };
@@ -67,6 +86,7 @@ describe("campaignTotals", () => {
   describe("getTeamRaisedCents / getFundraiserRaisedCents", () => {
     it("scopes the sum to campaignTeamId (which includes every fundraiser under that team, since their links share the tag)", async () => {
       const prismaMock = {
+        payment: { findMany: vi.fn().mockResolvedValue([]) },
         givingLink: {
           findMany: vi.fn().mockResolvedValue([{ id: "link1", totalCollectedCents: 3000, refundedCents: 0, returnedCents: 0 }]),
         },
@@ -85,6 +105,7 @@ describe("campaignTotals", () => {
 
     it("scopes the sum to campaignFundraiserId for an individual fundraiser", async () => {
       const prismaMock = {
+        payment: { findMany: vi.fn().mockResolvedValue([]) },
         givingLink: {
           findMany: vi.fn().mockResolvedValue([{ id: "link1", totalCollectedCents: 750, refundedCents: 0, returnedCents: 0 }]),
         },

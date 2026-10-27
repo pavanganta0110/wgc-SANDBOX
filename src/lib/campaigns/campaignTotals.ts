@@ -17,13 +17,38 @@ interface RaisedResult {
   linkIds: string[];
 }
 
+/**
+ * GivingLink.totalCollectedCents counts everything the donor was charged,
+ * including a fee they chose to cover on top of their gift. "Amount raised"
+ * is the gift itself, so that surcharge (amountCents - donationAmountCents on
+ * each succeeded payment) is taken back out here — otherwise a $250 gift with
+ * a $7.50 covered fee shows as $257.50 raised while the gift list shows $250.
+ * Refunded/returned payments aren't SUCCEEDED, so their fee stays in both the
+ * collected and refunded counters and cancels out.
+ */
+async function donorCoveredFeesByLink(churchId: string, linkIds: string[]): Promise<Map<string, number>> {
+  const byLink = new Map<string, number>();
+  if (linkIds.length === 0) return byLink;
+  const payments = await prisma.payment.findMany({
+    where: { churchId, givingLinkId: { in: linkIds }, status: "SUCCEEDED", donationAmountCents: { not: null } },
+    select: { givingLinkId: true, amountCents: true, donationAmountCents: true },
+  });
+  for (const p of payments) {
+    if (!p.givingLinkId) continue;
+    const surcharge = Math.max(0, p.amountCents - (p.donationAmountCents ?? p.amountCents));
+    byLink.set(p.givingLinkId, (byLink.get(p.givingLinkId) ?? 0) + surcharge);
+  }
+  return byLink;
+}
+
 async function sumGivingLinks(where: { churchId: string } & Record<string, string>): Promise<RaisedResult> {
   const links = await prisma.givingLink.findMany({
     where,
     select: { id: true, totalCollectedCents: true, refundedCents: true, returnedCents: true },
   });
+  const fees = await donorCoveredFeesByLink(where.churchId, links.map((l) => l.id));
   const raisedCents = links.reduce(
-    (sum, l) => sum + l.totalCollectedCents - l.refundedCents - l.returnedCents,
+    (sum, l) => sum + l.totalCollectedCents - l.refundedCents - l.returnedCents - (fees.get(l.id) ?? 0),
     0
   );
   return { raisedCents, linkIds: links.map((l) => l.id) };
@@ -57,7 +82,7 @@ export async function getCampaignsRaisedCentsBatch(
 ): Promise<Map<string, number>> {
   const result = new Map<string, number>(campaignIds.map((id) => [id, 0]));
   if (campaignIds.length === 0) return result;
-  const [linkSums, externalSums] = await Promise.all([
+  const [linkSums, externalSums, campaignLinks] = await Promise.all([
     prisma.givingLink.groupBy({
       by: ["fundraisingCampaignId"],
       where: { churchId, fundraisingCampaignId: { in: campaignIds } },
@@ -68,7 +93,17 @@ export async function getCampaignsRaisedCentsBatch(
       where: { churchId, fundraisingCampaignId: { in: campaignIds }, status: { notIn: ["RETURNED", "VOIDED"] } },
       _sum: { donationAmountCents: true },
     }),
+    prisma.givingLink.findMany({
+      where: { churchId, fundraisingCampaignId: { in: campaignIds } },
+      select: { id: true, fundraisingCampaignId: true },
+    }),
   ]);
+  const feesByLink = await donorCoveredFeesByLink(churchId, campaignLinks.map((l) => l.id));
+  for (const l of campaignLinks) {
+    if (!l.fundraisingCampaignId) continue;
+    const fee = feesByLink.get(l.id) ?? 0;
+    if (fee) result.set(l.fundraisingCampaignId, (result.get(l.fundraisingCampaignId) ?? 0) - fee);
+  }
   for (const row of linkSums) {
     if (!row.fundraisingCampaignId) continue;
     const net =
