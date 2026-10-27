@@ -73,7 +73,9 @@ export async function POST(req: Request) {
     if (!goodsServicesValidation.valid) {
       return NextResponse.json({ error: "Please correct the goods/services information", fieldErrors: goodsServicesValidation.errors }, { status: 400 });
     }
-    if (!fraudSessionId) {
+    // Bank/ACH transfers never carry a fraud_session_id (Finix.Auth's callback
+    // never fires for them) — same rule as /api/g/[slug]/donate.
+    if (paymentMethod !== "bank" && !fraudSessionId) {
       return NextResponse.json({ error: "Missing fraud session" }, { status: 400 });
     }
     if (!clientAttemptId) {

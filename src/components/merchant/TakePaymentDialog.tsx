@@ -127,7 +127,19 @@ export default function TakePaymentDialog({
     setSubmitting(true);
 
     try {
-      const fraudSessionId = await getFraudSessionId(finixMerchantId);
+      // getFraudSessionId has no internal timeout, and Finix.Auth's callback
+      // never fires for bank/ACH — skip it there, and race it elsewhere so a
+      // stall (e.g. Sift blocked by an ad blocker) becomes a visible error
+      // instead of an endless "Processing…".
+      const fraudSessionId =
+        paymentMethod === "bank"
+          ? ""
+          : await Promise.race([
+              getFraudSessionId(finixMerchantId),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("Fraud check timed out. Disable ad/tracker blockers for this site and try again.")), 10000),
+              ),
+            ]);
 
       const tokenPromise = new Promise<{ tokenId: string; instrumentType: string }>((resolve, reject) => {
         formInstanceRef.current!.submit((error, response) => {
