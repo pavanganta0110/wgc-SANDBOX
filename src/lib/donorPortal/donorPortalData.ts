@@ -28,6 +28,11 @@ export interface PortalRecurringGift {
   state: string | null;
   nextBillingDate: Date | null;
   fundName: string | null;
+  /** What the donor chose to give, before any fee they covered — the amount the "change amount" control edits. */
+  donationAmountCents: number | null;
+  donorCoversFee: boolean;
+  /** Pledge installments can't be changed or canceled online. */
+  isPledge: boolean;
 }
 
 export interface PortalWayToGive {
@@ -89,7 +94,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
     prisma.finixSubscription.findMany({
       where: { churchId, donorId: { in: donorIds }, state: "ACTIVE" },
       orderBy: { createdAtFinix: "desc" },
-      select: { id: true, amountCents: true, billingInterval: true, state: true, nextBillingDate: true, fundName: true },
+      select: { id: true, amountCents: true, billingInterval: true, state: true, nextBillingDate: true, fundName: true, donationAmountCents: true, donorCoversFee: true, isPledge: true },
     }),
     prisma.givingLink.findMany({
       where: { churchId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
@@ -144,7 +149,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
     .sort((a, b) => (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0))
     .slice(0, HISTORY_LIMIT);
 
-  const recurring: PortalRecurringGift[] = subscriptions;
+  const recurring: PortalRecurringGift[] = subscriptions.map((r) => ({ ...r, donorCoversFee: r.donorCoversFee ?? false }));
 
   const waysToGive: PortalWayToGive[] = [
     ...givingLinks.map<PortalWayToGive>((l) => ({ kind: "GIVING_LINK", title: l.publicTitle, description: l.description, href: `/g/${l.publicSlug}` })),

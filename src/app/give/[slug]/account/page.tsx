@@ -6,6 +6,7 @@ import { loadDonorPortalDashboard } from "@/lib/donorPortal/donorPortalData";
 import { formatCents } from "@/lib/format";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import DonorPortalLoginForm from "@/components/donorPortal/DonorPortalLoginForm";
+import RecurringGiftActions from "@/components/donorPortal/RecurringGiftActions";
 import DonorPortalLogoutButton from "@/components/donorPortal/DonorPortalLogoutButton";
 
 export const metadata: Metadata = { title: "My Giving", robots: { index: false, follow: false } };
@@ -95,17 +96,19 @@ export default async function DonorAccountPage({
           ) : (
             <ul className="divide-y divide-slate-100">
               {data.recurring.map((r) => (
-                <li key={r.id} className="py-2 flex justify-between text-sm">
-                  <span className="text-slate-700">
-                    {formatCents(r.amountCents ?? 0)} {frequencyLabel(r.billingInterval).toLowerCase()}
-                    {r.fundName ? ` · ${r.fundName}` : ""}
-                  </span>
-                  <span className="text-slate-500">{r.nextBillingDate ? `Next: ${dateFormat.format(r.nextBillingDate)}` : ""}</span>
+                <li key={r.id} className="py-3 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-700">
+                      {formatCents(r.amountCents ?? 0)} {frequencyLabel(r.billingInterval).toLowerCase()}
+                      {r.fundName ? ` · ${r.fundName}` : ""}
+                    </span>
+                    <span className="text-slate-500">{r.nextBillingDate ? `Next: ${dateFormat.format(r.nextBillingDate)}` : ""}</span>
+                  </div>
+                  <RecurringGiftActions slug={slug} subscriptionId={r.id} donationAmountCents={r.donationAmountCents ?? (r.donorCoversFee ? null : r.amountCents)} isPledge={r.isPledge} />
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-3 text-xs text-slate-400">To change or cancel a recurring gift, contact {session.churchName} for now.</p>
         </section>
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">

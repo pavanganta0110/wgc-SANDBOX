@@ -608,6 +608,19 @@ export class FinixClient {
     });
   }
 
+  // docs.finix.com/api/subscriptions documents PUT /subscriptions/{id} for
+  // subscriptions created WITHOUT a Subscription Plan (ours never use one):
+  // amount, buyer_details.instrument_id and billing_cycle_day are
+  // updatable; billing_interval is not. Used by the donor portal for
+  // in-place amount changes — no cancel/recreate gap.
+  async updateSubscription(subscriptionId: string, payload: { amount?: number; buyer_details?: { instrument_id: string } }) {
+    return this.fetchApi(`/subscriptions/${subscriptionId}`, {
+      method: "PUT",
+      headers: { Accept: "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
   // Confirmed against docs.finix.com/api/subscriptions: cancellation is
   // DELETE, not PUT with a state change.
   async cancelSubscription(subscriptionId: string) {
