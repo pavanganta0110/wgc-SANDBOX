@@ -4,6 +4,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState } from "react";
 import { ChevronDown, X, Download } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
+import ExportOptionsDialog from "@/components/merchant/ExportOptionsDialog";
 
 const STATES = ["SUCCEEDED", "PENDING", "FAILED", "CANCELED", "REFUNDED", "PARTIALLY_REFUNDED", "RETURNED"];
 
@@ -27,6 +28,7 @@ export default function DonationAttemptsFilterBar({
   const amount = searchParams.get("amount") || "";
 
   const [isStateOpen, setIsStateOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"csv" | "pdf" | null>(null);
 
   const activeFilterCount = [state, givingLinkName, donor, amount].filter(Boolean).length;
 
@@ -114,20 +116,29 @@ export default function DonationAttemptsFilterBar({
 
       {exportHref && (
         <>
-          <a
-            href={exportHref}
+          <button
+            type="button"
+            onClick={() => setExportFormat("csv")}
             className="ml-auto flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             <Download className="w-4 h-4" />
             Export CSV
-          </a>
-          <a
-            href={`${exportHref}${exportHref.includes("?") ? "&" : "?"}format=pdf`}
+          </button>
+          <button
+            type="button"
+            onClick={() => setExportFormat("pdf")}
             className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
           >
             <Download className="w-4 h-4" />
             Export PDF
-          </a>
+          </button>
+          {exportFormat && (
+            <ExportOptionsDialog
+              format={exportFormat}
+              exportUrl={`${exportHref}${exportHref.includes("?") ? "&" : "?"}${exportFormat === "pdf" ? "format=pdf" : "format=csv"}`}
+              onClose={() => setExportFormat(null)}
+            />
+          )}
         </>
       )}
     </div>

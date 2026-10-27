@@ -5,6 +5,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { normalizeMerchantRole, ROLE_PERMISSIONS } from "@/lib/auth/roles";
 import { buildTransactionReportData, renderTransactionReportCsv, renderTransactionReportPdf, resolveUserIdentity } from "@/lib/exports/transactionReportData";
+import { parseCsvColumnGroups, parsePdfSections } from "@/lib/exports/transactionExportOptions";
 import { buildTransactionExportFilename, csvResponse } from "@/lib/exports/transactionExport";
 
 /**
@@ -33,6 +34,8 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const format = searchParams.get("format") === "pdf" ? "pdf" : "csv";
+  const columnGroups = parseCsvColumnGroups(searchParams.get("columns"));
+  const pdfSections = parsePdfSections(searchParams.get("sections"));
   const givingLinkId = searchParams.get("givingLinkId") || undefined;
   const range = searchParams.get("range") || undefined;
   const from = searchParams.get("from") || undefined;
@@ -62,9 +65,9 @@ export async function GET(req: Request) {
   const filename = buildTransactionExportFilename("giving-link", filenameId, format);
 
   if (format === "pdf") {
-    const pdf = await renderTransactionReportPdf(data);
+    const pdf = await renderTransactionReportPdf(data, pdfSections);
     return new NextResponse(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="${filename}"` } });
   }
-  const csv = renderTransactionReportCsv(data);
+  const csv = renderTransactionReportCsv(data, columnGroups);
   return csvResponse(csv, filename);
 }
