@@ -151,9 +151,17 @@ export default function TakePaymentDialog({
         });
       });
 
-      const { tokenId } = await tokenPromise;
+      // Same failure mode as the fraud session: if Finix's form never calls
+      // back, the dialog would sit on "Processing…" forever.
+      const { tokenId } = await Promise.race([
+        tokenPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Card tokenization timed out. Please re-enter the card details and try again.")), 20000),
+        ),
+      ]);
 
       const res = await fetch("/api/merchant/transactions/payments/take-payment", {
+        signal: AbortSignal.timeout(60000),
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -185,7 +193,11 @@ export default function TakePaymentDialog({
       setResult({ success: true, transferId: data.transferId, state: data.state });
       setStep("result");
     } catch (err: any) {
-      setResult({ success: false, error: err?.message || "Payment could not be processed" });
+      console.error("[take-payment] failed:", err);
+      setResult({
+        success: false,
+        error: err?.name === "TimeoutError" ? "The payment request timed out. Check the Payments list before retrying." : err?.message || "Payment could not be processed",
+      });
       setStep("result");
     } finally {
       setSubmitting(false);
