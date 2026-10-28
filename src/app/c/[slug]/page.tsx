@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { pageBackgroundStyle } from "@/lib/campaigns/backgrounds";
+import { fontVarStyle, pageImageHeightPx, resolveDisplay, textZoomStyle } from "@/lib/campaigns/display";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
@@ -59,17 +60,19 @@ export default async function PublicCampaignPage({ params }: { params: Promise<{
     getFundraiserLeaderboard(campaign.churchId, campaign.id),
   ]);
 
+  const display = resolveDisplay(campaign);
+
   return (
     <>
       {isPreview && <CampaignPreviewBanner campaignId={campaign.id} message={describeUnavailableCampaign(campaign)} />}
-      <div className="min-h-screen py-12 px-4" style={pageBackgroundStyle(campaign.pageBackground, campaign.imageUrl)}>
+      <div data-campaign-font className="min-h-screen py-12 px-4" style={{ ...pageBackgroundStyle(campaign.pageBackground, campaign.imageUrl), ...fontVarStyle(display.fontStyle) }}>
       <div className="max-w-2xl mx-auto">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden mb-6">
-          {campaign.imageUrl && (
+          {campaign.imageUrl && display.imageSize !== "hidden" && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={campaign.imageUrl} alt={campaign.name} className="w-full h-48 object-cover" />
+            <img src={campaign.imageUrl} alt={campaign.name} className="w-full object-cover" style={{ height: pageImageHeightPx(display.imageSize) }} />
           )}
-          <div className="p-8">
+          <div className="p-8" style={textZoomStyle(display.textSize)}>
           <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="Fundraising Campaign" compact={Boolean(campaign.imageUrl)} />
           <h1 className="text-2xl font-bold text-center text-slate-900 mb-1">{campaign.name}</h1>
           <div className="mb-6" />

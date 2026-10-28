@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { generateUniqueSlug } from "@/lib/campaigns/slugs";
+import { parseDisplayUpdate } from "@/lib/campaigns/display";
 import { isValidPageBackground, isValidWallBackground } from "@/lib/campaigns/backgrounds";
 import { provisionCampaignGivingLink } from "@/lib/campaigns/campaignGivingLinks";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
@@ -61,6 +62,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid live wall background" }, { status: 400 });
   }
 
+  const display = parseDisplayUpdate(body);
+  if (display.error) return NextResponse.json({ error: display.error }, { status: 400 });
+
   if (!name?.trim()) {
     return NextResponse.json({ error: "Campaign name is required" }, { status: 400 });
   }
@@ -82,6 +86,7 @@ export async function POST(req: Request) {
       imageUrl: imageUrl?.trim() || null,
       ...(pageBackground !== undefined ? { pageBackground } : {}),
       ...(wallBackground !== undefined ? { wallBackground } : {}),
+      ...display.data,
       slug,
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,

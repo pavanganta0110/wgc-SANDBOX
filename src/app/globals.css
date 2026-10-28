@@ -159,3 +159,12 @@ textarea:not(:placeholder-shown):invalid:focus {
 @media (prefers-reduced-motion: reduce) {
   .wgc-fade-in { animation: none; }
 }
+
+/* Campaign page / live wall font choice — see src/lib/campaigns/display.ts.
+   Headings carry a global !important font-family, so they need their own rule. */
+[data-campaign-font] {
+  font-family: var(--campaign-font);
+}
+[data-campaign-font] :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--campaign-font) !important;
+}

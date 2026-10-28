@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { resolveDisplay } from "@/lib/campaigns/display";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { loadPublicCampaignBySlug, describeUnavailableCampaign } from "@/lib/campaigns/loadPublicCampaignData";
@@ -44,6 +45,7 @@ export default async function CampaignWallPage({ params }: { params: Promise<{ s
         logoUrl: church.logoUrl,
         imageUrl: campaign.imageUrl,
         background: campaign.wallBackground,
+        display: resolveDisplay(campaign),
         goalAmountCents: campaign.goalAmountCents,
         raisedCents,
         donorCount,

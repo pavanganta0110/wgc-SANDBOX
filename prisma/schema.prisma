@@ -4677,6 +4677,12 @@ model FundraisingCampaign {
   // src/lib/campaigns/backgrounds.ts for the allowed keys.
   pageBackground String @default("light")
   wallBackground String @default("navy")
+  // Size / font presets for the public page and live wall — see
+  // src/lib/campaigns/display.ts for the allowed keys.
+  qrSize    String @default("md")
+  imageSize String @default("md")
+  textSize  String @default("md")
+  fontStyle String @default("modern")
 
   // Public-facing vanity slug (e.g. "spring-gala-2026"), globally unique
   // across the platform — human-readable, distinct from
