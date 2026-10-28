@@ -45,7 +45,7 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
 
   if (isPledge) return <p className="text-xs text-slate-400">Part of a pledge — contact the organization to change it.</p>;
 
-  const link = "text-xs font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50";
+  const link = "text-xs font-medium text-[var(--portal-accent)] hover:opacity-80 disabled:opacity-50";
 
   return (
     <div className="mt-2 space-y-2">
@@ -88,7 +88,7 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
             I authorize this recurring gift to continue at the new amount on its current schedule.
           </label>
           <div className="flex gap-3">
-            <button type="submit" disabled={busy || !confirmed} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save"}</button>
+            <button type="submit" disabled={busy || !confirmed} className="rounded-lg bg-[var(--portal-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">{busy ? "Saving…" : "Save"}</button>
             <button type="button" className="text-xs text-slate-500" onClick={() => setMode("IDLE")}>Never mind</button>
           </div>
         </form>

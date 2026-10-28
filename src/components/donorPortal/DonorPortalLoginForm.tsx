@@ -50,7 +50,7 @@ export default function DonorPortalLoginForm({ slug, linkError }: { slug: string
   };
 
   const inputClass = "w-full rounded-lg border border-slate-200 px-3 py-2 text-sm";
-  const buttonClass = "w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50";
+  const buttonClass = "w-full rounded-lg bg-[var(--portal-accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50";
 
   if (step === "CODE") {
     return (

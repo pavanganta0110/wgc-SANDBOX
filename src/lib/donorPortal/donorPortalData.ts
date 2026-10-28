@@ -112,7 +112,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
       orderBy: { createdAt: "desc" },
       select: { slug: true, name: true },
     }),
-    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, slug: true, logoUrl: true } }),
+    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, slug: true, logoUrl: true, primaryColor: true } }),
     // Only statements the church itself has already generated — a donor can't trigger generation, so the church's review step is never bypassed.
     prisma.annualDonationStatement.findMany({
       where: { churchId, donorId: { in: donorIds }, statementStatus: { in: ["READY", "GENERATED"] }, supersededAt: null, generatedAt: { not: null }, eligibleAmountCents: { gt: 0 } },

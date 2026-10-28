@@ -5,6 +5,9 @@ import { requireDonorSession, DonorAuthError } from "@/lib/donorPortal/donorAuth
 import { loadDonorPortalDashboard } from "@/lib/donorPortal/donorPortalData";
 import { formatCents } from "@/lib/format";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
+import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
+import PoweredByWgc from "@/components/merchant/PoweredByWgc";
+import { resolvePortalAccent } from "@/lib/donorPortal/portalBrand";
 import DonorPortalLoginForm from "@/components/donorPortal/DonorPortalLoginForm";
 import RecurringGiftActions from "@/components/donorPortal/RecurringGiftActions";
 import DonorPortalLogoutButton from "@/components/donorPortal/DonorPortalLogoutButton";
@@ -30,8 +33,11 @@ export default async function DonorAccountPage({
   const { slug } = await params;
   const { linkError } = await searchParams;
 
-  const church = await prisma.church.findUnique({ where: { slug }, select: { name: true, slug: true } });
+  const church = await prisma.church.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true } });
   if (!church) notFound();
+
+  const accent = resolvePortalAccent(church.primaryColor);
+  const accentStyle = { "--portal-accent": accent } as React.CSSProperties;
 
   let session;
   try {
@@ -39,12 +45,13 @@ export default async function DonorAccountPage({
   } catch (err) {
     if (!(err instanceof DonorAuthError)) throw err;
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 py-10" style={accentStyle}>
         <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-          <h1 className="text-lg font-semibold text-slate-900 mb-1 text-center">{church.name}</h1>
+          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="My Giving" />
           <p className="text-sm text-slate-500 mb-6 text-center">Sign in to see your giving. Use the email you gave with.</p>
           <DonorPortalLoginForm slug={slug} linkError={Boolean(linkError)} />
         </div>
+        <PoweredByWgc />
       </div>
     );
   }
@@ -62,15 +69,13 @@ export default async function DonorAccountPage({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50" style={accentStyle}>
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-500">{session.churchName}</p>
-            <h1 className="text-2xl font-semibold text-slate-900">My Giving{data.donorName ? ` — ${data.donorName}` : ""}</h1>
-          </div>
+        <OrganizationBrandHeader logoUrl={data.church?.logoUrl ?? church.logoUrl} organizationName={session.churchName} kind="My Giving" />
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-slate-900">{data.donorName ? `Welcome, ${data.donorName}` : "Welcome"}</h1>
           <DonorPortalLogoutButton slug={slug} />
-        </header>
+        </div>
 
         <section className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-slate-100 bg-white p-4">
@@ -118,7 +123,7 @@ export default async function DonorAccountPage({
               {data.statements.map((st) => (
                 <li key={st.id} className="py-2 flex justify-between text-sm">
                   <span className="text-slate-700">{st.taxYear} · {formatCents(st.eligibleAmountCents)}</span>
-                  <a href={`/api/donor-portal/statements/${st.id}?slug=${encodeURIComponent(slug)}`} className="text-indigo-600 hover:text-indigo-500">Download PDF</a>
+                  <a href={`/api/donor-portal/statements/${st.id}?slug=${encodeURIComponent(slug)}`} className="text-[var(--portal-accent)] hover:opacity-80">Download PDF</a>
                 </li>
               ))}
             </ul>
@@ -133,10 +138,10 @@ export default async function DonorAccountPage({
             <ul className="grid gap-2 sm:grid-cols-2">
               {data.waysToGive.map((w) => (
                 <li key={w.href}>
-                  <a href={w.href} className="block rounded-lg border border-slate-200 p-3 hover:border-indigo-300">
+                  <a href={w.href} className="block rounded-lg border border-slate-200 p-3 hover:border-[var(--portal-accent)]">
                     <p className="text-sm font-medium text-slate-900">{w.title}</p>
                     {w.description && <p className="text-xs text-slate-500 line-clamp-2">{w.description}</p>}
-                    <p className="text-xs text-indigo-600 mt-1">{w.kind === "CAMPAIGN" ? "Campaign" : "Give"} →</p>
+                    <p className="text-xs text-[var(--portal-accent)] mt-1">{w.kind === "CAMPAIGN" ? "Campaign" : "Give"} →</p>
                   </a>
                 </li>
               ))}
@@ -174,6 +179,7 @@ export default async function DonorAccountPage({
             </table>
           )}
         </section>
+        <PoweredByWgc />
       </div>
     </div>
   );
