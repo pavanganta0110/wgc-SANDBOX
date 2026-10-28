@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveStaffStudentSelection, StudentSelectionError, type StudentSelection } from "@/lib/students/selection";
 import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { linkBankInstrumentToMerchant } from "@/lib/finix/linkInstrumentToMerchant";
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
       clientAttemptId,
       donor,
       fundName,
+      studentId: submittedStudentId,
+      studentGivenFor: submittedStudentGivenFor,
       note,
       isAnonymous,
       goodsServicesProvided,
@@ -60,6 +63,16 @@ export async function POST(req: Request) {
 
     if (!token || !donationAmountCents || donationAmountCents < 100) {
       return NextResponse.json({ error: "Invalid payment amount (minimum $1.00)" }, { status: 400 });
+    }
+
+    // Student Giving: which student (and term) this payment is credited to.
+    // Validated against the session's church before anything is charged.
+    let resolvedStudent: StudentSelection;
+    try {
+      resolvedStudent = await resolveStaffStudentSelection(auth.churchId, { studentId: submittedStudentId, givenFor: submittedStudentGivenFor });
+    } catch (err) {
+      if (err instanceof StudentSelectionError) return NextResponse.json({ error: err.message }, { status: 400 });
+      throw err;
     }
 
     const goodsServicesValidation = validateGoodsServicesInput(
@@ -311,6 +324,9 @@ export async function POST(req: Request) {
         idempotencyId,
         fraudSessionId,
         fundName: fundName || null,
+        studentId: resolvedStudent.studentId,
+        studentTermLabel: resolvedStudent.termLabel,
+        studentGivenFor: resolvedStudent.givenFor,
         note: note || null,
         isAnonymous: isAnonymous ?? false,
         createdByAdminUserId: auth.userId,

@@ -14,7 +14,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import { computeStudentStatus } from "../constants";
 import { parseDollarsToCents, parseStudentImport } from "../importPlan";
-import { resolveStudentSelection, StudentSelectionError } from "../selection";
+import { resolveStudentSelection, resolveStaffStudentSelection, StudentSelectionError } from "../selection";
 import { loadTermLedger } from "../ledger";
 
 describe("computeStudentStatus", () => {
@@ -137,5 +137,32 @@ describe("loadTermLedger", () => {
     const john = rows.find((r) => r.studentId === "s2")!;
     expect(john.creditedCents).toBe(0);
     expect(john.status).toBe("UNFUNDED");
+  });
+});
+
+describe("resolveStaffStudentSelection (Take a Payment)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("is a no-op when no student was chosen", async () => {
+    expect(await resolveStaffStudentSelection("c1", {})).toEqual({ studentId: null, termLabel: null, givenFor: null });
+    expect(prismaMock.church.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the feature is off, no term is set, or the student isn't this church's", async () => {
+    prismaMock.church.findUnique.mockResolvedValueOnce({ studentGivingEnabled: false, studentCurrentTerm: "Fall 2026" });
+    await expect(resolveStaffStudentSelection("c1", { studentId: "s1" })).rejects.toBeInstanceOf(StudentSelectionError);
+    prismaMock.church.findUnique.mockResolvedValueOnce({ studentGivingEnabled: true, studentCurrentTerm: null });
+    await expect(resolveStaffStudentSelection("c1", { studentId: "s1" })).rejects.toBeInstanceOf(StudentSelectionError);
+    prismaMock.church.findUnique.mockResolvedValueOnce({ studentGivingEnabled: true, studentCurrentTerm: "Fall 2026" });
+    prismaMock.student.findFirst.mockResolvedValueOnce(null);
+    await expect(resolveStaffStudentSelection("c1", { studentId: "other-church" })).rejects.toBeInstanceOf(StudentSelectionError);
+    expect(prismaMock.student.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ churchId: "c1" }) }));
+  });
+
+  it("returns the student, the org's current term, and sponsor vs self", async () => {
+    prismaMock.church.findUnique.mockResolvedValue({ studentGivingEnabled: true, studentCurrentTerm: "Fall 2026" });
+    prismaMock.student.findFirst.mockResolvedValue({ id: "s1" });
+    expect(await resolveStaffStudentSelection("c1", { studentId: "s1", givenFor: "SELF" })).toEqual({ studentId: "s1", termLabel: "Fall 2026", givenFor: "SELF" });
+    expect(await resolveStaffStudentSelection("c1", { studentId: "s1" })).toEqual({ studentId: "s1", termLabel: "Fall 2026", givenFor: "SPONSOR" });
   });
 });

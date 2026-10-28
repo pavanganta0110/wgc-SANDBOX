@@ -11,6 +11,7 @@ import { normalizeTermLabel } from "@/lib/students/constants";
 import { STUDENT_FILTERS, resolveStudentFilter } from "@/lib/students/filters";
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import StatusBadge from "@/components/merchant/students/StatusBadge";
+import TakePaymentAction from "@/components/merchant/dashboard/TakePaymentAction";
 import DownloadMenu from "@/components/merchant/students/DownloadMenu";
 import { AddStudentButton, CurrentTermForm, EnableStudentGivingCard, ImportStudentsButton } from "@/components/merchant/students/StudentActions";
 
@@ -27,11 +28,13 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
 
   const church = await prisma.church.findUnique({
     where: { id: auth.churchId },
-    select: { studentGivingEnabled: true, studentCurrentTerm: true },
+    select: { studentGivingEnabled: true, studentCurrentTerm: true, name: true, finixMerchantId: true },
   });
   if (!church?.studentGivingEnabled) return <EnableStudentGivingCard canManage={canManage} />;
 
   const sp = await searchParams;
+  const pricing = await prisma.churchPricing.findUnique({ where: { churchId: auth.churchId } });
+  const canTakePayment = auth.role !== "viewer" && !!church.finixMerchantId;
   const terms = await loadKnownTerms(auth.churchId);
   const term = normalizeTermLabel(sp.term) ?? church.studentCurrentTerm ?? terms[0] ?? null;
   const all = await loadTermLedger({ churchId: auth.churchId, termLabel: term });
@@ -59,6 +62,16 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
               filterLabel={activeFilter.label}
               count={rows.length}
             />
+          )}
+          {canTakePayment && (
+            <TakePaymentAction
+              finixMerchantId={church.finixMerchantId as string}
+              churchName={church.name}
+              pricing={{ cardPercentageFee: pricing?.cardPercentageFee ?? null, cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null, achFixedFeeCents: pricing?.achFixedFeeCents ?? null }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Take payment
+            </TakePaymentAction>
           )}
           {canManage && <ImportStudentsButton defaultTerm={term} />}
           {canManage && <AddStudentButton defaultTerm={term} />}

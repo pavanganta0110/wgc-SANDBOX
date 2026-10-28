@@ -69,3 +69,29 @@ export async function resolveStudentSelection(
   if (!student) throw new StudentSelectionError("That student could not be found.");
   return { studentId: student.id, termLabel, givenFor };
 }
+
+/**
+ * Staff-side version (Take a Payment): a signed-in team member picks the
+ * student, so there is no giving link. Same trust rules — the student must
+ * belong to the session's church, Student Giving must be on, and a term must
+ * be set — and it is checked before any charge is attempted. Returns the
+ * "no student" selection when none was chosen.
+ */
+export async function resolveStaffStudentSelection(
+  churchId: string,
+  submitted: { studentId?: unknown; givenFor?: unknown },
+): Promise<StudentSelection> {
+  if (typeof submitted.studentId !== "string" || !submitted.studentId) return NO_STUDENT_SELECTION;
+  const church = await prisma.church.findUnique({
+    where: { id: churchId },
+    select: { studentGivingEnabled: true, studentCurrentTerm: true },
+  });
+  if (!church?.studentGivingEnabled) throw new StudentSelectionError("Student Giving isn't turned on for this organization.");
+  if (!church.studentCurrentTerm) throw new StudentSelectionError("Set the current term on the Students page before crediting a student.");
+  const student = await prisma.student.findFirst({
+    where: { id: submitted.studentId, churchId, isActive: true },
+    select: { id: true },
+  });
+  if (!student) throw new StudentSelectionError("That student could not be found.");
+  return { studentId: student.id, termLabel: church.studentCurrentTerm, givenFor: submitted.givenFor === "SELF" ? "SELF" : "SPONSOR" };
+}

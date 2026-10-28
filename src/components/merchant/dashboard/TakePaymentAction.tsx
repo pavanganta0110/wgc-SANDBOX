@@ -10,12 +10,15 @@ export default function TakePaymentAction({
   pricing,
   className,
   children,
+  initialStudent,
 }: {
   finixMerchantId: string;
   churchName: string;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   className: string;
   children: ReactNode;
+  /** Pre-selects a student in the dialog (used from the Students pages). */
+  initialStudent?: { id: string; name: string } | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -24,7 +27,7 @@ export default function TakePaymentAction({
         {children}
       </button>
       {open && (
-        <TakePaymentDialog finixMerchantId={finixMerchantId} churchName={churchName} pricing={pricing} onClose={() => setOpen(false)} />
+        <TakePaymentDialog finixMerchantId={finixMerchantId} churchName={churchName} pricing={pricing} initialStudent={initialStudent} onClose={() => setOpen(false)} />
       )}
     </>
   );

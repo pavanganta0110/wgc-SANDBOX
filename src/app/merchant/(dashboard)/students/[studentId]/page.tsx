@@ -13,6 +13,7 @@ import {
   normalizeTermLabel,
   studentDisplayName,
 } from "@/lib/students/constants";
+import TakePaymentAction from "@/components/merchant/dashboard/TakePaymentAction";
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import StatusBadge from "@/components/merchant/students/StatusBadge";
 import { SetChargeForm, StudentGivingLinkButton } from "@/components/merchant/students/StudentActions";
@@ -35,12 +36,14 @@ export default async function StudentDetailPage({
   const canManage = canManageStudents(auth);
 
   const { studentId } = await params;
-  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { studentGivingEnabled: true, studentCurrentTerm: true } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { studentGivingEnabled: true, studentCurrentTerm: true, name: true, finixMerchantId: true } });
   if (!church?.studentGivingEnabled) redirect("/merchant/students");
   const student = await prisma.student.findFirst({ where: { id: studentId, churchId: auth.churchId } });
   if (!student) notFound();
 
   const sp = await searchParams;
+  const pricing = await prisma.churchPricing.findUnique({ where: { churchId: auth.churchId } });
+  const canTakePayment = auth.role !== "viewer" && !!church.finixMerchantId && student.isActive;
   const terms = await loadKnownTerms(auth.churchId);
   const term = normalizeTermLabel(sp.term) ?? church.studentCurrentTerm ?? terms[0] ?? null;
 
@@ -77,7 +80,20 @@ export default async function StudentDetailPage({
             {term ? ` · ${term}` : ""}
           </p>
         </div>
-        {canManage && student.isActive && <StudentGivingLinkButton studentId={student.id} termLabel={term} />}
+        <div className="flex flex-wrap items-center gap-2">
+          {canTakePayment && (
+            <TakePaymentAction
+              finixMerchantId={church.finixMerchantId as string}
+              churchName={church.name}
+              pricing={{ cardPercentageFee: pricing?.cardPercentageFee ?? null, cardFixedFeeCents: pricing?.cardFixedFeeCents ?? null, achFixedFeeCents: pricing?.achFixedFeeCents ?? null }}
+              initialStudent={{ id: student.id, name: `${name} (${student.studentNumber})` }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700"
+            >
+              Take payment for {student.firstName}
+            </TakePaymentAction>
+          )}
+          {canManage && student.isActive && <StudentGivingLinkButton studentId={student.id} termLabel={term} />}
+        </div>
       </header>
 
       <nav aria-label="Term" className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-0.5 w-fit">

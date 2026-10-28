@@ -27,11 +27,14 @@ export default function TakePaymentDialog({
   churchName,
   pricing,
   onClose,
+  initialStudent = null,
 }: {
   finixMerchantId: string;
   churchName: string;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
   onClose: () => void;
+  /** Opened from a student's page: that student is pre-selected. */
+  initialStudent?: { id: string; name: string } | null;
 }) {
   const [step, setStep] = useState<Step>("form");
   const [result, setResult] = useState<PaymentResult | null>(null);
@@ -42,6 +45,11 @@ export default function TakePaymentDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [fundName, setFundName] = useState("");
+  // Student Giving (only offered when the organization has it turned on).
+  const [studentOptions, setStudentOptions] = useState<{ term: string | null; students: { id: string; name: string }[] } | null>(null);
+  const [studentFilter, setStudentFilter] = useState("");
+  const [studentId, setStudentId] = useState(initialStudent?.id ?? "");
+  const [studentGivenFor, setStudentGivenFor] = useState<"SPONSOR" | "SELF">("SPONSOR");
   const [note, setNote] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [coverFees, setCoverFees] = useState(false);
@@ -57,6 +65,19 @@ export default function TakePaymentDialog({
 
   const formInstanceRef = useRef<FinixPaymentFormInstance | null>(null);
   const clientAttemptIdRef = useRef(crypto.randomUUID());
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/students/options")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.enabled) setStudentOptions({ term: json.term, students: json.students });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!APPLICATION_ID) return;
@@ -173,6 +194,8 @@ export default function TakePaymentDialog({
           clientAttemptId: clientAttemptIdRef.current,
           donor: { name: name.trim(), email: email.trim(), phone: phone.trim() || undefined },
           fundName: fundName.trim() || undefined,
+          studentId: studentId || undefined,
+          studentGivenFor: studentId ? studentGivenFor : undefined,
           note: note.trim() || undefined,
           isAnonymous,
           goodsServicesProvided,
@@ -282,6 +305,47 @@ export default function TakePaymentDialog({
                 />
               </div>
             </div>
+
+            {studentOptions && (
+              <div className="rounded-lg border border-slate-200 p-3 space-y-2">
+                <label className="block text-xs font-semibold text-slate-500">
+                  Credit to a student{studentOptions.term ? ` (${studentOptions.term})` : " — set the current term on the Students page first"}
+                </label>
+                <input
+                  value={studentFilter}
+                  onChange={(e) => setStudentFilter(e.target.value)}
+                  placeholder="Search students by name…"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex gap-2">
+                  <select
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Not for a specific student</option>
+                    {initialStudent && !studentOptions.students.some((s) => s.id === initialStudent.id) && (
+                      <option value={initialStudent.id}>{initialStudent.name}</option>
+                    )}
+                    {studentOptions.students
+                      .filter((st) => st.id === studentId || st.name.toLowerCase().includes(studentFilter.trim().toLowerCase()))
+                      .map((st) => (
+                        <option key={st.id} value={st.id}>{st.name}</option>
+                      ))}
+                  </select>
+                  <select
+                    value={studentGivenFor}
+                    onChange={(e) => setStudentGivenFor(e.target.value as "SPONSOR" | "SELF")}
+                    disabled={!studentId}
+                    aria-label="Gift type"
+                    className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="SPONSOR">Sponsor</option>
+                    <option value="SELF">Self-paid</option>
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1.5">Note</label>
@@ -459,6 +523,15 @@ export default function TakePaymentDialog({
               <div className="flex justify-between"><span className="text-slate-500">Payment Amount</span><span className="font-semibold">{formatCents(amountCents)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payment Method</span><span className="font-semibold">{paymentMethod === "card" ? "Card" : "Bank Account"}</span></div>
               {fundName.trim() && <div className="flex justify-between"><span className="text-slate-500">Fund/Campaign</span><span className="font-semibold">{fundName.trim()}</span></div>}
+              {studentId && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Student</span>
+                  <span className="font-semibold text-right">
+                    {studentOptions?.students.find((st) => st.id === studentId)?.name ?? initialStudent?.name ?? "Selected student"}
+                    {studentOptions?.term ? ` · ${studentOptions.term}` : ""} · {studentGivenFor === "SELF" ? "Self-paid" : "Sponsor"}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Goods or Services</span>
                 <span className="font-semibold">{goodsServicesProvided ? "Provided" : "None Provided"}</span>
