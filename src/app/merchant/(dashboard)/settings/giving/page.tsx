@@ -22,7 +22,7 @@ export default async function GivingSettingsPage() {
         Share this link so donors can sign in with their email to see their giving, receipts and statements, and manage their recurring gifts.
         It also appears on your public giving pages and in recurring-gift confirmation emails.
       </p>
-      <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} />
+      <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} organizationName={church.name} />
     </div>
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-900 mb-1">Giving</h3>
