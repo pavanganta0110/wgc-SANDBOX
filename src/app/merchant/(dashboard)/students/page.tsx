@@ -33,8 +33,17 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   const terms = await loadKnownTerms(auth.churchId);
   const term = normalizeTermLabel(sp.term) ?? church.studentCurrentTerm ?? terms[0] ?? null;
   const all = await loadTermLedger({ churchId: auth.churchId, termLabel: term });
-  const dueOnly = sp.filter === "due";
-  const rows = dueOnly ? all.filter((r) => r.status === "PARTIAL" || r.status === "UNFUNDED") : all;
+  const FILTERS: { key: string; label: string; test: (r: (typeof all)[number]) => boolean }[] = [
+    { key: "all", label: "All", test: () => true },
+    { key: "full", label: "Fully paid", test: (r) => r.status === "FULLY_CREDITED" || r.status === "OVER_FUNDED" },
+    { key: "partial", label: "Partially paid", test: (r) => r.status === "PARTIAL" },
+    { key: "none", label: "Didn't pay", test: (r) => r.status === "UNFUNDED" },
+    { key: "sponsored", label: "Got sponsor gifts", test: (r) => r.sponsorCents > 0 },
+    { key: "self", label: "Self-funded", test: (r) => r.selfCents > 0 },
+  ];
+  // "due" is the older link name for not-yet-fully-credited; keep it working.
+  const filterKey = sp.filter === "due" ? "partial" : FILTERS.some((f) => f.key === sp.filter) ? (sp.filter as string) : "all";
+  const rows = all.filter(FILTERS.find((f) => f.key === filterKey)!.test);
 
   const withCharge = all.filter((r) => r.chargeCents != null);
   const fully = all.filter((r) => r.status === "FULLY_CREDITED" || r.status === "OVER_FUNDED").length;
@@ -102,23 +111,28 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         ]}
       />
 
-      <div className="flex gap-2 text-xs font-semibold">
-        <Link href={term ? termHref(term) : "/merchant/students"} className={`rounded-lg px-3 py-1.5 ${!dueOnly ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}>
-          All students
-        </Link>
-        <Link href={term ? termHref(term, "&filter=due") : "/merchant/students?filter=due"} className={`rounded-lg px-3 py-1.5 ${dueOnly ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}>
-          Not yet fully credited
-        </Link>
+      <div className="flex flex-wrap gap-2 text-xs font-semibold">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={`/merchant/students?${term ? `term=${encodeURIComponent(term)}&` : ""}filter=${f.key}`}
+            className={`rounded-lg px-3 py-1.5 ${f.key === filterKey ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
+          >
+            {f.label} <span className="opacity-70">{all.filter(f.test).length}</span>
+          </Link>
+        ))}
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[960px] text-sm">
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-500">
               <th className="px-5 py-3">Student</th>
               <th className="px-3 py-3">ID</th>
               <th className="px-3 py-3 text-right">Charge</th>
               <th className="px-3 py-3 text-right">Credited</th>
+              <th className="px-3 py-3 text-right">From sponsors</th>
+              <th className="px-3 py-3 text-right">Self-paid</th>
               <th className="px-3 py-3 text-right">Pending</th>
               <th className="px-3 py-3 text-right">Balance</th>
               <th className="px-5 py-3">Status</th>
@@ -127,7 +141,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
           <tbody className="divide-y divide-slate-100">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={9} className="px-5 py-10 text-center text-slate-500">
                   {all.length === 0 ? "No students yet. Import a roster CSV or add a student." : "Nobody matches this filter."}
                 </td>
               </tr>
@@ -143,6 +157,11 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
                 <td className="px-3 py-3 text-slate-500">{r.studentNumber}</td>
                 <td className="px-3 py-3 text-right tabular-nums">{r.chargeCents == null ? "—" : formatCents(r.chargeCents)}</td>
                 <td className="px-3 py-3 text-right tabular-nums">{formatCents(r.creditedCents)}</td>
+                <td className="px-3 py-3 text-right tabular-nums text-slate-700">
+                  {r.sponsorCents ? formatCents(r.sponsorCents) : "—"}
+                  {r.sponsorCount > 0 && <span className="block text-[11px] text-slate-400">{r.sponsorCount} {r.sponsorCount === 1 ? "sponsor" : "sponsors"}</span>}
+                </td>
+                <td className="px-3 py-3 text-right tabular-nums text-slate-700">{r.selfCents ? formatCents(r.selfCents) : "—"}</td>
                 <td className="px-3 py-3 text-right tabular-nums text-slate-500">{r.pendingCents ? formatCents(r.pendingCents) : "—"}</td>
                 <td className="px-3 py-3 text-right font-bold tabular-nums text-slate-900">{r.balanceCents == null ? "—" : formatCents(r.balanceCents)}</td>
                 <td className="px-5 py-3"><StatusBadge status={r.status} /></td>

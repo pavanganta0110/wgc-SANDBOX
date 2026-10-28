@@ -132,6 +132,8 @@ describe("loadTermLedger", () => {
     expect(jane.pendingCents).toBe(10000);
     expect(jane.balanceCents).toBe(0);
     expect(jane.status).toBe("FULLY_CREDITED");
+    expect(jane.sponsorCents).toBe(100000);
+    expect(jane.selfCents).toBe(0); // the pending $100 self-paid gift isn't counted yet
     const john = rows.find((r) => r.studentId === "s2")!;
     expect(john.creditedCents).toBe(0);
     expect(john.status).toBe("UNFUNDED");

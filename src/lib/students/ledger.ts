@@ -34,6 +34,11 @@ export interface StudentLedgerRow {
   isActive: boolean;
   chargeCents: number | null;
   creditedCents: number;
+  /** Part of credited that came from sponsors / from the student themselves (settled, net). */
+  sponsorCents: number;
+  selfCents: number;
+  /** Distinct sponsors (donors) with a settled gift; anonymous/unknown donors count once each gift. */
+  sponsorCount: number;
   pendingCents: number;
   /** Charge minus credited; null when no charge is set for the term. */
   balanceCents: number | null;
@@ -166,18 +171,24 @@ export async function loadTermLedger(params: { churchId: string; termLabel: stri
   ]);
 
   const chargeByStudent = new Map(charges.map((c) => [c.studentId, c.amountCents]));
-  const byStudent = new Map<string, { credited: number; pending: number; count: number }>();
+  const byStudent = new Map<string, { credited: number; sponsor: number; self: number; sponsors: Set<string>; pending: number; count: number }>();
   for (const l of lines) {
     if (!l.studentId) continue;
-    const acc = byStudent.get(l.studentId) ?? { credited: 0, pending: 0, count: 0 };
-    if (l.settled) acc.credited += l.netCents;
-    else acc.pending += l.netCents;
+    const acc = byStudent.get(l.studentId) ?? { credited: 0, sponsor: 0, self: 0, sponsors: new Set<string>(), pending: 0, count: 0 };
+    if (l.settled) {
+      acc.credited += l.netCents;
+      if (l.givenFor === "SELF") acc.self += l.netCents;
+      else {
+        acc.sponsor += l.netCents;
+        if (l.netCents > 0) acc.sponsors.add(l.donorId ?? l.key);
+      }
+    } else acc.pending += l.netCents;
     acc.count += 1;
     byStudent.set(l.studentId, acc);
   }
 
   return students.map((s) => {
-    const agg = byStudent.get(s.id) ?? { credited: 0, pending: 0, count: 0 };
+    const agg = byStudent.get(s.id) ?? { credited: 0, sponsor: 0, self: 0, sponsors: new Set<string>(), pending: 0, count: 0 };
     const charge = chargeByStudent.has(s.id) ? (chargeByStudent.get(s.id) as number) : null;
     return {
       studentId: s.id,
@@ -187,6 +198,9 @@ export async function loadTermLedger(params: { churchId: string; termLabel: stri
       isActive: s.isActive,
       chargeCents: charge,
       creditedCents: agg.credited,
+      sponsorCents: agg.sponsor,
+      selfCents: agg.self,
+      sponsorCount: agg.sponsors.size,
       pendingCents: agg.pending,
       balanceCents: charge == null ? null : charge - agg.credited,
       status: computeStudentStatus(charge, agg.credited),
