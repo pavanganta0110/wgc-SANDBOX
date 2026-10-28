@@ -7,6 +7,7 @@ export interface SettingsNavItem {
 export const SETTINGS_NAV: SettingsNavItem[] = [
   { key: "general", label: "General", href: "/merchant/settings/general" },
   { key: "giving", label: "Giving", href: "/merchant/settings/giving" },
+  { key: "student-giving", label: "Student Giving", href: "/merchant/settings/student-giving" },
   { key: "payment-methods", label: "Payment Methods", href: "/merchant/settings/payment-methods" },
   { key: "fees", label: "Fees", href: "/merchant/settings/fees" },
   { key: "receipts", label: "Receipts", href: "/merchant/settings/receipts" },
