@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Download, Printer } from "lucide-react";
+import { PORTAL_BUTTON_LABELS, buildPortalButtonSnippet, readableTextColor } from "@/lib/donorPortal/websiteSnippet";
 
 /** The donor portal link (copyable) plus a QR code the church can download or print for a bulletin, flyer or lobby sign. */
-export default function CopyDonorPortalLink({ url, organizationName }: { url: string; organizationName: string }) {
+export default function CopyDonorPortalLink({ url, organizationName, accentColor }: { url: string; organizationName: string; accentColor: string }) {
   const [copied, setCopied] = useState(false);
+  const [snippetCopied, setSnippetCopied] = useState(false);
+  const [buttonLabel, setButtonLabel] = useState<string>(PORTAL_BUTTON_LABELS[0]);
+  const snippet = buildPortalButtonSnippet({ url, label: buttonLabel, accent: accentColor });
   const [qrPngUrl, setQrPngUrl] = useState<string | null>(null);
   const [qrSvg, setQrSvg] = useState<string | null>(null);
   const fileBase = `${organizationName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "donor"}-giving-portal-qr`;
@@ -24,6 +28,16 @@ export default function CopyDonorPortalLink({ url, organizationName }: { url: st
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard can be blocked; the URL is still selectable in the field.
+    }
+  };
+
+  const copySnippet = async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setSnippetCopied(true);
+      setTimeout(() => setSnippetCopied(false), 2000);
+    } catch {
+      // Clipboard can be blocked; the snippet is still selectable in the box.
     }
   };
 
@@ -89,6 +103,34 @@ export default function CopyDonorPortalLink({ url, organizationName }: { url: st
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="border-t border-slate-100 pt-4">
+        <h4 className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Add a button to your website</h4>
+        <p className="mb-3 text-xs text-slate-500">
+          Paste this into a &ldquo;Custom HTML&rdquo; or &ldquo;Embed&rdquo; block on your site (WordPress, Squarespace, Wix and most builders have one). Prefer a menu link? Just point a menu item at the link above.
+        </p>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <label className="text-xs text-slate-600">
+            Button text{" "}
+            <select value={buttonLabel} onChange={(e) => setButtonLabel(e.target.value)} className="ml-1 rounded-lg border border-slate-200 px-2 py-1 text-xs">
+              {PORTAL_BUTTON_LABELS.map((l) => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+          </label>
+          <span className="text-xs text-slate-400">Preview:</span>
+          <span
+            aria-hidden
+            style={{ display: "inline-block", padding: "10px 20px", background: accentColor, color: readableTextColor(accentColor), borderRadius: 8, fontSize: 14, fontWeight: 600 }}
+          >
+            {buttonLabel}
+          </span>
+        </div>
+        <textarea readOnly rows={4} value={snippet} onFocus={(e) => e.currentTarget.select()} className="w-full rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-xs text-slate-700" />
+        <button type="button" onClick={copySnippet} className="mt-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
+          {snippetCopied ? "Copied" : "Copy button code"}
+        </button>
       </div>
     </div>
   );

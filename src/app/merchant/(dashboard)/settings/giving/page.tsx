@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import GivingSettingsForm from "@/components/merchant/GivingSettingsForm";
 import CopyDonorPortalLink from "@/components/merchant/CopyDonorPortalLink";
 import PortalActivityCard from "@/components/merchant/PortalActivityCard";
+import { resolvePortalAccent } from "@/lib/donorPortal/portalBrand";
 import { loadPortalActivity } from "@/lib/donorPortal/portalActivity";
 
 export default async function GivingSettingsPage() {
@@ -25,7 +26,7 @@ export default async function GivingSettingsPage() {
         Share this link so donors can sign in with their email to see their giving, receipts and statements, and manage their recurring gifts.
         It also appears on your public giving pages and in recurring-gift confirmation emails.
       </p>
-      <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} organizationName={church.name} />
+      <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} organizationName={church.name} accentColor={resolvePortalAccent(church.primaryColor)} />
       <h4 className="mt-6 mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Portal activity</h4>
       <PortalActivityCard activity={portalActivity} />
     </div>
