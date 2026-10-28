@@ -34,7 +34,10 @@ export default function StudentGiftPicker({
   choice,
   onChange,
   light,
+  previewStudents,
 }: {
+  /** Builder preview only: searches this list locally instead of calling the public endpoint. */
+  previewStudents?: { id: string; name: string }[];
   slug: string;
   studentGiving: PublicStudentGiving;
   choice: StudentChoice;
@@ -51,7 +54,7 @@ export default function StudentGiftPicker({
   // Results are only shown for a 2+ character query (see the render below), so a
   // stale list from an earlier query is never displayed and needs no clearing here.
   useEffect(() => {
-    if (!searching_ || query.trim().length < 2) return;
+    if (previewStudents || !searching_ || query.trim().length < 2) return;
     const handle = setTimeout(async () => {
       setSearching(true);
       try {
@@ -63,7 +66,11 @@ export default function StudentGiftPicker({
       }
     }, 250);
     return () => clearTimeout(handle);
-  }, [query, slug, searching_]);
+  }, [query, slug, searching_, previewStudents]);
+
+  const shown = previewStudents
+    ? previewStudents.filter((st) => query.trim().split(/\s+/).every((t) => st.name.toLowerCase().includes(t.toLowerCase()))).slice(0, 15)
+    : results;
 
   const labelStyle = { color: light.bodyTextColor };
   const inputClass = "w-full px-3 py-2 rounded-lg border text-sm outline-none";
@@ -132,7 +139,7 @@ export default function StudentGiftPicker({
           />
           {query.trim().length >= 2 && (
             <ul className="mt-1 rounded-lg border divide-y max-h-48 overflow-auto" style={inputStyle}>
-              {results.map((s) => (
+              {shown.map((s) => (
                 <li key={s.id}>
                   <button
                     type="button"
@@ -144,7 +151,7 @@ export default function StudentGiftPicker({
                   </button>
                 </li>
               ))}
-              {!searching && results.length === 0 && (
+              {!searching && shown.length === 0 && (
                 <li className="px-3 py-2 text-xs" style={labelStyle}>No matching students found.</li>
               )}
             </ul>

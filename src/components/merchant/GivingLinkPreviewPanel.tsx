@@ -6,6 +6,7 @@ import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import { resolveGivingPageLogo } from "@/lib/givingLinks/types";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
+import type { PublicStudentGiving } from "@/lib/givingLinks/loadPublicGivingPageData";
 
 export default function GivingLinkPreviewPanel({
   churchName,
@@ -37,6 +38,8 @@ export default function GivingLinkPreviewPanel({
   showPoweredByWgc,
   fundSelectionEnabled = false,
   assignedFunds = [],
+  studentGiving = null,
+  previewStudents,
   pageType = "DONATIONS",
 }: {
   churchName: string;
@@ -68,6 +71,9 @@ export default function GivingLinkPreviewPanel({
   showPoweredByWgc?: boolean;
   fundSelectionEnabled?: boolean;
   assignedFunds?: AssignedActiveFund[];
+  /** Shows the "Who is this gift for?" picker in the preview. */
+  studentGiving?: PublicStudentGiving | null;
+  previewStudents?: { id: string; name: string }[];
   pageType?: "DONATIONS" | "MERCHANDISE" | "BOTH";
 }) {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
@@ -230,6 +236,8 @@ export default function GivingLinkPreviewPanel({
                     previewMode
                     fundSelectionEnabled={fundSelectionEnabled}
                     assignedFunds={assignedFunds}
+                    studentGiving={studentGiving}
+                    previewStudents={previewStudents}
                     onFormError={() => setFormError(true)}
                   />
                 </>

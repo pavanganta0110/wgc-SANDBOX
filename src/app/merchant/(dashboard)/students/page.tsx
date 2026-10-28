@@ -13,7 +13,7 @@ import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import StatusBadge from "@/components/merchant/students/StatusBadge";
 import TakePaymentAction from "@/components/merchant/dashboard/TakePaymentAction";
 import DownloadMenu from "@/components/merchant/students/DownloadMenu";
-import { AddStudentButton, CurrentTermForm, EnableStudentGivingCard, ImportStudentsButton } from "@/components/merchant/students/StudentActions";
+import { AddStudentButton, CollegeGivingLinkButton, CurrentTermForm, EnableStudentGivingCard, ImportStudentsButton } from "@/components/merchant/students/StudentActions";
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ term?: string; filter?: string }> }) {
   let auth;
@@ -73,6 +73,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
               Take payment
             </TakePaymentAction>
           )}
+          {canManage && <CollegeGivingLinkButton />}
           {canManage && <ImportStudentsButton defaultTerm={term} />}
           {canManage && <AddStudentButton defaultTerm={term} />}
         </div>

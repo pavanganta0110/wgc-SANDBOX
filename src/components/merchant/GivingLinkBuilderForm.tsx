@@ -361,6 +361,22 @@ export default function GivingLinkBuilderForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.fundSelectionEnabled]);
 
+  // Student Giving: roster + term so the live preview can show the real picker.
+  const [studentPreview, setStudentPreview] = useState<{ term: string | null; students: { id: string; name: string }[] } | null>(null);
+  useEffect(() => {
+    if (!studentGivingEnabled) return;
+    let cancelled = false;
+    fetch("/api/merchant/students/options")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.enabled) setStudentPreview({ term: json.term, students: json.students.map((st: { id: string; name: string }) => ({ id: st.id, name: st.name.replace(/\s*\([^)]*\)\s*$/, "") })) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [studentGivingEnabled]);
+
   const getFileNameFromUrl = (url: string) => {
     if (!url) return "";
     const parts = url.split("/");
@@ -1457,6 +1473,10 @@ export default function GivingLinkBuilderForm({
             assignedFunds={funds
               .filter((f) => f.isActive)
               .map((f) => ({ fundId: f.fundId, name: f.name, description: f.description || null, isDefault: f.isDefault, displayOrder: f.displayOrder }))}
+            studentGiving={
+              studentGivingEnabled && state.studentSelectionEnabled ? { mode: "PICKER", termLabel: studentPreview?.term ?? null } : null
+            }
+            previewStudents={studentPreview?.students}
             pageType={pageType}
           />
         </div>

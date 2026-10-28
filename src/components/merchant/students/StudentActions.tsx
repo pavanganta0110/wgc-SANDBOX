@@ -427,3 +427,46 @@ export function AssignGiftControl({
     </div>
   );
 }
+
+/**
+ * Gets (or creates) the single giving link where donors search for any
+ * student, and shows it with copy / open / edit-and-preview shortcuts.
+ */
+export function CollegeGivingLinkButton() {
+  const [busy, setBusy] = useState(false);
+  const [link, setLink] = useState<{ url: string; id: string } | null>(null);
+  async function load() {
+    setBusy(true);
+    try {
+      const res = await call<{ link: { id: string; publicSlug: string } }>("/api/merchant/students/college-link", "POST", {});
+      setLink({ url: `${window.location.origin}/g/${res.link.publicSlug}`, id: res.link.id });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!link) {
+    return (
+      <button onClick={load} disabled={busy} className={ghostBtn}>
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Link2 className="h-4 w-4" aria-hidden />} Giving link for all students
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2">
+      <input readOnly value={link.url} className={`${input} w-64`} onFocus={(e) => e.currentTarget.select()} aria-label="Giving link for all students" />
+      <button
+        className={ghostBtn}
+        onClick={async () => {
+          await navigator.clipboard.writeText(link.url);
+          toast.success("Link copied");
+        }}
+      >
+        <Copy className="h-4 w-4" aria-hidden /> Copy
+      </button>
+      <a href={link.url} target="_blank" rel="noopener noreferrer" className={ghostBtn}>Open</a>
+      <a href={`/merchant/giving-links/${link.id}/edit`} className={ghostBtn}>Edit &amp; preview</a>
+    </div>
+  );
+}

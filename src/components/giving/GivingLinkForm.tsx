@@ -102,6 +102,7 @@ export default function GivingLinkForm({
   fundSelectionEnabled = false,
   assignedFunds = [],
   studentGiving = null,
+  previewStudents,
   pledgeId,
   eventMode,
   onFormError,
@@ -146,6 +147,8 @@ export default function GivingLinkForm({
   assignedFunds?: AssignedActiveFund[];
   /** Student Giving: asks "who is this gift for?" (picker) or shows a fixed student (per-student link). Server re-validates. */
   studentGiving?: PublicStudentGiving | null;
+  /** Builder preview only: sample students for the picker (no network). */
+  previewStudents?: { id: string; name: string }[];
   /** Optional campaign pledge this donation should be tagged against — passed straight through to /donate as pledgeId, server-validated there. */
   pledgeId?: string;
   /**
@@ -1363,7 +1366,7 @@ export default function GivingLinkForm({
       )}
 
       {studentGiving && (
-        <StudentGiftPicker slug={slug} studentGiving={studentGiving} choice={studentChoice} onChange={setStudentChoice} light={light} />
+        <StudentGiftPicker slug={slug} studentGiving={studentGiving} choice={studentChoice} onChange={setStudentChoice} light={light} previewStudents={previewMode ? previewStudents : undefined} />
       )}
 
       {fundSelectionEnabled && assignedFunds.length > 0 && (
