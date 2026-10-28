@@ -153,6 +153,9 @@ export default function Header() {
               <Link href="/contact" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Contact Sales
               </Link>
+              <Link href="/my-giving" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
+                Donor Login
+              </Link>
               <Link href="/merchant/login" className="text-[12px] font-bold text-[#010409] hover:text-[#eab308] transition-all tracking-[0.1em]">
                 Merchant Login
               </Link>
@@ -231,6 +234,13 @@ export default function Header() {
               className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
             >
               Contact Sales
+            </Link>
+            <Link
+              href="/my-giving"
+              onClick={closeMenu}
+              className="w-full flex items-center justify-center px-6 py-4 border border-white/10 rounded-xl text-[12px] font-bold text-white bg-white/5 tracking-wide transition-all active:scale-95"
+            >
+              Donor Login
             </Link>
             <Link
               href="/merchant/login"

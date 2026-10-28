@@ -63,6 +63,7 @@ export default function Footer() {
               <h3 className="text-[11px] font-bold text-[#eab308] tracking-widest uppercase mb-10">Mission</h3>
               <ul role="list" className="space-y-6">
                 <FooterLink href="/about">Our Story</FooterLink>
+                <FooterLink href="/my-giving">Donor Login</FooterLink>
                 <FooterLink href="/contact">Support</FooterLink>
                 <FooterLink href="/legal/terms">Governance</FooterLink>
               </ul>
