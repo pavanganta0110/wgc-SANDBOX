@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CheckCircle2, CircleDollarSign, Download, GraduationCap, Users } from "lucide-react";
+import { CheckCircle2, CircleDollarSign, GraduationCap, Users } from "lucide-react";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
@@ -8,8 +8,10 @@ import { formatCents } from "@/lib/format";
 import { canManageStudents, canViewStudents } from "@/lib/students/access";
 import { loadKnownTerms, loadTermLedger } from "@/lib/students/ledger";
 import { normalizeTermLabel } from "@/lib/students/constants";
+import { STUDENT_FILTERS, resolveStudentFilter } from "@/lib/students/filters";
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import StatusBadge from "@/components/merchant/students/StatusBadge";
+import DownloadMenu from "@/components/merchant/students/DownloadMenu";
 import { AddStudentButton, CurrentTermForm, EnableStudentGivingCard, ImportStudentsButton } from "@/components/merchant/students/StudentActions";
 
 export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ term?: string; filter?: string }> }) {
@@ -33,17 +35,8 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   const terms = await loadKnownTerms(auth.churchId);
   const term = normalizeTermLabel(sp.term) ?? church.studentCurrentTerm ?? terms[0] ?? null;
   const all = await loadTermLedger({ churchId: auth.churchId, termLabel: term });
-  const FILTERS: { key: string; label: string; test: (r: (typeof all)[number]) => boolean }[] = [
-    { key: "all", label: "All", test: () => true },
-    { key: "full", label: "Fully paid", test: (r) => r.status === "FULLY_CREDITED" || r.status === "OVER_FUNDED" },
-    { key: "partial", label: "Partially paid", test: (r) => r.status === "PARTIAL" },
-    { key: "none", label: "Didn't pay", test: (r) => r.status === "UNFUNDED" },
-    { key: "sponsored", label: "Got sponsor gifts", test: (r) => r.sponsorCents > 0 },
-    { key: "self", label: "Self-funded", test: (r) => r.selfCents > 0 },
-  ];
-  // "due" is the older link name for not-yet-fully-credited; keep it working.
-  const filterKey = sp.filter === "due" ? "partial" : FILTERS.some((f) => f.key === sp.filter) ? (sp.filter as string) : "all";
-  const rows = all.filter(FILTERS.find((f) => f.key === filterKey)!.test);
+  const activeFilter = resolveStudentFilter(sp.filter);
+  const rows = all.filter(activeFilter.test);
 
   const withCharge = all.filter((r) => r.chargeCents != null);
   const fully = all.filter((r) => r.status === "FULLY_CREDITED" || r.status === "OVER_FUNDED").length;
@@ -60,20 +53,12 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {term && (
-            <a
-              href={`/api/merchant/students/export?term=${encodeURIComponent(term)}&type=ledger`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <Download className="h-4 w-4" aria-hidden /> Export term
-            </a>
-          )}
-          {term && (
-            <a
-              href={`/api/merchant/students/export?term=${encodeURIComponent(term)}&type=gifts`}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <Download className="h-4 w-4" aria-hidden /> Export gifts
-            </a>
+            <DownloadMenu
+              term={term}
+              filterKey={activeFilter.key}
+              filterLabel={activeFilter.label}
+              count={rows.length}
+            />
           )}
           {canManage && <ImportStudentsButton defaultTerm={term} />}
           {canManage && <AddStudentButton defaultTerm={term} />}
@@ -112,11 +97,11 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
       />
 
       <div className="flex flex-wrap gap-2 text-xs font-semibold">
-        {FILTERS.map((f) => (
+        {STUDENT_FILTERS.map((f) => (
           <Link
             key={f.key}
             href={`/merchant/students?${term ? `term=${encodeURIComponent(term)}&` : ""}filter=${f.key}`}
-            className={`rounded-lg px-3 py-1.5 ${f.key === filterKey ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
+            className={`rounded-lg px-3 py-1.5 ${f.key === activeFilter.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"}`}
           >
             {f.label} <span className="opacity-70">{all.filter(f.test).length}</span>
           </Link>
