@@ -158,21 +158,31 @@ export default async function DonorAccountPage({
               <thead>
                 <tr className="text-left text-xs text-slate-500">
                   <th className="pb-2 font-medium">Date</th>
+                  <th className="pb-2 font-medium">Gave to</th>
                   <th className="pb-2 font-medium">Fund</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium text-right">Amount</th>
+                  <th className="pb-2 pl-4 font-medium text-right">Receipt</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {data.gifts.map((g) => (
                   <tr key={`${g.source}-${g.id}`}>
                     <td className="py-2 text-slate-700">{g.date ? dateFormat.format(g.date) : "—"}</td>
+                    <td className="py-2 text-slate-700">{g.givingLinkTitle ?? (g.source === "RECORDED_BY_CHURCH" ? "Recorded by church" : "—")}</td>
                     <td className="py-2 text-slate-500">{g.fundName ?? "General"}</td>
                     <td className="py-2 text-slate-500">
                       {giftStatusLabel(g.status)}
                       {g.source === "RECORDED_BY_CHURCH" ? " · recorded by church" : ""}
                     </td>
                     <td className="py-2 text-right text-slate-900">{formatCents(g.amountCents)}</td>
+                    <td className="py-2 pl-4 text-right">
+                      {g.receipt ? (
+                        <a href={`/api/donor-portal/receipts/${g.receipt.kind}/${g.receipt.id}?slug=${encodeURIComponent(slug)}`} className="text-[var(--portal-accent)] hover:opacity-80">Download</a>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

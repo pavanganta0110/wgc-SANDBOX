@@ -129,6 +129,58 @@ export async function buildDonationReceiptPdfProps(
   return { props, donorEmail: donor?.email || null, donorName, church };
 }
 
+/**
+ * Renders a payment's receipt PDF without sending or issuing anything — used by the donor portal. Uses the latest
+ * non-superseded issued version's pinned financial snapshot when one exists (exactly what the donor was sent);
+ * otherwise builds the same snapshot sendDonationReceipt would, with the same deterministic receipt number, and
+ * persists nothing.
+ */
+export async function renderDonationReceiptPdfForPayment(paymentId: string, churchId: string): Promise<{ pdf: Buffer; fileName: string }> {
+  const payment = await prisma.payment.findFirst({ where: { id: paymentId, churchId } });
+  if (!payment) throw new Error("Payment not found");
+  const church = await prisma.church.findUnique({ where: { id: churchId } });
+  if (!church) throw new Error("Organization not found");
+
+  const issued = await prisma.donationReceipt.findFirst({ where: { paymentId, churchId, supersededAt: null }, orderBy: { version: "desc" } });
+
+  let snapshot: ReceiptFinancialSnapshot;
+  let fileName: string;
+  if (issued) {
+    snapshot = {
+      receiptNumber: issued.receiptNumber,
+      paymentAmountCents: issued.paymentAmountCentsSnapshot,
+      goodsServicesProvided: issued.goodsServicesProvidedSnapshot,
+      goodsServicesDescription: issued.goodsServicesDescriptionSnapshot,
+      goodsServicesFairMarketValueCents: issued.goodsServicesFairMarketValueCentsSnapshot,
+      recordedContributionAmountCents: issued.recordedContributionAmountCentsSnapshot ?? issued.paymentAmountCentsSnapshot,
+      acknowledgmentText: issued.acknowledgmentTextSnapshot,
+    };
+    fileName = `receipt-${issued.receiptNumber}${issued.version > 1 ? `-v${issued.version}` : ""}.pdf`;
+  } else {
+    const receiptNumber = payment.receiptNumber || generateReceiptNumber(church.receiptNumberPrefix, payment.id, payment.createdAt);
+    const paymentAmountCents = payment.donationAmountCents ?? payment.amountCents;
+    const goodsServicesProvided = payment.goodsServicesProvided;
+    const goodsServicesDescription = goodsServicesProvided ? payment.goodsServicesDescription : null;
+    const goodsServicesFairMarketValueCents = goodsServicesProvided ? payment.goodsServicesFairMarketValueCents ?? 0 : null;
+    snapshot = {
+      receiptNumber,
+      paymentAmountCents,
+      goodsServicesProvided,
+      goodsServicesDescription,
+      goodsServicesFairMarketValueCents,
+      recordedContributionAmountCents:
+        payment.recordedContributionAmountCents ??
+        (goodsServicesProvided ? computeRecordedContributionAmountCents(paymentAmountCents, goodsServicesFairMarketValueCents ?? 0) : paymentAmountCents),
+      acknowledgmentText: resolveAcknowledgmentText(church, goodsServicesDescription, goodsServicesFairMarketValueCents),
+    };
+    fileName = `receipt-${receiptNumber}.pdf`;
+  }
+
+  const { props } = await buildDonationReceiptPdfProps(payment, churchId, snapshot);
+  const pdf = (await renderToBuffer(DonationReceiptPdf(props))) as unknown as Buffer;
+  return { pdf, fileName };
+}
+
 export async function sendDonationReceipt(
   paymentId: string,
   churchId: string,

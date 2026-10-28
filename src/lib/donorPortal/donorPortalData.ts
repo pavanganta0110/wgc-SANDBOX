@@ -18,6 +18,10 @@ export interface PortalGift {
   amountCents: number;
   status: string;
   fundName: string | null;
+  /** The public title of the giving link the donor gave through; null for gifts with none (e.g. recorded by the church). */
+  givingLinkTitle: string | null;
+  /** Which receipt to download, when this gift has one. Completed gifts only. */
+  receipt: { kind: "payment" | "external"; id: string } | null;
   source: "WGC" | "RECORDED_BY_CHURCH";
 }
 
@@ -98,7 +102,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
       where: { churchId, donorId: { in: donorIds }, status: { not: "VOIDED" } },
       orderBy: { donationDate: "desc" },
       take: HISTORY_LIMIT,
-      select: { id: true, donationAmountCents: true, donationDate: true, fundName: true, depositStatus: true },
+      select: { id: true, donationAmountCents: true, donationDate: true, fundName: true, depositStatus: true, isAnonymous: true },
     }),
     prisma.finixSubscription.findMany({
       where: { churchId, donorId: { in: donorIds }, state: "ACTIVE" },
@@ -131,15 +135,48 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
         where: { churchId, finixPaymentInstrumentId: { in: instrumentIds }, state: { in: ["SUCCEEDED", "PENDING"] } },
         orderBy: { createdAtFinix: "desc" },
         take: HISTORY_LIMIT,
-        select: { id: true, finixTransferId: true, paymentId: true, amountCents: true, state: true, createdAtFinix: true },
+        select: { id: true, finixTransferId: true, paymentId: true, finixSubscriptionId: true, amountCents: true, state: true, createdAtFinix: true },
       })
     : [];
 
+  // A transfer reaches its payment by id or by transfer id (same two paths the donor aggregates use); recurring
+  // charges may only carry the subscription, which knows its giving link.
   const paymentIds = transfers.map((t) => t.paymentId).filter((id): id is string => Boolean(id));
-  const payments = paymentIds.length
-    ? await prisma.payment.findMany({ where: { churchId, id: { in: paymentIds } }, select: { id: true, fundName: true } })
+  const transferIds = transfers.map((t) => t.finixTransferId);
+  const subscriptionIds = [...new Set(transfers.map((t) => t.finixSubscriptionId).filter((id): id is string => Boolean(id)))];
+  const payments = transfers.length
+    ? await prisma.payment.findMany({
+        where: { churchId, OR: [{ id: { in: paymentIds } }, { finixTransferId: { in: transferIds } }] },
+        select: { id: true, finixTransferId: true, fundName: true, givingLinkId: true },
+      })
     : [];
-  const fundByPaymentId = new Map(payments.map((p) => [p.id, p.fundName]));
+  const paymentById = new Map(payments.map((p) => [p.id, p]));
+  const paymentByTransferId = new Map(payments.filter((p) => p.finixTransferId).map((p) => [p.finixTransferId as string, p]));
+  const subscriptionRows = subscriptionIds.length
+    ? await prisma.finixSubscription.findMany({ where: { churchId, finixSubscriptionId: { in: subscriptionIds } }, select: { finixSubscriptionId: true, givingLinkId: true, fundName: true } })
+    : [];
+  const subscriptionById = new Map(subscriptionRows.map((r) => [r.finixSubscriptionId, r]));
+
+  const linkIds = new Set<string>();
+  for (const p of payments) if (p.givingLinkId) linkIds.add(p.givingLinkId);
+  for (const r of subscriptionRows) if (r.givingLinkId) linkIds.add(r.givingLinkId);
+  const linkRows = linkIds.size
+    ? await prisma.givingLink.findMany({ where: { churchId, id: { in: [...linkIds] } }, select: { id: true, publicTitle: true } })
+    : [];
+  const titleByLinkId = new Map(linkRows.map((l) => [l.id, l.publicTitle]));
+
+  const resolveTransfer = (t: (typeof transfers)[number]) => {
+    const payment = (t.paymentId ? paymentById.get(t.paymentId) : undefined) ?? paymentByTransferId.get(t.finixTransferId);
+    const subscription = t.finixSubscriptionId ? subscriptionById.get(t.finixSubscriptionId) : undefined;
+    const linkId = payment?.givingLinkId ?? subscription?.givingLinkId ?? null;
+    const completed = (t.state ?? "").toUpperCase() === "SUCCEEDED";
+    return {
+      fundName: payment?.fundName ?? subscription?.fundName ?? null,
+      givingLinkTitle: linkId ? (titleByLinkId.get(linkId) ?? null) : null,
+      // A receipt needs the WGC payment row it is built from; a bare processor transfer has none.
+      receipt: payment && completed ? { kind: "payment" as const, id: payment.id } : null,
+    };
+  };
 
   const gifts: PortalGift[] = [
     ...transfers.map<PortalGift>((t) => ({
@@ -147,7 +184,7 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
       date: t.createdAtFinix,
       amountCents: t.amountCents ?? 0,
       status: (t.state ?? "UNKNOWN").toUpperCase(),
-      fundName: t.paymentId ? (fundByPaymentId.get(t.paymentId) ?? null) : null,
+      ...resolveTransfer(t),
       source: "WGC",
     })),
     ...externalRows
@@ -158,6 +195,9 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
         amountCents: e.donationAmountCents,
         status: "SUCCEEDED",
         fundName: e.fundName,
+        givingLinkTitle: null,
+        // An anonymous gift has no donor identity to put on a receipt.
+        receipt: e.isAnonymous ? null : { kind: "external" as const, id: e.id },
         source: "RECORDED_BY_CHURCH",
       })),
   ]
