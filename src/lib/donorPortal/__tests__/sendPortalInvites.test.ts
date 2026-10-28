@@ -82,7 +82,7 @@ describe("sendDonorPortalInvites", () => {
   });
 
   it("skips donors invited inside the throttle window, scoped to this church", async () => {
-    prismaMock.orgEmailLog.findMany.mockResolvedValue([{ recipientEmail: "Ann@example.com" }]);
+    prismaMock.orgEmailLog.findMany.mockResolvedValue([{ recipientEmail: "Ann@example.com", createdAt: new Date() }]);
     const r = await sendDonorPortalInvites({ ...base, recipients: [{ donorId: "a", email: "ann@example.com", name: "Ann" }] });
     expect(r.sent).toBe(0);
     expect(r.skipped.recentlyInvited).toBe(1);
@@ -95,6 +95,37 @@ describe("sendDonorPortalInvites", () => {
     expect(r.sent).toBe(MAX_INVITES_PER_REQUEST);
     expect(r.remaining).toBe(25);
     expect(sendWgcEmailMock).toHaveBeenCalledTimes(MAX_INVITES_PER_REQUEST);
+  });
+
+  it("reports every person with their outcome, including when a skipped donor was last invited", async () => {
+    loadOptedOutMock.mockResolvedValue(new Set(["opt@example.com"]));
+    const invitedAt = new Date("2026-10-27T15:00:00Z");
+    prismaMock.orgEmailLog.findMany.mockResolvedValue([{ recipientEmail: "Recent@example.com", createdAt: new Date("2026-10-20T00:00:00Z") }, { recipientEmail: "recent@example.com", createdAt: invitedAt }]);
+    const r = await sendDonorPortalInvites({
+      ...base,
+      dryRun: true,
+      recipients: [
+        { donorId: "1", email: "ok@example.com", name: "Ok Donor" },
+        { donorId: "2", email: "recent@example.com", name: "Recent Donor" },
+        { donorId: "3", email: "opt@example.com", name: "Opt Out" },
+        { donorId: "4", email: null, name: "No Email" },
+        { donorId: "5", email: "OK@example.com", name: "Dup" },
+      ],
+    });
+    const by = Object.fromEntries(r.details.map((d) => [d.donorId, d]));
+    expect(by["1"]).toMatchObject({ status: "WILL_SEND", name: "Ok Donor", email: "ok@example.com" });
+    expect(by["2"]).toMatchObject({ status: "RECENTLY_INVITED", invitedAt: invitedAt.toISOString() }); // the most recent invite wins
+    expect(by["3"].status).toBe("OPTED_OUT");
+    expect(by["4"].status).toBe("NO_EMAIL");
+    expect(by["5"].status).toBe("DUPLICATE");
+    expect(r.details).toHaveLength(5);
+  });
+
+  it("marks people beyond the per-request cap as next batch", async () => {
+    const recipients = Array.from({ length: MAX_INVITES_PER_REQUEST + 2 }, (_, i) => ({ donorId: `d${i}`, email: `u${i}@example.com`, name: `U${i}` }));
+    const r = await sendDonorPortalInvites({ ...base, dryRun: true, recipients });
+    expect(r.details.filter((d) => d.status === "WILL_SEND")).toHaveLength(MAX_INVITES_PER_REQUEST);
+    expect(r.details.filter((d) => d.status === "QUEUED_NEXT")).toHaveLength(2);
   });
 
   it("dry run counts but sends nothing", async () => {

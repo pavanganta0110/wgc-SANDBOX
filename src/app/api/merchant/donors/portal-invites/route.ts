@@ -6,6 +6,8 @@ import { logDashboardAction } from "@/lib/dashboardAudit";
 import { resolveCampaignAudience } from "@/lib/giving/campaignAudience";
 import { sendDonorPortalInvites, MAX_INVITES_PER_REQUEST } from "@/lib/donorPortal/sendPortalInvites";
 
+// A preview lists people by name and email, so it is capped to keep the response small.
+const MAX_PREVIEW_ROWS = 500;
 const BULK_INVITE_THROTTLE_MS = 7 * 24 * 60 * 60 * 1000;
 // Only audiences that make sense for "invite people to see their giving".
 const ALLOWED_SOURCES = ["ALL_DONORS", "IMPORTED_CONTACTS"] as const;
@@ -60,5 +62,12 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json({ ...result, maxPerRequest: MAX_INVITES_PER_REQUEST, dryRun });
+  // Names and emails only go back on a preview; a real send returns counts alone.
+  const { details, ...counts } = result;
+  return NextResponse.json({
+    ...counts,
+    maxPerRequest: MAX_INVITES_PER_REQUEST,
+    dryRun,
+    ...(dryRun ? { details: details.slice(0, MAX_PREVIEW_ROWS), detailsTruncated: details.length > MAX_PREVIEW_ROWS } : {}),
+  });
 }

@@ -16,12 +16,26 @@ export interface InviteRecipient {
   name: string | null;
 }
 
+export type InviteDetailStatus = "WILL_SEND" | "QUEUED_NEXT" | "RECENTLY_INVITED" | "OPTED_OUT" | "NO_EMAIL" | "DUPLICATE";
+
+/** One row of "who is this going to / why was someone skipped" for the merchant's preview. */
+export interface InviteDetail {
+  donorId: string | null;
+  name: string | null;
+  email: string | null;
+  status: InviteDetailStatus;
+  /** For RECENTLY_INVITED: when the last invite went out. */
+  invitedAt?: string;
+}
+
 export interface InviteResult {
   sent: number;
   failed: number;
   skipped: { noEmail: number; optedOut: number; recentlyInvited: number; duplicate: number };
   /** Eligible recipients not sent because of the per-request cap. */
   remaining: number;
+  /** Every person considered, with the outcome — shown in the preview so staff can see who and why. */
+  details: InviteDetail[];
 }
 
 export interface SendInvitesParams {
@@ -54,7 +68,7 @@ function firstName(name: string | null): string {
  */
 export async function sendDonorPortalInvites(params: SendInvitesParams): Promise<InviteResult> {
   const { churchId, actorUserId, recipients, throttleMs, dryRun } = params;
-  const result: InviteResult = { sent: 0, failed: 0, skipped: { noEmail: 0, optedOut: 0, recentlyInvited: 0, duplicate: 0 }, remaining: 0 };
+  const result: InviteResult = { sent: 0, failed: 0, skipped: { noEmail: 0, optedOut: 0, recentlyInvited: 0, duplicate: 0 }, remaining: 0, details: [] };
 
   const church = await prisma.church.findUnique({
     where: { id: churchId },
@@ -67,8 +81,16 @@ export async function sendDonorPortalInvites(params: SendInvitesParams): Promise
   const candidates: (InviteRecipient & { email: string; normalized: string })[] = [];
   for (const r of recipients) {
     const normalized = normalizeEmail(r.email);
-    if (!r.email || !normalized || !isValidEmail(r.email)) { result.skipped.noEmail++; continue; }
-    if (seen.has(normalized)) { result.skipped.duplicate++; continue; }
+    if (!r.email || !normalized || !isValidEmail(r.email)) {
+      result.skipped.noEmail++;
+      result.details.push({ donorId: r.donorId, name: r.name, email: r.email, status: "NO_EMAIL" });
+      continue;
+    }
+    if (seen.has(normalized)) {
+      result.skipped.duplicate++;
+      result.details.push({ donorId: r.donorId, name: r.name, email: r.email.trim(), status: "DUPLICATE" });
+      continue;
+    }
     seen.add(normalized);
     candidates.push({ ...r, email: r.email.trim(), normalized });
   }
@@ -77,18 +99,35 @@ export async function sendDonorPortalInvites(params: SendInvitesParams): Promise
   const optedOut = await loadOptedOutEmails(churchId, candidates.map((c) => c.email));
   const recent = await prisma.orgEmailLog.findMany({
     where: { churchId, relatedEntityType: INVITE_RELATED_ENTITY_TYPE, status: "SENT", createdAt: { gte: new Date(Date.now() - throttleMs) } },
-    select: { recipientEmail: true },
+    select: { recipientEmail: true, createdAt: true },
   });
-  const recentlyInvited = new Set(recent.map((r) => normalizeEmail(r.recipientEmail)).filter((e): e is string => Boolean(e)));
+  const recentlyInvited = new Map<string, Date>();
+  for (const r of recent) {
+    const e = normalizeEmail(r.recipientEmail);
+    const prev = e ? recentlyInvited.get(e) : undefined;
+    if (e && (!prev || r.createdAt > prev)) recentlyInvited.set(e, r.createdAt);
+  }
 
   const eligible = candidates.filter((c) => {
-    if (optedOut.has(c.normalized)) { result.skipped.optedOut++; return false; }
-    if (recentlyInvited.has(c.normalized)) { result.skipped.recentlyInvited++; return false; }
+    if (optedOut.has(c.normalized)) {
+      result.skipped.optedOut++;
+      result.details.push({ donorId: c.donorId, name: c.name, email: c.email, status: "OPTED_OUT" });
+      return false;
+    }
+    const invitedAt = recentlyInvited.get(c.normalized);
+    if (invitedAt) {
+      result.skipped.recentlyInvited++;
+      result.details.push({ donorId: c.donorId, name: c.name, email: c.email, status: "RECENTLY_INVITED", invitedAt: invitedAt.toISOString() });
+      return false;
+    }
     return true;
   });
 
   const batch = eligible.slice(0, MAX_INVITES_PER_REQUEST);
   result.remaining = eligible.length - batch.length;
+  for (const [i, c] of eligible.entries()) {
+    result.details.push({ donorId: c.donorId, name: c.name, email: c.email, status: i < MAX_INVITES_PER_REQUEST ? "WILL_SEND" : "QUEUED_NEXT" });
+  }
   if (dryRun) {
     result.sent = batch.length;
     return result;
