@@ -63,6 +63,10 @@ export default function RecordExternalDonationForm() {
   const [funds, setFunds] = useState<{ id: string; name: string; isActive: boolean }[] | null>(null);
   const [selectedFundId, setSelectedFundId] = useState("");
   const [fundName, setFundName] = useState("");
+  // Student Giving (only shown when the organization has it turned on).
+  const [studentOptions, setStudentOptions] = useState<{ enabled: boolean; term: string | null; students: { id: string; name: string }[] } | null>(null);
+  const [studentId, setStudentId] = useState("");
+  const [studentGivenFor, setStudentGivenFor] = useState<"SPONSOR" | "SELF">("SPONSOR");
   const [campaign, setCampaign] = useState("");
   const [givingPageLabel, setGivingPageLabel] = useState("");
   const [donationPurpose, setDonationPurpose] = useState("");
@@ -130,6 +134,19 @@ export default function RecordExternalDonationForm() {
       .catch(() => {
         if (!cancelled) setFunds([]);
       });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/students/options")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json?.enabled) setStudentOptions(json);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -278,6 +295,8 @@ export default function RecordExternalDonationForm() {
         donorAddress: donorMode === "new" && donorAddress.addressLine1.trim() ? donorAddress : undefined,
         fundId: selectedFundId || undefined,
         fundName: selectedFundId ? funds?.find((f) => f.id === selectedFundId)?.name : fundName || undefined,
+        studentId: studentId || undefined,
+        studentGivenFor: studentId ? studentGivenFor : undefined,
         campaign: campaign || undefined,
         givingPageLabel: givingPageLabel || undefined,
         donationPurpose: donationPurpose || undefined,
@@ -584,6 +603,36 @@ export default function RecordExternalDonationForm() {
                 onChange={(e) => setFundName(e.target.value)}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
               />
+            </div>
+          )}
+          {studentOptions && (
+            <div className="sm:col-span-2">
+              <label htmlFor="ext-donation-student" className="block text-xs font-medium text-slate-600 mb-1">
+                Credit to a student{studentOptions.term ? ` (${studentOptions.term})` : " — set the current term on the Students page first"}
+              </label>
+              <div className="flex gap-2">
+                <select
+                  id="ext-donation-student"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                >
+                  <option value="">Not for a specific student</option>
+                  {studentOptions.students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={studentGivenFor}
+                  onChange={(e) => setStudentGivenFor(e.target.value as "SPONSOR" | "SELF")}
+                  disabled={!studentId}
+                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  aria-label="Gift type"
+                >
+                  <option value="SPONSOR">Sponsor</option>
+                  <option value="SELF">Self-paid</option>
+                </select>
+              </div>
             </div>
           )}
           <input placeholder="Campaign" value={campaign} onChange={(e) => setCampaign(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />

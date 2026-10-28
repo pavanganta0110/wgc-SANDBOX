@@ -23,7 +23,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
 
   const [link, church, pricing, teamMembers] = await Promise.all([
     prisma.givingLink.findFirst({ where: { id, churchId, ...(auth.role === "fundraiser" ? { ownerUserId: auth.userId } : {}) } }),
-    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, logoUrl: true } }),
+    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, logoUrl: true, studentGivingEnabled: true } }),
     prisma.churchPricing.findUnique({ where: { churchId } }),
     canAssignOwner
       ? prisma.user.findMany({
@@ -59,6 +59,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     maxCollectedAmount: link.maxCollectedAmountCents != null ? (link.maxCollectedAmountCents / 100).toString() : "",
     fundName: link.fundName || "",
     fundSelectionEnabled: link.fundSelectionEnabled,
+    studentSelectionEnabled: link.studentSelectionEnabled,
     allowedPaymentMethods: parseAllowedPaymentMethods(link.allowedPaymentMethodsJson),
     donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
     collectMailingAddress: link.collectMailingAddress,
@@ -86,6 +87,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
       <h2 className="text-lg font-bold text-slate-900 mb-6">Edit Giving Link</h2>
       <GivingLinkBuilderForm
         mode="edit"
+        studentGivingEnabled={church?.studentGivingEnabled ?? false}
         linkId={id}
         initial={initial}
         churchName={church?.name || "Your Organization"}

@@ -17,7 +17,7 @@ export default async function CreateGivingLinkPage() {
   const canAssignOwner = auth.role === "owner" || auth.role === "admin";
 
   const [church, pricing, teamMembers] = await Promise.all([
-    prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true, defaultCollectMailingAddressOnNewLinks: true } }),
+    prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true, defaultCollectMailingAddressOnNewLinks: true, studentGivingEnabled: true } }),
     prisma.churchPricing.findUnique({ where: { churchId: auth.churchId } }),
     canAssignOwner
       ? prisma.user.findMany({
@@ -36,6 +36,7 @@ export default async function CreateGivingLinkPage() {
       <h2 className="text-lg font-bold text-slate-900 mb-6">Create Giving Link</h2>
       <GivingLinkBuilderForm
         mode="create"
+        studentGivingEnabled={church?.studentGivingEnabled ?? false}
         churchName={church?.name || "Your Organization"}
         churchLogoUrl={church?.logoUrl}
         pricing={{

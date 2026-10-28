@@ -269,6 +269,26 @@ export async function POST(req: Request) {
     confirmationNumber,
   });
 
+  // Student Giving (optional): tag this offline gift to a student + term.
+  // Validated against the session's church; ignored when the feature is off.
+  let studentTag: { studentId: string | null; studentTermLabel: string | null; studentGivenFor: string | null } = {
+    studentId: null,
+    studentTermLabel: null,
+    studentGivenFor: null,
+  };
+  if (typeof body.studentId === "string" && body.studentId) {
+    const [studentChurch, student] = await Promise.all([
+      prisma.church.findUnique({ where: { id: auth.churchId }, select: { studentGivingEnabled: true, studentCurrentTerm: true } }),
+      prisma.student.findFirst({ where: { id: body.studentId, churchId: auth.churchId }, select: { id: true } }),
+    ]);
+    const term = typeof body.studentTermLabel === "string" && body.studentTermLabel.trim() ? body.studentTermLabel.trim().slice(0, 40) : studentChurch?.studentCurrentTerm;
+    if (!studentChurch?.studentGivingEnabled || !student) {
+      return NextResponse.json({ error: "Student not found" }, { status: 400 });
+    }
+    if (!term) return NextResponse.json({ error: "Set the current term on the Students page first" }, { status: 400 });
+    studentTag = { studentId: student.id, studentTermLabel: term, studentGivenFor: body.studentGivenFor === "SELF" ? "SELF" : "SPONSOR" };
+  }
+
   const created = await prisma.externalDonation.create({
     data: {
       churchId: auth.churchId,
@@ -282,6 +302,7 @@ export async function POST(req: Request) {
       source,
       fundId: fundId || null,
       fundName: fundName || null,
+      ...studentTag,
       campaign: campaign || null,
       givingPageLabel: givingPageLabel || null,
       donationPurpose: donationPurpose || null,

@@ -66,6 +66,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     expiresAt,
     fundName,
     fundSelectionEnabled,
+    studentSelectionEnabled,
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
@@ -204,6 +205,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(expiresAt !== undefined ? { expiresAt: expiresAt ? new Date(expiresAt) : null } : {}),
       ...(fundName !== undefined ? { fundName: fundName?.trim() || null } : {}),
       ...(resolvedFundSelectionEnabled !== undefined ? { fundSelectionEnabled: resolvedFundSelectionEnabled } : {}),
+      // A per-student link (studentId set) is never a picker link.
+      ...(typeof studentSelectionEnabled === "boolean" && !existing.studentId
+        ? {
+            studentSelectionEnabled:
+              studentSelectionEnabled &&
+              !!(await prisma.church.findUnique({ where: { id: existing.churchId }, select: { studentGivingEnabled: true } }))?.studentGivingEnabled,
+          }
+        : {}),
       ...(recurringEnabled !== undefined ? { recurringEnabled } : {}),
       ...(allowedFrequencies !== undefined ? { allowedFrequenciesJson: allowedFrequencies } : {}),
       ...(validatedDefaults ? { defaultDonationType: validatedDefaults.defaultDonationType, defaultRecurringAmountCents: validatedDefaults.defaultRecurringAmountCents } : {}),

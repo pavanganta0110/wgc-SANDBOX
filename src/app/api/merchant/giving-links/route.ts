@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     expiresAt,
     fundName,
     fundSelectionEnabled,
+    studentSelectionEnabled,
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
@@ -152,6 +153,9 @@ export async function POST(req: Request) {
   }
 
   const resolvedFundSelectionEnabled = !!fundSelectionEnabled;
+  const resolvedStudentGivingEnabled = studentSelectionEnabled
+    ? !!(await prisma.church.findUnique({ where: { id: auth.churchId }, select: { studentGivingEnabled: true } }))?.studentGivingEnabled
+    : false;
   let validatedFundAssignments: FundAssignmentInput[] = [];
   if (resolvedFundSelectionEnabled) {
     try {
@@ -205,6 +209,8 @@ export async function POST(req: Request) {
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       fundName: fundName?.trim() || null,
       fundSelectionEnabled: resolvedFundSelectionEnabled,
+      // Only honored when the organization has Student Giving turned on.
+      studentSelectionEnabled: !!studentSelectionEnabled && resolvedStudentGivingEnabled,
       recurringEnabled: recurringEnabled ?? false,
       allowedFrequenciesJson: Array.isArray(allowedFrequencies) ? allowedFrequencies : ["MONTHLY"],
       defaultDonationType: defaultsResult.value.defaultDonationType,

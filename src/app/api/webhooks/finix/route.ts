@@ -559,6 +559,11 @@ export async function syncFinixDataFromWebhookEvent(
                   feeCalculationVersion: "v1",
                   merchantExpectedNetCents,
                   finixSubscriptionId: sub.finixSubscriptionId,
+                  // Student Giving: a monthly sponsor stays tied to the same
+                  // student and term on every charge.
+                  studentId: sub.studentId ?? null,
+                  studentTermLabel: sub.studentTermLabel ?? null,
+                  studentGivenFor: sub.studentGivenFor ?? null,
                 },
               });
 

@@ -37,7 +37,14 @@ export type PublicGivingPageData =
       logoUrl: string | null;
       fundSelectionEnabled: boolean;
       assignedFunds: AssignedActiveFund[];
+      studentGiving: PublicStudentGiving | null;
     };
+
+/** What the public page needs to ask "who is this gift for?". Names only —
+ * a student's ID/number never reaches an unauthenticated page. */
+export type PublicStudentGiving =
+  | { mode: "PICKER"; termLabel: string | null }
+  | { mode: "LOCKED"; studentName: string; termLabel: string | null };
 
 export async function loadPublicGivingPageData(slug: string): Promise<PublicGivingPageData> {
   const link = await prisma.givingLink.findUnique({ where: { publicSlug: slug } });
@@ -115,6 +122,25 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
 
   const assignedFunds = link.fundSelectionEnabled ? await loadAssignedActiveFunds(link.id) : [];
 
+  let studentGiving: PublicStudentGiving | null = null;
+  if (church.studentGivingEnabled) {
+    if (link.studentId) {
+      const student = await prisma.student.findFirst({
+        where: { id: link.studentId, churchId: church.id, isActive: true },
+        select: { firstName: true, lastName: true },
+      });
+      if (student) {
+        studentGiving = {
+          mode: "LOCKED",
+          studentName: `${student.firstName} ${student.lastName}`.trim(),
+          termLabel: link.studentTermLabel ?? church.studentCurrentTerm,
+        };
+      }
+    } else if (link.studentSelectionEnabled) {
+      studentGiving = { mode: "PICKER", termLabel: church.studentCurrentTerm };
+    }
+  }
+
   return {
     ok: true,
     link,
@@ -137,5 +163,6 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
     logoUrl,
     fundSelectionEnabled: link.fundSelectionEnabled,
     assignedFunds,
+    studentGiving,
   };
 }

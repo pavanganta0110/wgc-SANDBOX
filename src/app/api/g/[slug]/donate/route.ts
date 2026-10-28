@@ -18,6 +18,7 @@ import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFreque
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
 import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
+import { resolveStudentSelection, StudentSelectionError, type StudentSelection } from "@/lib/students/selection";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 import { normalizeEmail } from "@/lib/donors/donorContact";
@@ -102,6 +103,8 @@ async function handleDonate(req: Request, slug: string) {
       expectedTotalCents,
       clientAttemptId,
       fundId: submittedFundId,
+      studentId: submittedStudentId,
+      studentGivenFor: submittedStudentGivenFor,
       pledgeId: submittedPledgeId,
       eventRegistrationId: submittedEventRegistrationId,
     } = body;
@@ -171,6 +174,19 @@ async function handleDonate(req: Request, slug: string) {
       resolvedFund = await resolveDonorSelectedFund(link, submittedFundId);
     } catch (err) {
       if (err instanceof FundAssignmentError) {
+        return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: err.message, retryable: true }, { status: 400 });
+      }
+      throw err;
+    }
+
+    // Student Giving: "who is this gift for?" — validated server-side
+    // against this link's church (and fixed by the link for a per-student
+    // link). Ledger metadata only; never affects merchant/settlement routing.
+    let resolvedStudent: StudentSelection;
+    try {
+      resolvedStudent = await resolveStudentSelection(link, { studentId: submittedStudentId, givenFor: submittedStudentGivenFor });
+    } catch (err) {
+      if (err instanceof StudentSelectionError) {
         return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: err.message, retryable: true }, { status: 400 });
       }
       throw err;
@@ -760,6 +776,9 @@ async function handleDonate(req: Request, slug: string) {
           finixPaymentInstrumentId: instrumentId,
           fundId: resolvedFund.fundId,
           fundName: resolvedFund.fundName,
+          studentId: resolvedStudent.studentId,
+          studentTermLabel: resolvedStudent.termLabel,
+          studentGivenFor: resolvedStudent.givenFor,
           state: subscription.state ?? "ACTIVE",
           amountCents: totalCents,
           currency: "USD",
@@ -914,6 +933,9 @@ async function handleDonate(req: Request, slug: string) {
         merchantExpectedNetCents: totalCents - feeStrategy.expectedFeeCents,
         fundId: resolvedFund.fundId,
         fundName: resolvedFund.fundName || link.fundName || null,
+        studentId: resolvedStudent.studentId,
+        studentTermLabel: resolvedStudent.termLabel,
+        studentGivenFor: resolvedStudent.givenFor,
         pledgeId: resolvedPledgeId,
         // Quid-pro-quo disclosure for the part of an event registration
         // that buys something (a dinner, green fees, an add-on): the

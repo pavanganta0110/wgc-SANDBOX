@@ -7,6 +7,7 @@ import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVeri
 import OpenMerchantDashboardButton from "@/components/admin/OpenMerchantDashboardButton";
 import ResyncFinixTerminationButton from "@/components/admin/ResyncFinixTerminationButton";
 import StateBadge from "@/components/merchant/StateBadge";
+import StudentGivingToggle from "@/components/admin/StudentGivingToggle";
 
 // Hoisted out of the component body so the impure Date.now() call isn't
 // made directly during render (react-hooks/purity) — same value either way.
@@ -112,6 +113,7 @@ export default async function MerchantOverviewPage({ params }: { params: Promise
 
   return (
     <div className="space-y-6">
+      <StudentGivingToggle churchId={church.id} enabled={church.studentGivingEnabled} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold leading-6 text-gray-900">Merchant Overview</h2>

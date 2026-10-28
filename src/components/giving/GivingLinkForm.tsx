@@ -14,6 +14,13 @@ import { resolveThankYouVideoEmbed } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
+import type { PublicStudentGiving } from "@/lib/givingLinks/loadPublicGivingPageData";
+import StudentGiftPicker, {
+  EMPTY_STUDENT_CHOICE,
+  studentChoiceIncomplete,
+  studentChoicePayload,
+  type StudentChoice,
+} from "@/components/giving/StudentGiftPicker";
 import { trackMetaEvent } from "@/components/common/MetaPixel";
 import { resolveInitialDonationState } from "@/lib/givingLinks/defaultDonationSettings";
 
@@ -94,6 +101,7 @@ export default function GivingLinkForm({
   serverAvailability,
   fundSelectionEnabled = false,
   assignedFunds = [],
+  studentGiving = null,
   pledgeId,
   eventMode,
   onFormError,
@@ -136,6 +144,8 @@ export default function GivingLinkForm({
   serverAvailability?: { APPLE_PAY?: { enabledForOrganization: boolean }; GOOGLE_PAY?: { enabledForOrganization: boolean } };
   fundSelectionEnabled?: boolean;
   assignedFunds?: AssignedActiveFund[];
+  /** Student Giving: asks "who is this gift for?" (picker) or shows a fixed student (per-student link). Server re-validates. */
+  studentGiving?: PublicStudentGiving | null;
   /** Optional campaign pledge this donation should be tagged against — passed straight through to /donate as pledgeId, server-validated there. */
   pledgeId?: string;
   /**
@@ -278,6 +288,11 @@ export default function GivingLinkForm({
   });
   const selectedFund = assignedFunds.find((f) => f.fundId === selectedFundId) || null;
   const fundSelectionRequired = fundSelectionEnabled && assignedFunds.length > 0 && !selectedFundId;
+  const [studentChoice, setStudentChoice] = useState<StudentChoice>(
+    studentGiving?.mode === "LOCKED" ? { ...EMPTY_STUDENT_CHOICE, givenFor: "SPONSOR" } : EMPTY_STUDENT_CHOICE,
+  );
+  const studentSelectionRequired = studentChoiceIncomplete(studentGiving, studentChoice);
+  const studentPayload = studentChoicePayload(studentGiving, studentChoice);
 
   useEffect(() => {
     onResult?.(result);
@@ -489,6 +504,7 @@ export default function GivingLinkForm({
           fraudSessionId,
           clientAttemptId: attemptId,
           fundId: selectedFundId || undefined,
+          ...studentPayload,
           pledgeId: pledgeId || undefined,
           eventRegistrationId,
           // Donor Information is now required and collected before any
@@ -596,6 +612,10 @@ export default function GivingLinkForm({
       toast.error("Please select where you'd like your gift to go.");
       return;
     }
+    if (studentSelectionRequired) {
+      toast.error("Please choose who this gift is for.");
+      return;
+    }
     if (effectiveAmountCents < 100) {
       toast.error("Please enter an amount of at least $1.00");
       return;
@@ -665,6 +685,10 @@ export default function GivingLinkForm({
     }
     if (fundSelectionRequired) {
       toast.error("Please select where you'd like your gift to go.");
+      return;
+    }
+    if (studentSelectionRequired) {
+      toast.error("Please choose who this gift is for.");
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -928,6 +952,10 @@ export default function GivingLinkForm({
       toast.error("Please select where you'd like your gift to go.");
       return;
     }
+    if (studentSelectionRequired) {
+      toast.error("Please choose who this gift is for.");
+      return;
+    }
     if (!formInstanceRef.current || !formReady) {
       toast.error("Payment form is still loading — please wait a moment");
       return;
@@ -997,6 +1025,7 @@ export default function GivingLinkForm({
               fraudSessionId,
               clientAttemptId: attemptId,
               fundId: selectedFundId || undefined,
+          ...studentPayload,
               pledgeId: pledgeId || undefined,
               eventRegistrationId,
               donor: {
@@ -1331,6 +1360,10 @@ export default function GivingLinkForm({
           </>
         )}
       </div>
+      )}
+
+      {studentGiving && (
+        <StudentGiftPicker slug={slug} studentGiving={studentGiving} choice={studentChoice} onChange={setStudentChoice} light={light} />
       )}
 
       {fundSelectionEnabled && assignedFunds.length > 0 && (

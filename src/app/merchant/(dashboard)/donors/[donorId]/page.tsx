@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowUpRight, AlertTriangle, FileText } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
+import { loadStudentsSupportedByDonor } from "@/lib/students/ledger";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
@@ -316,6 +318,7 @@ async function OverviewTab({
         <Card title="Donation Trend">
           <DonationTrendChart data={trend} />
         </Card>
+        <StudentsSupportedCard donorId={donor.id} churchId={churchId} />
         {fundBreakdown.length > 0 && (
           <Card title="Fund/Campaign Breakdown">
             <div className="overflow-x-auto">
@@ -654,6 +657,41 @@ async function GivingLinksTab({ instrumentIds, churchId, scopedUserId }: { instr
           </table>
         </div>
       )}
+    </Card>
+  );
+}
+
+/** Students this donor has supported (Student Giving). Renders nothing when
+ * the organization hasn't turned the feature on or the donor has no tagged gifts. */
+async function StudentsSupportedCard({ donorId, churchId }: { donorId: string; churchId: string }) {
+  const church = await prisma.church.findUnique({ where: { id: churchId }, select: { studentGivingEnabled: true } });
+  if (!church?.studentGivingEnabled) return null;
+  const supported = await loadStudentsSupportedByDonor({ churchId, donorId });
+  if (supported.length === 0) return null;
+  return (
+    <Card title="Students Supported">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-slate-500">
+            <th className="py-2 pr-4">Student</th>
+            <th className="py-2 pr-4">Term</th>
+            <th className="py-2 pr-4 text-right">Gifts</th>
+            <th className="py-2 text-right">Credited</th>
+          </tr>
+        </thead>
+        <tbody>
+          {supported.map((s) => (
+            <tr key={`${s.studentId}|${s.termLabel}`} className="border-t border-slate-50">
+              <td className="py-2 pr-4 font-semibold text-slate-800">
+                <Link href={`/merchant/students/${s.studentId}?term=${encodeURIComponent(s.termLabel)}`} className="hover:text-indigo-600">{s.studentName}</Link>
+              </td>
+              <td className="py-2 pr-4 text-slate-600">{s.termLabel || "—"}</td>
+              <td className="py-2 pr-4 text-right text-slate-600">{s.giftCount}</td>
+              <td className="py-2 text-right font-semibold text-slate-900">{formatCents(s.totalCents)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Card>
   );
 }

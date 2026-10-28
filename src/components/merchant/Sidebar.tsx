@@ -35,6 +35,7 @@ import {
   CalendarDays,
   PlusCircle,
   Layers,
+  GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
@@ -65,6 +66,8 @@ export interface NavAccess {
   /** Mirrors the take-payment API: every role except VIEWER. */
   canTakePayment: boolean;
   canViewFunds: boolean;
+  /** Student Giving is switched on for this organization and the user can see donors. */
+  canViewStudents: boolean;
 }
 
 /** Shared by the desktop and mobile sidebars. */
@@ -129,6 +132,17 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { name: "Donors", href: "/merchant/donors", icon: Users, section: "Giving" },
   { name: "Giving Links", href: "/merchant/giving-links", icon: HeartHandshake, section: "Giving" },
+  {
+    name: "Students",
+    href: "/merchant/students",
+    icon: GraduationCap,
+    section: "Giving",
+    access: "canViewStudents",
+    children: [
+      { name: "All Students", href: "/merchant/students" },
+      { name: "Unallocated Gifts", href: "/merchant/students/unallocated" },
+    ],
+  },
   { name: "Funds", href: "/merchant/funds", icon: Layers, section: "Giving", access: "canViewFunds" },
   { name: "Giving Campaigns", href: "/merchant/giving-campaigns", icon: Send, section: "Giving" },
   { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins, section: "Giving" },

@@ -120,6 +120,7 @@ export default async function MerchantDashboardLayout({
     canViewFundraisingCampaigns: hasPermission(auth, "canViewFundraisingCampaigns"),
     canTakePayment: auth.role !== "viewer",
     canViewFunds: hasPermission(auth, "canViewDonors"),
+    canViewStudents: church.studentGivingEnabled && hasPermission(auth, "canViewDonors"),
   };
 
   return (

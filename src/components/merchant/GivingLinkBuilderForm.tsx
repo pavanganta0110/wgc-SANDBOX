@@ -86,6 +86,7 @@ interface BuilderState {
   maxCollectedAmount: string;
   fundName: string;
   fundSelectionEnabled: boolean;
+  studentSelectionEnabled: boolean;
   allowedPaymentMethods: PaymentMethodKey[];
   donorFieldSettings: DonorFieldSettings;
   collectMailingAddress: boolean;
@@ -128,6 +129,7 @@ function defaultState(): BuilderState {
     maxCollectedAmount: "",
     fundName: "",
     fundSelectionEnabled: false,
+    studentSelectionEnabled: false,
     allowedPaymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
     collectMailingAddress: true,
@@ -206,7 +208,10 @@ export default function GivingLinkBuilderForm({
   initialOwnerUserId,
   canAssignOwner,
   initialFundAssignments,
+  studentGivingEnabled = false,
 }: {
+  /** Student Giving is on for this organization: offers the "who is this gift for?" picker toggle. */
+  studentGivingEnabled?: boolean;
   mode: "create" | "edit";
   linkId?: string;
   initial?: Partial<BuilderState> & { publicSlug?: string };
@@ -582,6 +587,7 @@ export default function GivingLinkBuilderForm({
       expiresAt: computeExpiresAt(),
       fundName: state.fundName.trim() || null,
       fundSelectionEnabled: state.fundSelectionEnabled,
+      studentSelectionEnabled: studentGivingEnabled ? state.studentSelectionEnabled : false,
       fundAssignments: state.fundSelectionEnabled
         ? funds.map((f) => ({ fundId: f.fundId, isDefault: f.isDefault, displayOrder: f.displayOrder }))
         : [],
@@ -786,6 +792,26 @@ export default function GivingLinkBuilderForm({
                 className={inputClass}
               />
             </div>
+
+            {studentGivingEnabled && (
+              <div className="border border-slate-200 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <h5 className="text-sm font-bold text-slate-900">Student Giving</h5>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xs font-semibold text-slate-500">Ask which student this gift is for</span>
+                    <input
+                      type="checkbox"
+                      checked={state.studentSelectionEnabled}
+                      onChange={(e) => update("studentSelectionEnabled", e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                  </label>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Donors choose a student, themselves, or the general scholarship fund. Gifts are credited to that student for the current term.
+                </p>
+              </div>
+            )}
 
             <div className="border border-slate-200 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">

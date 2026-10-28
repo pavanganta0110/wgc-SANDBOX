@@ -307,6 +307,10 @@ model Church {
   id                            String    @id @default(cuid())
   name                          String
   slug                          String    @unique
+  // Student Giving feature flag (per organization) and the term the public
+  // "who is this gift for?" picker credits gifts to, e.g. "Fall 2026".
+  studentGivingEnabled          Boolean   @default(false)
+  studentCurrentTerm            String?
   primaryContactEmail           String
   onboardingApplicationId       String?
   finixMerchantId               String?
@@ -919,6 +923,58 @@ model Fund {
 // table (no soft-delete of its own) — removing an assignment here only
 // stops the fund from being offered on this link going forward, it never
 // touches Payment.fundId/fundName snapshots already recorded.
+// Student Giving: a student a gift can be credited toward (a college's
+// roster). studentNumber is the institution's own ID, unique per church, and
+// is what roster re-imports match on. Never shown on public pages.
+model Student {
+  id            String   @id @default(cuid())
+  churchId      String
+  studentNumber String
+  firstName     String
+  lastName      String
+  email         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([churchId, studentNumber])
+  @@index([churchId, lastName])
+}
+
+// What a student owes for one term (e.g. "Fall 2026"). Balance is always
+// derived as charge minus settled, refund-netted gifts — never stored.
+model StudentTermCharge {
+  id          String   @id @default(cuid())
+  churchId    String
+  studentId   String
+  termLabel   String
+  amountCents Int
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, termLabel])
+  @@index([churchId, termLabel])
+}
+
+// Append-only record of every manual (re)assignment of a gift to a student.
+model StudentAssignmentAudit {
+  id                 String   @id @default(cuid())
+  churchId           String
+  paymentId          String?
+  externalDonationId String?
+  fromStudentId      String?
+  toStudentId        String?
+  termLabel          String?
+  givenFor           String?
+  actorUserId        String?
+  createdAt          DateTime @default(now())
+
+  @@index([churchId, createdAt])
+  @@index([paymentId])
+  @@index([externalDonationId])
+}
+
 model GivingLinkFund {
   id           String   @id @default(cuid())
   givingLinkId String
@@ -980,6 +1036,13 @@ model Payment {
   achAuthorizationAcceptedAt        DateTime?
   fundName                          String?
   fundId                            String?
+  // Student Giving: which student (and term) this gift is credited toward.
+  // Plain string FK-by-convention, validated server-side against the same
+  // church before being trusted. studentGivenFor is SPONSOR | SELF | GENERAL;
+  // GENERAL with a null studentId means "scholarship fund, not yet assigned".
+  studentId                         String?
+  studentTermLabel                  String?
+  studentGivenFor                   String?
   // Set when this payment fulfills (fully or partially) a campaign Pledge —
   // either via the public campaign page's "Give now" flow or a merchant
   // linking an existing payment as evidence. Server-validated to belong to
@@ -1031,6 +1094,7 @@ model Payment {
   // can never both record it. Callers that may race treat P2002 as "already
   // recorded". Null (no transfer yet / offline) is never constrained.
   @@unique([finixTransferId])
+  @@index([churchId, studentId])
 }
 
 // One immutable snapshot per receipt version sent (or prepared) for a
@@ -2144,6 +2208,11 @@ model FinixSubscription {
   // change historical recurring-donation records. Same rationale as
   // Payment.fundName.
   fundName                   String?
+  // Student Giving: inherited by every recurring charge's Payment so a
+  // monthly sponsor stays tied to the same student and term.
+  studentId                  String?
+  studentTermLabel           String?
+  studentGivenFor            String?
   // Denormalized from FinixPaymentInstrumentSnapshot.donorId at webhook-sync
   // time — donor is only ever real-linked through the instrument, this
   // column exists purely so the Recurring Donors / Subscriptions list
@@ -2631,6 +2700,13 @@ model GivingLink {
   // Gift Designations: when true, the public giving page offers a fund
   // dropdown built from this link's GivingLinkFund assignments.
   fundSelectionEnabled      Boolean   @default(false)
+  // Student Giving: when true, the public page asks "who is this gift for?".
+  // studentId/studentTermLabel set => a per-student link with the student
+  // pre-selected (no picker). Both are ignored unless the church has
+  // studentGivingEnabled.
+  studentSelectionEnabled   Boolean   @default(false)
+  studentId                 String?
+  studentTermLabel          String?
   recurringEnabled          Boolean   @default(false)
   allowedFrequenciesJson    Json?
   // Which option the public form opens on: ONE_TIME (today's behavior, and
@@ -3059,6 +3135,11 @@ model ExternalDonation {
 
   fundId          String?
   fundName        String?
+  // Student Giving — same semantics as Payment.studentId / studentTermLabel
+  // / studentGivenFor (offline gifts credited toward a student).
+  studentId       String?
+  studentTermLabel String?
+  studentGivenFor String?
   campaign        String?
   givingPageLabel String?
   donationPurpose String?
