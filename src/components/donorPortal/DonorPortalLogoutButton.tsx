@@ -13,7 +13,7 @@ export default function DonorPortalLogoutButton({ slug }: { slug: string }) {
     router.refresh();
   };
   return (
-    <button type="button" onClick={logout} className="text-sm text-slate-500 hover:text-slate-800">
+    <button type="button" onClick={logout} className="text-sm text-slate-500 hover:text-[var(--portal-accent)]">
       Sign out
     </button>
   );

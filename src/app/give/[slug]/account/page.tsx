@@ -46,8 +46,8 @@ export default async function DonorAccountPage({
     if (!(err instanceof DonorAuthError)) throw err;
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 py-10" style={accentStyle}>
-        <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-100 p-8">
-          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="My Giving" />
+        <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-100 border-t-4 border-t-[var(--portal-accent)] p-8">
+          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="My Giving" kindColor={accent} />
           <p className="text-sm text-slate-500 mb-6 text-center">Sign in to see your giving. Use the email you gave with.</p>
           <DonorPortalLoginForm slug={slug} linkError={Boolean(linkError)} />
         </div>
@@ -70,8 +70,9 @@ export default async function DonorAccountPage({
 
   return (
     <div className="min-h-screen bg-slate-50" style={accentStyle}>
+      <div className="h-1.5 w-full bg-[var(--portal-accent)]" aria-hidden />
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-        <OrganizationBrandHeader logoUrl={data.church?.logoUrl ?? church.logoUrl} organizationName={session.churchName} kind="My Giving" />
+        <OrganizationBrandHeader logoUrl={data.church?.logoUrl ?? church.logoUrl} organizationName={session.churchName} kind="My Giving" kindColor={accent} />
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-slate-900">{data.donorName ? `Welcome, ${data.donorName}` : "Welcome"}</h1>
           <DonorPortalLogoutButton slug={slug} />
@@ -80,11 +81,11 @@ export default async function DonorAccountPage({
         <section className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-slate-100 bg-white p-4">
             <p className="text-xs text-slate-500">This year</p>
-            <p className="text-xl font-semibold text-slate-900">{formatCents(data.yearToDate.netDonatedCents)}</p>
+            <p className="text-xl font-semibold text-[var(--portal-accent)]">{formatCents(data.yearToDate.netDonatedCents)}</p>
           </div>
           <div className="rounded-xl border border-slate-100 bg-white p-4">
             <p className="text-xs text-slate-500">All time</p>
-            <p className="text-xl font-semibold text-slate-900">{formatCents(data.lifetime.netDonatedCents)}</p>
+            <p className="text-xl font-semibold text-[var(--portal-accent)]">{formatCents(data.lifetime.netDonatedCents)}</p>
             <p className="text-xs text-slate-400">{data.lifetime.donationCount} gifts</p>
           </div>
         </section>
@@ -95,7 +96,7 @@ export default async function DonorAccountPage({
         )}
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Recurring gifts</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Recurring gifts</h2>
           {data.recurring.length === 0 ? (
             <p className="text-sm text-slate-500">You have no active recurring gifts.</p>
           ) : (
@@ -118,7 +119,7 @@ export default async function DonorAccountPage({
 
         {data.statements.length > 0 && (
           <section className="rounded-xl border border-slate-100 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Annual giving statements</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Annual giving statements</h2>
             <ul className="divide-y divide-slate-100">
               {data.statements.map((st) => (
                 <li key={st.id} className="py-2 flex justify-between text-sm">
@@ -131,7 +132,7 @@ export default async function DonorAccountPage({
         )}
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Ways to give</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Ways to give</h2>
           {data.waysToGive.length === 0 ? (
             <p className="text-sm text-slate-500">No giving options are open right now.</p>
           ) : (
@@ -150,7 +151,7 @@ export default async function DonorAccountPage({
         </section>
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3">Giving history</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Giving history</h2>
           {data.gifts.length === 0 ? (
             <p className="text-sm text-slate-500">No gifts yet.</p>
           ) : (
