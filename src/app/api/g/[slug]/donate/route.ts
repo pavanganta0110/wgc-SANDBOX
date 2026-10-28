@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -757,11 +757,12 @@ async function handleDonate(req: Request, slug: string) {
 
       // Donor-chosen day for every charge after today's. Best-effort and never
       // creates a charge: if Finix refuses, the gift simply keeps today's day.
-      let nextBillingDate = parseFinixDate(subscription.next_billing_date);
+      const nextBillingDate = parseFinixDate(subscription.next_billing_date);
+      let pullDaySet = false;
       if (interval === "MONTHLY" && Number.isInteger(billingCycleDay) && billingCycleDay >= 1 && billingCycleDay <= 28) {
         try {
-          const updated = await finixClient.updateSubscription(subscription.id, { billing_cycle_day: billingCycleDay });
-          nextBillingDate = parseFinixDate(updated?.next_billing_date) ?? nextBillingDate;
+          await finixClient.updateSubscription(subscription.id, { billing_cycle_day: billingCycleDay });
+          pullDaySet = true;
         } catch (err) {
           console.error("Failed to set recurring billing_cycle_day:", err);
         }
@@ -810,6 +811,28 @@ async function handleDonate(req: Request, slug: string) {
           lastSyncedAt: new Date(),
         },
       });
+
+      if (pullDaySet) {
+        // Finix reports the moved next_billing_date only ~5-10s after the day
+        // change (the update reply still shows today's date), so refresh it
+        // once the response has gone out instead of saving a stale date.
+        const finixSubscriptionId = subscription.id;
+        after(async () => {
+          for (const waitMs of [10_000, 20_000]) {
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
+            try {
+              const fresh = await finixClient.getSubscription(finixSubscriptionId);
+              const date = parseFinixDate(fresh?.next_billing_date);
+              if (date && (!nextBillingDate || date.getTime() > nextBillingDate.getTime())) {
+                await prisma.finixSubscription.update({ where: { finixSubscriptionId }, data: { nextBillingDate: date, lastSyncedAt: new Date() } });
+                return;
+              }
+            } catch (err) {
+              console.error("Failed to refresh next billing date after setting billing_cycle_day:", err);
+            }
+          }
+        });
+      }
 
       try {
         // A subscription.id fresh off finixClient.createSubscription() a
