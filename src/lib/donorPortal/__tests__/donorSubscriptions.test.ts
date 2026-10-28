@@ -6,24 +6,24 @@ const { prismaMock, finixMock, emitEventMock } = vi.hoisted(() => ({
     finixSubscription: { findFirst: vi.fn(), update: vi.fn() },
     finixPaymentInstrumentSnapshot: { findFirst: vi.fn() },
     subscriptionAction: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-    subscriptionSetupLink: { create: vi.fn() },
     $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops)),
   },
-  finixMock: { updateSubscription: vi.fn(), cancelSubscription: vi.fn() },
+  finixMock: { updateSubscription: vi.fn(), cancelSubscription: vi.fn(), createPaymentInstrument: vi.fn() },
   emitEventMock: vi.fn(),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/finix/client", () => ({ finixClient: finixMock }));
 vi.mock("@/lib/events/emitEvent", () => ({ emitEvent: emitEventMock }));
+vi.mock("@/lib/finix/sync/syncPaymentInstruments", () => ({ syncPaymentInstrument: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 
 import { Prisma } from "@prisma/client";
-import { donorUpdateSubscriptionAmount, donorCancelSubscription, createDonorPaymentUpdateSetupUrl, DonorSubscriptionError } from "../donorSubscriptions";
+import { isBankInstrumentType, donorUpdateSubscriptionAmount, donorCancelSubscription, donorUpdateSubscriptionCard, loadDonorCardUpdateContext, DonorSubscriptionError } from "../donorSubscriptions";
 
 const ctx = { churchId: "church1", sessionDonorId: "d1", subscriptionId: "sub1", idempotencyKey: "key-1" };
 const sub = {
   id: "sub1", churchId: "church1", donorId: "d1", finixSubscriptionId: "subscription_X", state: "ACTIVE", canceledAt: null, completedAt: null,
-  amountCents: 5000, donationAmountCents: 5000, donorCoversFee: false, isPledge: false, finixPaymentInstrumentId: "PI1", billingInterval: "MONTHLY", fundId: null,
+  amountCents: 5000, donationAmountCents: 5000, donorCoversFee: false, isPledge: false, finixPaymentInstrumentId: "PI1", finixBuyerIdentityId: "ID1", billingInterval: "MONTHLY", fundId: null,
 };
 
 beforeEach(() => {
@@ -31,11 +31,19 @@ beforeEach(() => {
   prismaMock.donor.findFirst.mockResolvedValue({ id: "d1", email: "ann@example.com" });
   prismaMock.donor.findMany.mockResolvedValue([{ id: "d1", name: "Ann", email: "ann@example.com", normalizedEmail: "ann@example.com" }]);
   prismaMock.finixSubscription.findFirst.mockResolvedValue(sub);
-  prismaMock.finixPaymentInstrumentSnapshot.findFirst.mockResolvedValue({ paymentMethodType: "card", cardBrand: "VISA" });
+  prismaMock.finixPaymentInstrumentSnapshot.findFirst.mockResolvedValue({ paymentMethodType: "PAYMENT_CARD", cardBrand: "VISA" });
   prismaMock.subscriptionAction.create.mockResolvedValue({});
   prismaMock.$transaction.mockImplementation(async (ops: unknown[]) => Promise.all(ops));
   finixMock.updateSubscription.mockResolvedValue({});
   finixMock.cancelSubscription.mockResolvedValue({});
+});
+
+describe("isBankInstrumentType", () => {
+  it("recognizes Finix's real type strings", () => {
+    expect(isBankInstrumentType("BANK_ACCOUNT")).toBe(true);
+    expect(isBankInstrumentType("PAYMENT_CARD")).toBe(false);
+    expect(isBankInstrumentType(null)).toBe(false);
+  });
 });
 
 describe("ownership", () => {
@@ -48,7 +56,9 @@ describe("ownership", () => {
     prismaMock.finixSubscription.findFirst.mockResolvedValue(null);
     await expect(donorUpdateSubscriptionAmount(ctx, 7500)).rejects.toMatchObject({ status: 404 });
     await expect(donorCancelSubscription(ctx)).rejects.toMatchObject({ status: 404 });
-    await expect(createDonorPaymentUpdateSetupUrl(ctx)).rejects.toMatchObject({ status: 404 });
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 404 });
+    await expect(loadDonorCardUpdateContext(ctx)).rejects.toMatchObject({ status: 404 });
+    expect(finixMock.createPaymentInstrument).not.toHaveBeenCalled();
     expect(finixMock.updateSubscription).not.toHaveBeenCalled();
     expect(finixMock.cancelSubscription).not.toHaveBeenCalled();
   });
@@ -153,12 +163,84 @@ describe("donorCancelSubscription", () => {
   });
 });
 
-describe("createDonorPaymentUpdateSetupUrl", () => {
-  it("creates a short-lived setup link bound to this subscription and returns its /setup url", async () => {
-    const url = await createDonorPaymentUpdateSetupUrl(ctx);
-    expect(url).toMatch(/^\/setup\/[0-9a-f]{64}$/);
-    const data = prismaMock.subscriptionSetupLink.create.mock.calls[0][0].data;
-    expect(data).toMatchObject({ churchId: "church1", donorId: "d1", updateTargetFinixSubscriptionId: "subscription_X" });
-    expect(data.tokenHash).not.toContain(url.slice(7));
+describe("donorUpdateSubscriptionCard", () => {
+  beforeEach(() => {
+    finixMock.createPaymentInstrument.mockResolvedValue({ id: "PInew", type: "PAYMENT_CARD", brand: "VISA", last_four: "4242" });
+  });
+
+  it("saves the card on the donor's own identity, then swaps it on the SAME subscription — no new subscription, no cancel", async () => {
+    const r = await donorUpdateSubscriptionCard(ctx, "TKN12345");
+    expect(finixMock.createPaymentInstrument).toHaveBeenCalledWith({ identity: "ID1", token: "TKN12345", type: "TOKEN" });
+    expect(finixMock.updateSubscription).toHaveBeenCalledWith("subscription_X", { buyer_details: { instrument_id: "PInew" } });
+    expect(finixMock.cancelSubscription).not.toHaveBeenCalled();
+    expect(prismaMock.finixSubscription.update.mock.calls[0][0].data).toMatchObject({ finixPaymentInstrumentId: "PInew" });
+    expect(r).toMatchObject({ last4: "4242", brand: "VISA" });
+  });
+
+  it("recomputes the covered fee in the same PUT when the new card's brand changes it", async () => {
+    prismaMock.finixSubscription.findFirst.mockResolvedValue({ ...sub, donorCoversFee: true, amountCents: 5180, donationAmountCents: 5000 });
+    finixMock.createPaymentInstrument.mockResolvedValue({ id: "PIamex", type: "PAYMENT_CARD", brand: "AMERICAN_EXPRESS", last_four: "0005" });
+    const r = (await donorUpdateSubscriptionCard(ctx, "TKN12345")) as { amountCents: number };
+    const put = finixMock.updateSubscription.mock.calls[0][1];
+    expect(put.buyer_details).toEqual({ instrument_id: "PIamex" });
+    expect(put.amount).toBe(r.amountCents);
+    expect(put.amount).toBeGreaterThan(5000);
+  });
+
+  it("does not touch the subscription when Finix rejects the card", async () => {
+    finixMock.createPaymentInstrument.mockRejectedValue(new Error("declined"));
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 502 });
+    expect(finixMock.updateSubscription).not.toHaveBeenCalled();
+    expect(prismaMock.finixSubscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.subscriptionAction.update.mock.calls[0][0].data.state).toBe("FAILED");
+  });
+
+  it("keeps the old card in the database when the swap itself fails", async () => {
+    finixMock.updateSubscription.mockRejectedValue(new Error("boom"));
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 502 });
+    expect(prismaMock.finixSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it("tells the donor when the card was declined at authorization, and leaves everything unchanged", async () => {
+    finixMock.updateSubscription.mockRejectedValue(new Error('Finix Error: Authorization AU123 was declined.'));
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 400, message: expect.stringContaining("declined") });
+    expect(prismaMock.finixSubscription.update).not.toHaveBeenCalled();
+    expect(prismaMock.subscriptionAction.update.mock.calls[0][0].data.state).toBe("FAILED");
+  });
+
+  it("only accepts cards, only for active gifts, and refuses bank-funded gifts before calling Finix", async () => {
+    finixMock.createPaymentInstrument.mockResolvedValue({ id: "PIbank", type: "BANK_ACCOUNT" });
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 400 });
+    expect(finixMock.updateSubscription).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    prismaMock.finixSubscription.findFirst.mockResolvedValue({ ...sub, state: "CANCELED", canceledAt: new Date() });
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 400 });
+
+    prismaMock.finixSubscription.findFirst.mockResolvedValue(sub);
+    prismaMock.finixPaymentInstrumentSnapshot.findFirst.mockResolvedValue({ paymentMethodType: "BANK_ACCOUNT", cardBrand: null });
+    prismaMock.donor.findMany.mockResolvedValue([{ id: "d1", name: "Ann", email: "ann@example.com", normalizedEmail: "ann@example.com" }]);
+    prismaMock.donor.findFirst.mockResolvedValue({ id: "d1", email: "ann@example.com" });
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 400 });
+    expect(finixMock.createPaymentInstrument).not.toHaveBeenCalled();
+  });
+
+  it("refuses a covered-fee gift whose donation amount is unknown (the fee can't be recomputed)", async () => {
+    prismaMock.finixSubscription.findFirst.mockResolvedValue({ ...sub, donorCoversFee: true, donationAmountCents: null });
+    await expect(donorUpdateSubscriptionCard(ctx, "TKN12345")).rejects.toMatchObject({ status: 400 });
+    expect(finixMock.createPaymentInstrument).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing or oversized token", async () => {
+    await expect(donorUpdateSubscriptionCard(ctx, "")).rejects.toMatchObject({ status: 400 });
+    await expect(donorUpdateSubscriptionCard(ctx, "x".repeat(300))).rejects.toMatchObject({ status: 400 });
+    expect(finixMock.createPaymentInstrument).not.toHaveBeenCalled();
+  });
+
+  it("replays a completed request without saving another card", async () => {
+    prismaMock.subscriptionAction.create.mockRejectedValue(new Prisma.PrismaClientKnownRequestError("dup", { code: "P2002", clientVersion: "x" }));
+    prismaMock.subscriptionAction.findUnique.mockResolvedValue({ churchId: "church1", finixSubscriptionId: "subscription_X", actionType: "PAYMENT_METHOD_UPDATED", state: "COMPLETED", newValue: { last4: "4242" } });
+    expect(await donorUpdateSubscriptionCard(ctx, "TKN12345")).toEqual({ last4: "4242" });
+    expect(finixMock.createPaymentInstrument).not.toHaveBeenCalled();
   });
 });

@@ -3,12 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { resolveSubscriptionDisplayStatus } from "@/lib/subscriptions/subscriptionStatus";
-import { generateSetupLinkToken } from "@/lib/subscriptions/setupLinkToken";
+import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { findPortalDonorsByEmail } from "@/lib/donorPortal/donorAuth";
 
 const MIN_AMOUNT_CENTS = 100;
-const SETUP_LINK_EXPIRY_MS = 60 * 60 * 1000;
+
+/** Finix stores instrument types as PAYMENT_CARD / BANK_ACCOUNT — match loosely so a bank account is never mistaken for a card. */
+export function isBankInstrumentType(paymentMethodType: string | null | undefined): boolean {
+  return /bank/i.test(paymentMethodType ?? "");
+}
 
 export class DonorSubscriptionError extends Error {
   constructor(message: string, public status: number) {
@@ -44,7 +48,7 @@ async function loadOwnedSubscription(churchId: string, sessionDonorId: string, s
 }
 
 /** Claims the idempotency key; returns the stored result when this exact request already completed. */
-async function beginAction(ctx: DonorActionContext, actionType: "UPDATE_AMOUNT" | "CANCEL", finixSubscriptionId: string, oldValue: Prisma.InputJsonValue, newValue?: Prisma.InputJsonValue) {
+async function beginAction(ctx: DonorActionContext, actionType: "UPDATE_AMOUNT" | "CANCEL" | "PAYMENT_METHOD_UPDATED", finixSubscriptionId: string, oldValue: Prisma.InputJsonValue, newValue?: Prisma.InputJsonValue) {
   try {
     await prisma.subscriptionAction.create({
       data: { churchId: ctx.churchId, finixSubscriptionId, actionType, idempotencyKey: ctx.idempotencyKey, requestedByUserId: null, oldValue, newValue, state: "PENDING" },
@@ -99,7 +103,7 @@ export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, new
   const fee = calculateWgcFeeAmounts({
     donationAmountCents: newDonationAmountCents,
     donorCoversFee,
-    paymentMethod: instrument?.paymentMethodType === "bank" ? "ACH" : "CARD",
+    paymentMethod: isBankInstrumentType(instrument?.paymentMethodType) ? "ACH" : "CARD",
     cardBrand: instrument?.cardBrand || null,
   });
   const finalAmountCents = donorCoversFee ? fee.amountToChargeCents : newDonationAmountCents;
@@ -181,37 +185,102 @@ export async function donorCancelSubscription(ctx: DonorActionContext, reason?: 
   return { id: subscription.id, canceledAt: canceledAt.toISOString() };
 }
 
-/**
- * Returns the URL of the existing hosted card-update page (/setup/[token]) for
- * this subscription. The signed-in donor skips the email round trip, but the
- * card itself is still entered into Finix.js on that page — card numbers never
- * reach our servers.
- */
-export async function createDonorPaymentUpdateSetupUrl(ctx: Pick<DonorActionContext, "churchId" | "sessionDonorId" | "subscriptionId">): Promise<string> {
+/** What the card-update page needs to render — only for a subscription this donor owns and whose card can be changed online. */
+export async function loadDonorCardUpdateContext(ctx: Pick<DonorActionContext, "churchId" | "sessionDonorId" | "subscriptionId">) {
   const { subscription, status } = await loadOwnedSubscription(ctx.churchId, ctx.sessionDonorId, ctx.subscriptionId);
+  assertCardUpdatable(subscription, status);
+  const instrument = subscription.finixPaymentInstrumentId
+    ? await prisma.finixPaymentInstrumentSnapshot.findFirst({ where: { finixPaymentInstrumentId: subscription.finixPaymentInstrumentId, churchId: ctx.churchId }, select: { paymentMethodType: true, cardBrand: true, cardLast4: true } })
+    : null;
+  if (isBankInstrumentType(instrument?.paymentMethodType)) throw new DonorSubscriptionError("This gift is paid from a bank account. Please contact the organization to change it.", 400);
+  return {
+    amountCents: subscription.amountCents,
+    billingInterval: subscription.billingInterval,
+    donorName: (await prisma.donor.findFirst({ where: { id: ctx.sessionDonorId, churchId: ctx.churchId }, select: { name: true } }))?.name ?? null,
+    currentCard: instrument ? { brand: instrument.cardBrand, last4: instrument.cardLast4 } : null,
+  };
+}
+
+function assertCardUpdatable(subscription: { finixBuyerIdentityId: string | null; donorCoversFee: boolean | null; donationAmountCents: number | null }, status: string) {
   if (status !== "ACTIVE" && status !== "PAST_DUE") throw new DonorSubscriptionError("Only an active recurring gift's card can be updated.", 400);
+  if (!subscription.finixBuyerIdentityId) throw new DonorSubscriptionError("This recurring gift can't be changed online. Please contact the organization.", 400);
+  // A covered fee depends on the card brand, so the donation amount must be known to recompute it.
+  if (subscription.donorCoversFee && subscription.donationAmountCents == null) throw new DonorSubscriptionError("This recurring gift can't be changed online. Please contact the organization.", 400);
+}
 
-  const donor = await prisma.donor.findFirst({ where: { id: subscription.donorId!, churchId: ctx.churchId }, select: { id: true, email: true } });
-  if (!donor?.email) throw new DonorSubscriptionError("Recurring gift not found.", 404);
+/**
+ * Swaps the card on an existing subscription IN PLACE: the card is tokenized in
+ * the browser by Finix.js (raw numbers never reach us), saved on the donor's
+ * existing Finix identity, then PUT onto the same subscription. No new
+ * subscription, no cancel, no new donor record, and the billing schedule is
+ * untouched. When the donor covers fees and the new card's brand has a
+ * different fee, the amount is recomputed in the same PUT.
+ */
+export async function donorUpdateSubscriptionCard(ctx: DonorActionContext, finixToken: string) {
+  if (typeof finixToken !== "string" || finixToken.length < 5 || finixToken.length > 200) throw new DonorSubscriptionError("Please re-enter your card details.", 400);
 
-  const { token, tokenHash } = generateSetupLinkToken();
-  await prisma.subscriptionSetupLink.create({
-    data: {
-      churchId: ctx.churchId,
-      donorId: donor.id,
-      donorEmail: donor.email,
-      tokenHash,
-      amountCents: subscription.amountCents ?? 0,
-      billingInterval: subscription.billingInterval ?? "MONTHLY",
-      startDate: new Date(),
-      fundId: subscription.fundId,
-      status: "SENT",
-      sentAt: new Date(),
-      expiresAt: new Date(Date.now() + SETUP_LINK_EXPIRY_MS),
-      createdByUserId: null,
-      updateTargetFinixSubscriptionId: subscription.finixSubscriptionId,
-    },
-  });
+  const { subscription, status } = await loadOwnedSubscription(ctx.churchId, ctx.sessionDonorId, ctx.subscriptionId);
+  assertCardUpdatable(subscription, status);
+  const identityId = subscription.finixBuyerIdentityId!;
+  const currentInstrument = subscription.finixPaymentInstrumentId
+    ? await prisma.finixPaymentInstrumentSnapshot.findFirst({ where: { finixPaymentInstrumentId: subscription.finixPaymentInstrumentId, churchId: ctx.churchId }, select: { paymentMethodType: true } })
+    : null;
+  if (isBankInstrumentType(currentInstrument?.paymentMethodType)) throw new DonorSubscriptionError("This gift is paid from a bank account. Please contact the organization to change it.", 400);
 
-  return `/setup/${token}`;
+  const begun = await beginAction(ctx, "PAYMENT_METHOD_UPDATED", subscription.finixSubscriptionId, { finixPaymentInstrumentId: subscription.finixPaymentInstrumentId, amountCents: subscription.amountCents });
+  if (begun.replay) return begun.replay;
+
+  const fail = async (message: string, httpStatus: number, reason: string): Promise<never> => {
+    await prisma.subscriptionAction.update({ where: { idempotencyKey: ctx.idempotencyKey }, data: { state: "FAILED", failureReason: reason } });
+    throw new DonorSubscriptionError(message, httpStatus);
+  };
+
+  // 1. Save the new card on the donor's identity. Harmless if a later step fails — it is simply never attached.
+  let instrument: { id?: string; type?: string; brand?: string; last_four?: string } | null = null;
+  try {
+    instrument = await finixClient.createPaymentInstrument({ identity: identityId, token: finixToken, type: "TOKEN" });
+  } catch (err) {
+    return fail("We couldn't save that card. Please check the details and try again.", 502, err instanceof Error ? err.message : "createPaymentInstrument failed");
+  }
+  if (!instrument?.id) return fail("We couldn't save that card. Please check the details and try again.", 502, "No instrument id returned");
+  if (instrument.type && instrument.type !== "PAYMENT_CARD") return fail("Please enter a credit or debit card.", 400, `Unsupported instrument type ${instrument.type}`);
+
+  // 2. A covered fee follows the card brand — recompute so the donor is charged exactly donation + fee.
+  const donorCoversFee = subscription.donorCoversFee ?? false;
+  let newAmountCents = subscription.amountCents;
+  if (donorCoversFee) {
+    const fee = calculateWgcFeeAmounts({ donationAmountCents: subscription.donationAmountCents!, donorCoversFee: true, paymentMethod: "CARD", cardBrand: instrument.brand ?? null });
+    newAmountCents = fee.amountToChargeCents;
+  }
+  const amountChanged = newAmountCents != null && newAmountCents !== subscription.amountCents;
+
+  // 3. Swap on Finix first (external HTTP, outside any transaction); the DB follows only after Finix confirms.
+  try {
+    await finixClient.updateSubscription(subscription.finixSubscriptionId, { buyer_details: { instrument_id: instrument.id }, ...(amountChanged ? { amount: newAmountCents! } : {}) });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : "updateSubscription failed";
+    // Finix authorizes a new card before attaching it, so a declined card is a donor-fixable problem, not an outage.
+    if (/declined/i.test(reason)) return fail("That card was declined. Please try a different card — your current card is unchanged.", 400, reason);
+    return fail("We couldn't update your card. Your current card is unchanged.", 502, reason);
+  }
+
+  try {
+    await syncPaymentInstrument(instrument.id, { churchId: ctx.churchId, donorId: subscription.donorId ?? undefined });
+  } catch (err) {
+    console.error("Failed to snapshot the new payment instrument:", err);
+  }
+
+  const result = { id: subscription.id, last4: instrument.last_four ?? null, brand: instrument.brand ?? null, amountCents: newAmountCents };
+  await prisma.$transaction([
+    prisma.finixSubscription.update({
+      where: { id: subscription.id },
+      data: { finixPaymentInstrumentId: instrument.id, ...(amountChanged ? { amountCents: newAmountCents! } : {}), lastSyncedAt: new Date() },
+    }),
+    prisma.subscriptionAction.update({
+      where: { idempotencyKey: ctx.idempotencyKey },
+      data: { state: "COMPLETED", newValue: { ...result, finixPaymentInstrumentId: instrument.id, source: "DONOR_PORTAL", ipAddress: ctx.ipAddress ?? null, userAgent: ctx.userAgent ?? null }, completedAt: new Date() },
+    }),
+  ]);
+
+  return result;
 }

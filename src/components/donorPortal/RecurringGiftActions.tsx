@@ -51,17 +51,9 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
     <div className="mt-2 space-y-2">
       <div className="flex gap-4">
         {donationAmountCents != null && <button type="button" className={link} onClick={() => { setMode("AMOUNT"); setError(null); }}>Change amount</button>}
-        <button
-          type="button"
-          className={link}
-          disabled={busy}
-          onClick={() => run(async () => {
-            const data = await post(`${base}/payment-update`, { slug });
-            window.location.href = data.url;
-          })}
-        >
+        <a href={`/give/${slug}/account/card/${subscriptionId}`} className={link}>
           Update card
-        </button>
+        </a>
         <button type="button" className="text-xs font-medium text-red-600 hover:text-red-500" onClick={() => { setMode("CANCEL"); setError(null); }}>Cancel</button>
       </div>
 
