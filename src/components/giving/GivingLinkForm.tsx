@@ -17,6 +17,7 @@ import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 import type { PublicStudentGiving } from "@/lib/givingLinks/loadPublicGivingPageData";
 import StudentGiftPicker, {
   EMPTY_STUDENT_CHOICE,
+  initialStudentChoice,
   studentChoiceIncomplete,
   studentChoicePayload,
   type StudentChoice,
@@ -209,6 +210,8 @@ export default function GivingLinkForm({
   const [detectedCardBrand, setDetectedCardBrand] = useState<string | null>(null);
   const [isRecurring, setIsRecurring] = useState(initialDonation.isRecurring);
   const [frequency, setFrequency] = useState<FrequencyKey>(allowedFrequencies[0] ?? "MONTHLY");
+  // Monthly gifts: "" = keep charging on today's day; otherwise 1-28, the day of the month for every charge after today's.
+  const [pullDay, setPullDay] = useState("");
   const [coverFees, setCoverFees] = useState(feeCoverDefaultOn);
   const [paymentMethod, setPaymentMethod] = useState<"card" | "bank">(
     allowedPaymentMethods.includes("CARD") ? "card" : "bank"
@@ -292,8 +295,13 @@ export default function GivingLinkForm({
   const selectedFund = assignedFunds.find((f) => f.fundId === selectedFundId) || null;
   const fundSelectionRequired = fundSelectionEnabled && assignedFunds.length > 0 && !selectedFundId;
   const [studentChoice, setStudentChoice] = useState<StudentChoice>(
-    studentGiving?.mode === "LOCKED" ? { ...EMPTY_STUDENT_CHOICE, givenFor: "SPONSOR" } : EMPTY_STUDENT_CHOICE,
+    initialStudentChoice(studentGiving),
   );
+  const studentDefault = studentGiving?.mode === "PICKER" ? studentGiving.defaultGivenFor : null;
+  useEffect(() => {
+    // The builder preview can change the default live; re-open on it.
+    if (studentDefault) setStudentChoice({ ...EMPTY_STUDENT_CHOICE, givenFor: studentDefault });
+  }, [studentDefault]);
   const studentSelectionRequired = studentChoiceIncomplete(studentGiving, studentChoice);
   const studentPayload = studentChoicePayload(studentGiving, studentChoice);
 
@@ -1024,6 +1032,7 @@ export default function GivingLinkForm({
               coverFees: feeCoverEnabled ? coverFees : false,
               isRecurring: recurringEnabled ? isRecurring : false,
               billingInterval: isRecurring ? frequency : undefined,
+              billingCycleDay: isRecurring && frequency === "MONTHLY" && pullDay ? Number(pullDay) : undefined,
               paymentMethod,
               fraudSessionId,
               clientAttemptId: attemptId,
@@ -1259,6 +1268,27 @@ export default function GivingLinkForm({
               <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>
             ))}
           </select>
+          {frequency === "MONTHLY" && (
+            <div className="mt-3">
+              <label className="block text-xs font-semibold mb-1.5" style={{ color: light.bodyTextColor }}>
+                Day of the month for future gifts
+              </label>
+              <select
+                value={pullDay}
+                onChange={(e) => setPullDay(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+                style={{ borderColor: light.borderColor }}
+              >
+                <option value="">Same day each month (starting today)</option>
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                  <option key={d} value={d}>{`The ${d}${["th", "st", "nd", "rd"][d % 100 >= 11 && d % 100 <= 13 ? 0 : d % 10 < 4 ? d % 10 : 0]}`}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs opacity-70" style={{ color: light.bodyTextColor }}>
+                Your first gift is charged today. After that, gifts are charged on the day you choose.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1369,7 +1399,7 @@ export default function GivingLinkForm({
         <StudentGiftPicker slug={slug} studentGiving={studentGiving} choice={studentChoice} onChange={setStudentChoice} light={light} previewStudents={previewMode ? previewStudents : undefined} />
       )}
 
-      {fundSelectionEnabled && assignedFunds.length > 0 && (
+      {fundSelectionEnabled && !studentGiving && assignedFunds.length > 0 && (
         <div>
           <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
             Where would you like your gift to go?

@@ -10,6 +10,13 @@ export type StudentChoice = {
   studentName: string;
 };
 
+/** The picker opens on the link's configured default, so no "Select..." step is needed. */
+export function initialStudentChoice(studentGiving: PublicStudentGiving | null | undefined): StudentChoice {
+  if (studentGiving?.mode === "LOCKED") return { ...EMPTY_STUDENT_CHOICE, givenFor: "SPONSOR" };
+  if (studentGiving?.mode === "PICKER") return { ...EMPTY_STUDENT_CHOICE, givenFor: studentGiving.defaultGivenFor };
+  return EMPTY_STUDENT_CHOICE;
+}
+
 export const EMPTY_STUDENT_CHOICE: StudentChoice = { givenFor: "", studentId: "", studentName: "" };
 
 /** True while the picker still needs an answer before a gift can be submitted. */
@@ -98,7 +105,7 @@ export default function StudentGiftPicker({
   return (
     <div>
       <label className="block text-xs font-semibold mb-2" style={labelStyle}>
-        Who is this gift for?
+        Gift designation
         {studentGiving.termLabel ? ` (${studentGiving.termLabel})` : ""}
       </label>
       <select
@@ -110,7 +117,6 @@ export default function StudentGiftPicker({
         className={inputClass}
         style={inputStyle}
       >
-        <option value="">Select...</option>
         <option value="SPONSOR">A student I&apos;m supporting</option>
         <option value="SELF">Myself — I&apos;m the student</option>
         <option value="GENERAL">General scholarship fund</option>

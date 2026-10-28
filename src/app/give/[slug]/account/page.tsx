@@ -109,7 +109,7 @@ export default async function DonorAccountPage({
                     </span>
                     <span className="text-slate-500">{r.nextBillingDate ? `Next: ${dateFormat.format(r.nextBillingDate)}` : ""}</span>
                   </div>
-                  <RecurringGiftActions slug={slug} subscriptionId={r.id} donationAmountCents={r.donationAmountCents ?? (r.donorCoversFee ? null : r.amountCents)} isPledge={r.isPledge} />
+                  <RecurringGiftActions slug={slug} subscriptionId={r.id} donationAmountCents={r.donationAmountCents ?? (r.donorCoversFee ? null : r.amountCents)} isPledge={r.isPledge} donorCoversFee={r.donorCoversFee ?? false} />
                 </li>
               ))}
             </ul>
@@ -169,11 +169,11 @@ export default async function DonorAccountPage({
                 {data.gifts.map((g) => (
                   <tr key={`${g.source}-${g.id}`}>
                     <td className="py-2 text-slate-700">{g.date ? dateFormat.format(g.date) : "—"}</td>
-                    <td className="py-2 text-slate-700">{g.givingLinkTitle ?? (g.source === "RECORDED_BY_CHURCH" ? "Recorded by church" : "—")}</td>
+                    <td className="py-2 text-slate-700">{g.givingLinkTitle ?? (g.source === "RECORDED_BY_CHURCH" ? "Recorded by organization" : "—")}</td>
                     <td className="py-2 text-slate-500">{g.fundName ?? "General"}</td>
                     <td className="py-2 text-slate-500">
                       {giftStatusLabel(g.status)}
-                      {g.source === "RECORDED_BY_CHURCH" ? " · recorded by church" : ""}
+                      {g.source === "RECORDED_BY_CHURCH" ? " · recorded by organization" : ""}
                     </td>
                     <td className="py-2 text-right text-slate-900">{formatCents(g.amountCents)}</td>
                     <td className="py-2 pl-4 text-right">

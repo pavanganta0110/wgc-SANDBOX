@@ -87,6 +87,7 @@ interface BuilderState {
   fundName: string;
   fundSelectionEnabled: boolean;
   studentSelectionEnabled: boolean;
+  studentDefaultGivenFor: "SPONSOR" | "SELF" | "GENERAL";
   allowedPaymentMethods: PaymentMethodKey[];
   donorFieldSettings: DonorFieldSettings;
   collectMailingAddress: boolean;
@@ -130,6 +131,7 @@ function defaultState(): BuilderState {
     fundName: "",
     fundSelectionEnabled: false,
     studentSelectionEnabled: false,
+    studentDefaultGivenFor: "SPONSOR",
     allowedPaymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
     collectMailingAddress: true,
@@ -604,6 +606,7 @@ export default function GivingLinkBuilderForm({
       fundName: state.fundName.trim() || null,
       fundSelectionEnabled: state.fundSelectionEnabled,
       studentSelectionEnabled: studentGivingEnabled ? state.studentSelectionEnabled : false,
+      studentDefaultGivenFor: state.studentDefaultGivenFor,
       fundAssignments: state.fundSelectionEnabled
         ? funds.map((f) => ({ fundId: f.fundId, isDefault: f.isDefault, displayOrder: f.displayOrder }))
         : [],
@@ -818,6 +821,7 @@ export default function GivingLinkBuilderForm({
                     <input
                       type="checkbox"
                       checked={state.studentSelectionEnabled}
+                      disabled={state.fundSelectionEnabled}
                       onChange={(e) => update("studentSelectionEnabled", e.target.checked)}
                       className="w-4 h-4"
                     />
@@ -826,6 +830,23 @@ export default function GivingLinkBuilderForm({
                 <p className="text-xs text-slate-500">
                   Donors choose a student, themselves, or the general scholarship fund. Gifts are credited to that student for the current term.
                 </p>
+                {state.fundSelectionEnabled && (
+                  <p className="text-xs text-amber-700 mt-1">Turn off Gift Designations below to use Student Giving on this link.</p>
+                )}
+                {state.studentSelectionEnabled && (
+                  <label className="block mt-2 text-xs font-semibold text-slate-500">
+                    Default designation
+                    <select
+                      value={state.studentDefaultGivenFor}
+                      onChange={(e) => update("studentDefaultGivenFor", e.target.value as BuilderState["studentDefaultGivenFor"])}
+                      className={`${inputClass} mt-1`}
+                    >
+                      <option value="SPONSOR">A student I&apos;m supporting</option>
+                      <option value="SELF">Myself — I&apos;m the student</option>
+                      <option value="GENERAL">General scholarship fund</option>
+                    </select>
+                  </label>
+                )}
               </div>
             )}
 
@@ -837,6 +858,7 @@ export default function GivingLinkBuilderForm({
                   <input
                     type="checkbox"
                     checked={state.fundSelectionEnabled}
+                    disabled={state.studentSelectionEnabled}
                     onChange={(e) => update("fundSelectionEnabled", e.target.checked)}
                     className="w-4 h-4"
                   />
@@ -1474,7 +1496,7 @@ export default function GivingLinkBuilderForm({
               .filter((f) => f.isActive)
               .map((f) => ({ fundId: f.fundId, name: f.name, description: f.description || null, isDefault: f.isDefault, displayOrder: f.displayOrder }))}
             studentGiving={
-              studentGivingEnabled && state.studentSelectionEnabled ? { mode: "PICKER", termLabel: studentPreview?.term ?? null } : null
+              studentGivingEnabled && state.studentSelectionEnabled ? { mode: "PICKER", termLabel: studentPreview?.term ?? null, defaultGivenFor: state.studentDefaultGivenFor } : null
             }
             previewStudents={studentPreview?.students}
             pageType={pageType}

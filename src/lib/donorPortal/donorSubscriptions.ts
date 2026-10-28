@@ -80,7 +80,7 @@ async function beginAction(ctx: DonorActionContext, actionType: "UPDATE_AMOUNT" 
  * the Finix subscription id never changes there is no cancel/recreate gap in
  * which a donor's gift could silently stop.
  */
-export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, newDonationAmountCents: number) {
+export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, newDonationAmountCents: number, newDonorCoversFee?: boolean) {
   if (!Number.isInteger(newDonationAmountCents) || newDonationAmountCents < MIN_AMOUNT_CENTS) {
     throw new DonorSubscriptionError("Please enter an amount of at least $1.00.", 400);
   }
@@ -89,12 +89,15 @@ export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, new
   if (status !== "ACTIVE") throw new DonorSubscriptionError("Only an active recurring gift can be changed.", 400);
   if (subscription.isPledge) throw new DonorSubscriptionError("This recurring gift is part of a pledge. Please contact the organization to change it.", 400);
 
-  const donorCoversFee = subscription.donorCoversFee ?? false;
-  const currentDonationCents = subscription.donationAmountCents ?? (donorCoversFee ? null : subscription.amountCents);
+  const currentDonorCoversFee = subscription.donorCoversFee ?? false;
+  const donorCoversFee = typeof newDonorCoversFee === "boolean" ? newDonorCoversFee : currentDonorCoversFee;
+  const currentDonationCents = subscription.donationAmountCents ?? (currentDonorCoversFee ? null : subscription.amountCents);
   if (currentDonationCents == null || !subscription.finixPaymentInstrumentId) {
     throw new DonorSubscriptionError("This recurring gift can't be changed online. Please contact the organization.", 400);
   }
-  if (newDonationAmountCents === currentDonationCents) throw new DonorSubscriptionError("That is already your current amount.", 400);
+  if (newDonationAmountCents === currentDonationCents && donorCoversFee === currentDonorCoversFee) {
+    throw new DonorSubscriptionError("That is already your current amount.", 400);
+  }
 
   const instrument = await prisma.finixPaymentInstrumentSnapshot.findFirst({
     where: { finixPaymentInstrumentId: subscription.finixPaymentInstrumentId, churchId: ctx.churchId },
@@ -112,8 +115,8 @@ export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, new
     ctx,
     "UPDATE_AMOUNT",
     subscription.finixSubscriptionId,
-    { amountCents: subscription.amountCents, donationAmountCents: currentDonationCents },
-    { amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents, source: "DONOR_PORTAL", ipAddress: ctx.ipAddress ?? null, userAgent: ctx.userAgent ?? null },
+    { amountCents: subscription.amountCents, donationAmountCents: currentDonationCents, donorCoversFee: currentDonorCoversFee },
+    { amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents, donorCoversFee, source: "DONOR_PORTAL", ipAddress: ctx.ipAddress ?? null, userAgent: ctx.userAgent ?? null },
   );
   if (begun.replay) return begun.replay;
 
@@ -128,11 +131,11 @@ export async function donorUpdateSubscriptionAmount(ctx: DonorActionContext, new
     throw new DonorSubscriptionError("We couldn't update your gift. Your current amount is unchanged.", 502);
   }
 
-  const result = { id: subscription.id, amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents };
+  const result = { id: subscription.id, amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents, donorCoversFee };
   await prisma.$transaction([
     prisma.finixSubscription.update({
       where: { id: subscription.id },
-      data: { amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents, feeCalculationVersion: "v1", lastSyncedAt: new Date() },
+      data: { amountCents: finalAmountCents, donationAmountCents: newDonationAmountCents, donorCoversFee, feeCalculationVersion: "v1", lastSyncedAt: new Date() },
     }),
     prisma.subscriptionAction.update({
       where: { idempotencyKey: ctx.idempotencyKey },

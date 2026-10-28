@@ -60,6 +60,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     fundName: link.fundName || "",
     fundSelectionEnabled: link.fundSelectionEnabled,
     studentSelectionEnabled: link.studentSelectionEnabled,
+    studentDefaultGivenFor: (link.studentDefaultGivenFor === "SELF" || link.studentDefaultGivenFor === "GENERAL" ? link.studentDefaultGivenFor : "SPONSOR") as "SPONSOR" | "SELF" | "GENERAL",
     allowedPaymentMethods: parseAllowedPaymentMethods(link.allowedPaymentMethodsJson),
     donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
     collectMailingAddress: link.collectMailingAddress,

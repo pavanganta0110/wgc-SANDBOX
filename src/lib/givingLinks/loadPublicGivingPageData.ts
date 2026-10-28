@@ -40,10 +40,14 @@ export type PublicGivingPageData =
       studentGiving: PublicStudentGiving | null;
     };
 
-/** What the public page needs to ask "who is this gift for?". Names only —
+function parseDefaultGivenFor(v: string | null | undefined): "SPONSOR" | "SELF" | "GENERAL" {
+  return v === "SELF" || v === "GENERAL" ? v : "SPONSOR";
+}
+
+/** What the public page needs to ask for the gift designation. Names only —
  * a student's ID/number never reaches an unauthenticated page. */
 export type PublicStudentGiving =
-  | { mode: "PICKER"; termLabel: string | null }
+  | { mode: "PICKER"; termLabel: string | null; defaultGivenFor: "SPONSOR" | "SELF" | "GENERAL" }
   | { mode: "LOCKED"; studentName: string; termLabel: string | null };
 
 export async function loadPublicGivingPageData(slug: string): Promise<PublicGivingPageData> {
@@ -120,8 +124,6 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
     organizationLogoUrl: church.logoUrl,
   });
 
-  const assignedFunds = link.fundSelectionEnabled ? await loadAssignedActiveFunds(link.id) : [];
-
   let studentGiving: PublicStudentGiving | null = null;
   if (church.studentGivingEnabled) {
     if (link.studentId) {
@@ -137,9 +139,14 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
         };
       }
     } else if (link.studentSelectionEnabled) {
-      studentGiving = { mode: "PICKER", termLabel: church.studentCurrentTerm };
+      studentGiving = { mode: "PICKER", termLabel: church.studentCurrentTerm, defaultGivenFor: parseDefaultGivenFor(link.studentDefaultGivenFor) };
     }
   }
+
+  // Student Giving and fund designations are alternatives: the picker already
+  // offers the general scholarship fund, so never show both on one link.
+  const fundSelectionActive = link.fundSelectionEnabled && !studentGiving;
+  const assignedFunds = fundSelectionActive ? await loadAssignedActiveFunds(link.id) : [];
 
   return {
     ok: true,
@@ -161,7 +168,7 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
     googlePayEnvironment,
     serverAvailability,
     logoUrl,
-    fundSelectionEnabled: link.fundSelectionEnabled,
+    fundSelectionEnabled: fundSelectionActive,
     assignedFunds,
     studentGiving,
   };

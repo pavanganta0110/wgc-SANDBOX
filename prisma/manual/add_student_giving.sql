@@ -68,3 +68,5 @@ CREATE TABLE IF NOT EXISTS "StudentAssignmentAudit" (
 CREATE INDEX IF NOT EXISTS "StudentAssignmentAudit_churchId_createdAt_idx" ON "StudentAssignmentAudit"("churchId", "createdAt");
 CREATE INDEX IF NOT EXISTS "StudentAssignmentAudit_paymentId_idx" ON "StudentAssignmentAudit"("paymentId");
 CREATE INDEX IF NOT EXISTS "StudentAssignmentAudit_externalDonationId_idx" ON "StudentAssignmentAudit"("externalDonationId");
+
+ALTER TABLE "GivingLink" ADD COLUMN IF NOT EXISTS "studentDefaultGivenFor" TEXT;

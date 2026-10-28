@@ -9,6 +9,8 @@ interface Props {
   /** Donation amount before any covered fee, in cents; null when this gift can't be edited online. */
   donationAmountCents: number | null;
   isPledge: boolean;
+  /** Whether the donor currently covers the processing fee on this gift. */
+  donorCoversFee?: boolean;
 }
 
 type Mode = "IDLE" | "AMOUNT" | "CANCEL";
@@ -20,10 +22,11 @@ async function post(path: string, body: Record<string, unknown>) {
   return data;
 }
 
-export default function RecurringGiftActions({ slug, subscriptionId, donationAmountCents, isPledge }: Props) {
+export default function RecurringGiftActions({ slug, subscriptionId, donationAmountCents, isPledge, donorCoversFee = false }: Props) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("IDLE");
   const [amount, setAmount] = useState(donationAmountCents ? (donationAmountCents / 100).toFixed(2) : "");
+  const [coverFees, setCoverFees] = useState(donorCoversFee);
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +66,7 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
           onSubmit={(e) => {
             e.preventDefault();
             void run(async () => {
-              await post(`${base}/update-amount`, { slug, idempotencyKey, newDonationAmountCents: Math.round(Number(amount) * 100), consentConfirmed: confirmed });
+              await post(`${base}/update-amount`, { slug, idempotencyKey, newDonationAmountCents: Math.round(Number(amount) * 100), consentConfirmed: confirmed, donorCoversFee: coverFees });
               setIdempotencyKey(crypto.randomUUID()); // next change is a new intent
               setConfirmed(false);
               setMode("IDLE");
@@ -74,6 +77,10 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
           <label className="block text-xs text-slate-600">
             New gift amount (USD)
             <input type="number" min="1" step="0.01" required value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          </label>
+          <label className="flex items-start gap-2 text-xs text-slate-600">
+            <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
+            I&apos;ll cover the transaction cost so my full gift amount goes to the organization.
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-600">
             <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" />

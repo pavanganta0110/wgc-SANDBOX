@@ -122,9 +122,9 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-slate-200/70 bg-white shadow-sm">
+      <div className="overflow-auto max-h-[calc(100vh-12rem)] rounded-2xl border border-slate-200/70 bg-white shadow-sm">
         <table className="w-full min-w-[960px] text-sm">
-          <thead>
+          <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_rgb(226,232,240)]">
             <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-500">
               <th className="px-5 py-3">Student</th>
               <th className="px-3 py-3">ID</th>

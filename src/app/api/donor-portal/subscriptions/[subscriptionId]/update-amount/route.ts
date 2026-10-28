@@ -7,6 +7,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ subscri
     requireIdempotencyKey(ctx);
     if (body.consentConfirmed !== true) throw new DonorSubscriptionError("Please confirm the new amount.", 400);
     if (typeof body.newDonationAmountCents !== "number") throw new DonorSubscriptionError("Please enter a valid amount.", 400);
-    return { subscription: await donorUpdateSubscriptionAmount(ctx, body.newDonationAmountCents) };
+    return { subscription: await donorUpdateSubscriptionAmount(ctx, body.newDonationAmountCents, typeof body.donorCoversFee === "boolean" ? body.donorCoversFee : undefined) };
   });
 }

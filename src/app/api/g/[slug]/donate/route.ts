@@ -95,6 +95,7 @@ async function handleDonate(req: Request, slug: string) {
       coverFees,
       isRecurring,
       billingInterval,
+      billingCycleDay,
       paymentMethod,
       fraudSessionId,
       donor,
@@ -754,6 +755,18 @@ async function handleDonate(req: Request, slug: string) {
         },
       });
 
+      // Donor-chosen day for every charge after today's. Best-effort and never
+      // creates a charge: if Finix refuses, the gift simply keeps today's day.
+      let nextBillingDate = parseFinixDate(subscription.next_billing_date);
+      if (interval === "MONTHLY" && Number.isInteger(billingCycleDay) && billingCycleDay >= 1 && billingCycleDay <= 28) {
+        try {
+          const updated = await finixClient.updateSubscription(subscription.id, { billing_cycle_day: billingCycleDay });
+          nextBillingDate = parseFinixDate(updated?.next_billing_date) ?? nextBillingDate;
+        } catch (err) {
+          console.error("Failed to set recurring billing_cycle_day:", err);
+        }
+      }
+
       await prisma.finixSubscription.upsert({
         where: { finixSubscriptionId: subscription.id },
         create: {
@@ -784,7 +797,7 @@ async function handleDonate(req: Request, slug: string) {
           currency: "USD",
           billingInterval: interval,
           collectionMethod: "BILL_AUTOMATICALLY",
-          nextBillingDate: parseFinixDate(subscription.next_billing_date),
+          nextBillingDate,
           startedAt: new Date(),
           donationAmountCents,
           donorCoversFee: link.feeCoverEnabled && coverFees,
@@ -793,7 +806,7 @@ async function handleDonate(req: Request, slug: string) {
         },
         update: {
           state: subscription.state ?? undefined,
-          nextBillingDate: parseFinixDate(subscription.next_billing_date) ?? undefined,
+          nextBillingDate: nextBillingDate ?? undefined,
           lastSyncedAt: new Date(),
         },
       });

@@ -73,6 +73,7 @@ export async function POST(req: Request) {
     fundName,
     fundSelectionEnabled,
     studentSelectionEnabled,
+    studentDefaultGivenFor,
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
@@ -153,6 +154,12 @@ export async function POST(req: Request) {
   }
 
   const resolvedFundSelectionEnabled = !!fundSelectionEnabled;
+  if (resolvedFundSelectionEnabled && studentSelectionEnabled) {
+    return NextResponse.json(
+      { error: "Choose either gift designations or student giving for a link, not both. Student giving already offers the general scholarship fund." },
+      { status: 400 }
+    );
+  }
   const resolvedStudentGivingEnabled = studentSelectionEnabled
     ? !!(await prisma.church.findUnique({ where: { id: auth.churchId }, select: { studentGivingEnabled: true } }))?.studentGivingEnabled
     : false;
@@ -211,6 +218,7 @@ export async function POST(req: Request) {
       fundSelectionEnabled: resolvedFundSelectionEnabled,
       // Only honored when the organization has Student Giving turned on.
       studentSelectionEnabled: !!studentSelectionEnabled && resolvedStudentGivingEnabled,
+      studentDefaultGivenFor: studentDefaultGivenFor === "SELF" || studentDefaultGivenFor === "GENERAL" ? studentDefaultGivenFor : "SPONSOR",
       recurringEnabled: recurringEnabled ?? false,
       allowedFrequenciesJson: Array.isArray(allowedFrequencies) ? allowedFrequencies : ["MONTHLY"],
       defaultDonationType: defaultsResult.value.defaultDonationType,

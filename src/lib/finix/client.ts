@@ -613,7 +613,7 @@ export class FinixClient {
   // amount, buyer_details.instrument_id and billing_cycle_day are
   // updatable; billing_interval is not. Used by the donor portal for
   // in-place amount changes — no cancel/recreate gap.
-  async updateSubscription(subscriptionId: string, payload: { amount?: number; buyer_details?: { instrument_id: string } }) {
+  async updateSubscription(subscriptionId: string, payload: { amount?: number; billing_cycle_day?: number; buyer_details?: { instrument_id: string } }) {
     return this.fetchApi(`/subscriptions/${subscriptionId}`, {
       method: "PUT",
       headers: { Accept: "application/json" },

@@ -67,6 +67,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     fundName,
     fundSelectionEnabled,
     studentSelectionEnabled,
+    studentDefaultGivenFor,
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
@@ -133,6 +134,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const resolvedFundSelectionEnabled: boolean | undefined = fundSelectionEnabled !== undefined ? !!fundSelectionEnabled : undefined;
   let validatedFundAssignments: FundAssignmentInput[] | undefined;
   const effectiveFundSelectionEnabled = resolvedFundSelectionEnabled ?? existing.fundSelectionEnabled;
+  const effectiveStudentSelectionEnabled = typeof studentSelectionEnabled === "boolean" ? studentSelectionEnabled : existing.studentSelectionEnabled;
+  if (effectiveFundSelectionEnabled && effectiveStudentSelectionEnabled) {
+    return NextResponse.json(
+      { error: "Choose either gift designations or student giving for a link, not both. Student giving already offers the general scholarship fund." },
+      { status: 400 }
+    );
+  }
   if (fundAssignments !== undefined) {
     try {
       validatedFundAssignments = await validateFundAssignments(auth.churchId, Array.isArray(fundAssignments) ? fundAssignments : []);
@@ -213,6 +221,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
               !!(await prisma.church.findUnique({ where: { id: existing.churchId }, select: { studentGivingEnabled: true } }))?.studentGivingEnabled,
           }
         : {}),
+      ...(studentDefaultGivenFor === "SPONSOR" || studentDefaultGivenFor === "SELF" || studentDefaultGivenFor === "GENERAL" ? { studentDefaultGivenFor } : {}),
       ...(recurringEnabled !== undefined ? { recurringEnabled } : {}),
       ...(allowedFrequencies !== undefined ? { allowedFrequenciesJson: allowedFrequencies } : {}),
       ...(validatedDefaults ? { defaultDonationType: validatedDefaults.defaultDonationType, defaultRecurringAmountCents: validatedDefaults.defaultRecurringAmountCents } : {}),

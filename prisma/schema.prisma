@@ -2705,6 +2705,8 @@ model GivingLink {
   // pre-selected (no picker). Both are ignored unless the church has
   // studentGivingEnabled.
   studentSelectionEnabled   Boolean   @default(false)
+  // Which designation the picker opens on: SPONSOR | SELF | GENERAL. Null = SPONSOR.
+  studentDefaultGivenFor    String?
   studentId                 String?
   studentTermLabel          String?
   recurringEnabled          Boolean   @default(false)
