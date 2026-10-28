@@ -84,9 +84,12 @@ export async function loadDonorPortalDashboard(churchId: string, sessionDonorId:
   const now = new Date();
   const yearStart = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
 
-  const [lifetimeMap, ytdMap, instruments, externalRows, subscriptions, givingLinks, campaigns, church, statementRows] = await Promise.all([
-    loadDonorAggregatesBatch(donorIds, churchId),
-    loadDonorAggregatesBatch(donorIds, churchId, { gte: yearStart }),
+  // The two aggregate loaders each fan out into many queries; run back to back so one page view
+  // can't exhaust the pooled database connections (the Donors page documents the same failure).
+  const lifetimeMap = await loadDonorAggregatesBatch(donorIds, churchId);
+  const ytdMap = await loadDonorAggregatesBatch(donorIds, churchId, { gte: yearStart });
+
+  const [instruments, externalRows, subscriptions, givingLinks, campaigns, church, statementRows] = await Promise.all([
     prisma.finixPaymentInstrumentSnapshot.findMany({
       where: { churchId, donorId: { in: donorIds } },
       select: { finixPaymentInstrumentId: true },

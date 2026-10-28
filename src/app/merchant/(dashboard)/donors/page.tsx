@@ -38,6 +38,8 @@ import { loadDonorPaymentMethodMix } from "@/lib/donors/donorBreakdowns";
 import { prisma } from "@/lib/prisma";
 import DonorAnalyticsExtras from "@/components/merchant/DonorAnalyticsExtras";
 import { parseVisibleDonorColumns } from "@/lib/donorColumns";
+import { loadPortalSignedInEmails } from "@/lib/donorPortal/portalActivity";
+import { normalizeEmail } from "@/lib/donors/donorContact";
 import {
   DONOR_DISPLAY_STATUS_LABELS,
   type DonorDisplayStatus,
@@ -221,6 +223,8 @@ export default async function DonorsPage({
     churchId,
   );
 
+  // Only needed when the column is shown; sequenced like the loaders above.
+  const portalSignedIn = visibleCols.has("portal") ? await loadPortalSignedInEmails(churchId) : new Set<string>();
   const { rows, totalCount } = await loadDonorsList(
     churchId,
     {
@@ -409,6 +413,9 @@ export default async function DonorsPage({
                   {visibleCols.has("contact") && (
                     <th className="px-6 py-3">Contact</th>
                   )}
+                  {visibleCols.has("portal") && (
+                    <th className="px-6 py-3">Portal</th>
+                  )}
                   {visibleCols.has("status") && (
                     <th className="px-6 py-3">Status</th>
                   )}
@@ -555,6 +562,15 @@ export default async function DonorsPage({
                                 <AlertTriangle className="w-3 h-3" /> Missing
                                 contact
                               </p>
+                            )}
+                          </td>
+                        )}
+                        {visibleCols.has("portal") && (
+                          <td className="px-6 py-3">
+                            {portalSignedIn.has(donor.normalizedEmail ?? normalizeEmail(donor.email) ?? "") ? (
+                              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">Signed in</span>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
                             )}
                           </td>
                         )}

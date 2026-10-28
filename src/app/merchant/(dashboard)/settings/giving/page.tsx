@@ -2,6 +2,8 @@ import { getSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import GivingSettingsForm from "@/components/merchant/GivingSettingsForm";
 import CopyDonorPortalLink from "@/components/merchant/CopyDonorPortalLink";
+import PortalActivityCard from "@/components/merchant/PortalActivityCard";
+import { loadPortalActivity } from "@/lib/donorPortal/portalActivity";
 
 export default async function GivingSettingsPage() {
   const session = await getSession();
@@ -12,6 +14,7 @@ export default async function GivingSettingsPage() {
   ]);
   if (!church) return null;
 
+  const portalActivity = await loadPortalActivity(churchId);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
 
   return (
@@ -23,6 +26,8 @@ export default async function GivingSettingsPage() {
         It also appears on your public giving pages and in recurring-gift confirmation emails.
       </p>
       <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} organizationName={church.name} />
+      <h4 className="mt-6 mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Portal activity</h4>
+      <PortalActivityCard activity={portalActivity} />
     </div>
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-900 mb-1">Giving</h3>
