@@ -397,7 +397,7 @@ export default function MonitoringClient() {
 
           <Section
             title="Organizations Waiting for Billing Setup"
-            description="Churches approved but not billing-active with no subscription yet, or subscriptions stuck INCOMPLETE."
+            description="Organizations approved but not billing-active with no subscription yet, or subscriptions stuck INCOMPLETE."
             count={data.orgsWaitingForBillingSetup.length}
           >
             <table className="w-full text-sm">

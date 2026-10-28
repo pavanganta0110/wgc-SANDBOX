@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
   const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
   if (!church?.finixMerchantId) {
-    return NextResponse.json({ error: "No Finix merchant configured for this church" }, { status: 400 });
+    return NextResponse.json({ error: "No Finix merchant configured for this organization" }, { status: 400 });
   }
 
   try {

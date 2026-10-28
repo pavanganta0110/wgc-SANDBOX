@@ -119,7 +119,7 @@ export default function DepositFilterBar({ exportHref }: { exportHref?: string }
             <div className="fixed inset-0 z-40" onClick={() => setIsMoreOpen(false)} />
             <div className="absolute left-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 w-64 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Organization / Church</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Organization</label>
                 <input
                   type="text"
                   placeholder="Organization name"

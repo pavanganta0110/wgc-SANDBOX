@@ -110,7 +110,7 @@ export default function RetentionMeter({
             Donor retention
             <InfoTip
               label="Donor retention"
-              text={`Of the donors who gave in ${year - 1}, the share who have also given in ${year}. Higher is better; around 45% is typical for churches and nonprofits.`}
+              text={`Of the donors who gave in ${year - 1}, the share who have also given in ${year}. Higher is better; around 45% is typical for nonprofit organizations.`}
             />
           </h4>
           {tone ? (

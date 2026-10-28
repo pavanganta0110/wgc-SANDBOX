@@ -59,7 +59,7 @@ export default function DisputeInternalNote({
         onChange={(e) => setNote(e.target.value)}
         rows={3}
         maxLength={2000}
-        placeholder="Internal note — visible only to church admins"
+        placeholder="Internal note — visible only to organization admins"
         className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
       <div className="flex items-center gap-2 mt-2">

@@ -414,7 +414,7 @@ export default function RecordExternalDonationForm() {
               value={otherPaymentMethodName}
               onChange={(e) => setOtherPaymentMethodName(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
-              placeholder="e.g. GiveButter, church kiosk"
+              placeholder="e.g. GiveButter, org kiosk"
             />
           </div>
         )}
@@ -471,7 +471,7 @@ export default function RecordExternalDonationForm() {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Payment account label (optional)</label>
-              <input value={accountOrDestinationLabel} onChange={(e) => setAccountOrDestinationLabel(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Church CashApp" />
+              <input value={accountOrDestinationLabel} onChange={(e) => setAccountOrDestinationLabel(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Org CashApp" />
             </div>
           </div>
           <p className="text-xs text-slate-400">Never enter the donor's private login credentials.</p>

@@ -23,7 +23,7 @@ export async function POST(
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   if (!church) {
-    return NextResponse.json({ error: "Church not found" }, { status: 404 });
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
   let settlementsResult: { processed: number; created: number; updated: number } | { error: string } = {

@@ -285,7 +285,7 @@ export async function aplosStatus(): Promise<ServiceStatus> {
     }),
   ]);
 
-  if (!everSynced) return unknown("Aplos", "No church has an active Aplos connection yet.");
+  if (!everSynced) return unknown("Aplos", "No organization has an active Aplos connection yet.");
 
   const failed = recent.filter((r) => r.status === "FAILED" || r.status === "NEEDS_REVIEW");
   const lastSuccess = recent.filter((r) => r.status === "SYNCED").sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];

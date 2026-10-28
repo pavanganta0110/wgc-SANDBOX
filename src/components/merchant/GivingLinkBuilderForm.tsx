@@ -1451,7 +1451,7 @@ export default function GivingLinkBuilderForm({
             <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={state.branding.hideChurchAddress} onChange={(e) => update("branding", { ...state.branding, hideChurchAddress: e.target.checked })} />
-                Hide church address
+                Hide organization address
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={state.branding.hideContactInfo} onChange={(e) => update("branding", { ...state.branding, hideContactInfo: e.target.checked })} />

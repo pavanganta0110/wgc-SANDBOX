@@ -123,7 +123,7 @@ export async function provisionChurchAndBillingGateOrAlert(app: {
       finixMerchantId: app.finixMerchantId || undefined,
       finixIdentityId: app.finixIdentityId || undefined,
       newStatus: "PROVISIONING_FAILED",
-      customSubject: `[WGC Admin] Church provisioning FAILED — ${app.legalBusinessName || app.organizationName || app.contactEmail}`,
+      customSubject: `[WGC Admin] Organization provisioning FAILED — ${app.legalBusinessName || app.organizationName || app.contactEmail}`,
       whatHappened: `Finix approved this merchant, but creating its WGC dashboard account (Church row) failed: ${provisionError instanceof Error ? provisionError.message : String(provisionError)}`,
       actionNeeded: `This organization will not appear in the Merchants Directory and cannot access their dashboard until this is fixed. Open Merchant Applications and use "Provision Church Account" to retry, or investigate the error above.`,
       adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",

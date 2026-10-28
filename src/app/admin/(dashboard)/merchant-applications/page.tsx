@@ -157,13 +157,13 @@ export default function MerchantApplicationsPage() {
       const res = await fetch(`/api/admin/merchant-applications/${appId}/provision`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        toast.success("Church account provisioned. It will now appear in the Merchants Directory.");
+        toast.success("Organization account provisioned. It will now appear in the Merchants Directory.");
         fetchApps();
       } else {
         toast.error("Failed to provision: " + data.error);
       }
     } catch {
-      toast.error("Error provisioning church account.");
+      toast.error("Error provisioning organization account.");
     } finally {
       setProvisioning(null);
     }
@@ -171,7 +171,7 @@ export default function MerchantApplicationsPage() {
 
   const provisionChurch = (appId: string) => {
     setPendingConfirm({
-      message: "Create the missing Church dashboard account for this approved merchant?",
+      message: "Create the missing organization dashboard account for this approved merchant?",
       onConfirm: () => doProvisionChurch(appId),
     });
   };
@@ -312,7 +312,7 @@ export default function MerchantApplicationsPage() {
                         className="text-xs bg-red-100 hover:bg-red-200 text-red-800 px-2 py-1.5 rounded transition-colors font-semibold shadow-sm disabled:opacity-50"
                         title="Approved in Finix but no dashboard account exists yet — this merchant is missing from the Merchants Directory."
                       >
-                        {provisioning === app.id ? "Provisioning..." : "Provision Church Account"}
+                        {provisioning === app.id ? "Provisioning..." : "Provision Organization Account"}
                       </button>
                     )}
                     {app.onboardingStatus === 'MORE_INFORMATION_REQUIRED' && (

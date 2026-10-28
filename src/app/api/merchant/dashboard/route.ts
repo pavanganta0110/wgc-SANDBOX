@@ -21,7 +21,7 @@ export async function GET() {
   const church = await prisma.church.findUnique({ where: { id: auth.churchId } });
 
   if (!church) {
-    return NextResponse.json({ error: "Church not found" }, { status: 404 });
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }
 
   const [grossVolumeAgg, recentTransfers, transactionCount, disputeCount] = await Promise.all([

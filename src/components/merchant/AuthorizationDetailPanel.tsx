@@ -189,7 +189,7 @@ export default async function AuthorizationDetailPanel({
       {/* Organization */}
       <div className="px-5 py-4 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Organization</h4>
-        <Row label="Church" value={church?.name || "—"} />
+        <Row label="Organization" value={church?.name || "—"} />
       </div>
 
       {/* Receipt */}

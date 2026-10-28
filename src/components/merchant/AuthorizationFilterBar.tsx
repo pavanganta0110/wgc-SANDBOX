@@ -147,7 +147,7 @@ export default function AuthorizationFilterBar({
             <div className="absolute left-0 mt-2 z-50 bg-white rounded-2xl border border-slate-200 shadow-xl p-4 w-64 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">
-                  Organization / Church Name
+                  Organization Name
                 </label>
                 <input
                   type="text"

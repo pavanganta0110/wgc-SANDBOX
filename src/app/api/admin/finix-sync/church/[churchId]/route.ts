@@ -25,12 +25,12 @@ export async function POST(
     const church = await prisma.church.findUnique({ where: { id: churchId } });
 
     if (!church) {
-      return NextResponse.json({ error: "Church not found" }, { status: 404 });
+      return NextResponse.json({ error: "Organization not found" }, { status: 404 });
     }
 
     if (!church.finixMerchantId) {
       return NextResponse.json(
-        { error: "Church has no finixMerchantId to sync" },
+        { error: "Organization has no finixMerchantId to sync" },
         { status: 400 }
       );
     }
