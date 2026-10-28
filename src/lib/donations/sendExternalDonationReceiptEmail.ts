@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { loadPdfImage } from "@/lib/pdf/pdfImage";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { sendWgcEmail } from "@/lib/email";
+import { donorPortalLinkParagraph } from "@/lib/donorPortal/portalLink";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveReceiptSettings } from "@/lib/settings/receiptDefaults";
@@ -137,6 +138,7 @@ export async function sendExternalDonationReceiptEmail(
       `<p>Payment Amount: ${formatCents(donation.donationAmountCents)}<br/>Fair Market Value: ${formatCents(goodsServicesFairMarketValueCents ?? 0)}<br/>Recorded Contribution Amount: ${formatCents(recordedContributionAmountCents)}</p>`
     );
   }
+  lines.push(donorPortalLinkParagraph(church.slug));
   if (settings.footer) lines.push(`<p style="font-size:12px;color:#64748b;">${settings.footer}</p>`);
   lines.push(`<p style="font-size:11px;color:#94a3b8;">${settings.disclaimer}</p>`);
 

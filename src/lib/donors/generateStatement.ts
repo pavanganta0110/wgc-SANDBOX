@@ -6,6 +6,7 @@ import { YearEndStatementPdf, CombinedStatementsPdf, type StatementPdfProps } fr
 import { formatPersonName } from "@/lib/formatPersonName";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
+import { donorPortalLinkParagraph } from "@/lib/donorPortal/portalLink";
 import { DEFAULT_THANK_YOU_MESSAGE, STATEMENT_DISCLAIMER, resolveStatementPdfSettings } from "@/lib/donors/generateStatementDefaults";
 import { resolveAcknowledgmentText } from "@/lib/settings/acknowledgmentDefaults";
 
@@ -267,6 +268,7 @@ export async function sendYearEndStatementEmail(statementId: string, churchId: s
       <p>Hello ${donorName},</p>
       <p>Thank you for supporting ${orgName}. Your ${statement.taxYear} Year-End Donation Statement is ready. It summarizes the donations recorded for your account during the calendar year.</p>
       <p>Please review the statement and contact us if you believe any information needs correction.</p>
+      ${donorPortalLinkParagraph(church?.slug)}
       <p style="font-size: 12px; color: #94a3b8;">This statement is provided for record-keeping purposes and does not constitute tax advice.</p>
     `,
     attachments: [{ filename: `${statement.taxYear}-donation-statement.pdf`, content: pdf }],
