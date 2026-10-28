@@ -11,6 +11,7 @@ export default function DonorRowActions({
   canRestore,
   canExport,
   canEdit,
+  canInvite,
 }: {
   donorId: string;
   isArchived: boolean;
@@ -18,6 +19,8 @@ export default function DonorRowActions({
   canRestore: boolean;
   canExport: boolean;
   canEdit?: boolean;
+  /** Show "Send portal invite" — same permission as messaging donors. */
+  canInvite?: boolean;
 }) {
   const router = useRouter();
 
@@ -43,6 +46,17 @@ export default function DonorRowActions({
     }
   };
 
+  const sendPortalInvite = async () => {
+    try {
+      const res = await fetch(`/api/merchant/donors/${donorId}/portal-invite`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to send invite");
+      toast.success("Portal invite sent");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send invite");
+    }
+  };
+
   return (
     <RowActionsMenu
       items={[
@@ -56,6 +70,13 @@ export default function DonorRowActions({
           label: "Export Donor",
           onClick: () => window.open(`/api/merchant/donors/export?donorId=${donorId}`, "_blank"),
           hidden: !canExport,
+        },
+        {
+          label: "Send Portal Invite",
+          onClick: sendPortalInvite,
+          hidden: isArchived || !canInvite,
+          requiresConfirm: true,
+          confirmMessage: "Email this donor a link to your giving portal?",
         },
         {
           label: "Archive Donor",

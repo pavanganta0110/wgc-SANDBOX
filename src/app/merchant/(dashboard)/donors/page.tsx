@@ -15,6 +15,7 @@ import DonorsFilterBar from "@/components/merchant/DonorsFilterBar";
 import DonorRowActions from "@/components/merchant/DonorRowActions";
 import AddDonorButton from "@/components/merchant/AddDonorButton";
 import ImportDonorsButton from "@/components/merchant/ImportDonorsButton";
+import InviteDonorsToPortalButton from "@/components/merchant/InviteDonorsToPortalButton";
 import Pagination from "@/components/merchant/Pagination";
 import DonationTrendChart from "@/components/merchant/DonationTrendChart";
 import DonorGrowthChart from "@/components/merchant/DonorGrowthChart";
@@ -292,6 +293,7 @@ export default async function DonorsPage({
         )}
         {permissions.canEdit && (
           <div className="ml-auto flex items-center gap-2">
+            {permissions.canSendStatements && <InviteDonorsToPortalButton />}
             <ImportDonorsButton />
             <AddDonorButton />
           </div>
@@ -705,6 +707,7 @@ export default async function DonorsPage({
                             canRestore={permissions.canRestore}
                             canExport={permissions.canExport}
                             canEdit={permissions.canEdit}
+                            canInvite={permissions.canSendStatements}
                           />
                         </td>
                       </ClickableTableRow>

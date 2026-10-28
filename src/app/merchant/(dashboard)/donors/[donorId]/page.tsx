@@ -195,6 +195,7 @@ export default async function DonorProfilePage({
             canArchive={permissions.canArchive}
             canRestore={permissions.canRestore}
             canExport={false}
+            canInvite={permissions.canSendStatements}
           />
         </div>
       </div>
