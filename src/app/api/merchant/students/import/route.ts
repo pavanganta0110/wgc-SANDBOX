@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { guardStudentApi } from "@/lib/students/access";
 import { parseStudentImport } from "@/lib/students/importPlan";
+import { detectStudentImportKind } from "@/lib/students/giftImportPlan";
+import { runStudentGiftImport } from "@/lib/students/giftImport";
 
 /**
  * Roster (+ optional term charge) CSV import. `commit: false` returns a
@@ -17,6 +19,20 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   if (typeof body.csv !== "string" || !body.csv.trim()) {
     return NextResponse.json({ error: "A CSV file is required" }, { status: 400 });
+  }
+  // One endpoint for every file: gifts files (donor/date columns) go to the
+  // gifts importer, everything else is a roster (+ optional charges).
+  if (detectStudentImportKind(body.csv) === "gifts") {
+    const result = await runStudentGiftImport({
+      auth: guard.auth,
+      req,
+      csv: body.csv,
+      defaultTerm: typeof body.defaultTerm === "string" ? body.defaultTerm : null,
+      commit: body.commit === true,
+      alsoKnown: Array.isArray(body.alsoKnown) ? body.alsoKnown.filter((x: unknown): x is string => typeof x === "string").slice(0, 10000) : [],
+    });
+    if (result.fatalError) return NextResponse.json({ error: result.fatalError }, { status: 400 });
+    return NextResponse.json(result);
   }
   const parsed = parseStudentImport(body.csv, typeof body.defaultTerm === "string" ? body.defaultTerm : null);
   if (parsed.fatalError) return NextResponse.json({ error: parsed.fatalError }, { status: 400 });
@@ -39,7 +55,8 @@ export async function POST(req: Request) {
   };
   const errors = parsed.rows.filter((r) => r.errors.length > 0).slice(0, 100).map((r) => ({ rowNumber: r.rowNumber, studentNumber: r.studentNumber, errors: r.errors }));
 
-  if (body.commit !== true) return NextResponse.json({ committed: false, summary, errors });
+  const studentNumbers = valid.map((r) => r.studentNumber);
+  if (body.commit !== true) return NextResponse.json({ kind: "roster", committed: false, summary, errors, studentNumbers });
 
   // Upsert students first (one id per student number), then charges.
   const idByNumber = new Map(existingByNumber);
@@ -59,5 +76,5 @@ export async function POST(req: Request) {
       });
     }
   }
-  return NextResponse.json({ committed: true, summary, errors });
+  return NextResponse.json({ kind: "roster", committed: true, summary, errors, studentNumbers });
 }

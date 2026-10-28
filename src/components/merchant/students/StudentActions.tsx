@@ -155,40 +155,99 @@ export function AddStudentButton({ defaultTerm }: { defaultTerm: string | null }
   );
 }
 
-type ImportPreview = {
-  committed: boolean;
-  summary: { totalRows: number; validRows: number; errorRows: number; studentsToCreate: number; studentsToUpdate: number; chargesToSet: number };
-  errors: { rowNumber: number; studentNumber: string; errors: string[] }[];
-};
+type ImportErrorRow = { rowNumber: number; studentNumber: string; errors: string[] };
+type ImportResponse =
+  | { kind: "roster"; committed: boolean; summary: { totalRows: number; validRows: number; errorRows: number; studentsToCreate: number; studentsToUpdate: number; chargesToSet: number }; errors: ImportErrorRow[]; studentNumbers: string[] }
+  | { kind: "gifts"; committed: boolean; summary: { totalRows: number; validRows: number; errorRows: number; giftsToCreate: number; alreadyImported: number; totalCents: number }; errors: ImportErrorRow[] };
 
-/** Roster / charges CSV upload with a no-write preview before committing. */
+type ImportFile = { id: number; name: string; csv: string; result?: ImportResponse; error?: string; state: "ready" | "working" | "done" };
+
+const usd = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+
+function fileSummary(r: ImportResponse): string {
+  if (r.kind === "roster") {
+    const s = r.summary;
+    return `Roster / charges · ${s.validRows} of ${s.totalRows} rows ready · ${s.studentsToCreate} new, ${s.studentsToUpdate} updated, ${s.chargesToSet} charges`;
+  }
+  const s = r.summary;
+  return `Gifts · ${s.validRows} of ${s.totalRows} rows ready · ${s.giftsToCreate} new gifts (${usd(s.totalCents)})${s.alreadyImported ? `, ${s.alreadyImported} already imported` : ""}`;
+}
+
+/**
+ * Import one or more CSVs at once: rosters/charges and student gifts, in any
+ * order. Preview writes nothing; "Import" saves rosters first (so gifts can
+ * find their students), then gifts. Re-importing a file is safe.
+ */
 export function ImportStudentsButton({ defaultTerm }: { defaultTerm: string | null }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [csv, setCsv] = useState("");
-  const [fileName, setFileName] = useState("");
+  const [files, setFiles] = useState<ImportFile[]>([]);
   const [term, setTerm] = useState(defaultTerm ?? "");
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [previewed, setPreviewed] = useState(false);
 
-  async function run(commit: boolean) {
+  const patch = (id: number, p: Partial<ImportFile>) => setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...p } : f)));
+
+  async function send(csv: string, commit: boolean, alsoKnown: string[]): Promise<ImportResponse> {
+    return call<ImportResponse>("/api/merchant/students/import", "POST", { csv, defaultTerm: term, commit, alsoKnown });
+  }
+
+  async function previewAll() {
     setBusy(true);
     try {
-      const res = await call<ImportPreview>("/api/merchant/students/import", "POST", { csv, defaultTerm: term, commit });
-      setPreview(res);
-      if (commit) {
-        toast.success(`Imported ${res.summary.validRows} rows`);
-        setOpen(false);
-        setCsv("");
-        setPreview(null);
-        router.refresh();
+      // Pass 1 finds out what each file is; pass 2 re-checks gift files knowing
+      // which students the roster files in this batch are about to create.
+      const known = new Set<string>();
+      for (const f of files) {
+        patch(f.id, { state: "working", error: undefined });
+        try {
+          const res = await send(f.csv, false, []);
+          if (res.kind === "roster") res.studentNumbers.forEach((n) => known.add(n));
+          patch(f.id, { result: res, state: "ready" });
+        } catch (err) {
+          patch(f.id, { error: err instanceof Error ? err.message : "Could not read this file", result: undefined, state: "ready" });
+        }
       }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      if (known.size > 0) {
+        for (const f of files) {
+          try {
+            const first = await send(f.csv, false, []);
+            if (first.kind === "gifts") patch(f.id, { result: await send(f.csv, false, [...known]) });
+          } catch {
+            /* the first pass already recorded this file's error */
+          }
+        }
+      }
+      setPreviewed(true);
     } finally {
       setBusy(false);
     }
   }
+
+  async function importAll() {
+    setBusy(true);
+    let imported = 0;
+    try {
+      const order = [...files].sort((a, b) => (a.result?.kind === "gifts" ? 1 : 0) - (b.result?.kind === "gifts" ? 1 : 0));
+      for (const f of order) {
+        if (!f.result || f.result.summary.validRows === 0) continue;
+        patch(f.id, { state: "working" });
+        try {
+          const res = await send(f.csv, true, []);
+          patch(f.id, { result: res, state: "done" });
+          imported += res.kind === "gifts" ? res.summary.giftsToCreate : res.summary.validRows;
+        } catch (err) {
+          patch(f.id, { error: err instanceof Error ? err.message : "Import failed", state: "ready" });
+        }
+      }
+      toast.success(`Import finished — ${imported} rows saved`);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const importable = files.some((f) => f.state !== "done" && f.result && f.result.summary.validRows > 0);
 
   return (
     <>
@@ -196,51 +255,59 @@ export function ImportStudentsButton({ defaultTerm }: { defaultTerm: string | nu
         <Upload className="h-4 w-4" aria-hidden /> Import CSV
       </button>
       {open && (
-        <Modal title="Import students and charges" onClose={() => setOpen(false)}>
+        <Modal title="Import students, charges and gifts" onClose={() => setOpen(false)}>
           <p className="text-xs text-slate-500">
-            Columns: <strong>Student ID</strong>, <strong>First Name</strong>, <strong>Last Name</strong> (or <strong>Name</strong>), Email (optional), and
-            optionally <strong>Term</strong> + <strong>Charge</strong>. Re-uploading updates existing students by Student ID.
+            Pick <strong>one or several</strong> CSV files at once. A <strong>roster</strong> file has Student ID, First Name, Last Name (or Name), optional Email,
+            Term and Charge. A <strong>gifts</strong> file has Student ID, Donor Name, Donor Email, Amount, Date, Type (Sponsor / Self-paid), Method and
+            optionally Term and Reference. Rosters are imported before gifts, and re-uploading a file never duplicates anything.
           </p>
           <input
             type="file"
             accept=".csv,text/csv"
+            multiple
             onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setFileName(file.name);
-              setCsv(await file.text());
-              setPreview(null);
+              const picked = Array.from(e.target.files ?? []);
+              const loaded = await Promise.all(picked.map(async (file, i) => ({ id: Date.now() + i, name: file.name, csv: await file.text(), state: "ready" as const })));
+              setFiles(loaded);
+              setPreviewed(false);
             }}
             className="block w-full text-sm"
           />
           <label className="block text-xs font-semibold text-slate-500">
-            Term for rows that have a charge but no Term column
+            Term for rows with no Term column
             <input value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Fall 2026" className={`${input} mt-1`} />
           </label>
-          {preview && (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-              <p>
-                {preview.summary.validRows} of {preview.summary.totalRows} rows ready · {preview.summary.studentsToCreate} new, {preview.summary.studentsToUpdate}{" "}
-                updated, {preview.summary.chargesToSet} charges
-              </p>
-              {preview.errors.length > 0 && (
-                <ul className="mt-2 max-h-32 list-disc overflow-auto pl-5 text-xs text-red-700">
-                  {preview.errors.map((er) => (
-                    <li key={er.rowNumber}>
-                      Row {er.rowNumber}
-                      {er.studentNumber ? ` (${er.studentNumber})` : ""}: {er.errors.join("; ")}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          {files.length > 0 && (
+            <ul className="max-h-72 space-y-2 overflow-auto">
+              {files.map((f) => (
+                <li key={f.id} className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                  <p className="flex items-center justify-between gap-2 font-semibold">
+                    <span className="truncate">{f.name}</span>
+                    {f.state === "working" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+                    {f.state === "done" && <span className="text-xs font-semibold text-emerald-700">Imported</span>}
+                  </p>
+                  {f.error && <p className="mt-1 text-xs text-red-700">{f.error}</p>}
+                  {f.result && <p className="mt-1 text-xs">{fileSummary(f.result)}</p>}
+                  {f.result && f.result.errors.length > 0 && (
+                    <ul className="mt-2 max-h-24 list-disc overflow-auto pl-5 text-xs text-red-700">
+                      {f.result.errors.map((er) => (
+                        <li key={er.rowNumber}>
+                          Row {er.rowNumber}
+                          {er.studentNumber ? ` (${er.studentNumber})` : ""}: {er.errors.join("; ")}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
           )}
           <div className="flex justify-end gap-2 pt-1">
-            <button type="button" onClick={() => setOpen(false)} className={ghostBtn}>Cancel</button>
-            <button type="button" disabled={!csv || busy} onClick={() => run(false)} className={ghostBtn}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Preview{fileName ? "" : ""}
+            <button type="button" onClick={() => setOpen(false)} className={ghostBtn}>Close</button>
+            <button type="button" disabled={files.length === 0 || busy} onClick={previewAll} className={ghostBtn}>
+              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Preview {files.length > 1 ? "all" : ""}
             </button>
-            <button type="button" disabled={!preview || preview.summary.validRows === 0 || busy} onClick={() => run(true)} className={primaryBtn}>
+            <button type="button" disabled={!previewed || !importable || busy} onClick={importAll} className={primaryBtn}>
               Import valid rows
             </button>
           </div>
