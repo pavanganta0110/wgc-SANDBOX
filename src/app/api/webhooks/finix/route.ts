@@ -29,6 +29,7 @@ import { emitEvent } from "@/lib/events/emitEvent";
 import { emitRecurringPaymentOutcomeEvent } from "@/lib/events/recurringPaymentEvents";
 import { triggerRecoveryOnPaymentFailure } from "@/lib/subscriptions/recoveryAutomation";
 import { renewalDesignationFromSubscription } from "@/lib/subscriptions/renewalDesignation";
+import { withLedgerRow } from "@/lib/ledger/loadLedger";
 import { handleMerchantTermination } from "@/lib/onboarding/handleMerchantTermination";
 import { recordWebhookProcessingFailure } from "@/lib/monitoring/webhookHealth";
 
@@ -431,7 +432,7 @@ export async function syncFinixDataFromWebhookEvent(
           // Planning Center: send the gift now (after the response; never affects this webhook).
           triggerPlanningCenterSync(priorPayment.id);
           try {
-            await emitEvent({ type: "donation.created", churchId, data: { paymentId: priorPayment.id, donorId: priorPayment.donorId } });
+            await emitEvent({ type: "donation.created", churchId, data: await withLedgerRow(churchId, priorPayment.id, { paymentId: priorPayment.id, donorId: priorPayment.donorId }) });
           } catch (err) {
             console.error("Failed to emit donation.created event (async):", err);
           }
@@ -598,7 +599,7 @@ export async function syncFinixDataFromWebhookEvent(
                   console.error("Failed to send receipt/notify merchant for recurring charge:", err);
                 }
                 try {
-                  await emitEvent({ type: "donation.created", churchId, data: { paymentId: newRecurringPayment.id, donorId: newRecurringPayment.donorId, recurring: true } });
+                  await emitEvent({ type: "donation.created", churchId, data: await withLedgerRow(churchId, newRecurringPayment.id, { paymentId: newRecurringPayment.id, donorId: newRecurringPayment.donorId, recurring: true }) });
                 } catch (err) {
                   console.error("Failed to emit donation.created event (recurring charge):", err);
                 }

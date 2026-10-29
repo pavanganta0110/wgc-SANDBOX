@@ -23,6 +23,7 @@ import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 import { normalizeEmail } from "@/lib/donors/donorContact";
 import { emitEvent } from "@/lib/events/emitEvent";
+import { withLedgerRow } from "@/lib/ledger/loadLedger";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
@@ -1069,7 +1070,7 @@ async function handleDonate(req: Request, slug: string) {
         await emitEvent({
           type: "donation.created",
           churchId: church.id,
-          data: { paymentId: newPayment.id, donorId: donorRecord.id, amountCents: totalCents, donationAmountCents, givingLinkId: link.id },
+          data: await withLedgerRow(church.id, newPayment.id, { paymentId: newPayment.id, donorId: donorRecord.id, amountCents: totalCents, donationAmountCents, givingLinkId: link.id }),
         });
       } catch (err) {
         console.error("Failed to emit donation.created event:", err);

@@ -159,6 +159,36 @@ All require an admin session (`getAdminSession()`); some further require `wgc_su
 
 ---
 
+## Partner API (`/api/v1/**`)
+
+Authenticated with a merchant-issued, scoped API key (`Authorization: Bearer wgc_live_…`); the church always comes from the key, never from a query or body value. Errors use the structured `{ error: { type, message, requestId } }` shape. Other `/api/v1` routes are listed in `src/lib/api/scopes.ts`.
+
+### `GET /api/v1/ledger?from=…&to=…` (scope `donations:read`)
+
+Every gift in a date window in one call, for report runs and annual statements. `from` is inclusive and `to` exclusive; a date-only value is midnight UTC, so a full calendar year is `from=2026-01-01&to=2027-01-01`. The window can span at most 366 days and hold at most 10,000 gifts; a larger one returns `400` (with `rowLimit`) and must be read in parts. Rows are oldest first and include external (cash, check) gifts as `source: "EXTERNAL"` rows. Returns `{ data: LedgerRow[], count, from, to }`.
+
+`LedgerRow` (see `src/lib/ledger/ledgerRow.ts`), money always in cents:
+
+| Field | Meaning |
+|---|---|
+| `id`, `source` | Stable gift id (Payment or ExternalDonation id); `WGC` or `EXTERNAL` |
+| `date` | ISO 8601 UTC |
+| `kind`, `method`, `cardBrand`, `externalMethod` | `one-time`/`recurring`; `card`/`ach`/`external` |
+| `status` | `SUCCEEDED`, or `RETURNED` for an ACH the bank sent back |
+| `designation` | `{ fundId, fundName }`. Recurring renewals carry the subscription's fund |
+| `donor` | `{ id, name, firstName, lastName, salutation, email, phone, addressLine1/2, city, state, postalCode, country }`; first and last are a best-effort split of the single stored name, `salutation` is always `null` until a field exists |
+| `giftCents`, `feeCoveredCents`, `feeCoveredElected`, `chargedCents` | The gift before fee cover, what the donor added, whether they elected to, and the total charged |
+| `processingFeeCents`, `netCents` | What the processor took (null until reported) and net to the organization; `netCents` falls back to the expected net until the fee is known |
+| `refundedCents`, `refunded`, `disputed`, `disputeState`, `returned`, `voided` | Successful refunds, any dispute, ACH return, and voided external gifts |
+| `subscriptionId` | Ties every renewal to one recurring commitment |
+| `fairMarketValueCents`, `goodsDescription` | Goods given in exchange, when any |
+| `payoutId` | Settlement the gift landed in; null until it settles |
+| `givingLinkId`, `receiptNumber` | |
+
+The same row is sent as `ledger` inside the `donation.created` webhook payload (one-time gifts and recurring renewals), next to the existing `paymentId`/`donorId`/`amountCents` fields, so a consumer reading both sees identical numbers. `payoutId` and the final processing fee are usually still null at gift time; the date-ranged read returns them once known.
+
+---
+
 ## Error conventions
 
 Most routes return `{ error: string }` or `{ error: string, code: string }` on failure, with the `code` (e.g. `PAYMENT_STATUS_UNCERTAIN`, `REFUND_STATUS_UNCERTAIN`) used by financial-mutation routes specifically to signal "do not retry this as a fresh attempt" to the caller. See `src/lib/utils/errorNormalizer.ts` for the shared mapping and `src/lib/auth/errors.ts` for auth-specific error types (`UnauthorizedError`, `BillingAccessRestrictedError`).
