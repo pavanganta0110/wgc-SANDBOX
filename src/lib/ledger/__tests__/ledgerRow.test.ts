@@ -11,6 +11,7 @@ import {
 const donor = {
   id: "donor1",
   name: "Maya Torres",
+  salutation: "Ms.",
   email: "maya@example.com",
   phone: "+15555550100",
   addressLine1: "12 Elm St",
@@ -114,7 +115,7 @@ describe("buildPaymentLedgerRow", () => {
       givingLinkId: "link1",
       voided: false,
     });
-    expect(row.donor).toMatchObject({ id: "donor1", firstName: "Maya", lastName: "Torres", email: "maya@example.com", city: "Springfield", salutation: null });
+    expect(row.donor).toMatchObject({ id: "donor1", firstName: "Maya", lastName: "Torres", email: "maya@example.com", city: "Springfield", salutation: "Ms." });
   });
 
   it("falls back to the expected net until the actual processing fee is known, then uses the actual fee", () => {

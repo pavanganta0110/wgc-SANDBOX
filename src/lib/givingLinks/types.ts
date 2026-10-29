@@ -1,4 +1,5 @@
 export const DONOR_FIELDS = [
+  "salutation",
   "firstName",
   "lastName",
   "email",
@@ -19,6 +20,9 @@ export type DonorFieldVisibility = "REQUIRED" | "OPTIONAL" | "HIDDEN";
 export type DonorFieldSettings = Record<DonorFieldKey, DonorFieldVisibility>;
 
 export const DEFAULT_DONOR_FIELD_SETTINGS: DonorFieldSettings = {
+  // Mailing-list salutation ("Mr. and Mrs."). Hidden unless a link turns it on, so
+  // no existing giving page changes.
+  salutation: "HIDDEN",
   firstName: "REQUIRED",
   lastName: "REQUIRED",
   email: "REQUIRED",

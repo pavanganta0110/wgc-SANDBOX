@@ -29,6 +29,7 @@ export const EVENT_LINK_PAYMENT_METHODS = ["CARD", "BANK", "APPLE_PAY", "GOOGLE_
 export function deriveEventLinkSettings(event: EventLinkSource) {
   const addressMode = event.mailingAddressMode;
   const donorFieldSettings: DonorFieldSettings = {
+    salutation: "HIDDEN",
     firstName: "REQUIRED",
     lastName: "REQUIRED",
     email: "REQUIRED",

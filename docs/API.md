@@ -176,7 +176,7 @@ Every gift in a date window in one call, for report runs and annual statements. 
 | `kind`, `method`, `cardBrand`, `externalMethod` | `one-time`/`recurring`; `card`/`ach`/`external` |
 | `status` | `SUCCEEDED`, or `RETURNED` for an ACH the bank sent back |
 | `designation` | `{ fundId, fundName }`. Recurring renewals carry the subscription's fund |
-| `donor` | `{ id, name, firstName, lastName, salutation, email, phone, addressLine1/2, city, state, postalCode, country }`; first and last are a best-effort split of the single stored name, `salutation` is always `null` until a field exists |
+| `donor` | `{ id, name, firstName, lastName, salutation, email, phone, addressLine1/2, city, state, postalCode, country }`; first and last are a best-effort split of the single stored name; `salutation` is set when the giving page collected one, otherwise `null` |
 | `giftCents`, `feeCoveredCents`, `feeCoveredElected`, `chargedCents` | The gift before fee cover, what the donor added, whether they elected to, and the total charged |
 | `processingFeeCents`, `netCents` | What the processor took (null until reported) and net to the organization; `netCents` falls back to the expected net until the fee is known |
 | `refundedCents`, `refunded`, `disputed`, `disputeState`, `returned`, `voided` | Successful refunds, any dispute, ACH return, and voided external gifts |

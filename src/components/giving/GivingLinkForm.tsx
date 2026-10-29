@@ -232,6 +232,7 @@ export default function GivingLinkForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedPaymentMethods]);
+  const [salutation, setSalutation] = useState("");
   const [firstName, setFirstName] = useState(eventMode?.prefill?.firstName ?? "");
   const [lastName, setLastName] = useState(eventMode?.prefill?.lastName ?? "");
   const [email, setEmail] = useState(eventMode?.prefill?.email ?? "");
@@ -381,11 +382,13 @@ export default function GivingLinkForm({
   const phoneOk = eventMode
     ? phoneDigitCount(phone) >= 10 || (phone.trim() === "" && !eventMode.phoneRequired)
     : phoneDigitCount(phone) >= 10;
-  const donorInfoValid = Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneOk);
+  // Salutation only blocks the gift when the link marks it required.
+  const salutationOk = donorFieldSettings.salutation !== "REQUIRED" || Boolean(salutation.trim());
+  const donorInfoValid = Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && phoneOk && salutationOk);
   // What to tell the donor when donorInfoValid is false (see donorInfoMessage).
   const donorInfoMessageText = donorInfoMessage({
     phoneOptional: Boolean(eventMode && !eventMode.phoneRequired),
-    nameAndEmailOk: Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email)),
+    nameAndEmailOk: Boolean(firstName.trim() && lastName.trim() && isValidEmailFormat(email) && salutationOk),
   });
 
   // addressRequired is declared above, alongside mailingAddressPayload.
@@ -525,6 +528,7 @@ export default function GivingLinkForm({
           // email — are the source of truth here, matching exactly what
           // the card/bank submit path below sends.
           donor: {
+            salutation: salutation.trim() || undefined,
             firstName: firstName.trim(),
             lastName: lastName.trim(),
             name: `${firstName} ${lastName}`.trim() || walletResult.billingContact.name,
@@ -1041,6 +1045,7 @@ export default function GivingLinkForm({
               pledgeId: pledgeId || undefined,
               eventRegistrationId,
               donor: {
+                salutation: salutation.trim() || undefined,
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
                 name: fullName,
@@ -1433,6 +1438,24 @@ export default function GivingLinkForm({
         <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
           {eventMode ? "Registrant Information" : "Donor Information"}
         </h3>
+        {!eventMode && donorFieldSettings.salutation !== "HIDDEN" && (
+          <div className="mb-3">
+            <label htmlFor="donor-salutation" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              Salutation {donorFieldSettings.salutation === "REQUIRED" ? <span aria-hidden="true">*</span> : <span className="font-normal">(optional)</span>}
+            </label>
+            <input
+              id="donor-salutation"
+              required={donorFieldSettings.salutation === "REQUIRED"}
+              aria-required={donorFieldSettings.salutation === "REQUIRED"}
+              maxLength={40}
+              placeholder="e.g. Mr. and Mrs."
+              value={salutation}
+              onChange={(e) => setSalutation(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label htmlFor="donor-first-name" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>

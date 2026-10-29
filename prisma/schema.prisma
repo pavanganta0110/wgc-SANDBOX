@@ -782,6 +782,9 @@ model Donor {
   state                  String?
   postalCode             String?
   country                String?
+  // Mailing-list salutation, e.g. "Mr. and Mrs." — collected on the giving page
+  // when the link's salutation field is shown, and sent in the ledger feed.
+  salutation             String?
   // How this address was obtained — ONLINE_DONATION_FORM |
   // MERCHANT_MANUAL_ENTRY | EXTERNAL_DONATION | DONOR_PORTAL | CRM_IMPORT |
   // CSV_IMPORT | DONATION_ENVELOPE | CHECK | PLEDGE_FORM |

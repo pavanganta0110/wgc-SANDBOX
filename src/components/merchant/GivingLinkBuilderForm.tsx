@@ -21,6 +21,7 @@ import {
 } from "@/lib/givingLinks/types";
 
 const DONOR_FIELD_LABELS: Record<DonorFieldKey, string> = {
+  salutation: "Salutation (e.g. Mr. and Mrs.)",
   firstName: "First Name",
   lastName: "Last Name",
   email: "Email",

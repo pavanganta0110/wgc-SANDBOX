@@ -31,6 +31,8 @@ export interface DonorResolutionInput {
   postalCode?: string | null;
   country?: string | null;
   companyName?: string | null;
+  /** Mailing-list salutation (e.g. "Mr. and Mrs."). Filled on create, and on an existing match only when the donor has none. */
+  salutation?: string | null;
   /** Only meaningful alongside an address field above — how the address
    * was obtained (e.g. "CSV_IMPORT"). Ignored if no address field is set. */
   addressSource?: string | null;
@@ -88,6 +90,7 @@ export async function resolveOrCreateDonor(input: DonorResolutionInput): Promise
     postalCode: input.postalCode,
     country: input.country,
     companyName: input.companyName,
+    salutation: input.salutation,
     addressSource: input.addressSource,
     addressConfirmedDate: input.addressConfirmedDate,
   };
@@ -115,6 +118,7 @@ export async function resolveOrCreateDonor(input: DonorResolutionInput): Promise
         postalCode: input.postalCode || null,
         country: input.country || null,
         companyName: input.companyName || null,
+        salutation: input.salutation || null,
         contactSource: input.contactSource || null,
         ...(input.addressLine1
           ? {
@@ -180,13 +184,14 @@ interface ProfileUpdateInput {
   postalCode?: string | null;
   country?: string | null;
   companyName?: string | null;
+  salutation?: string | null;
   addressSource?: string | null;
   addressConfirmedDate?: string | null;
 }
 
 const ADDRESS_FIELDS_FOR_BACKFILL = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country"] as const;
 
-const FILL_WHEN_EMPTY_FIELDS = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country", "companyName"] as const;
+const FILL_WHEN_EMPTY_FIELDS = ["addressLine1", "addressLine2", "city", "state", "postalCode", "country", "companyName", "salutation"] as const;
 
 /**
  * Updates only the fields it's safe to update on an existing match —

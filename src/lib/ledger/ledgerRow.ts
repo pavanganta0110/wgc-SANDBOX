@@ -13,8 +13,8 @@ export interface LedgerDonor {
   /** Best-effort split of Donor.name (WGC stores one name field): last word is the last name. */
   firstName: string | null;
   lastName: string | null;
-  /** No salutation field exists yet; always null until one is added. */
-  salutation: null;
+  /** Mailing-list salutation ("Mr. and Mrs.") when the giving page collected one. */
+  salutation: string | null;
   email: string | null;
   phone: string | null;
   addressLine1: string | null;
@@ -71,6 +71,7 @@ export interface LedgerRow {
 export interface LedgerDonorSource {
   id: string;
   name: string | null;
+  salutation: string | null;
   email: string | null;
   phone: string | null;
   addressLine1: string | null;
@@ -156,7 +157,7 @@ export function toLedgerDonor(donor: LedgerDonorSource | null | undefined): Ledg
     name: donor.name,
     firstName,
     lastName,
-    salutation: null,
+    salutation: donor.salutation,
     email: donor.email,
     phone: donor.phone,
     addressLine1: donor.addressLine1,

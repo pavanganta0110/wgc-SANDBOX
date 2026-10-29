@@ -69,6 +69,7 @@ const EXTERNAL_SELECT = {
 const DONOR_SELECT = {
   id: true,
   name: true,
+  salutation: true,
   email: true,
   phone: true,
   addressLine1: true,
