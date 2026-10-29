@@ -90,6 +90,7 @@ All configuration is via environment variables (no separate config-file system b
 | Variable | Purpose |
 |---|---|
 | `ADMIN_SETUP_SECRET` | Gates the one-time `/api/admin/setup/seed-admin` bootstrap route |
+| `PARTNER_BILLING_CHARGING_ENABLED` | Set to `1` to let the daily partner-billing job (`/api/cron/partner-billing`) charge partners' saved cards. Unset or any other value: the job still makes monthly invoices so partners can see what is owed, but never touches a card. Needs `FINIX_WGC_BILLING_MERCHANT_ID` (WGC's own billing merchant). |
 | `PARTNER_WEBHOOK_ALLOW_LOCAL` | Local development only. Set to `1` to let a partner webhook point at `http://127.0.0.1…` or another private address. Ignored when `NODE_ENV` is `production`. |
 | `SANDBOX_ADMIN_EMAIL` / `SANDBOX_ADMIN_PASSWORD` | Seed credentials for local/sandbox admin bootstrap |
 | `TEST_WEBHOOK_SECRET` | Gates `/api/test/*` routes; if unset outside production, those routes are open (dev convenience — never rely on this in a shared environment) |

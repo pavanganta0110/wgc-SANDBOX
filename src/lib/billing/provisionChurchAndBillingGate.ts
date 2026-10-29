@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { provisionChurchAccount } from "@/lib/auth/provisionChurchAccount";
 import { sendWgcAdminEmail } from "@/lib/email";
+import { attachChurchToPartner } from "@/lib/partners/partnerBilling";
+import { partnerSuppressesMerchantEmails } from "@/lib/partners/onboardingCode";
 
 /**
  * Provisions the Church row + church_admin User account for an approved
@@ -30,17 +32,37 @@ export async function provisionChurchAndBillingGate(app: {
   finixMerchantId: string | null;
   finixIdentityId: string | null;
   finixApplicationId: string | null;
+  /** Set when the application came through a software partner (see model Partner). */
+  partnerId?: string | null;
+  partnerReference?: string | null;
 }) {
-  const provisioned = await provisionChurchAccount({
-    id: app.id,
-    organizationName: app.organizationName,
-    legalBusinessName: app.legalBusinessName,
-    contactEmail: app.contactEmail,
-    contactName: app.contactName,
-    finixMerchantId: app.finixMerchantId,
-    finixIdentityId: app.finixIdentityId,
-    finixApplicationId: app.finixApplicationId,
-  });
+  const provisioned = await provisionChurchAccount(
+    {
+      id: app.id,
+      organizationName: app.organizationName,
+      legalBusinessName: app.legalBusinessName,
+      contactEmail: app.contactEmail,
+      contactName: app.contactName,
+      finixMerchantId: app.finixMerchantId,
+      finixIdentityId: app.finixIdentityId,
+      finixApplicationId: app.finixApplicationId,
+    },
+    { skipAccessEmail: await partnerSuppressesMerchantEmails(app.partnerId) }
+  );
+
+  // An organization that came through a partner is billed through the partner, once, on
+  // approval — it has no subscription of its own. So it gets no billing gate and no
+  // activation email, and is never restricted for billing (no billingSetupStatus means
+  // "NO_GATE", see accessGate.ts). The partner link and the billable approval are recorded.
+  if (app.partnerId) {
+    await attachChurchToPartner({
+      churchId: provisioned.church.id,
+      partnerId: app.partnerId,
+      partnerReference: app.partnerReference ?? null,
+      onboardingApplicationId: app.id,
+    });
+    return provisioned;
+  }
 
   try {
     await prisma.church.update({
@@ -112,6 +134,8 @@ export async function provisionChurchAndBillingGateOrAlert(app: {
   finixMerchantId: string | null;
   finixIdentityId: string | null;
   finixApplicationId: string | null;
+  partnerId?: string | null;
+  partnerReference?: string | null;
 }) {
   try {
     return await provisionChurchAndBillingGate(app);

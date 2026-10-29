@@ -23,7 +23,12 @@ export async function provisionChurchAccount(app: {
   finixMerchantId: string | null;
   finixIdentityId: string | null;
   finixApplicationId: string | null;
-}) {
+},
+options: {
+  /** The owner account is still created, but WGC does not email its dashboard link
+   * (a partner that signs the organization in from its own screens asks for this). */
+  skipAccessEmail?: boolean;
+} = {}) {
   const orgName = app.legalBusinessName || app.organizationName;
   const slugBase = orgName
     .toLowerCase()
@@ -194,6 +199,10 @@ export async function provisionChurchAccount(app: {
   }
 
   const { user, rawToken } = claim;
+
+  if (options.skipAccessEmail) {
+    return { church, user, emailSent: false };
+  }
 
   // Previously hardcoded to https://www.wgcpayments.com regardless of
   // environment — every sandbox-provisioned account got an email pointing

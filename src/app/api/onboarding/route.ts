@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { sendWgcEmail, sendWgcAdminOnboardingNotification } from "@/lib/email";
 import { consumePromotionLeadForSignup } from "@/lib/billing/promotionAttribution";
+import { resolvePartnerByOnboardingCode } from "@/lib/partners/onboardingCode";
+import { notifyPartnerOfOnboardingStage } from "@/lib/partners/onboardingEvents";
 
 function extractFinixErrorMessage(err: any): string {
   let finixErrorStr = err.message || "Unknown error";
@@ -85,8 +87,16 @@ export async function POST(req: Request) {
       // Payout Bank
       accountHolderName, accountType, routingNumber, accountNumber, bankCountry, currency,
       legal,
-      recaptchaToken
+      recaptchaToken,
+      // A software partner's Get Started link (see src/lib/partners/onboardingCode.ts)
+      partnerCode, partnerReference
     } = body;
+
+    // Only a label. A missing or unknown code never blocks the application.
+    const partner = await resolvePartnerByOnboardingCode(partnerCode);
+    const partnerTag = partner
+      ? { partnerId: partner.id, partnerReference: typeof partnerReference === "string" && partnerReference.trim() ? partnerReference.trim().slice(0, 120) : null }
+      : {};
 
     const reqHeaders = await headers();
     const ipAddress = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || "unknown";
@@ -160,6 +170,7 @@ export async function POST(req: Request) {
           website,
           status: "DRAFT",
           promotion,
+          ...partnerTag,
 
           legalBusinessName, doingBusinessAs, businessType: businessTypeEnum,
           businessTaxIdProvided: !!businessTaxId, businessAddressLine1, businessAddressLine2, businessCity, businessState, businessPostalCode, businessCountry,
@@ -456,12 +467,18 @@ export async function POST(req: Request) {
       },
     });
 
+    // Tell the partner (if this came through one) that the application is in.
+    await notifyPartnerOfOnboardingStage({ applicationId: application.id });
+
     // Send ONBOARDING_SUBMITTED email idempotently
     const existingLog = await prisma.emailLog.findFirst({
       where: { onboardingApplicationId: application.id, type: "ONBOARDING_SUBMITTED" }
     });
 
-    if (!existingLog && contactEmail) {
+    // A partner that shows the status inside its own screens can ask WGC not to email the organization.
+    const holdMerchantEmail = Boolean(partner?.suppressMerchantEmails);
+
+    if (!existingLog && contactEmail && !holdMerchantEmail) {
       try {
         const safeBusinessName = legalBusinessName || "your organization";
         const onboardingSubmittedBodyHtml = `

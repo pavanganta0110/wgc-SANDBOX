@@ -3,8 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
 import { requirePartnerSession } from "@/lib/partners/partnerSession";
-import { PARTNER_DEFAULT_EVENTS } from "@/lib/partners/partnerWebhooks";
+import { PARTNER_DEFAULT_EVENTS, PARTNER_ONBOARDING_EVENTS } from "@/lib/partners/partnerWebhooks";
 import { WGC_EVENT_TYPES, isWgcEventType } from "@/lib/events/types";
+
+const ALL_PARTNER_EVENT_TYPES: string[] = [...PARTNER_ONBOARDING_EVENTS, ...WGC_EVENT_TYPES];
+const isPartnerEventType = (value: unknown): value is string => isWgcEventType(value) || (typeof value === "string" && (PARTNER_ONBOARDING_EVENTS as readonly string[]).includes(value));
 import { generateSigningSecret } from "@/lib/webhooks/signing";
 import { encryptSecret, serializeEnvelope } from "@/lib/webhooks/encryption";
 import { isAllowedPartnerWebhookUrl } from "@/lib/webhooks/webhookUrl";
@@ -40,23 +43,31 @@ export async function GET() {
           where: { partnerId: session.partnerId },
           orderBy: { createdAt: "desc" },
           take: 25,
-          select: { id: true, webhookEventId: true, churchId: true, status: true, attemptCount: true, lastAttemptAt: true, responseStatusCode: true, errorMessage: true, createdAt: true },
+          select: { id: true, webhookEventId: true, partnerEventId: true, churchId: true, status: true, attemptCount: true, lastAttemptAt: true, responseStatusCode: true, errorMessage: true, createdAt: true },
         }),
         prisma.partnerWebhookDelivery.count({ where: { partnerId: session.partnerId, createdAt: { gte: since }, status: "SUCCEEDED" } }),
         prisma.partnerWebhookDelivery.count({ where: { partnerId: session.partnerId, createdAt: { gte: since }, status: { in: ["FAILED", "ABANDONED"] } } }),
       ]);
-      const churchIds = [...new Set(recent.map((d) => d.churchId))];
-      const [events, churches] = await Promise.all([
-        prisma.webhookEvent.findMany({ where: { id: { in: recent.map((d) => d.webhookEventId) } }, select: { id: true, type: true } }),
+      const churchIds = [...new Set(recent.flatMap((d) => (d.churchId ? [d.churchId] : [])))];
+      const orgEventIds = recent.flatMap((d) => (d.webhookEventId ? [d.webhookEventId] : []));
+      const partnerEventIds = recent.flatMap((d) => (d.partnerEventId ? [d.partnerEventId] : []));
+      const [events, partnerEvents, churches] = await Promise.all([
+        prisma.webhookEvent.findMany({ where: { id: { in: orgEventIds } }, select: { id: true, type: true } }),
+        prisma.partnerEvent.findMany({ where: { id: { in: partnerEventIds }, partnerId: session.partnerId }, select: { id: true, type: true, dataJson: true } }),
         prisma.church.findMany({ where: { id: { in: churchIds }, partnerId: session.partnerId }, select: { id: true, name: true } }),
       ]);
-      const typeById = new Map(events.map((e) => [e.id, e.type]));
+      const typeById = new Map<string, string>([...events.map((e) => [e.id, e.type] as const), ...partnerEvents.map((e) => [e.id, e.type] as const)]);
       const nameById = new Map(churches.map((c) => [c.id, c.name]));
-      deliveries = recent.map((d) => ({ ...d, eventType: typeById.get(d.webhookEventId) ?? null, organizationName: nameById.get(d.churchId) ?? null }));
+      const orgNameOfPartnerEvent = new Map(partnerEvents.map((e) => [e.id, ((e.dataJson as { organization?: { name?: string | null } } | null)?.organization?.name ?? null)]));
+      deliveries = recent.map((d) => ({
+        ...d,
+        eventType: typeById.get(d.webhookEventId ?? d.partnerEventId ?? "") ?? null,
+        organizationName: (d.churchId ? nameById.get(d.churchId) : null) ?? (d.partnerEventId ? orgNameOfPartnerEvent.get(d.partnerEventId) : null) ?? null,
+      }));
       last24h = { succeeded, failed };
     }
 
-    return NextResponse.json({ endpoint, deliveries, last24h, availableEvents: WGC_EVENT_TYPES, defaultEvents: PARTNER_DEFAULT_EVENTS });
+    return NextResponse.json({ endpoint, deliveries, last24h, availableEvents: ALL_PARTNER_EVENT_TYPES, defaultEvents: PARTNER_DEFAULT_EVENTS });
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;
@@ -78,7 +89,7 @@ export async function PUT(req: Request) {
     if (!isAllowedPartnerWebhookUrl(url)) {
       return NextResponse.json({ error: "Enter a public https:// address. Localhost and private network addresses aren't allowed." }, { status: 400 });
     }
-    const events: string[] = Array.isArray(body.events) ? [...new Set<string>(body.events.filter(isWgcEventType))] : [];
+    const events: string[] = Array.isArray(body.events) ? [...new Set<string>(body.events.filter(isPartnerEventType))] : [];
     if (events.length === 0) return NextResponse.json({ error: "Choose at least one event." }, { status: 400 });
 
     if (!existing) {

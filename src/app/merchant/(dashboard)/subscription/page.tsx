@@ -39,6 +39,10 @@ export default async function SubscriptionPage() {
       />
     );
   }
+  // An organization that is billed through a partner has no WGC plan, invoices or payment method to show.
+  const billedByPartner = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { partnerId: true } });
+  if (billedByPartner?.partnerId) redirect("/merchant/dashboard");
+
   const canManage = hasPermission(auth, "canManageSubscription");
   const canCancel = hasPermission(auth, "canCancelSubscription");
   const canViewHistory = hasPermission(auth, "canViewBillingHistory");

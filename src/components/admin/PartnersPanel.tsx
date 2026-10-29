@@ -16,6 +16,11 @@ interface PartnerRow {
   slug: string;
   status: string;
   contactEmail: string | null;
+  suppressMerchantEmails: boolean;
+  onboardingCode: string;
+  pricePerMerchantCents: number | null;
+  cardBrand: string | null;
+  cardLast4: string | null;
   users: PartnerUserRow[];
   churches: { id: string; name: string; partnerReference: string | null }[];
 }
@@ -168,6 +173,65 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
           {partner.contactEmail ? ` · ${partner.contactEmail}` : ""}
         </p>
       </div>
+
+      <div>
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Get Started link (give this to the partner)</h4>
+        <code className="block break-all rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs">
+          {`${typeof window === "undefined" ? "" : window.location.origin}/start?partner=${partner.onboardingCode}&embed=1&ref=<partner's id for the organization>`}
+        </code>
+        <p className="text-xs text-slate-500 mt-1">
+          Optional extras: <code>org</code>, <code>name</code>, <code>email</code>, <code>phone</code>, <code>website</code> to prefill. The code only tags the application with this partner.
+        </p>
+      </div>
+
+      <div>
+        <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Billing</h4>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const raw = new FormData(e.currentTarget).get("price");
+            const dollars = typeof raw === "string" ? raw.trim() : "";
+            const cents = dollars === "" ? null : Math.round(Number(dollars) * 100);
+            if (cents !== null && !Number.isFinite(cents)) return report(false, { error: "Enter the price in dollars, for example 25 or 25.50." }, "");
+            const { ok, data } = await call(`/api/admin/partners/${partner.id}`, "PATCH", { pricePerMerchantCents: cents });
+            report(ok, data, cents === null ? "Billing stopped for new invoices." : "Price saved. It applies from the next invoice.");
+            await onChanged();
+          }}
+        >
+          <label className="text-xs font-semibold text-slate-600">
+            Price per approved merchant per month ($)
+            <input
+              name="price"
+              defaultValue={partner.pricePerMerchantCents ? (partner.pricePerMerchantCents / 100).toString() : ""}
+              placeholder="empty = not billed (new partners start at 10)"
+              inputMode="decimal"
+              className={`${inputClass} block w-48 mt-1`}
+            />
+          </label>
+          <button type="submit" className={buttonClass}>
+            Save price
+          </button>
+          <span className="text-xs text-slate-500">{partner.cardLast4 ? `Card on file: ${partner.cardBrand} ending ${partner.cardLast4}` : "No card on file yet."}</span>
+        </form>
+      </div>
+
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={partner.suppressMerchantEmails}
+          onChange={async (e) => {
+            const { ok, data } = await call(`/api/admin/partners/${partner.id}`, "PATCH", { suppressMerchantEmails: e.target.checked });
+            report(ok, data, "Saved.");
+            await onChanged();
+          }}
+        />
+        <span>
+          Don&apos;t email this partner&apos;s organizations about onboarding (submitted, more information, approved, dashboard access). Use when the partner shows the status in its own
+          screens. WGC admins are still emailed.
+        </span>
+      </label>
 
       <div>
         <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Partner staff</h4>

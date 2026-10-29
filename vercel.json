@@ -26,6 +26,10 @@
       "schedule": "0 16 1 * *"
     },
     {
+      "path": "/api/cron/partner-billing",
+      "schedule": "30 16 * * *"
+    },
+    {
       "path": "/api/cron/sms-addon-overage-check",
       "schedule": "5 16 1 * *"
     },

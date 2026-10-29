@@ -115,3 +115,88 @@ CREATE TABLE IF NOT EXISTS "PartnerWebhookDelivery" (
 CREATE INDEX IF NOT EXISTS "PartnerWebhookDelivery_partnerId_createdAt_idx" ON "PartnerWebhookDelivery"("partnerId", "createdAt");
 CREATE INDEX IF NOT EXISTS "PartnerWebhookDelivery_status_nextRetryAt_idx" ON "PartnerWebhookDelivery"("status", "nextRetryAt");
 CREATE INDEX IF NOT EXISTS "PartnerWebhookDelivery_webhookEventId_idx" ON "PartnerWebhookDelivery"("webhookEventId");
+
+-- Partner onboarding: tag on applications, the partner's Get Started code,
+-- partner-level events, and one billable approval per approved organization.
+ALTER TABLE "OnboardingApplication" ADD COLUMN IF NOT EXISTS "partnerId" TEXT;
+ALTER TABLE "OnboardingApplication" ADD COLUMN IF NOT EXISTS "partnerReference" TEXT;
+CREATE INDEX IF NOT EXISTS "OnboardingApplication_partnerId_idx" ON "OnboardingApplication"("partnerId");
+
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "onboardingCode" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "suppressMerchantEmails" BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS "Partner_onboardingCode_key" ON "Partner"("onboardingCode");
+
+ALTER TABLE "PartnerWebhookDelivery" ALTER COLUMN "webhookEventId" DROP NOT NULL;
+ALTER TABLE "PartnerWebhookDelivery" ALTER COLUMN "churchId" DROP NOT NULL;
+ALTER TABLE "PartnerWebhookDelivery" ADD COLUMN IF NOT EXISTS "partnerEventId" TEXT;
+CREATE INDEX IF NOT EXISTS "PartnerWebhookDelivery_partnerEventId_idx" ON "PartnerWebhookDelivery"("partnerEventId");
+
+CREATE TABLE IF NOT EXISTS "PartnerEvent" (
+  "id" TEXT NOT NULL,
+  "partnerId" TEXT NOT NULL,
+  "type" TEXT NOT NULL,
+  "onboardingApplicationId" TEXT,
+  "dataJson" JSONB NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PartnerEvent_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PartnerEvent_partnerId_createdAt_idx" ON "PartnerEvent"("partnerId", "createdAt");
+CREATE INDEX IF NOT EXISTS "PartnerEvent_onboardingApplicationId_idx" ON "PartnerEvent"("onboardingApplicationId");
+
+CREATE TABLE IF NOT EXISTS "PartnerBillableApproval" (
+  "id" TEXT NOT NULL,
+  "partnerId" TEXT NOT NULL,
+  "churchId" TEXT NOT NULL,
+  "onboardingApplicationId" TEXT,
+  "approvedAt" TIMESTAMP(3) NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "billedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PartnerBillableApproval_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PartnerBillableApproval_churchId_key" ON "PartnerBillableApproval"("churchId");
+CREATE INDEX IF NOT EXISTS "PartnerBillableApproval_partnerId_status_idx" ON "PartnerBillableApproval"("partnerId", "status");
+DO $$ BEGIN
+  ALTER TABLE "PartnerBillableApproval" ADD CONSTRAINT "PartnerBillableApproval_partnerId_fkey"
+    FOREIGN KEY ("partnerId") REFERENCES "Partner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Partner billing: price per merchant, the partner's saved card, and monthly invoices.
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "pricePerMerchantCents" INTEGER;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "billingIdentityId" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "billingPaymentInstrumentId" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "cardBrand" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "cardLast4" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "cardExpMonth" INTEGER;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "cardExpYear" INTEGER;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "billingContactEmail" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "billingAuthAcceptedAt" TIMESTAMP(3);
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "billingAuthTermsVersion" TEXT;
+
+CREATE TABLE IF NOT EXISTS "PartnerInvoice" (
+  "id" TEXT NOT NULL,
+  "partnerId" TEXT NOT NULL,
+  "period" TEXT NOT NULL,
+  "merchantCount" INTEGER NOT NULL,
+  "unitPriceCents" INTEGER NOT NULL,
+  "amountCents" INTEGER NOT NULL,
+  "currency" TEXT NOT NULL DEFAULT 'USD',
+  "lineItemsJson" JSONB NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'PENDING',
+  "attemptCount" INTEGER NOT NULL DEFAULT 0,
+  "attemptBudget" INTEGER NOT NULL DEFAULT 4,
+  "lastAttemptAt" TIMESTAMP(3),
+  "nextAttemptAt" TIMESTAMP(3),
+  "finixTransferId" TEXT,
+  "failureReason" TEXT,
+  "chargedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "PartnerInvoice_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PartnerInvoice_partnerId_period_key" ON "PartnerInvoice"("partnerId", "period");
+CREATE INDEX IF NOT EXISTS "PartnerInvoice_status_nextAttemptAt_idx" ON "PartnerInvoice"("status", "nextAttemptAt");
+DO $$ BEGIN
+  ALTER TABLE "PartnerInvoice" ADD CONSTRAINT "PartnerInvoice_partnerId_fkey"
+    FOREIGN KEY ("partnerId") REFERENCES "Partner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

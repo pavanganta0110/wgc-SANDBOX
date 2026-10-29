@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, KeyRound, Webhook } from "lucide-react";
+import { Building2, CreditCard, KeyRound, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
   { name: "API Key", href: "/partner/api-keys", icon: KeyRound },
   { name: "Webhook", href: "/partner/webhook", icon: Webhook },
+  { name: "Billing", href: "/partner/billing", icon: CreditCard },
 ];
 
 export default async function PartnerDashboardLayout({ children }: { children: React.ReactNode }) {

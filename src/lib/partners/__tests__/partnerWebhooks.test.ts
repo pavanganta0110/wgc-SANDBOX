@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   partnerWebhookEndpoint: { findUnique: vi.fn(), update: vi.fn() },
   partnerWebhookDelivery: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   webhookEvent: { findUnique: vi.fn() },
+  partnerEvent: { create: vi.fn(), findUnique: vi.fn() },
   $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -13,7 +14,7 @@ vi.mock("@/lib/webhooks/encryption", () => ({ decryptSecret: () => "whsec_test",
 const post = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/webhooks/postSignedWebhook", () => ({ postSignedWebhook: post }));
 
-import { attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, sendPartnerTestEvent } from "../partnerWebhooks";
+import { attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, recordPartnerEvent, sendPartnerTestEvent } from "../partnerWebhooks";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -139,5 +140,80 @@ describe("sendPartnerTestEvent", () => {
     expect(result).toEqual({ ok: true, statusCode: 204, error: undefined });
     expect(post.mock.calls[0][0].eventType).toBe("webhook.test");
     expect(JSON.parse(post.mock.calls[0][0].rawBody).type).toBe("webhook.test");
+  });
+});
+
+describe("recordPartnerEvent (onboarding events)", () => {
+  const params = { partnerId: "p1", type: "onboarding.approved", onboardingApplicationId: "app1", data: { organization: { id: "c1", name: "Grace", reference: "loc_1" }, stage: "approved" } };
+
+  beforeEach(() => {
+    prismaMock.partnerEvent.create.mockResolvedValue({ id: "pe1" });
+  });
+
+  it("always keeps the event, even when the partner has no webhook", async () => {
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue(null);
+    await recordPartnerEvent(params);
+    expect(prismaMock.partnerEvent.create.mock.calls[0][0].data).toMatchObject({ partnerId: "p1", type: "onboarding.approved", onboardingApplicationId: "app1" });
+    expect(prismaMock.partnerWebhookDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it("queues a delivery only when the endpoint is active and subscribed to that event", async () => {
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "w1", status: "ACTIVE", subscribedEventsJson: ["donation.created"] });
+    await recordPartnerEvent(params);
+    expect(prismaMock.partnerWebhookDelivery.create).not.toHaveBeenCalled();
+
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "w1", status: "DISABLED", subscribedEventsJson: ["onboarding.approved"] });
+    await recordPartnerEvent(params);
+    expect(prismaMock.partnerWebhookDelivery.create).not.toHaveBeenCalled();
+
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "w1", status: "ACTIVE", subscribedEventsJson: ["onboarding.approved"] });
+    await recordPartnerEvent(params);
+    expect(prismaMock.partnerWebhookDelivery.create).toHaveBeenCalledWith({ data: { partnerEventId: "pe1", partnerId: "p1", partnerEndpointId: "w1" } });
+  });
+
+  it("never throws", async () => {
+    prismaMock.partnerEvent.create.mockRejectedValue(new Error("db down"));
+    await expect(recordPartnerEvent(params)).resolves.toBeUndefined();
+  });
+});
+
+describe("delivering an onboarding event", () => {
+  const delivery = { id: "d9", status: "PENDING", attemptCount: 0, webhookEventId: null, partnerEventId: "pe1", partnerEndpointId: "w1", partnerId: "p1", churchId: null };
+  const endpoint = { id: "w1", partnerId: "p1", status: "ACTIVE", url: "https://hooks.example.com/x", signingSecretEncrypted: "enc", consecutiveFailures: 0 };
+
+  beforeEach(() => {
+    prismaMock.partnerWebhookDelivery.findUnique.mockResolvedValue(delivery);
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue(endpoint);
+    prismaMock.partnerWebhookDelivery.update.mockResolvedValue({});
+    prismaMock.partnerWebhookEndpoint.update.mockResolvedValue({});
+    post.mockResolvedValue({ ok: true, statusCode: 200, timestamp: 1 });
+  });
+
+  it("sends the stored event with its organization lifted out of the data", async () => {
+    prismaMock.partnerEvent.findUnique.mockResolvedValue({
+      id: "pe1",
+      partnerId: "p1",
+      type: "onboarding.information_required",
+      createdAt: new Date("2026-01-03T00:00:00Z"),
+      dataJson: { organization: { id: null, name: "Grace", reference: "loc_1" }, stage: "information_required", requestedItems: ["IRS letter"], updateUrl: "https://wgc.test/onboarding/update/t" },
+    });
+    await attemptPartnerWebhookDelivery("d9");
+    const body = JSON.parse(post.mock.calls[0][0].rawBody);
+    expect(post.mock.calls[0][0].eventType).toBe("onboarding.information_required");
+    expect(body).toEqual({
+      id: "pe1",
+      type: "onboarding.information_required",
+      createdAt: "2026-01-03T00:00:00.000Z",
+      organization: { id: null, name: "Grace", reference: "loc_1" },
+      data: { stage: "information_required", requestedItems: ["IRS letter"], updateUrl: "https://wgc.test/onboarding/update/t" },
+    });
+    expect(prismaMock.partnerWebhookDelivery.update.mock.calls[0][0].data.status).toBe("SUCCEEDED");
+  });
+
+  it("never sends an event that belongs to another partner", async () => {
+    prismaMock.partnerEvent.findUnique.mockResolvedValue({ id: "pe1", partnerId: "someone-else", type: "onboarding.approved", createdAt: new Date(), dataJson: {} });
+    await attemptPartnerWebhookDelivery("d9");
+    expect(post).not.toHaveBeenCalled();
+    expect(prismaMock.partnerWebhookDelivery.update.mock.calls[0][0].data.status).toBe("ABANDONED");
   });
 });

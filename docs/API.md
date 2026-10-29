@@ -231,3 +231,30 @@ The partner registers **one** endpoint in the dashboard (`/partner/webhook`, htt
 ```
 
 Failed deliveries are retried on the same schedule as organization webhooks and the endpoint is turned off after 20 failures in a row. The dashboard shows delivery results for the last 24 hours and the latest deliveries, can send a signed `webhook.test` event, and can rotate the signing secret (the old one stops verifying at once).
+
+### Onboarding through a partner
+
+An organization can start its application from inside the partner's own screen. WGC gives the partner its Get Started code (it is shown to WGC admins on the Partners page; the partner's own dashboard has no onboarding screen). The link is `/start?partner=<code>&embed=1&ref=<partner's id for the organization>`, with optional prefill (`org`, `name`, `email`, `phone`, `website`). With `embed=1` the form (and the page shown after submitting) has no WGC header, footer or marketing text. The code only tags the application; it never changes how the application is reviewed. A missing or unknown code leaves the application untagged and never blocks it.
+
+The partner then follows each application:
+
+| Stage | Webhook event |
+|---|---|
+| `submitted` | `onboarding.submitted` |
+| `under_review` | `onboarding.under_review` |
+| `information_required` | `onboarding.information_required`, with `data.requestedItems` (what is missing) and `data.updateUrl` (a one-time link for the organization to upload it; valid 7 days) |
+| `approved` | `onboarding.approved`, with `organization.id` now set |
+| `rejected` | `onboarding.rejected` |
+
+`organization` in these events is `{ id, name, reference }`; `id` is `null` until approval. The same stages are readable at `GET /api/v1/partner/onboarding` (no upload links). The upload link arrives only in the `onboarding.information_required` event; if it is lost, WGC can issue another.
+
+**Billing.** An organization that came through a partner has no WGC subscription: no billing gate, no activation email, no Billing Plan screens, and it is never restricted for billing. The partner is billed instead, once per approved organization. Each approval is recorded once (`PartnerBillableApproval`, unique per organization); a repeated approval webhook adds nothing. Charging is separate and not built yet. A WGC super admin can also stop WGC's own onboarding and dashboard-access emails to the partner's organizations (Partners page), for partners that show the status in their own screens.
+
+### Partner billing
+
+A partner pays WGC; its merchants do not. The price is **$10 per approved merchant per month** for a new partner. A WGC admin can change it for any partner (Partners page); it is a setting, not fixed in code. The partner saves a card in the partner dashboard (Billing page; the card number goes to Finix, never to WGC).
+
+- **What is charged.** On the first daily run each month (`/api/cron/partner-billing`) WGC makes that month's invoice: price × the merchants counted, and charges the saved card once through WGC's own billing merchant. A merchant counts from the month after it was approved, while it is the partner's and active. Each new approval raises the next charge. An issued invoice never changes; a price change applies from the next one.
+- **Never twice.** One invoice per partner per month (unique key). Each charge attempt is claimed with a conditional update before Finix is called, uses its own Finix idempotency id (invoice + attempt number), and a charge interrupted mid-way is looked up at Finix before it is repeated.
+- **Failures.** A declined card is retried the next day, up to 4 attempts, and the partner is emailed each time. Saving a new card lets an unpaid invoice try again at once (two more attempts).
+- **Off by default.** Cards are only charged when `PARTNER_BILLING_CHARGING_ENABLED=1`; otherwise invoices are made and nothing is charged. A partner with no price set is not billed.

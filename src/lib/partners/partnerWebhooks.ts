@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { decryptSecret, deserializeEnvelope } from "@/lib/webhooks/encryption";
 import { postSignedWebhook } from "@/lib/webhooks/postSignedWebhook";
@@ -13,7 +14,23 @@ import { createAuditLog } from "@/lib/audit";
  * partner can tell which of its organizations it came from.
  */
 
-export const PARTNER_DEFAULT_EVENTS = ["donation.created"];
+export const PARTNER_DEFAULT_EVENTS = [
+  "donation.created",
+  "onboarding.submitted",
+  "onboarding.information_required",
+  "onboarding.approved",
+  "onboarding.rejected",
+];
+
+/** Partner-level events (no organization yet). Offered in the dashboard next to the organization events. */
+export const PARTNER_ONBOARDING_EVENTS = [
+  "onboarding.submitted",
+  "onboarding.under_review",
+  "onboarding.information_required",
+  "onboarding.information_submitted",
+  "onboarding.approved",
+  "onboarding.rejected",
+] as const;
 
 /**
  * Called by emitEvent after the event is stored. Queues a delivery when the
@@ -44,33 +61,113 @@ export async function queuePartnerWebhookDelivery(params: { eventId: string; typ
   }
 }
 
-/** One attempt, recorded on the delivery row and the endpoint. Never throws. */
-export async function attemptPartnerWebhookDelivery(deliveryId: string): Promise<void> {
-  const delivery = await prisma.partnerWebhookDelivery.findUnique({ where: { id: deliveryId } });
-  if (!delivery || delivery.status === "SUCCEEDED" || delivery.status === "ABANDONED") return;
+export interface PartnerDeliveryPayload {
+  id: string;
+  type: string;
+  createdAt: string;
+  /** `id` is null until the organization exists (before approval). */
+  organization: { id: string | null; name: string | null; reference: string | null };
+  data: unknown;
+}
 
-  const [event, endpoint, church] = await Promise.all([
-    prisma.webhookEvent.findUnique({ where: { id: delivery.webhookEventId } }),
-    prisma.partnerWebhookEndpoint.findUnique({ where: { id: delivery.partnerEndpointId } }),
-    prisma.church.findUnique({ where: { id: delivery.churchId }, select: { id: true, name: true, partnerId: true, partnerReference: true } }),
-  ]);
-  if (!event || !endpoint || endpoint.status !== "ACTIVE" || !church || church.partnerId !== delivery.partnerId) {
-    await prisma.partnerWebhookDelivery.update({ where: { id: deliveryId }, data: { status: "ABANDONED", errorMessage: "Endpoint no longer active or organization no longer linked" } });
-    return;
+/**
+ * The body of a delivery, built fresh from the stored event. An organization
+ * event is only sent while that organization is still the partner's; a partner
+ * event (onboarding.*) only while it belongs to the partner. Null means: don't send.
+ */
+async function buildDeliveryPayload(delivery: {
+  partnerId: string;
+  webhookEventId: string | null;
+  partnerEventId: string | null;
+  churchId: string | null;
+}): Promise<PartnerDeliveryPayload | null> {
+  if (delivery.partnerEventId) {
+    const event = await prisma.partnerEvent.findUnique({ where: { id: delivery.partnerEventId } });
+    if (!event || event.partnerId !== delivery.partnerId) return null;
+    const data = (event.dataJson ?? {}) as { organization?: PartnerDeliveryPayload["organization"] } & Record<string, unknown>;
+    const { organization, ...rest } = data;
+    return {
+      id: event.id,
+      type: event.type,
+      createdAt: event.createdAt.toISOString(),
+      organization: organization ?? { id: null, name: null, reference: null },
+      data: rest,
+    };
   }
 
-  const rawBody = JSON.stringify({
+  if (!delivery.webhookEventId || !delivery.churchId) return null;
+  const [event, church] = await Promise.all([
+    prisma.webhookEvent.findUnique({ where: { id: delivery.webhookEventId } }),
+    prisma.church.findUnique({ where: { id: delivery.churchId }, select: { id: true, name: true, partnerId: true, partnerReference: true } }),
+  ]);
+  if (!event || !church || church.partnerId !== delivery.partnerId) return null;
+  return {
     id: event.id,
     type: event.type,
     createdAt: event.createdAt.toISOString(),
     organization: { id: church.id, name: church.name, reference: church.partnerReference },
     data: event.dataJson,
-  });
+  };
+}
+
+/**
+ * Records a partner-level event (an onboarding stage change) and queues its
+ * delivery when the partner's endpoint is active and subscribed. The event row is
+ * kept either way, so the Onboarding page and API always have the history.
+ * Never throws.
+ */
+export async function recordPartnerEvent(params: {
+  partnerId: string;
+  type: string;
+  onboardingApplicationId: string | null;
+  data: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const event = await prisma.partnerEvent.create({
+      data: {
+        partnerId: params.partnerId,
+        type: params.type,
+        onboardingApplicationId: params.onboardingApplicationId,
+        dataJson: params.data as Prisma.InputJsonValue,
+      },
+    });
+    const endpoint = await prisma.partnerWebhookEndpoint.findUnique({
+      where: { partnerId: params.partnerId },
+      select: { id: true, status: true, subscribedEventsJson: true },
+    });
+    if (!endpoint || endpoint.status !== "ACTIVE") return;
+    const events = Array.isArray(endpoint.subscribedEventsJson) ? (endpoint.subscribedEventsJson as string[]) : [];
+    if (!events.includes(params.type)) return;
+
+    const delivery = await prisma.partnerWebhookDelivery.create({
+      data: { partnerEventId: event.id, partnerId: params.partnerId, partnerEndpointId: endpoint.id },
+    });
+    void attemptPartnerWebhookDelivery(delivery.id).catch(() => {});
+  } catch (err) {
+    console.error(`recordPartnerEvent failed for type=${params.type} partner=${params.partnerId}:`, err);
+  }
+}
+
+/** One attempt, recorded on the delivery row and the endpoint. Never throws. */
+export async function attemptPartnerWebhookDelivery(deliveryId: string): Promise<void> {
+  const delivery = await prisma.partnerWebhookDelivery.findUnique({ where: { id: deliveryId } });
+  if (!delivery || delivery.status === "SUCCEEDED" || delivery.status === "ABANDONED") return;
+
+  const [payload, endpoint] = await Promise.all([
+    buildDeliveryPayload(delivery),
+    prisma.partnerWebhookEndpoint.findUnique({ where: { id: delivery.partnerEndpointId } }),
+  ]);
+  if (!payload || !endpoint || endpoint.status !== "ACTIVE") {
+    await prisma.partnerWebhookDelivery.update({ where: { id: deliveryId }, data: { status: "ABANDONED", errorMessage: "Endpoint no longer active or the event is no longer the partner's" } });
+    return;
+  }
+
+  const rawBody = JSON.stringify(payload);
 
   let result;
   try {
     const secret = decryptSecret(deserializeEnvelope(endpoint.signingSecretEncrypted));
-    result = await postSignedWebhook({ url: endpoint.url, secret, rawBody, eventId: event.id, eventType: event.type });
+    result = await postSignedWebhook({ url: endpoint.url, secret, rawBody, eventId: payload.id, eventType: payload.type });
   } catch (err) {
     result = { ok: false, error: err instanceof Error ? err.message : "Unknown delivery error", statusCode: undefined, bodySnippet: undefined, timestamp: Math.floor(Date.now() / 1000) };
   }

@@ -12,6 +12,9 @@ import { parseVerificationOutcomes } from "@/lib/finix/parseVerificationOutcomes
 import { parseFinixDate } from "@/lib/finix/parseFinixDate";
 import { mapFinixDisputeStateToWgcStatus } from "@/lib/finix/statusMapping";
 import { provisionChurchAndBillingGateOrAlert } from "@/lib/billing/provisionChurchAndBillingGate";
+import { partnerSuppressesMerchantEmails } from "@/lib/partners/onboardingCode";
+import { notifyPartnerOfOnboardingStage } from "@/lib/partners/onboardingEvents";
+import { onboardingStage } from "@/lib/partners/onboardingStages";
 import { syncPaymentInstrument } from "@/lib/finix/sync/syncPaymentInstruments";
 import { syncFeesForTransfer } from "@/lib/finix/sync/syncFees";
 import { linkTransfersToSettlement, recomputeSettlementAggregates } from "@/lib/finix/sync/syncSettlements";
@@ -75,6 +78,15 @@ export async function sendWebhookEmail(
   badgeColor: string,
   bodyHtml: string
 ) {
+  // A partner that shows onboarding status inside its own screens can ask WGC not to
+  // email the organization. Fails open: if the check itself fails, the email still goes.
+  try {
+    const owner = await prisma.onboardingApplication.findUnique({ where: { id: applicationId }, select: { partnerId: true } });
+    if (await partnerSuppressesMerchantEmails(owner?.partnerId)) return;
+  } catch {
+    // fall through and send
+  }
+
   // Finix redelivers webhooks (retries, or two events landing close
   // together), and the old check-then-send-then-log sequence had a real
   // race window: the "does a log already exist" check and the eventual
@@ -1749,6 +1761,9 @@ export async function POST(req: Request) {
       const orgName = app.legalBusinessName || app.organizationName;
       const safeOrgName = orgName || "your organization";
 
+      // Set only when this delivery creates a request for more information; passed to the partner's webhook.
+      let partnerUpdateUrl: string | null = null;
+
       const updateData: any = {
         lastFinixEventId: eventId,
         lastFinixEventType: eventType,
@@ -1850,6 +1865,8 @@ export async function POST(req: Request) {
             finixMerchantId: app.finixMerchantId || data.id,
             finixIdentityId: app.finixIdentityId,
             finixApplicationId: app.finixApplicationId,
+            partnerId: app.partnerId,
+            partnerReference: app.partnerReference,
           });
         } else if (onboardingState === "UPDATE_REQUESTED") {
           // Work out what Finix is actually asking for on EVERY delivery of
@@ -1938,6 +1955,7 @@ export async function POST(req: Request) {
             updateData.updateTokenExpiresAt = expiresAt;
 
             const secureLink = `https://www.wgcpayments.com/onboarding/update/${rawToken}`;
+            partnerUpdateUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/onboarding/update/${rawToken}`;
 
             await sendWebhookEmail(
               app.id,
@@ -2021,6 +2039,14 @@ export async function POST(req: Request) {
         where: { id: app.id },
         data: updateData
       });
+
+      // If this application came through a partner, tell the partner when its stage
+      // changed. `app` is the row from before this update, so it gives the previous
+      // stage and a repeated delivery of the same status is not announced twice.
+      // Never throws, so it can't affect the response back to Finix.
+      if (app.partnerId) {
+        await notifyPartnerOfOnboardingStage({ applicationId: app.id, previousStage: onboardingStage(app), updateUrl: partnerUpdateUrl });
+      }
 
       await prisma.finixWebhookEvent.update({
         where: { id: webhookEvent.id },

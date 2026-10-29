@@ -121,6 +121,8 @@ export default async function MerchantDashboardLayout({
     canTakePayment: auth.role !== "viewer",
     canViewFunds: hasPermission(auth, "canViewDonors"),
     canViewStudents: church.studentGivingEnabled && hasPermission(auth, "canViewDonors"),
+    // An organization billed through a partner has no WGC plan or invoices to show.
+    canViewBillingPlan: !church.partnerId,
   };
 
   return (

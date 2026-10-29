@@ -110,9 +110,16 @@ model OnboardingApplication {
   suspendedAt                       DateTime?
   suspensionReason                  String?
   promotion                         String?
+  // Software partner (for example a CRM) this application came through, and the
+  // partner's own id for the organization (a CRM location id). Only a label:
+  // it never changes how Finix reviews the application. See model Partner.
+  partnerId                         String?
+  partnerReference                  String?
   associatedOwners                  AssociatedOwner[]
   documents                         MerchantDocument[]
   internalDocuments                 OnboardingInternalDocument[]
+
+  @@index([partnerId])
 }
 
 // A WGC-only document collected during onboarding — never sent to Finix or
@@ -516,13 +523,36 @@ model Partner {
   // ACTIVE | SUSPENDED. A suspended partner's staff are signed out and can't
   // sign in; its organizations and their payments are not affected.
   status       String   @default("ACTIVE")
+  /// Goes in the partner's Get Started links so an application can be tagged to
+  /// this partner. A label only; generated on first use (src/lib/partners/onboardingCode.ts).
+  onboardingCode String? @unique
+  /// When true, WGC does not email the organization's own onboarding status or
+  /// dashboard-access messages for applications of this partner: the partner
+  /// shows the status inside its own screens. Off by default.
+  suppressMerchantEmails Boolean @default(false)
+  /// What the partner pays WGC per approved merchant per month, in cents. Null = the
+  /// partner is not being billed yet. Set by a WGC admin.
+  pricePerMerchantCents Int?
+  /// The partner's saved card, charged monthly (see PartnerInvoice). Only Finix ids and
+  /// the display details are stored; never the card number.
+  billingIdentityId          String?
+  billingPaymentInstrumentId String?
+  cardBrand                  String?
+  cardLast4                  String?
+  cardExpMonth               Int?
+  cardExpYear                Int?
+  billingContactEmail        String?
+  billingAuthAcceptedAt      DateTime?
+  billingAuthTermsVersion    String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  invoices         PartnerInvoice[]
   users            PartnerUser[]
   churches         Church[]
   apiKeys          PartnerApiKey[]
   webhookEndpoints PartnerWebhookEndpoint[]
+  billableApprovals PartnerBillableApproval[]
 }
 
 model PartnerUser {
@@ -611,11 +641,15 @@ model PartnerWebhookEndpoint {
 /// WebhookDelivery; retried by the same cron.
 model PartnerWebhookDelivery {
   id                String @id @default(cuid())
-  webhookEventId    String
+  /// Exactly one of these is set: the organization event (WebhookEvent), or a
+  /// partner-level event such as onboarding.* (PartnerEvent).
+  webhookEventId    String?
+  partnerEventId    String?
   partnerId         String
   partnerEndpointId String
-  /// The organization the event happened in.
-  churchId          String
+  /// The organization the event happened in. Null for an onboarding event, which
+  /// happens before the organization exists.
+  churchId          String?
 
   /// PENDING | SUCCEEDED | FAILED | ABANDONED
   status        String    @default("PENDING")
@@ -633,6 +667,82 @@ model PartnerWebhookDelivery {
   @@index([partnerId, createdAt])
   @@index([status, nextRetryAt])
   @@index([webhookEventId])
+  @@index([partnerEventId])
+}
+
+/// One monthly charge to a partner: price per merchant x the merchants counted that
+/// month. At most one per partner per month (the unique key is what makes the daily
+/// job safe to run twice). The card is charged with a stable Finix idempotency id
+/// derived from this row, so a retry can never charge twice.
+model PartnerInvoice {
+  id        String @id @default(cuid())
+  partnerId String
+  /// Calendar month, UTC, "YYYY-MM".
+  period    String
+
+  merchantCount  Int
+  unitPriceCents Int
+  amountCents    Int
+  currency       String @default("USD")
+  /// The merchants counted: [{ churchId, name, reference }].
+  lineItemsJson  Json
+
+  /// PENDING | AWAITING_CARD | CHARGING | SUCCEEDED | FAILED | WAIVED
+  status        String    @default("PENDING")
+  attemptCount  Int       @default(0)
+  /// How many attempts are allowed in total. Saving a new card after the budget is used up
+  /// grants a couple more. Attempt numbers never restart, so no Finix idempotency id is reused.
+  attemptBudget Int       @default(4)
+  lastAttemptAt DateTime?
+  /// When a failed charge may be tried again. Null once the budget is spent.
+  nextAttemptAt DateTime?
+
+  finixTransferId String?
+  failureReason   String?
+  chargedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, period])
+  @@index([status, nextAttemptAt])
+}
+
+/// A partner-level event that has no organization yet (onboarding.submitted,
+/// onboarding.information_required, onboarding.approved, ...). The durable
+/// source a PartnerWebhookDelivery reads.
+model PartnerEvent {
+  id        String   @id @default(cuid())
+  partnerId String
+  type      String
+  /// The onboarding application the event is about.
+  onboardingApplicationId String?
+  dataJson  Json
+  createdAt DateTime @default(now())
+
+  @@index([partnerId, createdAt])
+  @@index([onboardingApplicationId])
+}
+
+/// One approved organization of a partner, recorded once when it is approved.
+/// This is what the partner is billed for (not the organization). The charge
+/// itself is separate; a row here only says it is owed.
+model PartnerBillableApproval {
+  id        String   @id @default(cuid())
+  partnerId String
+  churchId  String   @unique
+  onboardingApplicationId String?
+  approvedAt DateTime
+  /// PENDING | BILLED | WAIVED
+  status    String   @default("PENDING")
+  billedAt  DateTime?
+  createdAt DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, status])
 }
 
 /// Mirrors Finix's `Compliance Form` resource (PCI SAQ attestation). Finix
