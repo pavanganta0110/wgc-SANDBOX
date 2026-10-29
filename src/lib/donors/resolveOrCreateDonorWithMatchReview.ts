@@ -4,7 +4,7 @@ import { findBestScoredMatch, type MatchCandidateDonor } from "@/lib/donors/dono
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { DONOR_CANDIDATE_CAP } from "@/lib/donors/donorsList";
 
-export type PossibleMatchSourceType = "EXTERNAL_DONATION_ENTRY" | "EXTERNAL_DONATION_IMPORT" | "MIGRATION_IMPORT" | "PLANNING_CENTER_IMPORT";
+export type PossibleMatchSourceType = "EXTERNAL_DONATION_ENTRY" | "EXTERNAL_DONATION_IMPORT" | "MIGRATION_IMPORT" | "PLANNING_CENTER_IMPORT" | "ONLINE_DONATION";
 
 export interface ResolveWithMatchReviewInput extends DonorResolutionInput {
   sourceType: PossibleMatchSourceType;
@@ -27,9 +27,10 @@ export interface ResolveWithMatchReviewResult {
 }
 
 /**
- * The merchant-side counterpart to resolveOrCreateDonor, used only by the
- * External Donation manual-entry and CSV-import paths (never the public
- * Finix checkout — see donorMatchConfidence.ts doc comment for why).
+ * The merchant-side counterpart to resolveOrCreateDonor, used by the
+ * External Donation manual-entry and CSV-import paths. The public Finix
+ * checkout does not resolve its donor through this (it must resolve
+ * instantly); it calls raisePossibleMatchForNewDonor after the payment.
  * Exact-match resolution (email/phone/finixIdentityId) behaves identically
  * to resolveOrCreateDonor — that is unchanged and still auto-attaches
  * without any review step, exactly as the spec requires for HIGH
@@ -60,6 +61,54 @@ export async function resolveOrCreateDonorWithMatchReview(input: ResolveWithMatc
     });
     return resolved;
   }
+
+  const review = await raisePossibleMatchForNewDonor({
+    ...resolutionInput,
+    donorId: resolved.id,
+    sourceType,
+    sourceId,
+    donationAmountCents,
+    donationDate,
+    actorUserId,
+    actorEmail,
+    actorRole,
+    req,
+  });
+  return review.possibleMatchId ? { ...resolved, possibleMatchId: review.possibleMatchId } : resolved;
+}
+
+export interface RaisePossibleMatchInput {
+  churchId: string;
+  /** The brand-new donor just created. */
+  donorId: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  addressLine1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postalCode?: string | null;
+  sourceType: PossibleMatchSourceType;
+  sourceId?: string;
+  donationAmountCents?: number;
+  donationDate?: Date;
+  actorUserId?: string | null;
+  actorEmail?: string | null;
+  actorRole?: string | null;
+  req?: Request;
+}
+
+/**
+ * Scans the existing roster for a fuzzy possible match against a donor that
+ * was just created and, if one is found, raises a PossibleDonorMatch row for a
+ * human to confirm or reject. Never merges anything and never touches the
+ * gift. Split out of resolveOrCreateDonorWithMatchReview so a caller that must
+ * resolve its donor instantly (the public checkout) can run this afterwards,
+ * outside the payment path.
+ */
+export async function raisePossibleMatchForNewDonor(input: RaisePossibleMatchInput): Promise<{ id: string; possibleMatchId?: string }> {
+  const { sourceType, sourceId, donationAmountCents, donationDate, actorUserId, actorEmail, actorRole, req } = input;
+  const resolved = { id: input.donorId };
 
   // A brand-new donor was just created — scan for a fuzzy MEDIUM match
   // against the existing roster before we consider this donation fully

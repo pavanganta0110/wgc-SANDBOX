@@ -2,13 +2,14 @@ import { normalizeEmail, normalizePhone } from "@/lib/donors/donorContact";
 
 /**
  * Confidence-scored fuzzy matching for the "does this newly-entered/
- * imported donor already exist" question. Deliberately NOT used by the
- * public Finix checkout path (resolveOrCreateDonor stays exact-match-only
+ * imported donor already exist" question. The public Finix checkout never
+ * uses it to resolve its donor (resolveOrCreateDonor stays exact-match-only
  * there — a live donation form must resolve instantly and can never block
- * or ask a donor to disambiguate themselves). This module only backs the
- * merchant-side External Donation manual-entry and CSV-import flows, where
- * a staff member enters someone else's information and a human review
- * step before merging is exactly what the spec requires.
+ * or ask a donor to disambiguate themselves); it only raises a review row
+ * AFTER the payment succeeded, via raisePossibleMatchForNewDonor. Otherwise
+ * this module backs the merchant-side External Donation manual-entry and
+ * CSV-import flows, where a staff member enters someone else's information
+ * and a human review step before merging is exactly what the spec requires.
  *
  * Tiers:
  *  - HIGH: exact normalizedEmail, normalizedPhone, or finixIdentityId —
@@ -17,9 +18,12 @@ import { normalizeEmail, normalizePhone } from "@/lib/donors/donorContact";
  *  - MEDIUM: similar name AND (same address, OR partial phone match, OR
  *    similar email) — never auto-merged, always requires a reviewer to
  *    confirm via the possible-match queue.
+ *  - MEDIUM also covers one narrow bare-name case: an identical full name on
+ *    a different email, with no contradicting address or phone (the "same
+ *    person gave from a second email" duplicate).
  *  - LOW: name similarity alone, nothing else corroborating — never
  *    surfaced as a possible match; a new donor is created silently, same
- *    as today. Matching on a bare name is explicitly disallowed by the spec.
+ *    as today. Any other bare-name match is explicitly disallowed by the spec.
  */
 
 export type MatchConfidence = "HIGH" | "MEDIUM" | "LOW" | "NONE";
@@ -159,13 +163,23 @@ export function scoreDonorMatch(existing: MatchCandidateDonor, candidate: NewDon
   );
   if (similarEmail) matchedFields.push("email (similar)");
 
+  // The one bare-name case that is reviewable: an identical full name (at least
+  // two words) that arrives on a different email, where nothing on file
+  // contradicts it — an address or phone that explicitly differs means a
+  // different person with a common name, so it stays LOW. A human still
+  // confirms every one; nothing is merged automatically.
+  const sameFullName = Boolean(existingName && candidateName && existingName === candidateName && existingName.includes(" "));
+  const differentEmail = Boolean(existing.normalizedEmail && candidateEmailNormalized && existing.normalizedEmail !== candidateEmailNormalized);
+  const sameNameDifferentEmail = sameFullName && differentEmail && !conflictingFields.includes("address") && !conflictingFields.includes("phone");
+
   // MEDIUM: similar name AND at least one corroborating signal.
-  const hasCorroboratingSignal = sameAddress || partialPhoneMatch || similarEmail;
+  const hasCorroboratingSignal = sameAddress || partialPhoneMatch || similarEmail || sameNameDifferentEmail;
   if (nameSimilar && hasCorroboratingSignal) {
     const reasonParts = ["similar name"];
     if (sameAddress) reasonParts.push("same mailing address");
     if (partialPhoneMatch) reasonParts.push("matching last 4 phone digits");
     if (similarEmail) reasonParts.push("similar email address");
+    if (sameNameDifferentEmail && !sameAddress && !partialPhoneMatch && !similarEmail) reasonParts[0] = "identical name on a different email address";
     return {
       confidence: "MEDIUM",
       score: Math.round(60 + nameSim * 20 + (matchedFields.length - 1) * 5),

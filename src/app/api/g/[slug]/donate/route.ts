@@ -24,6 +24,7 @@ import { cleanAddressInput, hasAnyAddressField, applyDonorAddressUpdate } from "
 import { normalizeEmail } from "@/lib/donors/donorContact";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { withLedgerRow } from "@/lib/ledger/loadLedger";
+import { raisePossibleMatchForNewDonor } from "@/lib/donors/resolveOrCreateDonorWithMatchReview";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
@@ -1074,6 +1075,27 @@ async function handleDonate(req: Request, slug: string) {
         });
       } catch (err) {
         console.error("Failed to emit donation.created event:", err);
+      }
+
+      // A brand-new donor on a succeeded gift: look for an existing donor with the
+      // same name on a different email and, if found, queue a possible-match review
+      // for a human. Runs only after the payment and never merges or changes it.
+      if (donorRecord.created) {
+        try {
+          await raisePossibleMatchForNewDonor({
+            churchId: church.id,
+            donorId: donorRecord.id,
+            name: fullName,
+            email: donor.email,
+            phone: donor.phone || null,
+            sourceType: "ONLINE_DONATION",
+            sourceId: newPayment.id,
+            donationAmountCents: totalCents,
+            donationDate: newPayment.createdAt,
+          });
+        } catch (err) {
+          console.error("Failed to check new donor for possible duplicates:", err);
+        }
       }
     }
 

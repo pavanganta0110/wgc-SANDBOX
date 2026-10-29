@@ -103,3 +103,48 @@ describe("findBestScoredMatch", () => {
     expect(best).toBeNull();
   });
 });
+
+describe("scoreDonorMatch — identical full name on a different email", () => {
+  it("is MEDIUM (reviewable) when nothing on file contradicts it", () => {
+    const result = scoreDonorMatch(donor(), { name: "John Smith", email: "john.smith.work@company.org" });
+    expect(result.confidence).toBe("MEDIUM");
+    expect(result.reason).toBe("identical name on a different email address");
+  });
+
+  it("stays LOW when the address explicitly differs, because that is a different person with a common name", () => {
+    const result = scoreDonorMatch(donor(), {
+      name: "John Smith",
+      email: "someone@else.com",
+      addressLine1: "999 Other Ave",
+      city: "Denver",
+      postalCode: "80202",
+    });
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("stays LOW when the phone explicitly differs", () => {
+    const result = scoreDonorMatch(donor(), { name: "John Smith", email: "someone@else.com", phone: "111-222-3333" });
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("stays LOW for a single-word name, which is too common to review", () => {
+    const result = scoreDonorMatch(donor({ name: "Madonna" }), { name: "Madonna", email: "other@example.com" });
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("stays LOW when the new donor has no email to compare, since a different email can't be shown", () => {
+    const result = scoreDonorMatch(donor(), { name: "John Smith" });
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("does not treat a merely similar (not identical) name on a different email as reviewable", () => {
+    const result = scoreDonorMatch(donor(), { name: "Jon Smith", email: "someone@else.com" });
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("keeps the richer reason when other signals also match", () => {
+    const result = scoreDonorMatch(donor(), { name: "John Smith", email: "john@gmail.com" });
+    expect(result.confidence).toBe("MEDIUM");
+    expect(result.reason).toContain("similar email address");
+  });
+});
