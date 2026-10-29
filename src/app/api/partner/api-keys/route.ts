@@ -11,7 +11,7 @@ export async function GET() {
     const keys = await prisma.partnerApiKey.findMany({
       where: { partnerId: session.partnerId },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, keyPrefix: true, status: true, createdAt: true, lastUsedAt: true, revokedAt: true, requestCount: true },
+      select: { id: true, name: true, keyPrefix: true, status: true, createdAt: true, lastUsedAt: true, revokedAt: true, requestCount: true, errorCount: true, lastErrorAt: true },
     });
     return NextResponse.json({ keys, environment: partnerKeyEnvironment() === "live" ? "Production" : "Sandbox" });
   } catch (err) {

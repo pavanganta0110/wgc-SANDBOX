@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   payment: { findMany: vi.fn() },
-  externalDonation: { findMany: vi.fn() },
+  externalDonation: { findMany: vi.fn(), findFirst: vi.fn() },
   donor: { findMany: vi.fn() },
   finixRefundOrReversal: { findMany: vi.fn() },
   finixDispute: { findMany: vi.fn() },
@@ -140,5 +140,32 @@ describe("cursor encoding", () => {
     expect(decodePartnerLedgerCursor("not-a-cursor")).toBeNull();
     expect(decodePartnerLedgerCursor(Buffer.from(JSON.stringify({ date: "nope", id: "x" })).toString("base64url"))).toBeNull();
     expect(decodePartnerLedgerCursor(Buffer.from(JSON.stringify({ id: "x" })).toString("base64url"))).toBeNull();
+  });
+});
+
+import { loadLedgerRowForExternal, withExternalLedgerRow } from "../loadLedger";
+
+describe("external gift ledger row (for the donation.created / updated / voided events)", () => {
+  it("builds the row for one external gift of this organization only", async () => {
+    prismaMock.externalDonation.findFirst.mockResolvedValue(external("e_1", "c1", "2026-01-04T00:00:00Z"));
+    const row = await loadLedgerRowForExternal("c1", "e_1");
+    expect(prismaMock.externalDonation.findFirst.mock.calls[0][0].where).toEqual({ id: "e_1", churchId: "c1" });
+    expect(row).toMatchObject({ id: "e_1", source: "EXTERNAL", method: "external", giftCents: 5000 });
+  });
+
+  it("is null for a gift that isn't this organization's", async () => {
+    prismaMock.externalDonation.findFirst.mockResolvedValue(null);
+    expect(await loadLedgerRowForExternal("c1", "e_x")).toBeNull();
+  });
+
+  it("adds the ledger row to an event payload, and never throws", async () => {
+    prismaMock.externalDonation.findFirst.mockResolvedValue(external("e_1", "c1", "2026-01-04T00:00:00Z"));
+    const withRow = await withExternalLedgerRow("c1", "e_1", { externalDonationId: "e_1" });
+    expect(withRow.externalDonationId).toBe("e_1");
+    expect((withRow.ledger as { id: string }).id).toBe("e_1");
+
+    prismaMock.externalDonation.findFirst.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await withExternalLedgerRow("c1", "e_1", { externalDonationId: "e_1" })).toEqual({ externalDonationId: "e_1" });
   });
 });

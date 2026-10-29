@@ -11,6 +11,9 @@ import { PARTNER_SESSION_COOKIE_NAME } from '@/lib/partners/partnerSessionConsta
 const PARTNER_PUBLIC_PREFIXES = [
   '/partner/login',
   '/partner/accept-invite',
+  '/partner/forgot-password',
+  '/partner/reset-password',
+  '/api/partner/forgot-password',
   '/api/partner/login',
   '/api/partner/logout',
   '/api/partner/accept-invite',

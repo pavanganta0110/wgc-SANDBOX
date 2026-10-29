@@ -44,18 +44,29 @@ export async function authenticatePartnerApiRequest(req: Request): Promise<Partn
   return { partnerKeyId: key.id, partnerId: key.partnerId };
 }
 
+/** Counts an error response against the key, for the partner's health view. Never throws. */
+function recordKeyError(partnerKeyId: string): void {
+  prisma.partnerApiKey
+    .update({ where: { id: partnerKeyId }, data: { errorCount: { increment: 1 }, lastErrorAt: new Date() } })
+    .catch(() => {});
+}
+
 /** Same shape as withApiAuth, for the read-only partner API. */
 export function withPartnerApiAuth(handler: (req: Request, auth: PartnerApiAuthContext, requestId: string) => Promise<NextResponse>) {
   return async (req: Request): Promise<NextResponse> => {
     const requestId = generateRequestId();
+    let auth: PartnerApiAuthContext | null = null;
     try {
-      const auth = await authenticatePartnerApiRequest(req);
+      auth = await authenticatePartnerApiRequest(req);
       const res = await handler(req, auth, requestId);
       res.headers.set("X-Request-Id", requestId);
+      // The key was accepted, so an error here is something the partner will want to see.
+      if (res.status >= 400) recordKeyError(auth.partnerKeyId);
       return res;
     } catch (err) {
       if (err instanceof ApiAuthError) return apiError(err.type, err.message, requestId);
       console.error(`Unhandled /api/v1/partner error [${requestId}]:`, err);
+      if (auth) recordKeyError(auth.partnerKeyId);
       return apiError("internal_error", "An unexpected error occurred.", requestId);
     }
   };

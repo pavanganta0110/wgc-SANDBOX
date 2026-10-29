@@ -200,3 +200,14 @@ DO $$ BEGIN
   ALTER TABLE "PartnerInvoice" ADD CONSTRAINT "PartnerInvoice_partnerId_fkey"
     FOREIGN KEY ("partnerId") REFERENCES "Partner"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Partner sign-in code (email two-factor) and API key error counters.
+ALTER TABLE "PartnerUser" ADD COLUMN IF NOT EXISTS "mfaCodeHash" TEXT;
+ALTER TABLE "PartnerUser" ADD COLUMN IF NOT EXISTS "mfaCodeExpiresAt" TIMESTAMP(3);
+ALTER TABLE "PartnerUser" ADD COLUMN IF NOT EXISTS "mfaCodeAttempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "PartnerUser" ADD COLUMN IF NOT EXISTS "mfaCodeSentAt" TIMESTAMP(3);
+ALTER TABLE "PartnerUser" ADD COLUMN IF NOT EXISTS "mfaChallengeHash" TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS "PartnerUser_mfaChallengeHash_key" ON "PartnerUser"("mfaChallengeHash");
+
+ALTER TABLE "PartnerApiKey" ADD COLUMN IF NOT EXISTS "errorCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "PartnerApiKey" ADD COLUMN IF NOT EXISTS "lastErrorAt" TIMESTAMP(3);

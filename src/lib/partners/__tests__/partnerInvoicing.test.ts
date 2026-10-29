@@ -271,3 +271,31 @@ describe("runPartnerBilling", () => {
     expect(prismaMock.partner.findMany.mock.calls[0][0].where).toEqual({ status: "ACTIVE", pricePerMerchantCents: { gt: 0 } });
   });
 });
+
+describe("receipt for a paid invoice", () => {
+  it("emails the billing contact after a successful charge", async () => {
+    prismaMock.partner.findUnique.mockImplementation(async ({ select }: { select: Record<string, boolean> }) =>
+      "billingPaymentInstrumentId" in select
+        ? { status: "ACTIVE", billingPaymentInstrumentId: "PI_1" }
+        : { name: "Clear Vision", contactEmail: "contact@example.test", billingContactEmail: "billing@example.test", cardBrand: "VISA", cardLast4: "4242" }
+    );
+    expect(await chargePartnerInvoice("inv1", { now: NOW, chargingEnabled: true })).toBe("SUCCEEDED");
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const mail = sendEmail.mock.calls[0][0];
+    expect(mail.to).toBe("billing@example.test");
+    expect(mail.bodyHtml).toContain("$75.00");
+    expect(mail.bodyHtml).toContain("ending 4242");
+  });
+
+  it("a receipt that can't be sent never undoes the charge", async () => {
+    sendEmail.mockRejectedValue(new Error("mail down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await chargePartnerInvoice("inv1", { now: NOW, chargingEnabled: true })).toBe("SUCCEEDED");
+  });
+
+  it("sends no receipt when the charge fails", async () => {
+    finix.createTransfer.mockResolvedValue({ id: "TR_x", state: "FAILED" });
+    await chargePartnerInvoice("inv1", { now: NOW, chargingEnabled: true });
+    expect(sendEmail.mock.calls.every((c) => !/receipt/i.test(String(c[0].subject)))).toBe(true);
+  });
+});

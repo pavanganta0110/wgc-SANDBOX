@@ -13,6 +13,8 @@ import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDon
 import { cleanAddressInput, hasAnyAddressField, isAddressSource, applyDonorAddressUpdate } from "@/lib/donors/donorAddress";
 import { parseAdditionalRecipients } from "@/lib/email";
 import { computePledgeFulfillment } from "@/lib/pledges/pledgeFulfillment";
+import { emitEvent } from "@/lib/events/emitEvent";
+import { withExternalLedgerRow } from "@/lib/ledger/loadLedger";
 
 export async function GET(req: Request) {
   let auth;
@@ -402,6 +404,15 @@ export async function POST(req: Request) {
       // it's just not marked sent; the merchant can retry from the list.
     }
   }
+
+  // Tell webhook consumers (this organization's endpoints and its partner's) that a cash, check
+  // or other offline gift was recorded, with the same ledger row an online gift carries
+  // (ledger.source is "EXTERNAL"). Never throws; the gift is already saved.
+  await emitEvent({
+    type: "donation.created",
+    churchId: auth.churchId,
+    data: await withExternalLedgerRow(auth.churchId, created.id, { externalDonationId: created.id, donorId: created.donorId ?? null, source: "EXTERNAL" }),
+  });
 
   return NextResponse.json({ donation: created, possibleDuplicate: Boolean(duplicate) }, { status: 201 });
 }

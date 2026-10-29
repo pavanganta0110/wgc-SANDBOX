@@ -6,6 +6,8 @@ import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
+import { emitEvent } from "@/lib/events/emitEvent";
+import { withExternalLedgerRow } from "@/lib/ledger/loadLedger";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -129,6 +131,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     metadata: { fields: Object.keys(data) },
     req,
   });
+
+  // An edited cash/check gift changes a report's numbers: send the fresh ledger row. Never throws.
+  await emitEvent({ type: "donation.updated", churchId: auth.churchId, data: await withExternalLedgerRow(auth.churchId, id, { externalDonationId: id, fields: Object.keys(data), source: "EXTERNAL" }) });
 
   return NextResponse.json({ donation: updated });
 }

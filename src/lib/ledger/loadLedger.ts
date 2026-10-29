@@ -300,3 +300,22 @@ export async function loadPartnerLedgerPage(params: LoadPartnerLedgerPageParams)
   const last = page[page.length - 1];
   return { rows, nextCursor: hasMore && last ? encodePartnerLedgerCursor({ date: last.date, id: last.id }) : null };
 }
+
+/** The ledger row for one external (cash, check, other) gift. Null if it isn't this church's. */
+export async function loadLedgerRowForExternal(churchId: string, externalDonationId: string): Promise<LedgerRow | null> {
+  const donation = await prisma.externalDonation.findFirst({ where: { id: externalDonationId, churchId }, select: EXTERNAL_SELECT });
+  if (!donation) return null;
+  const lookups = await loadLookups(churchId, [], [donation]);
+  return buildExternalLedgerRow(donation, lookups);
+}
+
+/** Like withLedgerRow, for an external gift. Never throws: an event must still go out with its basic payload. */
+export async function withExternalLedgerRow(churchId: string, externalDonationId: string, base: Record<string, unknown>): Promise<Record<string, unknown>> {
+  try {
+    const ledger = await loadLedgerRowForExternal(churchId, externalDonationId);
+    return ledger ? { ...base, ledger } : base;
+  } catch (err) {
+    console.error(`Failed to build ledger row for external gift event externalDonationId=${externalDonationId}:`, err);
+    return base;
+  }
+}

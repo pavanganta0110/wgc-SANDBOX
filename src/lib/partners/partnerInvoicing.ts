@@ -134,6 +134,30 @@ async function notifyPartnerOfFailure(partnerId: string, invoice: { period: stri
   }
 }
 
+/** A receipt for a paid invoice, to the partner's billing contact. Best-effort: a failed email never affects the charge. */
+async function sendPartnerReceipt(invoice: PartnerInvoice): Promise<void> {
+  try {
+    const partner = await prisma.partner.findUnique({
+      where: { id: invoice.partnerId },
+      select: { name: true, contactEmail: true, billingContactEmail: true, cardBrand: true, cardLast4: true },
+    });
+    const to = partner?.billingContactEmail || partner?.contactEmail;
+    if (!partner || !to) return;
+    await sendWgcEmail({
+      to,
+      subject: `WGC Payments receipt: ${invoice.period}`,
+      title: "Payment received",
+      badgeText: "Receipt",
+      badgeColor: "#10B981",
+      bodyHtml: `<p>Thank you. We charged $${(invoice.amountCents / 100).toFixed(2)} to your ${partner.cardBrand ?? "card"}${partner.cardLast4 ? ` ending ${partner.cardLast4}` : ""} for ${invoice.period}.</p>
+                 <p>${invoice.merchantCount} approved merchant${invoice.merchantCount === 1 ? "" : "s"} × $${(invoice.unitPriceCents / 100).toFixed(2)} for ${partner.name}.</p>
+                 <p>You can see every invoice in the Billing page of your partner dashboard.</p>`,
+    });
+  } catch (err) {
+    console.error("sendPartnerReceipt failed:", err);
+  }
+}
+
 async function recordFailure(invoice: PartnerInvoice, attempt: number, reason: string, now: Date): Promise<void> {
   const final = attempt >= invoice.attemptBudget;
   await prisma.partnerInvoice.update({
@@ -150,6 +174,7 @@ async function recordSuccess(invoice: PartnerInvoice, transferId: string, now: D
     data: { status: "SUCCEEDED", finixTransferId: transferId, chargedAt: now, failureReason: null, nextAttemptAt: null },
   });
   await createAuditLog({ action: "PARTNER_INVOICE_CHARGED", metadata: { partnerId: invoice.partnerId, invoiceId: invoice.id, amountCents: invoice.amountCents, finixTransferId: transferId } });
+  await sendPartnerReceipt(invoice);
 }
 
 const transferState = (transfer: { state?: string } | null | undefined) => String(transfer?.state ?? "").toUpperCase();

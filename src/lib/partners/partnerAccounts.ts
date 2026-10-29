@@ -105,3 +105,28 @@ export async function verifyPartnerLogin(emailInput: string, password: string) {
   if (!ok) return null;
   return { id: user.id, partnerId: user.partnerId, email: user.email, authVersion: user.authVersion };
 }
+
+export const PARTNER_RESET_TTL_MINUTES = 60;
+
+/**
+ * Starts a password reset for someone who already has a password. Returns null when there
+ * is nothing to reset (unknown email, no password yet, disabled, partner suspended); the
+ * caller must answer the same way either way so the form can't be used to find out who has
+ * an account. Someone who hasn't accepted their invitation uses that link instead.
+ * The link reuses the single-use setup token, so it also ends other sessions when it's used.
+ */
+export async function createPartnerPasswordReset(emailInput: string): Promise<{ rawToken: string; email: string; name: string | null } | null> {
+  const email = emailInput.trim().toLowerCase();
+  const user = await prisma.partnerUser.findUnique({
+    where: { email },
+    select: { id: true, name: true, passwordHash: true, disabledAt: true, partner: { select: { status: true } } },
+  });
+  if (!user || !user.passwordHash || user.disabledAt || user.partner.status !== "ACTIVE") return null;
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  await prisma.partnerUser.update({
+    where: { id: user.id },
+    data: { setPasswordTokenHash: hashPartnerToken(rawToken), setPasswordTokenExpiresAt: new Date(Date.now() + PARTNER_RESET_TTL_MINUTES * 60 * 1000) },
+  });
+  return { rawToken, email, name: user.name };
+}

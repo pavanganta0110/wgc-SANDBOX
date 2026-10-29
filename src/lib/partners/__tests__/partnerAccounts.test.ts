@@ -133,3 +133,30 @@ describe("verifyPartnerLogin", () => {
     expect(await verifyPartnerLogin("a@b.co", "correct horse battery")).toBeNull();
   });
 });
+
+import { createPartnerPasswordReset } from "../partnerAccounts";
+
+describe("createPartnerPasswordReset", () => {
+  const active = { id: "pu_1", name: "David", passwordHash: "salt:hash", disabledAt: null, partner: { status: "ACTIVE" } };
+
+  it("issues a one-hour, single-use link and stores only its hash", async () => {
+    prismaMock.partnerUser.findUnique.mockResolvedValue(active);
+    prismaMock.partnerUser.update.mockResolvedValue({});
+    const reset = await createPartnerPasswordReset(" David@Example.com ");
+    expect(reset?.email).toBe("david@example.com");
+    const data = prismaMock.partnerUser.update.mock.calls[0][0].data;
+    expect(data.setPasswordTokenHash).toBe(hashPartnerToken(reset!.rawToken));
+    expect(JSON.stringify(data)).not.toContain(reset!.rawToken);
+    const ttl = data.setPasswordTokenExpiresAt.getTime() - Date.now();
+    expect(ttl).toBeGreaterThan(55 * 60 * 1000);
+    expect(ttl).toBeLessThanOrEqual(60 * 60 * 1000 + 1000);
+  });
+
+  it("does nothing for an unknown email, an unaccepted invite, a disabled user or a suspended partner", async () => {
+    for (const row of [null, { ...active, passwordHash: null }, { ...active, disabledAt: new Date() }, { ...active, partner: { status: "SUSPENDED" } }]) {
+      prismaMock.partnerUser.findUnique.mockResolvedValue(row);
+      expect(await createPartnerPasswordReset("x@example.com")).toBeNull();
+    }
+    expect(prismaMock.partnerUser.update).not.toHaveBeenCalled();
+  });
+});

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Building2, CreditCard, KeyRound, Webhook } from "lucide-react";
+import { BookOpen, Building2, CreditCard, KeyRound, Users, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { name: "API Key", href: "/partner/api-keys", icon: KeyRound },
   { name: "Webhook", href: "/partner/webhook", icon: Webhook },
   { name: "Billing", href: "/partner/billing", icon: CreditCard },
+  { name: "Team", href: "/partner/team", icon: Users },
+  { name: "Docs", href: "/partner/docs", icon: BookOpen },
 ];
 
 export default async function PartnerDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +39,18 @@ export default async function PartnerDashboardLayout({ children }: { children: R
           <PartnerSignOutButton />
         </div>
       </div>
+      {/* The side menu below is hidden on narrow screens; this strip takes its place. */}
+      <nav aria-label="Partner menu" className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 bg-white border-b border-slate-100">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link key={item.href} href={item.href} className="flex shrink-0 items-center gap-2 py-2 px-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Icon className="w-4 h-4 shrink-0" />
+              {item.name}
+            </Link>
+          );
+        })}
+      </nav>
       <div className="flex-grow flex">
         <aside className="shrink-0 w-56 bg-white border-r border-slate-100 py-6 px-3 hidden md:block">
           <nav className="space-y-1">

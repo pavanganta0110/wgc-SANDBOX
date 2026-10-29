@@ -61,3 +61,31 @@ export async function notifyPartnerOfOnboardingStage(params: {
     console.error(`notifyPartnerOfOnboardingStage failed for application=${params.applicationId}:`, err);
   }
 }
+
+/**
+ * Tells a partner that an organization answered a request for more information (it
+ * uploaded or filled in what was missing) and the application is back under review.
+ * Sent once, from the route that saves the submission. Never throws.
+ */
+export async function notifyPartnerOfInformationSubmitted(applicationId: string): Promise<void> {
+  try {
+    const app = await prisma.onboardingApplication.findUnique({
+      where: { id: applicationId },
+      select: { id: true, partnerId: true, partnerReference: true, organizationName: true, legalBusinessName: true, lastUpdateSubmittedAt: true },
+    });
+    if (!app?.partnerId) return;
+    await recordPartnerEvent({
+      partnerId: app.partnerId,
+      type: "onboarding.information_submitted",
+      onboardingApplicationId: app.id,
+      data: {
+        organization: { id: null, name: app.legalBusinessName || app.organizationName, reference: app.partnerReference },
+        applicationId: app.id,
+        stage: "under_review",
+        submittedAt: app.lastUpdateSubmittedAt?.toISOString() ?? new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error(`notifyPartnerOfInformationSubmitted failed for application=${applicationId}:`, err);
+  }
+}

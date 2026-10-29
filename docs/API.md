@@ -203,6 +203,24 @@ For a software partner (for example a CRM). One **read-only** key reads the data
 
 Which organizations a key can read always comes from the key. Nothing in the query string can widen it.
 
+### More partner endpoints
+
+All return rows with `organization` `{ id, name, reference }`, accept `organization` (one of the partner's own, by WGC id or reference), `limit` (default 25, max 100) and `cursor` (`nextCursor` from the last page), and answer `{ data, count, hasMore, nextCursor }`.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/partner/donors` | Donors (same fields as `/api/v1/donors`). |
+| `GET /api/v1/partner/recurring` | Recurring schedules: `status` (ACTIVE, PAST_DUE, CANCELED, ...), `interval`, `giftCents`, `chargedCents`, `feeCovered`, `designation`, `startedAt`, `nextChargeAt`, `canceledAt`, `cancelReason`, `lastFailure`. Optional `donorId`, `status` (filters the returned page). |
+| `GET /api/v1/partner/settlements` | Payouts (same fields as `/api/v1/settlements`). |
+| `GET /api/v1/partner/giving-links` | Giving links with `netCollectedCents`. Optional `status`. |
+| `GET /api/v1/partner/campaigns` | Campaigns with `raisedCents`. Optional `status`. |
+
+Each key's request and error counts are shown on the partner dashboard's API Key page (a request that came back 4xx or 5xx after the key was accepted counts as an error).
+
+### Gift events (organization and partner webhooks)
+
+`donation.created` is sent for online and recurring gifts and now also for cash, check and other offline gifts recorded by an organization (`data.ledger.source` is `WGC` or `EXTERNAL`; bulk imports do not send an event, read them from the ledger). New: `donation.updated` and `donation.voided` (offline gifts), and `donation.disputed` (a gift was disputed, or the dispute changed state; `data.state` and `data.ledger.disputeState`). `donation.refunded` and `donation.returned` now carry `data.ledger` too, so a report can update the gift. Every one of these goes to the organization's own webhook endpoints and to its partner's one endpoint.
+
 ### `GET /api/v1/partner/organizations`
 
 The partner's organizations: `id`, `name`, `reference` (the partner's own id, such as a CRM location id), `status` (`active` | `terminated`), `createdAt`.

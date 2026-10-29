@@ -27,6 +27,7 @@ export async function GET() {
       createdAt: true,
       users: { select: { id: true, email: true, name: true, passwordHash: true, disabledAt: true, lastLoginAt: true }, orderBy: { createdAt: "asc" } },
       churches: { select: { id: true, name: true, partnerReference: true }, orderBy: { name: "asc" } },
+      invoices: { select: { id: true, period: true, merchantCount: true, amountCents: true, status: true, failureReason: true }, orderBy: { period: "desc" }, take: 6 },
     },
   });
 

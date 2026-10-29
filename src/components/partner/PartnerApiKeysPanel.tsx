@@ -15,6 +15,8 @@ interface KeyRow {
   lastUsedAt: string | null;
   revokedAt: string | null;
   requestCount: number;
+  errorCount: number;
+  lastErrorAt: string | null;
 }
 
 interface ListResponse {
@@ -131,13 +133,15 @@ export default function PartnerApiKeysPanel() {
               <th className="px-4 py-3 font-semibold">Status</th>
               <th className="px-4 py-3 font-semibold">Last used</th>
               <th className="px-4 py-3 font-semibold text-right">Requests</th>
+              <th className="px-4 py-3 font-semibold text-right">Errors</th>
+              <th className="px-4 py-3 font-semibold">Last error</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {keys.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-slate-500">
+                <td colSpan={8} className="px-4 py-6 text-slate-500">
                   No keys yet.
                 </td>
               </tr>
@@ -149,6 +153,11 @@ export default function PartnerApiKeysPanel() {
                   <td className="px-4 py-3 text-slate-600">{k.status === "ACTIVE" ? "Active" : `Revoked ${dateFmt(k.revokedAt)}`}</td>
                   <td className="px-4 py-3 text-slate-600">{dateFmt(k.lastUsedAt)}</td>
                   <td className="px-4 py-3 text-right text-slate-900">{k.requestCount.toLocaleString("en-US")}</td>
+                  <td className={`px-4 py-3 text-right ${k.errorCount > 0 ? "text-red-600 font-semibold" : "text-slate-900"}`}>
+                    {k.errorCount.toLocaleString("en-US")}
+                    {k.requestCount > 0 && k.errorCount > 0 ? ` (${Math.round((k.errorCount / k.requestCount) * 100)}%)` : ""}
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{dateFmt(k.lastErrorAt)}</td>
                   <td className="px-4 py-3 text-right">
                     {k.status === "ACTIVE" && (
                       <button type="button" onClick={() => revoke(k.id)} className="text-xs font-semibold text-red-600">

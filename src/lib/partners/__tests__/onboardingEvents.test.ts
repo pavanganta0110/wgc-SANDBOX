@@ -83,3 +83,28 @@ describe("notifyPartnerOfOnboardingStage", () => {
     await expect(notifyPartnerOfOnboardingStage({ applicationId: "app1" })).resolves.toBeUndefined();
   });
 });
+
+import { notifyPartnerOfInformationSubmitted } from "../onboardingEvents";
+
+describe("notifyPartnerOfInformationSubmitted", () => {
+  it("does nothing for an application with no partner", async () => {
+    prismaMock.onboardingApplication.findUnique.mockResolvedValue({ ...base, partnerId: null, lastUpdateSubmittedAt: new Date() });
+    await notifyPartnerOfInformationSubmitted("app1");
+    expect(recordPartnerEvent).not.toHaveBeenCalled();
+  });
+
+  it("announces that the answer is in, tagged with the partner's reference", async () => {
+    const at = new Date("2026-01-05T00:00:00Z");
+    prismaMock.onboardingApplication.findUnique.mockResolvedValue({ ...base, lastUpdateSubmittedAt: at });
+    await notifyPartnerOfInformationSubmitted("app1");
+    const call = recordPartnerEvent.mock.calls[0][0];
+    expect(call).toMatchObject({ partnerId: "p1", type: "onboarding.information_submitted", onboardingApplicationId: "app1" });
+    expect(call.data.organization).toEqual({ id: null, name: "Grace Community Church Inc", reference: "loc_1" });
+    expect(call.data.submittedAt).toBe("2026-01-05T00:00:00.000Z");
+  });
+
+  it("never throws", async () => {
+    prismaMock.onboardingApplication.findUnique.mockRejectedValue(new Error("db down"));
+    await expect(notifyPartnerOfInformationSubmitted("app1")).resolves.toBeUndefined();
+  });
+});

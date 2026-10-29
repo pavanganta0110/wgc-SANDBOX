@@ -75,3 +75,42 @@ describe("withPartnerApiAuth", () => {
     expect(await res.json()).toEqual({ partnerId: "p1" });
   });
 });
+
+describe("error counting for the partner's health view", () => {
+  const goodKey = () => {
+    const key = generatePartnerApiKey("test");
+    prismaMock.partnerApiKey.findUnique.mockResolvedValue({ id: "k1", partnerId: "p1", status: "ACTIVE", partner: { status: "ACTIVE" } });
+    return key;
+  };
+  const errorCalls = () => prismaMock.partnerApiKey.update.mock.calls.filter((c) => "errorCount" in c[0].data);
+
+  it("counts a 4xx or 5xx answer against the key", async () => {
+    const key = goodKey();
+    for (const status of [404, 400, 500]) {
+      prismaMock.partnerApiKey.update.mockClear();
+      await withPartnerApiAuth(async () => NextResponse.json({ error: "x" }, { status }))(req(`Bearer ${key}`));
+      expect(errorCalls(), String(status)).toHaveLength(1);
+      expect(errorCalls()[0][0].where).toEqual({ id: "k1" });
+      expect(errorCalls()[0][0].data.errorCount).toEqual({ increment: 1 });
+    }
+  });
+
+  it("counts a handler that throws, and does not count a good answer", async () => {
+    const key = goodKey();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const res = await withPartnerApiAuth(async () => {
+      throw new Error("boom");
+    })(req(`Bearer ${key}`));
+    expect(res.status).toBe(500);
+    expect(errorCalls()).toHaveLength(1);
+
+    prismaMock.partnerApiKey.update.mockClear();
+    await withPartnerApiAuth(async () => NextResponse.json({ ok: true }))(req(`Bearer ${key}`));
+    expect(errorCalls()).toHaveLength(0);
+  });
+
+  it("does not count a request that never got past authentication", async () => {
+    await withPartnerApiAuth(async () => NextResponse.json({ ok: true }))(req());
+    expect(prismaMock.partnerApiKey.update).not.toHaveBeenCalled();
+  });
+});

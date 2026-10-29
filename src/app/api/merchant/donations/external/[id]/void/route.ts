@@ -6,6 +6,8 @@ import { isAuthError } from "@/lib/auth/errors";
 import { toSafeErrorResponse } from "@/lib/utils/errorNormalizer";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
+import { emitEvent } from "@/lib/events/emitEvent";
+import { withExternalLedgerRow } from "@/lib/ledger/loadLedger";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   let auth;
@@ -54,6 +56,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     metadata: { reason },
     req,
   });
+
+  // A voided gift must come out of a report: send the ledger row (voided: true). Never throws.
+  await emitEvent({ type: "donation.voided", churchId: auth.churchId, data: await withExternalLedgerRow(auth.churchId, id, { externalDonationId: id, source: "EXTERNAL" }) });
 
   return NextResponse.json({ donation: updated });
 }

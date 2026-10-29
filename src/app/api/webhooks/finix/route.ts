@@ -742,7 +742,10 @@ export async function syncFinixDataFromWebhookEvent(
             await emitEvent({
               type: "donation.refunded",
               churchId,
-              data: { paymentId: refundedPayment?.id ?? null, donorId: refundedPayment?.donorId ?? null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
+              // The full ledger row rides along (when the payment is found) so a report can update the gift.
+              data: refundedPayment
+                ? await withLedgerRow(churchId, refundedPayment.id, { paymentId: refundedPayment.id, donorId: refundedPayment.donorId, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null })
+                : { paymentId: null, donorId: null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
             });
           } catch (err) {
             console.error("Failed to emit donation.refunded event:", err);
@@ -858,7 +861,9 @@ export async function syncFinixDataFromWebhookEvent(
               await emitEvent({
                 type: "donation.returned",
                 churchId,
-                data: { paymentId: returnedPayment?.id ?? null, donorId: returnedPayment?.donorId ?? null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
+                data: returnedPayment
+                  ? await withLedgerRow(churchId, returnedPayment.id, { paymentId: returnedPayment.id, donorId: returnedPayment.donorId, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null })
+                  : { paymentId: null, donorId: null, amountCents: data.amount ?? 0, givingLinkId: originalGivingLinkId ?? null },
               });
             } catch (err) {
               console.error("Failed to emit donation.returned event:", err);
@@ -872,7 +877,7 @@ export async function syncFinixDataFromWebhookEvent(
 
   if (entity === "DISPUTE" && data?.id) {
     const churchId = await resolveChurchIdForMerchant(data.merchant);
-    const existingDispute = await prisma.finixDispute.findUnique({ where: { finixDisputeId: data.id }, select: { id: true } });
+    const existingDispute = await prisma.finixDispute.findUnique({ where: { finixDisputeId: data.id }, select: { id: true, state: true } });
 
     await prisma.finixDispute.upsert({
       where: { finixDisputeId: data.id },
@@ -922,6 +927,37 @@ export async function syncFinixDataFromWebhookEvent(
         badgeColor: "#DC2626",
         bodyHtml: `<p>A donor has disputed a payment. Review the dispute and, if evidence is requested, respond before the deadline.</p><p><a href="https://www.wgcpayments.com/merchant/disputes">View disputes</a></p>`,
       });
+    }
+
+    // Tell webhook consumers (an organization's endpoints, and its partner's) when a gift is
+    // disputed or the dispute's state changes, with the gift's full ledger row so a report can
+    // update it. Only when it is new or its state actually changed, so a redelivery stays quiet.
+    // Never throws and never affects the rest of this handler.
+    if (churchId && data.transfer) {
+      try {
+        const newDisputeState = mapFinixDisputeStateToWgcStatus(data.state);
+        if (!existingDispute || existingDispute.state !== newDisputeState) {
+          const disputedPayment = await prisma.payment.findFirst({ where: { finixTransferId: data.transfer, churchId }, select: { id: true, donorId: true } });
+          if (disputedPayment) {
+            await emitEvent({
+              type: "donation.disputed",
+              churchId,
+              data: await withLedgerRow(churchId, disputedPayment.id, {
+                paymentId: disputedPayment.id,
+                donorId: disputedPayment.donorId,
+                disputeId: data.id,
+                state: newDisputeState,
+                reason: data.reason ?? null,
+                amountCents: data.amount ?? null,
+                evidenceDueAt: data.evidence_due_at ?? null,
+                outcome: data.outcome ?? null,
+              }),
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to emit donation.disputed event:", err);
+      }
     }
 
     // Display-only sync onto InvoicePayment.disputeStatus — per the schema

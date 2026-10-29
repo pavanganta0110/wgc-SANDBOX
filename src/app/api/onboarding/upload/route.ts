@@ -5,6 +5,8 @@ import { finixClient } from "@/lib/finix/client";
 import { extractRequestedFileType } from "@/lib/finix/parseVerificationOutcomes";
 import { sendWgcEmail, sendWgcAdminEmail } from "@/lib/email";
 import { parseBankAccount, parseUpdateRequestFields, redactLongDigits, redactSsnLike } from "@/lib/onboarding/updateRequestFields";
+import { notifyPartnerOfInformationSubmitted } from "@/lib/partners/onboardingEvents";
+import { partnerSuppressesMerchantEmails } from "@/lib/partners/onboardingCode";
 
 // Matches UpdateForm.tsx's field-naming convention: each upload slot is
 // submitted as `file__<finixFileType>` (finixFileType may be the empty
@@ -239,17 +241,22 @@ export async function POST(req: Request) {
       }
     });
 
-    // 6. Send Email to Merchant
+    // If this application came through a partner, tell the partner the answer is in. Never throws.
+    await notifyPartnerOfInformationSubmitted(app.id);
+
+    // 6. Send Email to Merchant (held back when the partner shows the status in its own screens)
     const safeOrgName = app.organizationName || "your organization";
-    await sendWgcEmail({
-      to: app.contactEmail,
-      subject: "Additional information received — WGC Payments",
-      title: "Additional information received",
-      badgeText: "Under Review",
-      badgeColor: "#0B5DBC",
-      bodyHtml: `<p>We have received the additional information for your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
+    if (!(await partnerSuppressesMerchantEmails(app.partnerId).catch(() => false))) {
+      await sendWgcEmail({
+        to: app.contactEmail,
+        subject: "Additional information received — WGC Payments",
+        title: "Additional information received",
+        badgeText: "Under Review",
+        badgeColor: "#0B5DBC",
+        bodyHtml: `<p>We have received the additional information for your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
                  <p>Your application has been resubmitted for review. We will notify you once the review is completed or if any further information is required.</p>`
-    });
+      });
+    }
 
     // 7. Send Email to Admin
     const fieldsUpdated = [

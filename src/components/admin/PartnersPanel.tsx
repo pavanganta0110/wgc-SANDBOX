@@ -23,6 +23,7 @@ interface PartnerRow {
   cardLast4: string | null;
   users: PartnerUserRow[];
   churches: { id: string; name: string; partnerReference: string | null }[];
+  invoices: { id: string; period: string; merchantCount: number; amountCents: number; status: string; failureReason: string | null }[];
 }
 interface ChurchHit {
   id: string;
@@ -215,6 +216,36 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
           <span className="text-xs text-slate-500">{partner.cardLast4 ? `Card on file: ${partner.cardBrand} ending ${partner.cardLast4}` : "No card on file yet."}</span>
         </form>
       </div>
+
+      {partner.invoices.length > 0 && (
+        <div>
+          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Recent invoices</h4>
+          <ul className="text-sm text-slate-700 space-y-1">
+            {partner.invoices.map((i) => (
+              <li key={i.id} className="flex flex-wrap items-center gap-3">
+                <span>
+                  {i.period} · {i.merchantCount} merchant{i.merchantCount === 1 ? "" : "s"} · ${(i.amountCents / 100).toFixed(2)} · {i.status.toLowerCase().replace("_", " ")}
+                </span>
+                {["PENDING", "AWAITING_CARD", "FAILED"].includes(i.status) && (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-red-600"
+                    onClick={async () => {
+                      const reason = window.prompt("Reason for waiving this invoice?");
+                      if (!reason) return;
+                      const { ok, data } = await call(`/api/admin/partners/${partner.id}/invoices/${i.id}/waive`, "POST", { reason });
+                      report(ok, data, "Invoice waived.");
+                      await onChanged();
+                    }}
+                  >
+                    Waive
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <label className="flex items-start gap-2 text-sm text-slate-700">
         <input
