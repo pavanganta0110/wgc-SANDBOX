@@ -92,3 +92,15 @@ Known limits: Safari blocks third-party cookies, so an embedded session cannot h
 - Edge middleware's admin check is **signature-and-expiry only** — it cannot see `authVersion`/`passwordChangedAt` invalidation. Any route that skips its own `getAdminSession()`/`requireMerchantSession()` call in favor of trusting middleware alone would accept a session that should have been invalidated (e.g. after a password reset or explicit logout-all).
 - There is no rate-limiting library in use for login attempts beyond custom, purpose-built modules: `src/lib/auth/adminAuthRateLimit.ts` and `src/lib/auth/merchantAuthRateLimit.ts`.
 - `BackgroundJob.entityId`/`FinixWebhookEvent` processing has no auth concept of its own — the worker route (`POST /api/internal/jobs/run`) is gated by a **separate** shared secret (`requireWorkerAuth()`), not a user session, and must remain fail-closed (missing/invalid secret = deny, never a public bypass).
+
+## Partner accounts (`/partner`)
+
+A software partner (for example a CRM) has its own sign-in, separate from organization users and WGC admins.
+
+- **Model:** `Partner` has many `PartnerUser`s and many `Church`es (`Church.partnerId`, plus `Church.partnerReference` for the partner's own id, such as a CRM location id). Each deployment (sandbox, production) has its own rows.
+- **Session:** `src/lib/partners/partnerSession.ts`. Its own cookie (`wgc_partner_session`, 8 hours), its own token format and a separate signing context, so a partner token is never valid as an organization or admin session, and the reverse. `getPartnerSession()` re-reads the database on every call: user not disabled, partner `ACTIVE`, `authVersion` unchanged.
+- **Scoping:** `partnerId` always comes from the session, never from a request. `loadPartnerOrganizations(partnerId)` is the only way the partner pages read organizations.
+- **Invites:** a WGC super admin (MFA-verified) creates the partner, links organizations and invites staff at `/admin/partners`. The invite link is single use, expires in 7 days and is stored only as a SHA-256 hash. Passwords are at least 12 characters.
+- **Middleware:** `/partner/**` and `/api/partner/**` need the partner cookie except login, logout and accept-invite; cross-site writes to `/api/partner/**` are refused. This is a backstop; every page and route still calls `getPartnerSession()`.
+- **API key and webhook:** partner staff create one read-only key (`PartnerApiKey`, `wgc_ptr_test_…` / `wgc_ptr_live_…`) and register one webhook in the dashboard; see [`API.md`](./API.md#partner-api-apiv1partner). Both are managed with the partner session.
+- **Not yet:** two-factor sign-in for partner staff and password reset by email. Add two-factor before relying on partner keys in production, since a key reads donor data across the partner's organizations.

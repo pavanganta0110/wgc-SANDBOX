@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   buildExternalLedgerRow,
@@ -23,6 +24,7 @@ const IN_CLAUSE_CHUNK = 5000;
 
 const PAYMENT_SELECT = {
   id: true,
+  churchId: true,
   donorId: true,
   createdAt: true,
   status: true,
@@ -47,6 +49,7 @@ const PAYMENT_SELECT = {
 
 const EXTERNAL_SELECT = {
   id: true,
+  churchId: true,
   donorId: true,
   donationDate: true,
   paymentMethod: true,
@@ -86,8 +89,12 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Everything a set of gifts needs beyond its own row, in a fixed number of queries (never one per gift). */
-async function loadLookups(churchId: string, payments: LedgerPaymentSource[], externals: LedgerExternalSource[]): Promise<LedgerLookups> {
+/**
+ * Everything a set of gifts needs beyond its own row, in a fixed number of queries (never one per gift).
+ * `churchScope` is one organization, or the list a partner key may read; every lookup is limited to it.
+ */
+async function loadLookups(churchScope: string | string[], payments: LedgerPaymentSource[], externals: LedgerExternalSource[]): Promise<LedgerLookups> {
+  const churchId = typeof churchScope === "string" ? churchScope : { in: churchScope };
   const donorIds = [...new Set([...payments.map((p) => p.donorId), ...externals.map((e) => e.donorId)].filter((id): id is string => !!id))];
   const paymentIds = payments.map((p) => p.id);
   const transferIds = [...new Set(payments.map((p) => p.finixTransferId).filter((id): id is string => !!id))];
@@ -195,4 +202,101 @@ export async function withLedgerRow(churchId: string, paymentId: string, base: R
     console.error(`Failed to build ledger row for event payload paymentId=${paymentId}:`, err);
     return base;
   }
+}
+
+export interface PartnerLedgerOrganization {
+  id: string;
+  name: string;
+  /** The partner's own id for the organization (a CRM location id). */
+  reference: string | null;
+}
+
+export interface PartnerLedgerCursor {
+  /** ISO date of the last row already returned. */
+  date: string;
+  id: string;
+}
+
+export function encodePartnerLedgerCursor(cursor: PartnerLedgerCursor): string {
+  return Buffer.from(JSON.stringify(cursor)).toString("base64url");
+}
+
+export function decodePartnerLedgerCursor(raw: string): PartnerLedgerCursor | null {
+  try {
+    const value = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (typeof value?.date === "string" && typeof value?.id === "string" && !Number.isNaN(new Date(value.date).getTime())) {
+      return { date: value.date, id: value.id };
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+export type PartnerLedgerRow = LedgerRow & { organization: PartnerLedgerOrganization };
+
+export interface LoadPartnerLedgerPageParams {
+  /** Only the organizations the partner key may read — resolved by the caller from the key, never from the request. */
+  organizations: PartnerLedgerOrganization[];
+  /** Inclusive. */
+  from: Date;
+  /** Exclusive. */
+  to: Date;
+  cursor: PartnerLedgerCursor | null;
+  limit: number;
+}
+
+const rowOrder = (a: { date: string; id: string }, b: { date: string; id: string }) =>
+  a.date === b.date ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.date < b.date ? -1 : 1;
+
+/**
+ * One page of the gifts of a partner's organizations in [from, to), oldest first,
+ * ordered by (date, id) so a cursor is a stable keyset: the same gift is never
+ * returned twice and none is skipped, even while new gifts arrive.
+ */
+export async function loadPartnerLedgerPage(params: LoadPartnerLedgerPageParams): Promise<{ rows: PartnerLedgerRow[]; nextCursor: string | null }> {
+  const { organizations, from, to, cursor, limit } = params;
+  if (organizations.length === 0) return { rows: [], nextCursor: null };
+
+  const churchIds = organizations.map((o) => o.id);
+  const orgById = new Map(organizations.map((o) => [o.id, o]));
+  const after = cursor ? new Date(cursor.date) : null;
+
+  const paymentWhere: Prisma.PaymentWhereInput = {
+    churchId: { in: churchIds },
+    status: { in: LEDGER_PAYMENT_STATUSES },
+    createdAt: { gte: from, lt: to },
+    ...(cursor && after ? { OR: [{ createdAt: { gt: after } }, { createdAt: after, id: { gt: cursor.id } }] } : {}),
+  };
+  const externalWhere: Prisma.ExternalDonationWhereInput = {
+    churchId: { in: churchIds },
+    donationDate: { gte: from, lt: to },
+    ...(cursor && after ? { OR: [{ donationDate: { gt: after } }, { donationDate: after, id: { gt: cursor.id } }] } : {}),
+  };
+
+  const [payments, externals] = await Promise.all([
+    prisma.payment.findMany({ where: paymentWhere, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit + 1, select: PAYMENT_SELECT }),
+    prisma.externalDonation.findMany({ where: externalWhere, orderBy: [{ donationDate: "asc" }, { id: "asc" }], take: limit + 1, select: EXTERNAL_SELECT }),
+  ]);
+
+  const merged = [
+    ...payments.map((p) => ({ date: p.createdAt.toISOString(), id: p.id, churchId: p.churchId, payment: p, external: null })),
+    ...externals.map((e) => ({ date: e.donationDate.toISOString(), id: e.id, churchId: e.churchId, payment: null, external: e })),
+  ].sort(rowOrder);
+
+  const hasMore = merged.length > limit;
+  const page = hasMore ? merged.slice(0, limit) : merged;
+
+  const lookups = await loadLookups(
+    churchIds,
+    page.flatMap((m) => (m.payment ? [m.payment] : [])),
+    page.flatMap((m) => (m.external ? [m.external] : []))
+  );
+
+  const rows: PartnerLedgerRow[] = page.map((m) => {
+    const base = m.payment ? buildPaymentLedgerRow(m.payment, lookups) : buildExternalLedgerRow(m.external!, lookups);
+    return { ...base, organization: orgById.get(m.churchId)! };
+  });
+  const last = page[page.length - 1];
+  return { rows, nextCursor: hasMore && last ? encodePartnerLedgerCursor({ date: last.date, id: last.id }) : null };
 }

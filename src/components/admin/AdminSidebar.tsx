@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity } from "lucide-react";
+import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity, Handshake } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -21,7 +21,10 @@ const NAV_ITEMS = [
   { name: "My Profile", href: "/admin/profile", icon: UserCircle },
 ];
 
-const SUPER_ADMIN_NAV_ITEMS = [{ name: "Admin Users", href: "/admin/settings/admins", icon: Users }];
+const SUPER_ADMIN_NAV_ITEMS = [
+  { name: "Admin Users", href: "/admin/settings/admins", icon: Users },
+  { name: "Partners", href: "/admin/partners", icon: Handshake },
+];
 
 export default function AdminSidebar({ role }: { role: "wgc_super_admin" | "wgc_admin" }) {
   const pathname = usePathname();

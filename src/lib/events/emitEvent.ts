@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { WgcEventType } from "@/lib/events/types";
 import { attemptWebhookDelivery } from "@/lib/webhooks/deliverWebhook";
+import { queuePartnerWebhookDelivery } from "@/lib/partners/partnerWebhooks";
 
 /**
  * The single entry point for "something happened" anywhere in the app.
@@ -29,6 +30,11 @@ export async function emitEvent(params: { type: WgcEventType; churchId: string; 
     const event = await prisma.webhookEvent.create({
       data: { churchId: params.churchId, type: params.type, dataJson: params.data as Prisma.InputJsonValue },
     });
+
+    // A partner's one webhook gets the events of every organization linked to it.
+    // Never throws, and runs before the organization's own endpoints so neither
+    // path can hold up the other.
+    await queuePartnerWebhookDelivery({ eventId: event.id, type: params.type, churchId: params.churchId });
 
     const endpoints = await prisma.webhookEndpoint.findMany({
       where: { churchId: params.churchId, status: "ACTIVE" },

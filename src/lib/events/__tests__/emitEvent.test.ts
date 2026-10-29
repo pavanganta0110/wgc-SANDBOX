@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/webhooks/deliverWebhook", () => ({ attemptWebhookDelivery: vi.fn().mockResolvedValue(undefined) }));
+const queuePartnerWebhookDelivery = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("@/lib/partners/partnerWebhooks", () => ({ queuePartnerWebhookDelivery }));
 
 const mockPrisma = {
   webhookEvent: { create: vi.fn() },
@@ -14,6 +16,15 @@ describe("emitEvent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPrisma.webhookEvent.create.mockResolvedValue({ id: "evt1", churchId: "church-a", type: "donation.created" });
+  });
+
+  it("hands the stored event to the partner webhook queue, with the organization it happened in", async () => {
+    mockPrisma.webhookEndpoint.findMany.mockResolvedValue([]);
+
+    const { emitEvent } = await import("../emitEvent");
+    await emitEvent({ type: "donation.created", churchId: "church-a", data: {} });
+
+    expect(queuePartnerWebhookDelivery).toHaveBeenCalledWith({ eventId: "evt1", type: "donation.created", churchId: "church-a" });
   });
 
   it("always persists a durable WebhookEvent row, even with zero subscribed endpoints", async () => {

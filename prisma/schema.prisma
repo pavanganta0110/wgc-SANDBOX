@@ -316,6 +316,12 @@ model Church {
   finixMerchantId               String?
   finixIdentityId               String?
   finixApplicationId            String?
+  // Software partner (for example a CRM) this organization came through, and
+  // the partner's own id for it (a CRM location id). Both null for an
+  // organization with no partner. See model Partner.
+  partnerId                     String?
+  partnerReference              String?
+  partner                       Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   // Auto-release cadence for this merchant's Settlement Queue (see
   // /admin/merchants/[churchId]/settlements — SettlementQueuePanel).
   // Weekday numbers matching JS Date.getDay() (0=Sunday..6=Saturday); e.g.
@@ -492,7 +498,141 @@ model Church {
   aplosConnection         AplosConnection?
 
   @@unique([onboardingApplicationId])
+  @@unique([partnerId, partnerReference])
   @@index([finixMerchantId])
+  @@index([partnerId])
+}
+
+/// A software partner (for example a CRM) whose customers use WGC. Partner
+/// staff sign in to their own area (/partner) with a PartnerUser — a login
+/// completely separate from organization users and WGC admins — and see only
+/// the organizations linked to their partner. Each deployment (sandbox,
+/// production) has its own Partner rows. See src/lib/partners/.
+model Partner {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  contactEmail String?
+  // ACTIVE | SUSPENDED. A suspended partner's staff are signed out and can't
+  // sign in; its organizations and their payments are not affected.
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users            PartnerUser[]
+  churches         Church[]
+  apiKeys          PartnerApiKey[]
+  webhookEndpoints PartnerWebhookEndpoint[]
+}
+
+model PartnerUser {
+  id        String  @id @default(cuid())
+  partnerId String
+  email     String  @unique
+  name      String?
+
+  passwordHash String?
+  // Invite and password-setup link: only the SHA-256 hash is stored.
+  setPasswordTokenHash      String?   @unique
+  setPasswordTokenExpiresAt DateTime?
+
+  disabledAt  DateTime?
+  lastLoginAt DateTime?
+  // Bumped on a password change or disable; a session carries the value from
+  // sign-in and is rejected once it no longer matches.
+  authVersion Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+}
+
+/// A read-only API key for a partner: one key reads the data of every
+/// organization linked to the partner (/api/v1/partner/*). Like ApiKey, only
+/// the SHA-256 hash is stored and the key is shown once. Separate from ApiKey
+/// on purpose: that one is scoped to a single organization.
+model PartnerApiKey {
+  id        String @id @default(cuid())
+  partnerId String
+  name      String
+
+  /// First characters of the key, to recognise it in a list.
+  keyPrefix String
+  hashedKey String @unique
+
+  /// ACTIVE | REVOKED
+  status String @default("ACTIVE")
+
+  createdByPartnerUserId String?
+  createdAt              DateTime  @default(now())
+  lastUsedAt             DateTime?
+  revokedAt              DateTime?
+  requestCount           Int       @default(0)
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+}
+
+/// The partner's one webhook endpoint. It receives the events of every
+/// organization linked to the partner, each tagged with the organization.
+model PartnerWebhookEndpoint {
+  id        String @id @default(cuid())
+  partnerId String @unique
+  url       String
+
+  /// ACTIVE | DISABLED (by the partner) | DISABLED_AUTO (after repeated failures).
+  status String @default("ACTIVE")
+
+  /// WgcEventType strings. Never "all events" implicitly.
+  subscribedEventsJson Json
+
+  /// AES-256-GCM envelope (src/lib/webhooks/encryption.ts), reversible because
+  /// the secret is needed at delivery time to sign. Shown once at creation.
+  signingSecretEncrypted String
+  signingSecretLast4     String
+
+  createdByPartnerUserId String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  disabledAt             DateTime?
+  disabledReason         String?
+
+  consecutiveFailures Int       @default(0)
+  lastDeliveryAt      DateTime?
+  lastSuccessAt       DateTime?
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+}
+
+/// One attempt chain for one event to one partner endpoint. Mirrors
+/// WebhookDelivery; retried by the same cron.
+model PartnerWebhookDelivery {
+  id                String @id @default(cuid())
+  webhookEventId    String
+  partnerId         String
+  partnerEndpointId String
+  /// The organization the event happened in.
+  churchId          String
+
+  /// PENDING | SUCCEEDED | FAILED | ABANDONED
+  status        String    @default("PENDING")
+  attemptCount  Int       @default(0)
+  nextRetryAt   DateTime?
+  lastAttemptAt DateTime?
+
+  responseStatusCode  Int?
+  responseBodySnippet String?
+  errorMessage        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([partnerId, createdAt])
+  @@index([status, nextRetryAt])
+  @@index([webhookEventId])
 }
 
 /// Mirrors Finix's `Compliance Form` resource (PCI SAQ attestation). Finix

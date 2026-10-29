@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { attemptWebhookDelivery } from "@/lib/webhooks/deliverWebhook";
+import { attemptPartnerWebhookDelivery } from "@/lib/partners/partnerWebhooks";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
@@ -50,7 +51,20 @@ export async function GET(req: Request) {
       else if (after?.status !== "SUCCEEDED") stillFailing++;
     }
 
-    return { processedCount: due.length, successCount: succeeded, failedCount: stillFailing };
+    // Partner webhook deliveries wait on the same backoff schedule.
+    const duePartner = await prisma.partnerWebhookDelivery.findMany({
+      where: { status: "FAILED", nextRetryAt: { lte: new Date() } },
+      select: { id: true },
+      take: 200,
+    });
+    for (const row of duePartner) {
+      await attemptPartnerWebhookDelivery(row.id);
+      const after = await prisma.partnerWebhookDelivery.findUnique({ where: { id: row.id }, select: { status: true } });
+      if (after?.status === "SUCCEEDED") succeeded++;
+      else stillFailing++;
+    }
+
+    return { processedCount: due.length + duePartner.length, successCount: succeeded, failedCount: stillFailing };
   });
 
   return NextResponse.json({ success: true, attempted: result.processedCount, succeeded: result.successCount, stillFailing: result.failedCount });

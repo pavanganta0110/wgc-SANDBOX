@@ -2,6 +2,23 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants'
 import { isCrossSiteStateChange } from '@/lib/security/crossSiteGuard'
+import { PARTNER_SESSION_COOKIE_NAME } from '@/lib/partners/partnerSessionConstants'
+
+// Partner area (/partner, /api/partner): the sign-in and invite pages and their
+// APIs are reachable without a session; everything else needs the partner
+// cookie. Coarse backstop only (presence of the cookie) — every partner page and
+// route still calls requirePartnerSession(), which does the real database check.
+const PARTNER_PUBLIC_PREFIXES = [
+  '/partner/login',
+  '/partner/accept-invite',
+  '/api/partner/login',
+  '/api/partner/logout',
+  '/api/partner/accept-invite',
+];
+
+function isPartnerPublicPath(pathname: string): boolean {
+  return PARTNER_PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
 
 // Public admin auth pages — reachable without a session, everything else
 // under /admin and /api/admin requires one. Deliberately duplicates the
@@ -117,6 +134,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.json({ error: 'Cross-site requests are not allowed.' }, { status: 403 });
   }
 
+  const isPartnerPath = pathname === '/partner' || pathname.startsWith('/partner/') || pathname.startsWith('/api/partner');
+  if (isPartnerPath) {
+    if (pathname.startsWith('/api/partner') && isCrossSiteStateChange(request.method, request.headers.get('sec-fetch-site'))) {
+      return NextResponse.json({ error: 'Cross-site requests are not allowed.' }, { status: 403 });
+    }
+    if (!isPartnerPublicPath(pathname) && !request.cookies.get(PARTNER_SESSION_COOKIE_NAME)?.value) {
+      if (pathname.startsWith('/api/partner')) {
+        return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+      }
+      return NextResponse.redirect(new URL('/partner/login', request.url));
+    }
+  }
+
   const isMerchantPath = pathname.startsWith('/merchant') || pathname.startsWith('/api/merchant');
   if (isMerchantPath && !isMerchantPublicPath(pathname)) {
     const hasSession = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
@@ -169,5 +199,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/test/:path*', '/merchant/:path*', '/api/merchant/:path*'],
+  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/test/:path*', '/merchant/:path*', '/api/merchant/:path*', '/partner', '/partner/:path*', '/api/partner/:path*'],
 }

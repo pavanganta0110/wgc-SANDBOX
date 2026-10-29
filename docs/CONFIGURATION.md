@@ -90,6 +90,7 @@ All configuration is via environment variables (no separate config-file system b
 | Variable | Purpose |
 |---|---|
 | `ADMIN_SETUP_SECRET` | Gates the one-time `/api/admin/setup/seed-admin` bootstrap route |
+| `PARTNER_WEBHOOK_ALLOW_LOCAL` | Local development only. Set to `1` to let a partner webhook point at `http://127.0.0.1…` or another private address. Ignored when `NODE_ENV` is `production`. |
 | `SANDBOX_ADMIN_EMAIL` / `SANDBOX_ADMIN_PASSWORD` | Seed credentials for local/sandbox admin bootstrap |
 | `TEST_WEBHOOK_SECRET` | Gates `/api/test/*` routes; if unset outside production, those routes are open (dev convenience — never rely on this in a shared environment) |
 

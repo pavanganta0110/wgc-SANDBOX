@@ -196,3 +196,38 @@ The same row is sent as `ledger` inside the `donation.created` webhook payload (
 ## Error conventions
 
 Most routes return `{ error: string }` or `{ error: string, code: string }` on failure, with the `code` (e.g. `PAYMENT_STATUS_UNCERTAIN`, `REFUND_STATUS_UNCERTAIN`) used by financial-mutation routes specifically to signal "do not retry this as a fresh attempt" to the caller. See `src/lib/utils/errorNormalizer.ts` for the shared mapping and `src/lib/auth/errors.ts` for auth-specific error types (`UnauthorizedError`, `BillingAccessRestrictedError`).
+
+## Partner API (`/api/v1/partner/*`)
+
+For a software partner (for example a CRM). One **read-only** key reads the data of every organization linked to the partner. Create the key in the partner dashboard (`/partner/api-keys`); it is shown once. Sandbox keys start `wgc_ptr_test_`, production keys `wgc_ptr_live_`; a key only works in the environment that issued it. Send it as `Authorization: Bearer wgc_ptr_…`. Organization keys (`wgc_live_…`) do not work here and partner keys do not work on the organization API.
+
+Which organizations a key can read always comes from the key. Nothing in the query string can widen it.
+
+### `GET /api/v1/partner/organizations`
+
+The partner's organizations: `id`, `name`, `reference` (the partner's own id, such as a CRM location id), `status` (`active` | `terminated`), `createdAt`.
+
+### `GET /api/v1/partner/ledger?from=…&to=…`
+
+Every gift of those organizations in `[from, to)`, oldest first, in pages. Each row is the same `LedgerRow` as `GET /api/v1/ledger` and the `donation.created` webhook, plus `organization: { id, name, reference }`.
+
+| Parameter | |
+|---|---|
+| `from`, `to` | Required. Dates (`2026-01-01`) or ISO timestamps. `from` inclusive, `to` exclusive, at most 366 days. |
+| `limit` | Rows per page. Default 500, at most 1000. |
+| `cursor` | The `nextCursor` of the previous page. Keep calling until it is `null`. Rows are ordered by (date, id), so none is skipped or repeated even while new gifts arrive. |
+| `organization` | Optional. Limit to one of the partner's own organizations, by WGC id or by the partner's reference. Anything else is `404`. |
+
+Response: `{ data: [...], count, nextCursor, from, to, requestId }`. Rate limit: the same per-key limit as the organization API.
+
+### Partner webhook
+
+The partner registers **one** endpoint in the dashboard (`/partner/webhook`, https only) and chooses the events. It receives those events for every linked organization, signed exactly like organization webhooks (`WGC-Signature: timestamp=…,sig=…`, HMAC-SHA256 of `timestamp:rawBody`). The body is:
+
+```json
+{ "id": "…", "type": "donation.created", "createdAt": "…",
+  "organization": { "id": "…", "name": "…", "reference": "loc_123" },
+  "data": { "…": "…", "ledger": { "…": "the ledger row" } } }
+```
+
+Failed deliveries are retried on the same schedule as organization webhooks and the endpoint is turned off after 20 failures in a row. The dashboard shows delivery results for the last 24 hours and the latest deliveries, can send a signed `webhook.test` event, and can rotate the signing secret (the old one stops verifying at once).
