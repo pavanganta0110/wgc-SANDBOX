@@ -22,6 +22,8 @@ vi.mock('@/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    // The PATCH route reads the organization-wide address rule.
+    church: { findUnique: vi.fn().mockResolvedValue({ requireDonorAddress: false }) },
   },
 }));
 

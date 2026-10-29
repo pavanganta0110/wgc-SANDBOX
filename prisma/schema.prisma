@@ -473,6 +473,13 @@ model Church {
   // existing link's already-set value.
   defaultCollectMailingAddressOnNewLinks Boolean @default(true)
 
+  // Organization-wide rule: when true, every giving page of this church must
+  // collect a mailing address and require it — a staff member cannot create or
+  // edit a link to skip it, and existing links are treated as requiring it too
+  // (enforced where links are saved, rendered, and where the gift is accepted).
+  // Off by default, so nothing changes until an owner turns it on.
+  requireDonorAddress Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

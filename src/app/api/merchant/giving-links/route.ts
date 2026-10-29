@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { generatePublicSlug, isValidReturnUrl } from "@/lib/givingLinks/validation";
-import { DEFAULT_DONOR_FIELD_SETTINGS } from "@/lib/givingLinks/types";
+import { DEFAULT_DONOR_FIELD_SETTINGS, parseDonorFieldSettings } from "@/lib/givingLinks/types";
+import { applyOrgAddressRequirement } from "@/lib/givingLinks/addressRequirement";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveGivingLinkOwnerForCreate } from "@/lib/auth/givingLinkOwnership";
 import { resolveViewScope } from "@/lib/auth/viewScope";
@@ -183,10 +184,18 @@ export async function POST(req: Request) {
   // explicitly pass a value — after creation this is fully independent per
   // link (changing the org default never touches an existing link).
   let resolvedCollectMailingAddress = typeof collectMailingAddress === "boolean" ? collectMailingAddress : true;
+  const addressChurch = await prisma.church.findUnique({
+    where: { id: auth.churchId },
+    select: { defaultCollectMailingAddressOnNewLinks: true, requireDonorAddress: true },
+  });
   if (typeof collectMailingAddress !== "boolean") {
-    const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { defaultCollectMailingAddressOnNewLinks: true } });
-    resolvedCollectMailingAddress = church?.defaultCollectMailingAddressOnNewLinks ?? true;
+    resolvedCollectMailingAddress = addressChurch?.defaultCollectMailingAddressOnNewLinks ?? true;
   }
+  // Organization-wide rule: when on, a new link always collects and requires the address,
+  // whatever the form sent — a staff member can't create a page that skips it.
+  const forcedAddress = addressChurch?.requireDonorAddress
+    ? applyOrgAddressRequirement(true, { collectMailingAddress: resolvedCollectMailingAddress, donorFieldSettings: parseDonorFieldSettings(donorFieldSettings) })
+    : null;
 
   let publicSlug = generatePublicSlug();
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -224,8 +233,8 @@ export async function POST(req: Request) {
       defaultDonationType: defaultsResult.value.defaultDonationType,
       defaultRecurringAmountCents: defaultsResult.value.defaultRecurringAmountCents,
       allowedPaymentMethodsJson: methods,
-      donorFieldSettingsJson: donorFieldSettings || DEFAULT_DONOR_FIELD_SETTINGS,
-      collectMailingAddress: resolvedCollectMailingAddress,
+      donorFieldSettingsJson: forcedAddress ? forcedAddress.donorFieldSettings : donorFieldSettings || DEFAULT_DONOR_FIELD_SETTINGS,
+      collectMailingAddress: forcedAddress ? forcedAddress.collectMailingAddress : resolvedCollectMailingAddress,
       feeCoverEnabled: feeCoverEnabled ?? true,
       feeCoverDefaultOn: feeCoverDefaultOn ?? true,
       receiptSettingsJson: receiptSettings || null,

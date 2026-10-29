@@ -25,6 +25,7 @@ import { normalizeEmail } from "@/lib/donors/donorContact";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { withLedgerRow } from "@/lib/ledger/loadLedger";
 import { raisePossibleMatchForNewDonor } from "@/lib/donors/resolveOrCreateDonorWithMatchReview";
+import { applyOrgAddressRequirement } from "@/lib/givingLinks/addressRequirement";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
 import { checkDonationRateLimit } from "@/lib/giving/donationRateLimit";
@@ -301,7 +302,11 @@ async function handleDonate(req: Request, slug: string) {
     const allowedFrequencies = parseAllowedFrequencies(link.allowedFrequenciesJson);
     const interval = allowedFrequencies.includes(billingInterval) ? billingInterval : allowedFrequencies[0];
 
-    const fieldSettings = parseDonorFieldSettings(link.donorFieldSettingsJson);
+    // The organization-wide address rule (when on) wins over this link's own setting.
+    const { collectMailingAddress: linkCollectsAddress, donorFieldSettings: fieldSettings } = applyOrgAddressRequirement(church.requireDonorAddress, {
+      collectMailingAddress: link.collectMailingAddress,
+      donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
+    });
     const fullName =
       [donor?.firstName, donor?.lastName].filter(Boolean).join(" ").trim() ||
       donor?.name?.trim() ||
@@ -329,7 +334,7 @@ async function handleDonate(req: Request, slug: string) {
     // is a public, unauthenticated endpoint a client-side-only check can't
     // actually enforce. `street`'s setting is the single bundled driver for
     // the whole address block (see that file's own comment on why).
-    if (link.collectMailingAddress && fieldSettings.street === "REQUIRED") {
+    if (linkCollectsAddress && fieldSettings.street === "REQUIRED") {
       const cleanedRequiredAddress = cleanAddressInput(
         mailingAddress && typeof mailingAddress === "object" ? mailingAddress : {}
       );

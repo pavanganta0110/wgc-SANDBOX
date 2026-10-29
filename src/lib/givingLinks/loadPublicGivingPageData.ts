@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { applyOrgAddressRequirement } from "@/lib/givingLinks/addressRequirement";
 import { resolveGivingLinkStatus } from "@/lib/givingLinks/status";
 import { getPaymentMethodAvailability } from "@/lib/payments/paymentMethodAvailability";
 import {
@@ -27,6 +28,8 @@ export type PublicGivingPageData =
       light: BrandingSettings["light"];
       pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
       donorFieldSettings: DonorFieldSettings;
+      /** After the organization-wide address rule (Church.requireDonorAddress) is applied. */
+      collectMailingAddress: boolean;
       allowedPaymentMethods: PaymentMethodKey[];
       allowedFrequencies: FrequencyKey[];
       suggestedAmountsCents: number[];
@@ -90,7 +93,11 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
   }
 
   const pricing = await prisma.churchPricing.findUnique({ where: { churchId: church.id } });
-  const donorFieldSettings = parseDonorFieldSettings(link.donorFieldSettingsJson);
+  // The organization-wide address rule (when on) wins over this link's own setting.
+  const { collectMailingAddress, donorFieldSettings } = applyOrgAddressRequirement(church.requireDonorAddress, {
+    collectMailingAddress: link.collectMailingAddress,
+    donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
+  });
   const allowedPaymentMethods = parseAllowedPaymentMethods(link.allowedPaymentMethodsJson);
   const allowedFrequencies = parseAllowedFrequencies(link.allowedFrequenciesJson);
   const suggestedAmountsCents = Array.isArray(link.suggestedAmountsJson)
@@ -160,6 +167,7 @@ export async function loadPublicGivingPageData(slug: string): Promise<PublicGivi
       achFixedFeeCents: pricing?.achFixedFeeCents ?? null,
     },
     donorFieldSettings,
+    collectMailingAddress,
     allowedPaymentMethods,
     allowedFrequencies,
     suggestedAmountsCents,

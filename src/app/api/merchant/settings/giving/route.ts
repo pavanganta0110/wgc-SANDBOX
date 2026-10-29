@@ -81,6 +81,11 @@ export async function PATCH(req: Request) {
   if ("defaultCollectMailingAddressOnNewLinks" in body) {
     data.defaultCollectMailingAddressOnNewLinks = body.defaultCollectMailingAddressOnNewLinks === true;
   }
+  // Organization-wide rule: every giving page must collect and require a mailing
+  // address, applied to existing links too (see applyOrgAddressRequirement).
+  if ("requireDonorAddress" in body) {
+    data.requireDonorAddress = body.requireDonorAddress === true;
+  }
 
   if (Object.keys(errors).length > 0) {
     return NextResponse.json({ error: "Validation failed", fieldErrors: errors }, { status: 400 });

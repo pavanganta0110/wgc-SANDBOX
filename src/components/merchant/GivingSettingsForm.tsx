@@ -11,6 +11,7 @@ interface FormValues {
   givingPrivacyUrl: string;
   givingSupportEmail: string;
   defaultCollectMailingAddressOnNewLinks: boolean;
+  requireDonorAddress: boolean;
 }
 
 const inputClass = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400";
@@ -101,6 +102,19 @@ export default function GivingSettingsForm({
           </label>
           <p className="text-xs text-slate-400 mt-1 ml-6">
             Controls the starting value only for giving links created after this change — existing links keep whatever they're already set to.
+          </p>
+        </div>
+        <div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={values.requireDonorAddress}
+              onChange={(e) => setBool("requireDonorAddress", e.target.checked)}
+            />
+            Require a mailing address on every giving page
+          </label>
+          <p className="text-xs text-slate-400 mt-1 ml-6">
+            Applies to all giving links, including existing ones: donors must enter an address to give, and no team member can create or edit a link to skip it. Keeps year-end statements mailable.
           </p>
         </div>
       </div>

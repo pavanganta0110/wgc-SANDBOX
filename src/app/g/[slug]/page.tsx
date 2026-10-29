@@ -43,7 +43,7 @@ export default async function GivingLinkPublicPage({
 
   const { light, church } = data;
 
-  const { link, branding, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds, studentGiving } = data;
+  const { link, branding, pricing, donorFieldSettings, collectMailingAddress, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds, studentGiving } = data;
 
   return (
     <div className="min-h-screen py-12 px-4" style={{ backgroundColor: light.pageBackground }}>
@@ -110,7 +110,7 @@ export default async function GivingLinkPublicPage({
             feeCoverEnabled={link.feeCoverEnabled}
             feeCoverDefaultOn={link.feeCoverDefaultOn}
             donorFieldSettings={donorFieldSettings}
-            collectMailingAddress={link.collectMailingAddress}
+            collectMailingAddress={collectMailingAddress}
             pricing={pricing}
             thankYouMessage={branding.thankYouMessage}
             thankYouVideoUrl={branding.thankYouVideoUrl}

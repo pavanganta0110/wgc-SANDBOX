@@ -33,7 +33,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
     );
   }
 
-  const { link, church, branding, light, pricing, donorFieldSettings, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds, studentGiving } = data;
+  const { link, church, branding, light, pricing, donorFieldSettings, collectMailingAddress, allowedPaymentMethods, allowedFrequencies, suggestedAmountsCents, googlePayGatewayMerchantId, googlePayMerchantId, googlePayEnvironment, serverAvailability, logoUrl, fundSelectionEnabled, assignedFunds, studentGiving } = data;
 
   if (church.embedDomainRestrictionEnabled) {
     const requestHeaders = await headers();
@@ -101,7 +101,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           feeCoverEnabled={link.feeCoverEnabled}
           feeCoverDefaultOn={link.feeCoverDefaultOn}
           donorFieldSettings={donorFieldSettings}
-          collectMailingAddress={link.collectMailingAddress}
+          collectMailingAddress={collectMailingAddress}
           pricing={pricing}
           thankYouMessage={branding.thankYouMessage}
           thankYouVideoUrl={branding.thankYouVideoUrl}

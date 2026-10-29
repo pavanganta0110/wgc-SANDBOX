@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { parseDonorFieldSettings } from "@/lib/givingLinks/types";
+import { applyOrgAddressRequirement } from "@/lib/givingLinks/addressRequirement";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isValidReturnUrl } from "@/lib/givingLinks/validation";
@@ -46,6 +48,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const existing = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!existing) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
+  const addressRuleChurch = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { requireDonorAddress: true } });
 
   const body = await req.json();
   const {
@@ -228,6 +231,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(allowedPaymentMethods !== undefined ? { allowedPaymentMethodsJson: allowedPaymentMethods } : {}),
       ...(donorFieldSettings !== undefined ? { donorFieldSettingsJson: donorFieldSettings } : {}),
       ...(typeof collectMailingAddress === "boolean" ? { collectMailingAddress } : {}),
+      // Organization-wide rule: when on, every save leaves this link collecting and requiring
+      // the address, even if the form sent something else (later keys override earlier ones).
+      ...(addressRuleChurch?.requireDonorAddress
+        ? {
+            collectMailingAddress: true,
+            donorFieldSettingsJson: applyOrgAddressRequirement(true, {
+              collectMailingAddress: true,
+              donorFieldSettings: parseDonorFieldSettings(donorFieldSettings !== undefined ? donorFieldSettings : existing.donorFieldSettingsJson),
+            }).donorFieldSettings,
+          }
+        : {}),
       ...(feeCoverEnabled !== undefined ? { feeCoverEnabled } : {}),
       ...(feeCoverDefaultOn !== undefined ? { feeCoverDefaultOn } : {}),
       ...(receiptSettings !== undefined ? { receiptSettingsJson: receiptSettings } : {}),
