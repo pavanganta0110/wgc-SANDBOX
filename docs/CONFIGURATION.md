@@ -83,6 +83,7 @@ All configuration is via environment variables (no separate config-file system b
 | `PAYOUT_ACCOUNT_MAX_PENDING_CHANGE_REQUESTS` | Cap on concurrent bank-account change requests per church |
 | `PAYOUT_ACCOUNT_MAX_STORED_HISTORICAL_ACCOUNTS` | Cap on retained historical payout-account records |
 | `PAYOUT_PROOF_MAX_FILES` | Max files attachable as bank-account-change proof |
+| `EMBED_PARTNER_FRAME_ANCESTORS` | Comma- or space-separated https origins (e.g. `https://app.cvprotools.com`, or one `https://*.host.tld` wildcard) of partner sites allowed to show the merchant dashboard (`/merchant/**`) and onboarding (`/start`, `/onboarding/**`) in an iframe. Unset = nothing changes (every page keeps `frame-ancestors 'self'`). Read when the server starts, so changing it needs a redeploy. Invalid entries (http, paths, bare `*`, `*.tld`) are dropped with a startup warning, never widened. This only lets the page load in the frame; a cross-site frame still can't hold a login cookie (`SameSite=Lax`), so a working embedded dashboard also needs the embed-session work |
 
 ## Dev/sandbox-only
 

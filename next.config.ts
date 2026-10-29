@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 // package export no longer includes it) — confirmed against this repo's
 // installed version's package.json exports map.
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { parseFrameAncestorOrigins, partnerFrameAncestorsDirective } from "./src/lib/security/frameAncestors";
 
 // Next.js's own dev server (Turbopack HMR, React DevTools call-stack
 // reconstruction) uses eval() internally — production never does. Scoping
@@ -97,6 +98,30 @@ const securityHeaders = [
   },
 ];
 
+// Partner platforms (e.g. a CRM) that may show the merchant dashboard and the
+// onboarding pages inside an iframe, set per deployment with
+// EMBED_PARTNER_FRAME_ANCESTORS (comma/space separated https origins). Unset
+// means nothing changes: every page keeps frame-ancestors 'self'. Only the
+// routes below are opened, only to the listed origins, so the rest of the site
+// stays unframable. An invalid entry is dropped (never widened) and warned about.
+const partnerFrames = parseFrameAncestorOrigins(process.env.EMBED_PARTNER_FRAME_ANCESTORS);
+if (partnerFrames.rejected.length > 0) {
+  console.warn(`EMBED_PARTNER_FRAME_ANCESTORS: ignoring invalid entries: ${partnerFrames.rejected.join(", ")}`);
+}
+const baseCsp = securityHeaders.find((h) => h.key === "Content-Security-Policy")?.value ?? "";
+const partnerFrameHeaders =
+  partnerFrames.origins.length > 0 && baseCsp.includes("frame-ancestors 'self'")
+    ? ["/merchant/:path*", "/start", "/onboarding/:path*"].map((source) => ({
+        source,
+        headers: [
+          // X-Frame-Options can't name a third-party origin, so it's cleared and the
+          // CSP frame-ancestors below is the single rule (same pattern as /embed/*).
+          { key: "X-Frame-Options", value: "" },
+          { key: "Content-Security-Policy", value: baseCsp.replace("frame-ancestors 'self'", partnerFrameAncestorsDirective(partnerFrames.origins)) },
+        ],
+      }))
+    : [];
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   async redirects() {
@@ -134,6 +159,7 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      ...partnerFrameHeaders,
       {
         // /embed/* must be iframe-able from arbitrary third-party sites —
         // that's the entire point of the website-embed feature. Per-org
