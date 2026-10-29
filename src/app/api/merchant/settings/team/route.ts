@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
 import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
+import { CHECKIN_ONLY_BASE_ROLE, CHECKIN_ONLY_PERMISSION_OVERRIDES, isTeamInvitePreset } from "@/lib/auth/checkinPreset";
 
 // Team-access Checkpoint 4: the set of role strings that represent a real,
 // manageable organization member on the Team page — mirrors
@@ -94,7 +95,11 @@ export async function POST(req: Request) {
   if (!isValidEmail(email)) {
     return NextResponse.json({ error: "Please enter a valid email address" }, { status: 400 });
   }
-  const requestedRole = typeof body.role === "string" ? body.role : "admin";
+  // A preset (today only "checkin": a door login that checks attendees in and
+  // sees nothing else) fixes the role itself, so it can't be combined with a
+  // different one.
+  const preset = isTeamInvitePreset(body.preset) ? body.preset : null;
+  const requestedRole = preset === "checkin" ? CHECKIN_ONLY_BASE_ROLE : typeof body.role === "string" ? body.role : "admin";
   if (!INVITABLE_ROLES.includes(requestedRole as any)) {
     return NextResponse.json({ error: "Role must be one of: owner, admin, fundraiser, viewer" }, { status: 400 });
   }
@@ -128,10 +133,11 @@ export async function POST(req: Request) {
       setPasswordTokenHash: tokenHash,
       setPasswordTokenExpiresAt: expiresAt,
       invitedByUserId: auth.userId,
+      ...(preset === "checkin" ? { permissionsJson: CHECKIN_ONLY_PERMISSION_OVERRIDES } : {}),
     },
   });
 
-  const roleLabel = requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1);
+  const roleLabel = preset === "checkin" ? "door check-in" : requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1);
   const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const inviteLink = `${origin}/merchant/set-password/${rawToken}`;
   await sendWgcEmail({
@@ -153,7 +159,7 @@ export async function POST(req: Request) {
     action: "settings.team_member_invited",
     entityType: "user",
     entityId: user.id,
-    metadata: { email, role: requestedRole },
+    metadata: { email, role: requestedRole, ...(preset ? { preset } : {}) },
     req,
   });
 
