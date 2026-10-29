@@ -163,6 +163,10 @@ All require an admin session (`getAdminSession()`); some further require `wgc_su
 
 Authenticated with a merchant-issued, scoped API key (`Authorization: Bearer wgc_live_…`); the church always comes from the key, never from a query or body value. Errors use the structured `{ error: { type, message, requestId } }` shape. Other `/api/v1` routes are listed in `src/lib/api/scopes.ts`.
 
+### `POST /api/v1/embed/sessions` (scope `embed:sessions`)
+
+Body `{ "email": "staff@church.org", "redirectTo": "/merchant/dashboard" }` (`redirectTo` optional, must be an in-app `/merchant/…` path). Returns `{ data: { url, expiresAt } }`: a one-time link, valid about 60 seconds, that the partner opens in its iframe to start that staff member's own session. Only `fundraiser` and `viewer` accounts without MFA can be started this way; owners and admins sign in directly. Errors: `404` no such team member in the key's organization, `403` with a `code` (`role_not_allowed`, `user_disabled`, `mfa_enabled`). Details and guardrails in [`AUTHENTICATION.md`](./AUTHENTICATION.md#embedded-login-for-a-partner-platform-crm-iframe).
+
 ### `GET /api/v1/ledger?from=…&to=…` (scope `donations:read`)
 
 Every gift in a date window in one call, for report runs and annual statements. `from` is inclusive and `to` exclusive; a date-only value is midnight UTC, so a full calendar year is `from=2026-01-01&to=2027-01-01`. The window can span at most 366 days and hold at most 10,000 gifts; a larger one returns `400` (with `rowLimit`) and must be read in parts. Rows are oldest first and include external (cash, check) gifts as `source: "EXTERNAL"` rows. Returns `{ data: LedgerRow[], count, from, to }`.

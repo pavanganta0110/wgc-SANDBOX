@@ -6672,3 +6672,23 @@ model DonorPortalSession {
 
   @@index([churchId, donorId])
 }
+
+/// A short-lived, single-use login link that a partner platform (for example a CRM)
+/// requests for ONE named staff member, so its iframe can start that person's own
+/// WGC session. Only the SHA-256 hash of the token is stored, the church and user
+/// come from the partner's API key and the lookup (never from the link), and a link
+/// works once, for about a minute. See src/lib/auth/embedLogin.ts.
+model EmbedLoginToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  churchId   String
+  userId     String
+  apiKeyId   String?
+  redirectTo String?
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([churchId, userId])
+  @@index([expiresAt])
+}

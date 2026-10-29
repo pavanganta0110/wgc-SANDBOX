@@ -70,6 +70,18 @@ An impersonating admin (see below) resolves to the **real `owner` permission set
 - Every mutating write during impersonation should be tagged via `auditImpersonatedWrite()` (`src/lib/auth/auditImpersonatedWrite.ts`) into `DashboardAuditLog`, attributing the action to the admin, not the merchant.
 - **Tenant-isolation invariant**: the only path to a `targetChurchId` is the DB-backed `AdminImpersonationSession` row, itself only ever created by the start route reading the URL path param server-side at start time — the resolver never reads `churchId` from a URL/body param at request time.
 
+## Embedded login for a partner platform (CRM iframe)
+
+Lets a partner that shows the WGC dashboard in an iframe start **one named staff member's own session**, so that person sees exactly what they normally would (a fundraiser still only sees donors tied to their own gifts). Code: `src/lib/auth/embedLogin.ts`.
+
+1. The partner's **server** calls `POST /api/v1/embed/sessions` with an API key holding the `embed:sessions` scope and `{ email, redirectTo? }`. The church comes from the key; the person is looked up inside that church by email.
+2. WGC returns a one-time link (`/merchant/embed/enter?token=…`, valid ~60 seconds, stored only as a SHA-256 hash in `EmbedLoginToken`). The partner opens it in its iframe.
+3. `GET /merchant/embed/enter` spends the link with one atomic conditional update (so it works once), re-checks the person, sets the normal `wgc_session` cookie with `SameSite=None; Secure; Partitioned; HttpOnly` (8 hours), and redirects to an in-app merchant page.
+
+Guardrails: only `fundraiser` and `viewer` accounts can be started this way — never an owner or admin, so a leaked partner key can't reach bank, billing, team or API-key settings; a person with **MFA on is refused** (this path has no code step); disabled accounts are refused; `redirectTo` must be an in-app `/merchant/…` path; every start is written to the dashboard audit log (`auth.embed_login_requested`, `auth.embed_session_started`). Because the cookie has to be `SameSite=None`, the edge middleware refuses any `/api/merchant/**` write that the browser labels `Sec-Fetch-Site: cross-site` (`src/lib/security/crossSiteGuard.ts`), and `Partitioned` keeps the cookie from being sent when WGC is framed by any other top-level site. The page must also be allowed to load in the frame: see `EMBED_PARTNER_FRAME_ANCESTORS` in [`CONFIGURATION.md`](./CONFIGURATION.md).
+
+Known limits: Safari blocks third-party cookies, so an embedded session cannot hold a login there; a team member who needs the dashboard in Safari opens it in a new tab and signs in directly.
+
 ## "View as teammate" (same-tenant, not impersonation)
 
 `src/lib/auth/viewScope.ts` — a **same-organization** "view as a specific teammate" tool (`wgc_view_scope` cookie), used e.g. by an `owner` wanting to see the dashboard as a `viewer` would. This is a *different* mechanism from admin impersonation: it has a hard rejection for any cross-organization attempt (it can only ever view within the same `churchId`), and is not reusable for the cross-tenant admin case — the two mechanisms are intentionally separate. `requireFullOrganizationContext()` is the escape hatch for pages that must always show the real user's own full context regardless of an active view-scope.

@@ -22,6 +22,8 @@ export const API_SCOPES = [
   "transactions:read",
   "recurring:read",
   "settlements:read",
+  // Start a login for one named staff member inside a partner's iframe (see src/lib/auth/embedLogin.ts).
+  "embed:sessions",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];

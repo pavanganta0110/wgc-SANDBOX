@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SESSION_COOKIE_NAME } from '@/lib/auth/sessionConstants'
+import { isCrossSiteStateChange } from '@/lib/security/crossSiteGuard'
 
 // Public admin auth pages — reachable without a session, everything else
 // under /admin and /api/admin requires one. Deliberately duplicates the
@@ -41,6 +42,8 @@ const MERCHANT_PUBLIC_PREFIXES = [
   '/merchant/login',
   '/merchant/forgot-password',
   '/merchant/set-password',
+  // Partner-embedded login: spends a one-time link and starts the session itself.
+  '/merchant/embed/enter',
   '/api/merchant/login',
   '/api/merchant/logout',
   '/api/merchant/forgot-password',
@@ -107,6 +110,12 @@ async function verifyAdminSessionCookie(token: string | undefined): Promise<bool
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  // CSRF backstop for the merchant API (the embedded-session cookie is SameSite=None): a write
+  // the browser reports as coming from another site is never legitimate.
+  if (pathname.startsWith('/api/merchant') && isCrossSiteStateChange(request.method, request.headers.get('sec-fetch-site'))) {
+    return NextResponse.json({ error: 'Cross-site requests are not allowed.' }, { status: 403 });
+  }
 
   const isMerchantPath = pathname.startsWith('/merchant') || pathname.startsWith('/api/merchant');
   if (isMerchantPath && !isMerchantPublicPath(pathname)) {
