@@ -28,6 +28,7 @@ import type { InvoiceStatus } from "@/lib/invoices/invoiceStatus";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { emitRecurringPaymentOutcomeEvent } from "@/lib/events/recurringPaymentEvents";
 import { triggerRecoveryOnPaymentFailure } from "@/lib/subscriptions/recoveryAutomation";
+import { renewalDesignationFromSubscription } from "@/lib/subscriptions/renewalDesignation";
 import { handleMerchantTermination } from "@/lib/onboarding/handleMerchantTermination";
 import { recordWebhookProcessingFailure } from "@/lib/monitoring/webhookHealth";
 
@@ -564,6 +565,9 @@ export async function syncFinixDataFromWebhookEvent(
                   studentId: sub.studentId ?? null,
                   studentTermLabel: sub.studentTermLabel ?? null,
                   studentGivenFor: sub.studentGivenFor ?? null,
+                  // Designation: every renewal inherits the fund snapshotted on
+                  // the subscription, so renewals never fall to the general fund.
+                  ...renewalDesignationFromSubscription(sub),
                 },
               });
 
