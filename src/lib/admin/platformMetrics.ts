@@ -92,13 +92,24 @@ export interface PlatformMetrics {
  * A successful charge: excludes Finix's own settlement/payout rows and ACH
  * return rows (same exclusions the merchant Payments list uses).
  */
-const CHARGE_WHERE = Prisma.sql`
+export const SUCCESSFUL_CHARGE_WHERE = Prisma.sql`
   UPPER(ft."state") = 'SUCCEEDED'
   AND (ft."subtype" IS NULL OR (ft."subtype" NOT ILIKE '%SETTLEMENT%' AND ft."subtype" NOT ILIKE '%RETURN%'))
   AND (ft."type" IS NULL OR UPPER(ft."type") <> 'REVERSAL')
 `;
 
-function inRange(column: Prisma.Sql, from: Date | null, to: Date): Prisma.Sql {
+/**
+ * An organization that exists in this database. Partner stats read only organizations
+ * already linked to a partner, so this holds for them; kept for parity with the main
+ * repository's platform metrics.
+ */
+const CHARGE_WHERE = SUCCESSFUL_CHARGE_WHERE;
+
+export const ATTRIBUTED_WHERE = Prisma.sql`
+  EXISTS (SELECT 1 FROM "Church" c_attr WHERE c_attr."id" = ft."churchId")
+`;
+
+export function inRange(column: Prisma.Sql, from: Date | null, to: Date): Prisma.Sql {
   return from ? Prisma.sql`${column} >= ${from} AND ${column} < ${to}` : Prisma.sql`${column} < ${to}`;
 }
 
@@ -106,7 +117,7 @@ function inRange(column: Prisma.Sql, from: Date | null, to: Date): Prisma.Sql {
  * Method comes from the payment-instrument snapshot; when that hasn't
  * synced yet, falls back to the WGC Payment row's own method.
  */
-const METHOD_SQL = Prisma.sql`
+export const METHOD_SQL = Prisma.sql`
   CASE
     WHEN UPPER(COALESCE(pi."paymentMethodType", p."paymentMethodType", '')) = 'BANK_ACCOUNT' THEN 'ACH'
     WHEN COALESCE(pi."paymentMethodType", p."paymentMethodType") IS NULL THEN 'OTHER'
@@ -114,7 +125,7 @@ const METHOD_SQL = Prisma.sql`
   END
 `;
 
-const JOINS = Prisma.sql`
+export const JOINS = Prisma.sql`
   LEFT JOIN "FinixPaymentInstrumentSnapshot" pi ON pi."finixPaymentInstrumentId" = ft."finixPaymentInstrumentId"
   LEFT JOIN LATERAL (
     SELECT p0."paymentMethodType" FROM "Payment" p0 WHERE p0."finixTransferId" = ft."finixTransferId" LIMIT 1
