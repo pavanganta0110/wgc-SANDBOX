@@ -276,3 +276,9 @@ A partner pays WGC; its merchants do not. The price is **$10 per approved mercha
 - **Never twice.** One invoice per partner per month (unique key). Each charge attempt is claimed with a conditional update before Finix is called, uses its own Finix idempotency id (invoice + attempt number), and a charge interrupted mid-way is looked up at Finix before it is repeated.
 - **Failures.** A declined card is retried the next day, up to 4 attempts, and the partner is emailed each time. Saving a new card lets an unpaid invoice try again at once (two more attempts).
 - **Off by default.** Cards are only charged when `PARTNER_BILLING_CHARGING_ENABLED=1`; otherwise invoices are made and nothing is charged. A partner with no price set is not billed.
+
+### Partner CRM frame — `POST /api/v1/partner/embed-links`
+
+One link for the iframe a partner shows inside its own product for one organization. Body: `reference` (your id for the organization, required), optional `email` (the CRM user looking at it), `organizationName`, `contactName`, `contactEmail`, `contactPhone`, `website` (fill the application form). Returns `{ url, expiresAt }`; the link is signed and valid 15 minutes, so request a new one each time the page opens.
+
+The frame follows the organization: application form → "submitted" / "under review" → "more information needed" (with what is missing and a button to add it) → "approved, setting up" → the organization's dashboard, signed in automatically (no WGC login). An owner opens as an organization admin: no bank, team, billing, API-key or webhook management. People who use MFA must sign in at WGC directly. Allow your CRM's origin in `EMBED_PARTNER_FRAME_ANCESTORS`.

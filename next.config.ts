@@ -111,7 +111,7 @@ if (partnerFrames.rejected.length > 0) {
 const baseCsp = securityHeaders.find((h) => h.key === "Content-Security-Policy")?.value ?? "";
 const partnerFrameHeaders =
   partnerFrames.origins.length > 0 && baseCsp.includes("frame-ancestors 'self'")
-    ? ["/merchant/:path*", "/start", "/onboarding/:path*"].map((source) => ({
+    ? ["/merchant/:path*", "/start", "/onboarding/:path*", "/partner-embed", "/partner-embed/:path*"].map((source) => ({
         source,
         headers: [
           // X-Frame-Options can't name a third-party origin, so it's cleared and the

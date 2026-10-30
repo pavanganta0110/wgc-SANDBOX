@@ -70,6 +70,8 @@ export interface NavAccess {
   canViewStudents: boolean;
   /** False for an organization that is billed through a partner: it has no WGC plan to show. */
   canViewBillingPlan: boolean;
+  /** Inside a partner's frame: the links the partner chose to show. Absent or null shows everything. */
+  embeddedMenu?: string[] | null;
 }
 
 /** Shared by the desktop and mobile sidebars. */
@@ -78,6 +80,7 @@ export function visibleNavItems(role: string | undefined, access?: NavAccess): N
   return NAV_ITEMS.filter((item) => {
     if (item.organizationOnly && !isOrgLevelRole) return false;
     if (item.access && access && !access[item.access]) return false;
+    if (access?.embeddedMenu && !access.embeddedMenu.includes(item.href)) return false;
     return true;
   });
 }

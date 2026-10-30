@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, Building2, CreditCard, KeyRound, Users, Webhook } from "lucide-react";
+import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Users, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
   { name: "API Key", href: "/partner/api-keys", icon: KeyRound },
   { name: "Webhook", href: "/partner/webhook", icon: Webhook },
+  { name: "Menu", href: "/partner/menu", icon: ListChecks },
   { name: "Billing", href: "/partner/billing", icon: CreditCard },
   { name: "Team", href: "/partner/team", icon: Users },
   { name: "Docs", href: "/partner/docs", icon: BookOpen },

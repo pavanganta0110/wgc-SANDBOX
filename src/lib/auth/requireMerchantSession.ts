@@ -35,6 +35,8 @@ export interface MerchantAuthContext {
    * (undefined) for every normal merchant session — never present and
    * false, so `if (auth.impersonation)` is the one check needed everywhere. */
   impersonation?: ActiveImpersonation;
+  /** True when the session was started inside a partner's frame (see /partner-embed/enter). */
+  embedded?: boolean;
 }
 
 const ACCESS_STATE_MESSAGES: Record<OrgAccessState, string> = {
@@ -196,7 +198,10 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
     email: user.email,
     churchId: user.churchId,
     rawRole,
-    role: normalizeMerchantRole(rawRole),
+    // A session started inside a partner's frame (payload.embedded, signed into the cookie)
+    // never holds the owner's full power: it works as an organization admin, which has no
+    // bank, team, billing, API-key or webhook management unless explicitly granted.
+    role: payload.embedded && normalizeMerchantRole(rawRole) === "owner" ? "admin" : normalizeMerchantRole(rawRole),
     // Always false here — wgc_admin/wgc_super_admin always return from the
     // impersonation branch above (or throw) and never reach this point; TS
     // narrows rawRole to exclude both past that point.
@@ -205,5 +210,6 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
     authVersion: user.authVersion,
     authTime: payload.authTime ?? null,
     orgAccessState: access.state,
+    ...(payload.embedded ? { embedded: true } : {}),
   };
 });

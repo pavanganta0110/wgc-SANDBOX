@@ -53,11 +53,13 @@ export interface StartPartnerContext {
   partnerCode?: string | null;
   partnerReference?: string | null;
   prefill?: StartPrefill;
+  /** Where to go after submitting, instead of the success page (the partner's own status page). */
+  afterSubmitPath?: string | null;
 }
 
-export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, prefill = {} }: StartPartnerContext = {}) {
+export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, prefill = {}, afterSubmitPath = null }: StartPartnerContext = {}) {
   const router = useRouter();
-  const successPath = (applicationId: string) => `/onboarding/success?applicationId=${applicationId}${embed ? "&embed=1" : ""}`;
+  const successPath = (applicationId: string) => afterSubmitPath ?? `/onboarding/success?applicationId=${applicationId}${embed ? "&embed=1" : ""}`;
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasBeneficialOwners, setHasBeneficialOwners] = useState<boolean | null>(null);

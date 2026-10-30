@@ -530,6 +530,10 @@ model Partner {
   /// dashboard-access messages for applications of this partner: the partner
   /// shows the status inside its own screens. Off by default.
   suppressMerchantEmails Boolean @default(false)
+  /// Which sidebar items the partner's organizations see inside the partner's own frame:
+  /// { allowed: string[], known: string[] } (item links). Null = everything shows. Items WGC adds
+  /// later are not in `known`, so they stay hidden until the partner ticks them (src/lib/partners/embeddedMenu.ts).
+  embeddedMenuJson Json?
   /// What the partner pays WGC per approved merchant per month, in cents. Null = the
   /// partner is not being billed yet. Set by a WGC admin.
   pricePerMerchantCents Int?

@@ -32,6 +32,9 @@ export interface SessionPayload {
   // authVersion instead (see above).
   passwordChangedAt?: number | null;
   exp: number; // unix seconds
+  // Started inside a partner's frame (see /partner-embed/enter). An owner in such a
+  // session is treated as an organization admin — see requireMerchantSession().
+  embedded?: boolean;
   authTime?: number; // unix seconds of sign-in
   // Session-bound proof that THIS session completed OTP verification —
   // set true only by completeAdminLogin() when called from the post-OTP
