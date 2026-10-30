@@ -8,7 +8,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/audit", () => ({ createAuditLog: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/auth/merchantAuthRateLimit", () => ({ checkMerchantAuthRateLimit: () => true }));
 const requirePartnerSession = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession }));
+vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession, requirePartnerWriteSession: requirePartnerSession }));
 const accounts = vi.hoisted(() => ({ createPartnerInvite: vi.fn() }));
 vi.mock("@/lib/partners/partnerAccounts", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/partners/partnerAccounts")>()), createPartnerInvite: accounts.createPartnerInvite }));
 const sendInvite = vi.hoisted(() => vi.fn());

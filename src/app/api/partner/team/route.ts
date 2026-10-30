@@ -4,7 +4,7 @@ import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
 import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
 import { isValidEmail } from "@/lib/donors/donorContact";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import { createPartnerInvite, PartnerAccountError } from "@/lib/partners/partnerAccounts";
 import { sendPartnerInviteEmail } from "@/lib/partners/partnerInviteEmail";
 
@@ -36,7 +36,7 @@ export async function GET() {
 /** Invites a colleague to this partner account (or sends a pending invite again). Everyone on the account has the same access. */
 export async function POST(req: Request) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     if (!checkMerchantAuthRateLimit(`partner-invite:${session.partnerId}`)) {
       return NextResponse.json({ error: "Too many invitations. Please try again in a minute." }, { status: 429 });
     }

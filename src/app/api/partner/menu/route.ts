@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import {
   EMBEDDED_MENU_ALWAYS_ON,
   EMBEDDED_MENU_CATALOG,
@@ -33,7 +33,7 @@ export async function GET() {
 /** Saves the ticked items for the partner's own organizations. Body: { allowed: string[] }. */
 export async function PUT(req: Request) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const body = await req.json().catch(() => ({}));
     if (!Array.isArray(body.allowed)) return NextResponse.json({ error: "Choose the items to show." }, { status: 400 });
 

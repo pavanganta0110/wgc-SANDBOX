@@ -7,7 +7,7 @@ vi.mock("@/lib/finix/client", () => ({ finixClient: finix }));
 vi.mock("@/lib/audit", () => ({ createAuditLog: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ "x-forwarded-for": "1.2.3.4", "user-agent": "test" }) }));
 const requirePartnerSession = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession }));
+vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession, requirePartnerWriteSession: requirePartnerSession }));
 
 import { POST } from "../card/route";
 import { UnauthorizedError } from "@/lib/auth/errors";

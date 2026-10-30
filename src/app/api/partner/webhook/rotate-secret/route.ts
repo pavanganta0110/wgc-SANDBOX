@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import { generateSigningSecret } from "@/lib/webhooks/signing";
 import { encryptSecret, serializeEnvelope } from "@/lib/webhooks/encryption";
 
 /** A new signing secret, shown once. The old one stops verifying right away. */
 export async function POST() {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const secret = generateSigningSecret();
     const result = await prisma.partnerWebhookEndpoint.updateMany({
       where: { partnerId: session.partnerId },

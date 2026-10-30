@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 
 /**
  * Removes someone's access to this partner account. They are signed out at once (authVersion
@@ -10,7 +10,7 @@ import { requirePartnerSession } from "@/lib/partners/partnerSession";
  */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const { userId } = await params;
     if (userId === session.partnerUserId) return NextResponse.json({ error: "You can't remove yourself." }, { status: 400 });
 

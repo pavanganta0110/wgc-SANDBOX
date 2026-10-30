@@ -175,9 +175,22 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
             {partner.contactEmail ? ` · ${partner.contactEmail}` : ""}
           </p>
         </div>
-        <a href={`/admin/partners/${partner.id}`} className="shrink-0 rounded-lg bg-[#010409] text-white text-xs font-semibold px-3 py-2">
-          Volume and revenue
-        </a>
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              const { ok, data } = await call(`/api/admin/partners/${partner.id}/view`, "POST");
+              if (ok) window.location.assign("/partner/organizations");
+              else report(false, data, "");
+            }}
+            className="rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+          >
+            View partner dashboard
+          </button>
+          <a href={`/admin/partners/${partner.id}`} className="rounded-lg bg-[#010409] text-white text-xs font-semibold px-3 py-2">
+            Volume and revenue
+          </a>
+        </div>
       </div>
 
       <div>

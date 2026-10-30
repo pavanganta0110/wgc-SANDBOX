@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 
 /** Revokes one of the signed-in partner's own keys. It stops working immediately. */
 export async function DELETE(_req: Request, { params }: { params: Promise<{ keyId: string }> }) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const { keyId } = await params;
     const result = await prisma.partnerApiKey.updateMany({
       where: { id: keyId, partnerId: session.partnerId, status: "ACTIVE" },

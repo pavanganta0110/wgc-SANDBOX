@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const prismaMock = vi.hoisted(() => ({ partner: { findUnique: vi.fn(), update: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/audit", () => ({ createAuditLog: vi.fn() }));
-vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession: vi.fn(async () => ({ partnerId: "p1", partnerUserId: "u1", email: "d@x.test" })) }));
+const sessionFn = vi.hoisted(() => vi.fn(async () => ({ partnerId: "p1", partnerUserId: "u1", email: "d@x.test" })));
+vi.mock("@/lib/partners/partnerSession", () => ({ requirePartnerSession: sessionFn, requirePartnerWriteSession: sessionFn }));
 
 import { GET, PUT } from "../route";
 

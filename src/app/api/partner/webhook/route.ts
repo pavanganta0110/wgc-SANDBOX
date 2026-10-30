@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import { PARTNER_DEFAULT_EVENTS, PARTNER_ONBOARDING_EVENTS } from "@/lib/partners/partnerWebhooks";
 import { WGC_EVENT_TYPES, isWgcEventType } from "@/lib/events/types";
 
@@ -80,7 +80,7 @@ export async function GET() {
  */
 export async function PUT(req: Request) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const body = await req.json().catch(() => ({}));
 
     const existing = await prisma.partnerWebhookEndpoint.findUnique({ where: { partnerId: session.partnerId }, select: { id: true } });

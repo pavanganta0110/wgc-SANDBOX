@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { finixClient } from "@/lib/finix/client";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
-import { requirePartnerSession } from "@/lib/partners/partnerSession";
+import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import { PARTNER_NEW_CARD_EXTRA_ATTEMPTS } from "@/lib/partners/partnerInvoicing";
 
 export const PARTNER_BILLING_AUTHORIZATION_TERMS_VERSION = "partner-billing-authorization-v1";
@@ -18,7 +18,7 @@ export const PARTNER_BILLING_AUTHORIZATION_TERMS_VERSION = "partner-billing-auth
  */
 export async function POST(req: Request) {
   try {
-    const session = await requirePartnerSession();
+    const session = await requirePartnerWriteSession();
     const body = await req.json().catch(() => ({}));
     const token = typeof body.financeInstrumentToken === "string" ? body.financeInstrumentToken : "";
     if (!token) return NextResponse.json({ error: "Missing card token." }, { status: 400 });

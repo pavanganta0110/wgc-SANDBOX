@@ -4,6 +4,7 @@ import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Users, Webhook }
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
+import PartnerViewBanner from "@/components/partner/PartnerViewBanner";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function PartnerDashboardLayout({ children }: { children: R
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
+      {session.readOnly && <PartnerViewBanner partnerName={session.partnerName} />}
       <div className="flex items-center justify-between px-4 md:px-10 py-5 border-b border-slate-100 bg-white">
         <div>
           <h1 className="text-lg font-bold text-slate-900">{session.partnerName}</h1>
@@ -37,7 +39,7 @@ export default async function PartnerDashboardLayout({ children }: { children: R
             {live ? "Production" : "Sandbox"}
           </span>
           <span className="text-sm text-slate-600 hidden md:inline">{session.email}</span>
-          <PartnerSignOutButton />
+          {!session.readOnly && <PartnerSignOutButton />}
         </div>
       </div>
       {/* The side menu below is hidden on narrow screens; this strip takes its place. */}
