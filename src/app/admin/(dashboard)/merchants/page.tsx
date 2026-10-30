@@ -197,7 +197,10 @@ export default function MerchantsDirectoryPage() {
             <Store className="h-6 w-6 text-indigo-600" />
             Merchants Directory
           </h1>
-          <p className="text-slate-500 mt-1">Manage and view all merchants across the platform.</p>
+          <p className="text-slate-500 mt-1">
+            Merchants that signed up directly. Merchants that came through a software partner are under{" "}
+            <Link href="/admin/partners" className="font-semibold text-indigo-600 hover:text-indigo-800">Partners</Link>.
+          </p>
         </div>
         <div className="flex gap-3">
           <button 

@@ -39,7 +39,8 @@ export async function GET(req: Request) {
     }
 
     // Base WHERE conditions
-    const conditions: Prisma.Sql[] = [Prisma.sql`1=1`];
+    // Merchants that came through a software partner are listed under Partners, not here.
+    const conditions: Prisma.Sql[] = [Prisma.sql`c."partnerId" IS NULL`];
 
     if (status) {
       conditions.push(Prisma.sql`c."status" = ${status}`);

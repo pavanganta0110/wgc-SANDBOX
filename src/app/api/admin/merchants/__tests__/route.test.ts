@@ -40,6 +40,16 @@ describe("GET /api/admin/merchants — filters", () => {
     expect(where.sql).not.toContain("ILIKE");
   });
 
+  it("leaves out merchants that came through a partner (they are listed under Partners)", async () => {
+    await get("");
+    const where = whereOfFirstQuery();
+    expect(where.sql).toContain('c."partnerId" IS NULL');
+    // The data query reads the same WHERE clause, so the page and its count agree.
+    const secondValues = mockQueryRaw.mock.calls[1].slice(1) as unknown[];
+    const secondWhere = secondValues.find((v): v is SqlLike => typeof v === "object" && v !== null && "sql" in (v as object) && (v as SqlLike).sql.includes("partnerId"));
+    expect(secondWhere?.sql).toContain('c."partnerId" IS NULL');
+  });
+
   it("filters created date as >= start and < the day after the end day (the end day is fully included)", async () => {
     const res = await get("createdDateStart=2026-10-01&createdDateEnd=2026-10-08");
     expect(res.status).toBe(200);
