@@ -8,7 +8,8 @@ vi.mock("@/lib/partners/partnerApiAuth", () => ({
 const prismaMock = vi.hoisted(() => ({ partnerEmbedLinkRequest: { count: vi.fn(), create: vi.fn(), deleteMany: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { POST, EMBED_LINKS_PER_MINUTE } from "../route";
+import { POST } from "../route";
+import { EMBED_LINKS_PER_MINUTE } from "@/lib/partners/embedLinkRequests";
 import { verifyPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 
 beforeAll(() => {

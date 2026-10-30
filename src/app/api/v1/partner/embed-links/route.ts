@@ -1,12 +1,8 @@
 import { apiError, apiSuccess } from "@/lib/api/response";
-import { prisma } from "@/lib/prisma";
+import { EMBED_LINKS_PER_MINUTE, recordEmbedLinkRequest } from "@/lib/partners/embedLinkRequests";
 import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { createPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 import { isValidEmail } from "@/lib/donors/donorContact";
-
-/** Link requests one key may make per minute. Held in the database, so it holds across servers. */
-export const EMBED_LINKS_PER_MINUTE = 60;
-const KEEP_REQUEST_RECORDS_DAYS = 30;
 
 const text = (value: unknown, max: number): string | undefined => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined);
 
@@ -34,15 +30,9 @@ export const POST = withPartnerApiAuth(async (req, auth, requestId) => {
   const contactEmail = text(body.contactEmail, 254);
   if (contactEmail && !isValidEmail(contactEmail)) return apiError("validation_error", "`contactEmail` must be a valid email address.", requestId);
 
-  const recent = await prisma.partnerEmbedLinkRequest.count({ where: { partnerKeyId: auth.partnerKeyId, createdAt: { gte: new Date(Date.now() - 60_000) } } });
-  if (recent >= EMBED_LINKS_PER_MINUTE) {
+  const recorded = await recordEmbedLinkRequest({ partnerId: auth.partnerId, partnerKeyId: auth.partnerKeyId, reference });
+  if (recorded === "too_many") {
     return apiError("rate_limit_error", `Too many link requests (${EMBED_LINKS_PER_MINUTE} per minute per key). Wait a moment and try again.`, requestId);
-  }
-  await prisma.partnerEmbedLinkRequest.create({ data: { partnerId: auth.partnerId, partnerKeyId: auth.partnerKeyId, reference } });
-  if (Math.random() < 0.02) {
-    void prisma.partnerEmbedLinkRequest
-      .deleteMany({ where: { createdAt: { lt: new Date(Date.now() - KEEP_REQUEST_RECORDS_DAYS * 24 * 60 * 60 * 1000) } } })
-      .catch(() => undefined);
   }
 
   const { token, expiresAt } = createPartnerEmbedLinkToken({
