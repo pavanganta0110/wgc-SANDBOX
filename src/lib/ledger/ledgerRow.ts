@@ -25,6 +25,22 @@ export interface LedgerDonor {
   country: string | null;
 }
 
+/**
+ * The named individual a gift is for, when the donor picked one (a student today; the same slot
+ * carries any named person). `id` is null for a gift given to the general pool ("GENERAL") that
+ * is not assigned to anyone yet.
+ */
+export interface LedgerPerson {
+  id: string | null;
+  /** The organization's own number for the person (a student number), if any. */
+  number: string | null;
+  name: string | null;
+  /** The term or period the gift was credited to, as labelled by the organization. */
+  term: string | null;
+  /** SPONSOR | SELF | GENERAL: who the gift was given as. */
+  givenFor: string | null;
+}
+
 export interface LedgerRow {
   /** Stable id: the Payment id for WGC gifts, the ExternalDonation id for external ones. */
   id: string;
@@ -37,7 +53,8 @@ export interface LedgerRow {
   /** Only for external gifts: cash, check, etc. as recorded. */
   externalMethod: string | null;
   status: string;
-  designation: { fundId: string | null; fundName: string | null };
+  /** The fund, and the named person when the donor chose one (null when the gift is not for a person). */
+  designation: { fundId: string | null; fundName: string | null; person: LedgerPerson | null };
   donor: LedgerDonor | null;
   /** The gift before any fee cover. */
   giftCents: number;
@@ -104,6 +121,9 @@ export interface LedgerPaymentSource {
   goodsServicesFairMarketValueCents: number | null;
   givingLinkId: string | null;
   receiptNumber: string | null;
+  studentId: string | null;
+  studentTermLabel: string | null;
+  studentGivenFor: string | null;
 }
 
 export interface LedgerExternalSource {
@@ -125,9 +145,21 @@ export interface LedgerExternalSource {
   finixSettlementId: string | null;
   voidedAt: Date | null;
   receiptNumber: string | null;
+  studentId: string | null;
+  studentTermLabel: string | null;
+  studentGivenFor: string | null;
+}
+
+export interface LedgerStudentSource {
+  id: string;
+  studentNumber: string;
+  firstName: string;
+  lastName: string;
 }
 
 export interface LedgerLookups {
+  /** The named people gifts are credited to, by id. */
+  students: Map<string, LedgerStudentSource>;
   donors: Map<string, LedgerDonorSource>;
   /** Successful refund cents per original Payment id (failed/canceled refunds already excluded). */
   refundedCentsByPaymentId: Map<string, number>;
@@ -169,6 +201,22 @@ export function toLedgerDonor(donor: LedgerDonorSource | null | undefined): Ledg
   };
 }
 
+/** The named person on a gift, or null when it is not credited to anyone. */
+export function toLedgerPerson(
+  gift: { studentId: string | null; studentTermLabel: string | null; studentGivenFor: string | null },
+  students: Map<string, LedgerStudentSource>
+): LedgerPerson | null {
+  if (!gift.studentId && !gift.studentGivenFor) return null;
+  const student = gift.studentId ? students.get(gift.studentId) : undefined;
+  return {
+    id: gift.studentId,
+    number: student?.studentNumber ?? null,
+    name: student ? `${student.firstName} ${student.lastName}`.trim() : null,
+    term: gift.studentTermLabel,
+    givenFor: gift.studentGivenFor,
+  };
+}
+
 export function buildPaymentLedgerRow(payment: LedgerPaymentSource, lookups: LedgerLookups): LedgerRow {
   const transfer = payment.finixTransferId ? lookups.transfersByFinixTransferId.get(payment.finixTransferId) : undefined;
   const processingFeeCents = payment.actualFinixFeesCents ?? transfer?.feeCents ?? null;
@@ -186,7 +234,7 @@ export function buildPaymentLedgerRow(payment: LedgerPaymentSource, lookups: Led
     cardBrand: isBank ? null : payment.cardBrand,
     externalMethod: null,
     status: payment.status,
-    designation: { fundId: payment.fundId, fundName: payment.fundName },
+    designation: { fundId: payment.fundId, fundName: payment.fundName, person: toLedgerPerson(payment, lookups.students) },
     donor: toLedgerDonor(payment.donorId ? lookups.donors.get(payment.donorId) : null),
     giftCents: payment.donationAmountCents ?? payment.amountCents,
     feeCoveredCents,
@@ -220,7 +268,7 @@ export function buildExternalLedgerRow(donation: LedgerExternalSource, lookups: 
     cardBrand: null,
     externalMethod: donation.paymentMethod,
     status: donation.status,
-    designation: { fundId: donation.fundId, fundName: donation.fundName },
+    designation: { fundId: donation.fundId, fundName: donation.fundName, person: toLedgerPerson(donation, lookups.students) },
     donor: toLedgerDonor(donation.donorId ? lookups.donors.get(donation.donorId) : null),
     giftCents: donation.donationAmountCents,
     feeCoveredCents: donation.supplementalFeeCents,

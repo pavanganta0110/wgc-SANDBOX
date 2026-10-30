@@ -25,6 +25,7 @@ const donor = {
 function lookups(overrides: Partial<LedgerLookups> = {}): LedgerLookups {
   return {
     donors: new Map([["donor1", donor]]),
+    students: new Map(),
     refundedCentsByPaymentId: new Map(),
     disputeStateByPaymentId: new Map(),
     transfersByFinixTransferId: new Map(),
@@ -55,6 +56,9 @@ function payment(overrides: Partial<LedgerPaymentSource> = {}): LedgerPaymentSou
     goodsServicesFairMarketValueCents: null,
     givingLinkId: "link1",
     receiptNumber: "R-1",
+    studentId: null,
+    studentTermLabel: null,
+    studentGivenFor: null,
     ...overrides,
   };
 }
@@ -79,6 +83,9 @@ function external(overrides: Partial<LedgerExternalSource> = {}): LedgerExternal
     finixSettlementId: null,
     voidedAt: null,
     receiptNumber: null,
+    studentId: null,
+    studentTermLabel: null,
+    studentGivenFor: null,
     ...overrides,
   };
 }
@@ -199,3 +206,37 @@ describe("buildExternalLedgerRow", () => {
     expect(row.processingFeeCents).toBe(120);
   });
 });
+
+describe("the named person on a gift", () => {
+  const people = new Map([["st1", { id: "st1", studentNumber: "S-1042", firstName: "Jordan", lastName: "Lee" }]]);
+
+  it("a gift to a named person carries who, their number, the term and how it was given", () => {
+    const row = buildPaymentLedgerRow(payment({ studentId: "st1", studentTermLabel: "Fall 2026", studentGivenFor: "SPONSOR" }), lookups({ students: people }));
+    expect(row.designation).toEqual({
+      fundId: "fund1",
+      fundName: "Summer Missions",
+      person: { id: "st1", number: "S-1042", name: "Jordan Lee", term: "Fall 2026", givenFor: "SPONSOR" },
+    });
+  });
+
+  it("a gift that is not for a person has person null, so the fund works as before", () => {
+    expect(buildPaymentLedgerRow(payment(), lookups()).designation.person).toBeNull();
+    expect(buildExternalLedgerRow(external(), lookups()).designation.person).toBeNull();
+  });
+
+  it("a gift to the general pool is marked as such with no person yet", () => {
+    const row = buildPaymentLedgerRow(payment({ studentId: null, studentGivenFor: "GENERAL", studentTermLabel: "Fall 2026" }), lookups());
+    expect(row.designation.person).toEqual({ id: null, number: null, name: null, term: "Fall 2026", givenFor: "GENERAL" });
+  });
+
+  it("keeps the id when the person can no longer be found, without inventing a name", () => {
+    const row = buildPaymentLedgerRow(payment({ studentId: "gone", studentGivenFor: "SELF" }), lookups());
+    expect(row.designation.person).toEqual({ id: "gone", number: null, name: null, term: null, givenFor: "SELF" });
+  });
+
+  it("cash and check gifts carry the person too", () => {
+    const row = buildExternalLedgerRow(external({ studentId: "st1", studentTermLabel: "Spring 2027", studentGivenFor: "SPONSOR" }), lookups({ students: people }));
+    expect(row.designation.person).toMatchObject({ id: "st1", name: "Jordan Lee", term: "Spring 2027" });
+  });
+});
+

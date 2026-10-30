@@ -8,6 +8,7 @@ import {
   type LedgerLookups,
   type LedgerPaymentSource,
   type LedgerRow,
+  type LedgerStudentSource,
 } from "./ledgerRow";
 
 /** Hard cap on one ledger read. A window over the cap is rejected, not silently cut. */
@@ -45,6 +46,9 @@ const PAYMENT_SELECT = {
   goodsServicesFairMarketValueCents: true,
   givingLinkId: true,
   receiptNumber: true,
+  studentId: true,
+  studentTermLabel: true,
+  studentGivenFor: true,
 } as const;
 
 const EXTERNAL_SELECT = {
@@ -67,6 +71,9 @@ const EXTERNAL_SELECT = {
   finixSettlementId: true,
   voidedAt: true,
   receiptNumber: true,
+  studentId: true,
+  studentTermLabel: true,
+  studentGivenFor: true,
 } as const;
 
 const DONOR_SELECT = {
@@ -98,8 +105,9 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
   const donorIds = [...new Set([...payments.map((p) => p.donorId), ...externals.map((e) => e.donorId)].filter((id): id is string => !!id))];
   const paymentIds = payments.map((p) => p.id);
   const transferIds = [...new Set(payments.map((p) => p.finixTransferId).filter((id): id is string => !!id))];
+  const studentIds = [...new Set([...payments.map((p) => p.studentId), ...externals.map((e) => e.studentId)].filter((id): id is string => !!id))];
 
-  const [donorRows, refundRows, disputeRows, transferRows] = await Promise.all([
+  const [donorRows, refundRows, disputeRows, transferRows, studentRows] = await Promise.all([
     Promise.all(chunk(donorIds, IN_CLAUSE_CHUNK).map((ids) => prisma.donor.findMany({ where: { churchId, id: { in: ids } }, select: DONOR_SELECT }))).then((r) => r.flat()),
     Promise.all(
       chunk(paymentIds, IN_CLAUSE_CHUNK).map((ids) =>
@@ -114,9 +122,15 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
         prisma.finixTransfer.findMany({ where: { churchId, finixTransferId: { in: ids } }, select: { finixTransferId: true, finixSettlementId: true, feeCents: true } })
       )
     ).then((r) => r.flat()),
+    Promise.all(
+      chunk(studentIds, IN_CLAUSE_CHUNK).map((ids) =>
+        prisma.student.findMany({ where: { churchId, id: { in: ids } }, select: { id: true, studentNumber: true, firstName: true, lastName: true } })
+      )
+    ).then((r) => r.flat()),
   ]);
 
   const donors = new Map<string, LedgerDonorSource>(donorRows.map((d) => [d.id, d]));
+  const students = new Map<string, LedgerStudentSource>(studentRows.map((st) => [st.id, st]));
 
   const refundedCentsByPaymentId = new Map<string, number>();
   for (const refund of refundRows) {
@@ -134,7 +148,7 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
     transferRows.map((t) => [t.finixTransferId, { settlementId: t.finixSettlementId, feeCents: t.feeCents }])
   );
 
-  return { donors, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId };
+  return { donors, students, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId };
 }
 
 export interface LoadLedgerParams {
