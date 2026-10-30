@@ -121,8 +121,8 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
       // Opening the dashboard starts the session, which a page can't do, so a route does and comes back here if it can't.
       if (params.problem !== "1") redirect(`/partner-embed/enter?link=${encodeURIComponent(link)}`);
       return (
-        <Panel icon={<XCircle className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="We could not open your dashboard">
-          <p>Your account is ready, but this page could not sign you in. Ask your account owner to sign in at wgcpayments.com, or contact support.</p>
+        <Panel icon={<XCircle className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="You don't have access yet">
+          <p>Your organization is set up, but your email has not been added. Ask your organization's administrator to add you under Team, using the same email you use here. Then open this page again.</p>
         </Panel>
       );
   }

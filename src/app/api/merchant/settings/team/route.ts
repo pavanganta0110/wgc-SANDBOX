@@ -10,6 +10,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
 import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
+import { partnerSuppressesMerchantEmails } from "@/lib/partners/onboardingCode";
 import { CHECKIN_ONLY_BASE_ROLE, CHECKIN_ONLY_PERMISSION_OVERRIDES, isTeamInvitePreset } from "@/lib/auth/checkinPreset";
 
 // Team-access Checkpoint 4: the set of role strings that represent a real,
@@ -118,7 +119,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This email is already associated with another account" }, { status: 409 });
   }
 
-  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true } });
+  const church = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, partnerId: true } });
+  // People added for an organization that came through a partner who shows WGC inside its own
+  // product already have access there and open it from the partner's screen, so no invitation
+  // email is sent. They can still set a password later with "forgot password".
+  const holdInviteEmail = await partnerSuppressesMerchantEmails(church?.partnerId);
 
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -140,16 +145,18 @@ export async function POST(req: Request) {
   const roleLabel = preset === "checkin" ? "door check-in" : requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1);
   const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const inviteLink = `${origin}/merchant/set-password/${rawToken}`;
-  await sendWgcEmail({
-    to: email,
-    subject: `You've been invited to join ${church?.name || "an organization"} on WGC Payments`,
-    title: "You're invited",
-    badgeText: "Team Invitation",
-    badgeColor: "#0B5DBC",
-    bodyHtml: `<p>You've been invited to join <strong>${church?.name || "an organization"}</strong> as a ${roleLabel} on WGC Payments.</p>
+  if (!holdInviteEmail) {
+    await sendWgcEmail({
+      to: email,
+      subject: `You've been invited to join ${church?.name || "an organization"} on WGC Payments`,
+      title: "You're invited",
+      badgeText: "Team Invitation",
+      badgeColor: "#0B5DBC",
+      bodyHtml: `<p>You've been invited to join <strong>${church?.name || "an organization"}</strong> as a ${roleLabel} on WGC Payments.</p>
                <p><a href="${inviteLink}">Accept invitation and set your password</a></p>
                <p>This invitation link expires in 7 days.</p>`,
-  });
+    });
+  }
 
   await logDashboardAction({
     churchId: auth.churchId,

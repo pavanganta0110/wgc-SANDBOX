@@ -109,3 +109,35 @@ describe("POST /api/merchant/settings/team — door check-in preset", () => {
     expect(data).not.toHaveProperty("permissionsJson");
   });
 });
+
+describe("POST /api/merchant/settings/team — organizations that came through a partner", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.AUTH_SESSION_SECRET = "test-secret-at-least-32-characters-long";
+  });
+
+  it("adds the person but sends no invitation email when the partner shows WGC in its own product", async () => {
+    const { POST, prisma } = await arrange();
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE", name: "Grace Church", partnerId: "p1" } as never);
+    const partnerFind = vi.fn().mockResolvedValue({ suppressMerchantEmails: true });
+    (prisma as unknown as { partner: { findUnique: typeof partnerFind } }).partner = { findUnique: partnerFind };
+    const { sendWgcEmail } = await import("@/lib/email");
+
+    const res = await POST(invite({ email: "sam@b.com", role: "fundraiser" }));
+
+    expect(res.status).toBe(201);
+    expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ email: "sam@b.com", role: "fundraiser", churchId: "church-a" }) }));
+    expect(sendWgcEmail).not.toHaveBeenCalled();
+  });
+
+  it("still sends the invitation email for an ordinary organization", async () => {
+    const { POST, prisma } = await arrange();
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE", name: "Grace Church", partnerId: null } as never);
+    const { sendWgcEmail } = await import("@/lib/email");
+
+    const res = await POST(invite({ email: "sam@b.com", role: "viewer" }));
+
+    expect(res.status).toBe(201);
+    expect(sendWgcEmail).toHaveBeenCalledTimes(1);
+  });
+});

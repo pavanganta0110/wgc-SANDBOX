@@ -22,6 +22,12 @@ describe("POST /api/v1/partner/embed-links", () => {
     expect(verifyPartnerEmbedLinkToken(token)).toMatchObject({ partnerId: "p1", reference: "loc_1", email: "owner@church.test", prefill: { organizationName: "Grace" } });
   });
 
+  it("uses the person's email as the organization's contact unless a contact email is given", async () => {
+    const link = async (body: unknown) => verifyPartnerEmbedLinkToken(new URL((await (await post(body)).json()).data.url).searchParams.get("link"));
+    expect((await link({ reference: "loc_1", email: "Admin@Church.test" }))?.prefill.contactEmail).toBe("admin@church.test");
+    expect((await link({ reference: "loc_1", email: "admin@church.test", contactEmail: "office@church.test" }))?.prefill.contactEmail).toBe("office@church.test");
+  });
+
   it("needs a reference and valid emails", async () => {
     expect((await post({})).status).toBe(400);
     expect((await post({ reference: "x", email: "nope" })).status).toBe(400);

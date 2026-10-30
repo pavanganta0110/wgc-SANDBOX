@@ -36,7 +36,10 @@ export const POST = withPartnerApiAuth(async (req, auth, requestId) => {
     prefill: {
       organizationName: text(body.organizationName, 200),
       contactName: text(body.contactName, 200),
-      contactEmail,
+      // The person opening the frame is who fills in the application, so by default their own email
+      // becomes the organization's contact. It must match the email the partner sends later for that
+      // person, because that is how the dashboard finds them.
+      contactEmail: contactEmail ?? email,
       contactPhone: text(body.contactPhone, 40),
       website: text(body.website, 300),
     },

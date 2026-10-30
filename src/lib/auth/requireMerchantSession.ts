@@ -9,6 +9,8 @@ import { resolveOrgAccessState, type OrgAccessState } from "@/lib/billing/access
 import { resolveActiveImpersonation, type ActiveImpersonation } from "./impersonation";
 import { touchUserActivity } from "@/lib/monitoring/activity";
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
 export interface MerchantAuthContext {
   userId: string;
   email: string;
@@ -193,6 +195,8 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
     throw new BillingAccessRestrictedError(access.state, ACCESS_STATE_MESSAGES[access.state] || "Dashboard access is currently restricted.");
   }
 
+  const embeddedOwner = payload.embedded === true && normalizeMerchantRole(rawRole) === "owner";
+
   return {
     userId: user.id,
     email: user.email,
@@ -200,13 +204,14 @@ export const requireMerchantSession = cache(async (allowRestrictedAccess: boolea
     rawRole,
     // A session started inside a partner's frame (payload.embedded, signed into the cookie)
     // never holds the owner's full power: it works as an organization admin, which has no
-    // bank, team, billing, API-key or webhook management unless explicitly granted.
-    role: payload.embedded && normalizeMerchantRole(rawRole) === "owner" ? "admin" : normalizeMerchantRole(rawRole),
+    // bank, billing, API-key or webhook management. The one thing the owner keeps there is
+    // managing the team, so the people who already use the partner's product can be added.
+    role: embeddedOwner ? "admin" : normalizeMerchantRole(rawRole),
     // Always false here — wgc_admin/wgc_super_admin always return from the
     // impersonation branch above (or throw) and never reach this point; TS
     // narrows rawRole to exclude both past that point.
     isWgcAdmin: false,
-    permissionsJson: user.permissionsJson,
+    permissionsJson: embeddedOwner ? { ...(isPlainObject(user.permissionsJson) ? user.permissionsJson : {}), canManageTeam: true } : user.permissionsJson,
     authVersion: user.authVersion,
     authTime: payload.authTime ?? null,
     orgAccessState: access.state,
