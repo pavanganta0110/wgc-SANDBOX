@@ -29,14 +29,14 @@ export async function ensureOnboardingCode(partnerId: string): Promise<string> {
 }
 
 /** The active partner behind a code, or null. A bad code never blocks an application; it just isn't tagged. */
-export async function resolvePartnerByOnboardingCode(code: unknown): Promise<{ id: string; suppressMerchantEmails: boolean } | null> {
+export async function resolvePartnerByOnboardingCode(code: unknown): Promise<{ id: string; suppressMerchantEmails: boolean; embedSignInMode: string } | null> {
   if (!looksLikeOnboardingCode(code)) return null;
   const partner = await prisma.partner.findUnique({
     where: { onboardingCode: code },
-    select: { id: true, status: true, suppressMerchantEmails: true },
+    select: { id: true, status: true, suppressMerchantEmails: true, embedSignInMode: true },
   });
   if (!partner || partner.status !== "ACTIVE") return null;
-  return { id: partner.id, suppressMerchantEmails: partner.suppressMerchantEmails };
+  return { id: partner.id, suppressMerchantEmails: partner.suppressMerchantEmails, embedSignInMode: partner.embedSignInMode };
 }
 
 /** Whether WGC should hold back its own emails to the organization for this application. */

@@ -20,6 +20,7 @@ export async function GET() {
       status: true,
       contactEmail: true,
       suppressMerchantEmails: true,
+      embedSignInMode: true,
       onboardingCode: true,
       pricePerMerchantCents: true,
       cardBrand: true,
@@ -35,10 +36,67 @@ export async function GET() {
   // WGC gives it to the partner; it is not shown in the partner's own dashboard.
   const withCodes = await Promise.all(partners.map(async (p) => ({ ...p, onboardingCode: p.onboardingCode ?? (await ensureOnboardingCode(p.id)) })));
 
+  // How each partner's connection is doing, so a stuck key or webhook shows up here and not only in the partner's own dashboard.
+  const ids = partners.map((p) => p.id);
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [keyRows, endpoints, deliveryCounts, latestDeliveries, linkRequests] = await Promise.all([
+    prisma.partnerApiKey.groupBy({ by: ["partnerId"], where: { partnerId: { in: ids }, status: "ACTIVE" }, _count: { _all: true }, _sum: { errorCount: true, requestCount: true }, _max: { lastUsedAt: true, lastErrorAt: true } }),
+    prisma.partnerWebhookEndpoint.findMany({ where: { partnerId: { in: ids } }, select: { partnerId: true, url: true, status: true, consecutiveFailures: true, disabledReason: true, lastDeliveryAt: true, lastSuccessAt: true } }),
+    prisma.partnerWebhookDelivery.groupBy({ by: ["partnerId", "status"], where: { partnerId: { in: ids }, createdAt: { gte: since } }, _count: { _all: true } }),
+    prisma.partnerWebhookDelivery.findMany({
+      where: { partnerId: { in: ids } },
+      orderBy: { createdAt: "desc" },
+      take: 60,
+      select: { id: true, partnerId: true, status: true, attemptCount: true, responseStatusCode: true, errorMessage: true, createdAt: true, webhookEventId: true, partnerEventId: true },
+    }),
+    prisma.partnerEmbedLinkRequest.groupBy({ by: ["partnerId"], where: { partnerId: { in: ids }, createdAt: { gte: since } }, _count: { _all: true } }),
+  ]);
+  const eventIds = latestDeliveries.flatMap((d) => (d.webhookEventId ? [d.webhookEventId] : []));
+  const partnerEventIds = latestDeliveries.flatMap((d) => (d.partnerEventId ? [d.partnerEventId] : []));
+  const [orgEvents, partnerEvents] = await Promise.all([
+    prisma.webhookEvent.findMany({ where: { id: { in: eventIds } }, select: { id: true, type: true } }),
+    prisma.partnerEvent.findMany({ where: { id: { in: partnerEventIds } }, select: { id: true, type: true } }),
+  ]);
+  const typeOf = new Map<string, string>([...orgEvents, ...partnerEvents].map((e) => [e.id, e.type]));
+  const hostOf = (url: string) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return null;
+    }
+  };
+
+  const health = (partnerId: string) => {
+    const key = keyRows.find((k) => k.partnerId === partnerId);
+    const endpoint = endpoints.find((e) => e.partnerId === partnerId);
+    const count = (status: string[]) => deliveryCounts.filter((d) => d.partnerId === partnerId && status.includes(d.status)).reduce((a, d) => a + d._count._all, 0);
+    return {
+      apiKey: { activeKeys: key?._count._all ?? 0, requests: key?._sum.requestCount ?? 0, errors: key?._sum.errorCount ?? 0, lastUsedAt: key?._max.lastUsedAt ?? null, lastErrorAt: key?._max.lastErrorAt ?? null },
+      webhook: endpoint
+        ? {
+            host: hostOf(endpoint.url),
+            status: endpoint.status,
+            consecutiveFailures: endpoint.consecutiveFailures,
+            disabledReason: endpoint.disabledReason,
+            lastDeliveryAt: endpoint.lastDeliveryAt,
+            lastSuccessAt: endpoint.lastSuccessAt,
+            succeeded24h: count(["SUCCEEDED"]),
+            failed24h: count(["FAILED", "ABANDONED"]),
+          }
+        : null,
+      linkRequests24h: linkRequests.find((l) => l.partnerId === partnerId)?._count._all ?? 0,
+      recentDeliveries: latestDeliveries
+        .filter((d) => d.partnerId === partnerId)
+        .slice(0, 8)
+        .map((d) => ({ id: d.id, eventType: typeOf.get(d.webhookEventId ?? d.partnerEventId ?? "") ?? null, status: d.status, attempts: d.attemptCount, statusCode: d.responseStatusCode, error: d.errorMessage, at: d.createdAt })),
+    };
+  };
+
   return NextResponse.json({
     partners: withCodes.map((p) => ({
       ...p,
       users: p.users.map(({ passwordHash, ...u }) => ({ ...u, invitePending: !passwordHash })),
+      health: health(p.id),
     })),
   });
 }

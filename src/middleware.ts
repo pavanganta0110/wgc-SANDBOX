@@ -157,6 +157,11 @@ export async function middleware(request: NextRequest) {
       if (pathname.startsWith('/api/merchant')) {
         return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
       }
+      // Inside a partner's frame (another site embedding this page) the sign-in page is no use:
+      // the person has no WGC password, they reopen WGC from the partner's own screen.
+      if (request.headers.get('sec-fetch-dest') === 'iframe' && request.headers.get('sec-fetch-site') === 'cross-site') {
+        return NextResponse.redirect(new URL('/partner-embed/ended', request.url));
+      }
       const loginUrl = new URL('/merchant/login', request.url);
       loginUrl.searchParams.set('redirectTo', pathname);
       return NextResponse.redirect(loginUrl);

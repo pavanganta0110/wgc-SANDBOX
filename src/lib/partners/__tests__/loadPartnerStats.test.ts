@@ -95,6 +95,11 @@ describe("loadPartnerStats", () => {
     expect(s.merchants).toEqual({ linked: 3, processing: 2, active: 2 });
   });
 
+  it("asks the money flow for this partner's organizations only, not the whole platform", async () => {
+    await loadPartnerStats("p1", from, to);
+    expect(flowMock.loadMerchantMoneyFlow.mock.calls[0][1]).toEqual({ churchIds: ["c1", "c2", "c3"] });
+  });
+
   it("takes fees and deposits from the dashboard's own merchant rows, for this partner's organizations only", async () => {
     const s = (await loadPartnerStats("p1", from, to))!;
     expect(s.byMerchant.map((m) => m.name)).toEqual(["Grace", "Hope", "Quiet"]);

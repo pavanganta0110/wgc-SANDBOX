@@ -4,6 +4,7 @@ import { getSettingsPermissions } from "@/lib/settings/settingsPermissions";
 import TeamSettingsPanel from "@/components/merchant/TeamSettingsPanel";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
 
 const MANAGEABLE_ORG_ROLES = ["church_admin", "owner", "admin", "fundraiser", "viewer"] as const;
 
@@ -26,8 +27,11 @@ export default async function TeamSettingsPage() {
       where: { churchId: auth.churchId, role: { in: [...MANAGEABLE_ORG_ROLES] } },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.church.findUnique({ where: { id: auth.churchId }, select: { primaryOwnerUserId: true } }),
+    prisma.church.findUnique({ where: { id: auth.churchId }, select: { primaryOwnerUserId: true, partnerId: true } }),
   ]);
+
+  // A partner whose product has one shared login signs its people in with passcodes, which the team sets here.
+  const passcodeMode = church?.partnerId ? (await getEmbedSignInMode(church.partnerId)) === "PASSCODE" : false;
 
   const members = users.map((user) => {
     const invitePending = !user.passwordHash;
@@ -48,6 +52,7 @@ export default async function TeamSettingsPage() {
       isSelf: user.id === auth.userId,
       isPrimaryOwner: user.id === church?.primaryOwnerUserId,
       permissionOverrides: overrides,
+      hasPasscode: !!user.framePasscodeHash,
     };
   });
 
@@ -61,6 +66,7 @@ export default async function TeamSettingsPage() {
         initialMembers={members}
         canManageTeam={permissions.canManageTeam}
         canManageOwners={!auth.impersonation && auth.rawRole === "owner"}
+        passcodeMode={passcodeMode}
       />
     </div>
   );

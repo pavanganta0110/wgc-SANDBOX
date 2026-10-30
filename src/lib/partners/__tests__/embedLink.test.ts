@@ -14,6 +14,13 @@ describe("partner embed link", () => {
     expect(verifyPartnerEmbedLinkToken(token)).toMatchObject(payload);
   });
 
+  it("gives every link its own random id", () => {
+    const a = verifyPartnerEmbedLinkToken(createPartnerEmbedLinkToken(payload).token)!;
+    const b = verifyPartnerEmbedLinkToken(createPartnerEmbedLinkToken(payload).token)!;
+    expect(a.jti).toMatch(/^[0-9a-f]{32}$/);
+    expect(a.jti).not.toBe(b.jti);
+  });
+
   it("expires", () => {
     const now = Date.now();
     const { token } = createPartnerEmbedLinkToken(payload, now);

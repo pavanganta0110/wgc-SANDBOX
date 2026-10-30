@@ -28,12 +28,19 @@ describe("Payment.attributedUserId is only ever set at payment creation", () => 
     "src/app/api/merchant/transactions/payments/[transferId]/goods-services/route.ts",
     "src/lib/payments/backfill.ts",
     "src/lib/donors/donorBackfill.ts",
-    "src/lib/giving/generateReceipt.ts",
   ];
 
   it.each(paymentUpdateSites)("test 18/19: %s never writes attributedUserId in an update/upsert payload", (relPath) => {
     const source = read(relPath);
     expect(source).not.toMatch(/attributedUserId/);
+  });
+
+  // The receipt code reads the attributed user (to say who the receipt is for) and explains why in a
+  // comment, so the word appears. What must never appear is attributedUserId being set: as an object
+  // key (`attributedUserId: …`) or assigned (`attributedUserId = …`).
+  it("test 18/19: src/lib/giving/generateReceipt.ts reads attributedUserId but never sets it", () => {
+    const source = read("src/lib/giving/generateReceipt.ts");
+    expect(source).not.toMatch(/attributedUserId\s*[:=]/);
   });
 
   // Refunds, disputes, and ACH returns are modeled on entirely separate

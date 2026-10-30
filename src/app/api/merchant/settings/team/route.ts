@@ -11,6 +11,8 @@ import { requireFullOrganizationContext } from "@/lib/auth/viewScope";
 import { isAuthError } from "@/lib/auth/errors";
 import { auditImpersonatedWrite } from "@/lib/auth/auditImpersonatedWrite";
 import { partnerSuppressesMerchantEmails } from "@/lib/partners/onboardingCode";
+import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
+import { hashFramePasscode, validateFramePasscode } from "@/lib/auth/framePasscode";
 import { CHECKIN_ONLY_BASE_ROLE, CHECKIN_ONLY_PERMISSION_OVERRIDES, isTeamInvitePreset } from "@/lib/auth/checkinPreset";
 
 // Team-access Checkpoint 4: the set of role strings that represent a real,
@@ -123,7 +125,16 @@ export async function POST(req: Request) {
   // People added for an organization that came through a partner who shows WGC inside its own
   // product already have access there and open it from the partner's screen, so no invitation
   // email is sent. They can still set a password later with "forgot password".
-  const holdInviteEmail = await partnerSuppressesMerchantEmails(church?.partnerId);
+  // A partner whose product has one shared login signs its people in with a passcode the team sets, so there is
+  // nothing to invite by email: the passcode is required and the person is added with it.
+  const passcodeMode = church?.partnerId ? (await getEmbedSignInMode(church.partnerId)) === "PASSCODE" : false;
+  let framePasscodeHash: string | null = null;
+  if (passcodeMode) {
+    const problem = validateFramePasscode(body.passcode);
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+    framePasscodeHash = await hashFramePasscode(body.passcode);
+  }
+  const holdInviteEmail = passcodeMode || (await partnerSuppressesMerchantEmails(church?.partnerId));
 
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -139,6 +150,7 @@ export async function POST(req: Request) {
       setPasswordTokenExpiresAt: expiresAt,
       invitedByUserId: auth.userId,
       ...(preset === "checkin" ? { permissionsJson: CHECKIN_ONLY_PERMISSION_OVERRIDES } : {}),
+      ...(framePasscodeHash ? { framePasscodeHash, framePasscodeSetAt: new Date() } : {}),
     },
   });
 

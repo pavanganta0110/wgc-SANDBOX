@@ -7,6 +7,7 @@ import { sendWgcEmail, sendWgcAdminOnboardingNotification } from "@/lib/email";
 import { consumePromotionLeadForSignup } from "@/lib/billing/promotionAttribution";
 import { resolvePartnerByOnboardingCode } from "@/lib/partners/onboardingCode";
 import { notifyPartnerOfOnboardingStage } from "@/lib/partners/onboardingEvents";
+import { hashFramePasscode, validateFramePasscode } from "@/lib/auth/framePasscode";
 
 function extractFinixErrorMessage(err: any): string {
   let finixErrorStr = err.message || "Unknown error";
@@ -89,7 +90,9 @@ export async function POST(req: Request) {
       legal,
       recaptchaToken,
       // A software partner's Get Started link (see src/lib/partners/onboardingCode.ts)
-      partnerCode, partnerReference
+      partnerCode, partnerReference,
+      // The owner's passcode for signing in from inside the partner's frame (only for partners that use passcodes)
+      framePasscode
     } = body;
 
     // Only a label. A missing or unknown code never blocks the application.
@@ -97,6 +100,15 @@ export async function POST(req: Request) {
     const partnerTag = partner
       ? { partnerId: partner.id, partnerReference: typeof partnerReference === "string" && partnerReference.trim() ? partnerReference.trim().slice(0, 120) : null }
       : {};
+
+    // A partner whose product has one shared login signs its people in with passcodes. The person filling in
+    // the application chooses the owner's; only its hash is kept, and it is copied to the owner's account.
+    let framePasscodeHash: string | null = null;
+    if (partner?.embedSignInMode === "PASSCODE") {
+      const problem = validateFramePasscode(framePasscode);
+      if (problem) return NextResponse.json({ success: false, message: problem }, { status: 400 });
+      framePasscodeHash = await hashFramePasscode(framePasscode);
+    }
 
     const reqHeaders = await headers();
     const ipAddress = reqHeaders.get("x-forwarded-for") || reqHeaders.get("x-real-ip") || "unknown";
@@ -171,6 +183,7 @@ export async function POST(req: Request) {
           status: "DRAFT",
           promotion,
           ...partnerTag,
+          ...(framePasscodeHash ? { framePasscodeHash } : {}),
 
           legalBusinessName, doingBusinessAs, businessType: businessTypeEnum,
           businessTaxIdProvided: !!businessTaxId, businessAddressLine1, businessAddressLine2, businessCity, businessState, businessPostalCode, businessCountry,

@@ -212,3 +212,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS "PartnerUser_mfaChallengeHash_key" ON "Partner
 ALTER TABLE "PartnerApiKey" ADD COLUMN IF NOT EXISTS "errorCount" INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE "PartnerApiKey" ADD COLUMN IF NOT EXISTS "lastErrorAt" TIMESTAMP(3);
 ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "embeddedMenuJson" JSONB;
+
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "framePasscodeHash" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "framePasscodeSetAt" TIMESTAMP(3);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "framePasscodeFailedAttempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "framePasscodeLockedUntil" TIMESTAMP(3);
+ALTER TABLE "OnboardingApplication" ADD COLUMN IF NOT EXISTS "framePasscodeHash" TEXT;
+ALTER TABLE "Partner" ADD COLUMN IF NOT EXISTS "embedSignInMode" TEXT NOT NULL DEFAULT 'CRM_IDENTITY';
+
+CREATE TABLE IF NOT EXISTS "PartnerEmbedEntry" (
+  "id" TEXT NOT NULL,
+  "jtiHash" TEXT NOT NULL,
+  "partnerId" TEXT NOT NULL,
+  "usedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "expiresAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "PartnerEmbedEntry_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PartnerEmbedEntry_jtiHash_key" ON "PartnerEmbedEntry"("jtiHash");
+CREATE INDEX IF NOT EXISTS "PartnerEmbedEntry_expiresAt_idx" ON "PartnerEmbedEntry"("expiresAt");
+
+CREATE TABLE IF NOT EXISTS "PartnerEmbedLinkRequest" (
+  "id" TEXT NOT NULL,
+  "partnerId" TEXT NOT NULL,
+  "partnerKeyId" TEXT NOT NULL,
+  "reference" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PartnerEmbedLinkRequest_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PartnerEmbedLinkRequest_partnerKeyId_createdAt_idx" ON "PartnerEmbedLinkRequest"("partnerKeyId", "createdAt");
+CREATE INDEX IF NOT EXISTS "PartnerEmbedLinkRequest_partnerId_createdAt_idx" ON "PartnerEmbedLinkRequest"("partnerId", "createdAt");

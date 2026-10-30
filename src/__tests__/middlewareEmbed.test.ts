@@ -36,4 +36,17 @@ describe("middleware — embedded session support", () => {
     const crossSiteRead = await middleware(request("/api/merchant/settings/team", { headers: { "sec-fetch-site": "cross-site", cookie: "wgc_session=anything" } }));
     expect(crossSiteRead.status).toBe(200);
   });
+
+  it("sends a signed-out person inside another site's frame to the session-ended screen, not the login page", async () => {
+    const res = await middleware(request("/merchant/dashboard", { headers: { "sec-fetch-dest": "iframe", "sec-fetch-site": "cross-site" } }));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/partner-embed/ended");
+  });
+
+  it("does not change a normal visit: a signed-out person on WGC's own page, or in WGC's own frame, still goes to login", async () => {
+    const normal = await middleware(request("/merchant/dashboard", { headers: { "sec-fetch-dest": "document", "sec-fetch-site": "none" } }));
+    expect(normal.headers.get("location")).toContain("/merchant/login");
+    const ownFrame = await middleware(request("/merchant/dashboard", { headers: { "sec-fetch-dest": "iframe", "sec-fetch-site": "same-origin" } }));
+    expect(ownFrame.headers.get("location")).toContain("/merchant/login");
+  });
 });

@@ -25,6 +25,8 @@ interface Member {
   isSelf: boolean;
   isPrimaryOwner: boolean;
   permissionOverrides: Record<string, boolean>;
+  /** A passcode for signing in from the partner's frame is set (only used when passcodeMode is on). */
+  hasPasscode?: boolean;
 }
 
 interface Metric {
@@ -50,14 +52,20 @@ export default function TeamSettingsPanel({
   initialMembers,
   canManageTeam,
   canManageOwners = false,
+  passcodeMode = false,
 }: {
   initialMembers: Member[];
   canManageTeam: boolean;
   canManageOwners?: boolean;
+  /** People sign in from the partner's frame with a passcode the team sets, instead of an emailed invitation. */
+  passcodeMode?: boolean;
 }) {
   const assignableRoles = canManageOwners ? OWNER_ASSIGNABLE_ROLES : INVITABLE_ROLES;
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePasscode, setInvitePasscode] = useState("");
+  const [passcodeEditId, setPasscodeEditId] = useState<string | null>(null);
+  const [passcodeValue, setPasscodeValue] = useState("");
   // "checkin" is a preset (viewer role + two event permissions), not a role string.
   const [inviteRole, setInviteRole] = useState<AssignableRole | "checkin">("fundraiser");
   const [inviting, setInviting] = useState(false);
@@ -87,17 +95,39 @@ export default function TeamSettingsPanel({
       const res = await fetch("/api/merchant/settings/team", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(inviteRole === "checkin" ? { email, preset: "checkin" } : { email, role: inviteRole }),
+        body: JSON.stringify({ ...(inviteRole === "checkin" ? { email, preset: "checkin" } : { email, role: inviteRole }), ...(passcodeMode ? { passcode: invitePasscode } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send invitation");
       setMembers((prev) => [...prev, { ...data.member, isSelf: false, isPrimaryOwner: false, permissionOverrides: data.member.permissionOverrides ?? {} }]);
       setInviteEmail("");
-      toast.success(`Invitation sent to ${email} as ${inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole]}`);
+      setInvitePasscode("");
+      toast.success(passcodeMode ? `Added ${email} as ${inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole]}` : `Invitation sent to ${email} as ${inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole]}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to send invitation");
     } finally {
       setInviting(false);
+    }
+  };
+
+  const savePasscode = async (member: Member) => {
+    setBusyId(member.id);
+    try {
+      const res = await fetch(`/api/merchant/settings/team/${member.id}/passcode`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode: passcodeValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not set the passcode");
+      setMembers((prev) => prev.map((m) => (m.id === member.id ? { ...m, hasPasscode: true } : m)));
+      setPasscodeEditId(null);
+      setPasscodeValue("");
+      toast.success(`Passcode set for ${member.email}`);
+    } catch (err: any) {
+      toast.error(err.message || "Could not set the passcode");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -209,6 +239,16 @@ export default function TeamSettingsPanel({
             onChange={(e) => setInviteEmail(e.target.value)}
             className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
           />
+          {passcodeMode && (
+            <input
+              type="password"
+              autoComplete="new-password"
+              placeholder="Passcode (6+ characters)"
+              value={invitePasscode}
+              onChange={(e) => setInvitePasscode(e.target.value)}
+              className="w-56 px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
+            />
+          )}
           <select
             value={inviteRole}
             onChange={(e) => setInviteRole(e.target.value as any)}
@@ -224,7 +264,7 @@ export default function TeamSettingsPanel({
             disabled={inviting}
             className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold whitespace-nowrap disabled:opacity-50"
           >
-            {inviting ? "Sending…" : "Invite Team Member"}
+            {inviting ? (passcodeMode ? "Adding…" : "Sending…") : passcodeMode ? "Add Team Member" : "Invite Team Member"}
           </button>
         </div>
       )}
@@ -295,6 +335,30 @@ export default function TeamSettingsPanel({
                                 Withdraw
                               </button>
                             </>
+                          )}
+                          {passcodeMode && !member.disabled && (member.role !== "owner" || member.isSelf) && (
+                            passcodeEditId === member.id ? (
+                              <span className="flex items-center gap-2">
+                                <input
+                                  type="password"
+                                  autoComplete="new-password"
+                                  placeholder="New passcode"
+                                  value={passcodeValue}
+                                  onChange={(e) => setPasscodeValue(e.target.value)}
+                                  className="w-36 px-2 py-1 rounded border border-slate-200 text-xs"
+                                />
+                                <button onClick={() => savePasscode(member)} disabled={busyId === member.id} className="text-xs font-semibold text-blue-600 hover:underline disabled:opacity-50">
+                                  Save
+                                </button>
+                                <button onClick={() => { setPasscodeEditId(null); setPasscodeValue(""); }} className="text-xs font-semibold text-slate-500 hover:underline">
+                                  Cancel
+                                </button>
+                              </span>
+                            ) : (
+                              <button onClick={() => { setPasscodeEditId(member.id); setPasscodeValue(""); }} className="text-xs font-semibold text-blue-600 hover:underline">
+                                {member.hasPasscode ? "Change passcode" : "Set passcode"}
+                              </button>
+                            )
                           )}
                           {isEditable && (
                             <button

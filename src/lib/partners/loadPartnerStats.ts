@@ -129,7 +129,7 @@ export async function loadPartnerStats(partnerId: string, from: Date, to: Date):
         _sum: { amountCents: true },
       }),
       prisma.bankReturn.aggregate({ where: { churchId: { in: ids }, createdAtFinix: { gte: from, lt: to } }, _sum: { amountCents: true } }),
-      loadMerchantMoneyFlow(period),
+      loadMerchantMoneyFlow(period, { churchIds: ids }),
       prisma.$queryRaw<{ church_id: string; charged: number | null }[]>(Prisma.sql`
         SELECT p."churchId" AS church_id,
                SUM(ROUND(COALESCE(p."donationAmountCents", 0)::numeric * COALESCE(p."percentageBps", 0) / 10000) + COALESCE(p."fixedFeeCents", 0))::float8 AS charged

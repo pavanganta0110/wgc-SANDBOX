@@ -141,3 +141,39 @@ describe("POST /api/merchant/settings/team — organizations that came through a
     expect(sendWgcEmail).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("POST /api/merchant/settings/team: organizations whose partner uses passcodes", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.AUTH_SESSION_SECRET = "test-secret-at-least-32-characters-long";
+  });
+
+  async function arrangePasscode() {
+    const a = await arrange();
+    vi.mocked(a.prisma.church.findUnique).mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE", name: "Grace Church", partnerId: "p1" } as never);
+    (a.prisma as unknown as { partner: { findUnique: ReturnType<typeof vi.fn> } }).partner = { findUnique: vi.fn().mockResolvedValue({ embedSignInMode: "PASSCODE", suppressMerchantEmails: false }) };
+    return a;
+  }
+
+  it("needs a passcode, stores only its hash, and sends no invitation email", async () => {
+    const { POST, prisma } = await arrangePasscode();
+    const { sendWgcEmail } = await import("@/lib/email");
+
+    expect((await POST(invite({ email: "sam@b.com", role: "fundraiser" }))).status).toBe(400);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+
+    const res = await POST(invite({ email: "sam@b.com", role: "fundraiser", passcode: "river-stone-42" }));
+    expect(res.status).toBe(201);
+    const data = vi.mocked(prisma.user.create).mock.calls[0][0].data as { framePasscodeHash?: string };
+    expect(data.framePasscodeHash).toMatch(/^[0-9a-f]+:[0-9a-f]+$/);
+    expect(JSON.stringify(data)).not.toContain("river-stone-42");
+    expect(sendWgcEmail).not.toHaveBeenCalled();
+  });
+
+  it("refuses a weak passcode", async () => {
+    const { POST, prisma } = await arrangePasscode();
+    expect((await POST(invite({ email: "sam@b.com", role: "viewer", passcode: "111111" }))).status).toBe(400);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+});
+

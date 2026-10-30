@@ -77,3 +77,34 @@ describe("loadMerchantMoneyFlow", () => {
     expect(flow.totals.awaitingDepositCents).toBe(a.awaitingDepositCents + b.awaitingDepositCents);
   });
 });
+
+describe("loadMerchantMoneyFlow: limited to some organizations", () => {
+  it("reads only those organizations in every query, and nothing at all for an empty list", async () => {
+    const { prisma } = await import("@/lib/prisma");
+    const { loadMerchantMoneyFlow } = await import("@/lib/admin/merchantMoneyFlow");
+    const { resolveAdminPeriod } = await import("@/lib/admin/platformMetrics");
+    const period = resolveAdminPeriod("ytd", new Date("2026-10-23T12:00:00Z"));
+
+    vi.mocked(prisma.$queryRaw).mockClear();
+    vi.mocked(prisma.finixRefundOrReversal.groupBy).mockClear();
+    vi.mocked(prisma.church.findMany).mockClear();
+    rawCall = 0;
+    await loadMerchantMoneyFlow(period, { churchIds: ["a"] });
+    const calls = vi.mocked(prisma.$queryRaw).mock.calls as unknown as unknown[][];
+    expect(calls).toHaveLength(5);
+    for (const call of calls) {
+      // A tagged query: the strings first, then the values. One value is the organization filter.
+      const filtered = call.slice(1).some((v) => typeof v === "object" && v !== null && "values" in v && (v as { values: unknown[] }).values.flat().includes("a"));
+      expect(filtered).toBe(true);
+    }
+    expect(vi.mocked(prisma.finixRefundOrReversal.groupBy).mock.calls[0][0]!.where!.churchId).toEqual({ in: ["a"] });
+    expect(vi.mocked(prisma.church.findMany).mock.calls[0][0]!.where).toEqual({ id: { in: ["a"] } });
+
+    vi.mocked(prisma.$queryRaw).mockClear();
+    const none = await loadMerchantMoneyFlow(period, { churchIds: [] });
+    expect(none.rows).toEqual([]);
+    expect(none.totals.collectedCents).toBe(0);
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
+

@@ -61,7 +61,32 @@ export function awaitingDeposit(
   return row.collectedCents - row.refundedCents - row.feesCents - (row.depositedCents - row.pulledBackCents);
 }
 
-export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<MerchantMoneyFlow> {
+const ZERO_TOTALS: MerchantMoneyFlow["totals"] = {
+  collectedCents: 0,
+  paymentCount: 0,
+  refundedCents: 0,
+  feesCents: 0,
+  payoutFeeCents: 0,
+  payoutFeeCount: 0,
+  donorCoveredFeesCents: 0,
+  donorCoveredCount: 0,
+  orgPaidCount: 0,
+  noFeeRecordCount: 0,
+  depositedCents: 0,
+  depositCount: 0,
+  pulledBackCents: 0,
+  awaitingDepositCents: 0,
+};
+
+/**
+ * `churchIds` limits every figure to those organizations (the partner pages read one partner's
+ * merchants this way, instead of the whole platform). Without it nothing changes: every
+ * organization, exactly as before.
+ */
+export async function loadMerchantMoneyFlow(period: AdminPeriod, opts: { churchIds?: string[] } = {}): Promise<MerchantMoneyFlow> {
+  const only = opts.churchIds;
+  if (only && only.length === 0) return { rows: [], totals: { ...ZERO_TOTALS } };
+  const scope = (column: Prisma.Sql) => (only ? Prisma.sql`AND ${column} IN (${Prisma.join(only)})` : Prisma.empty);
   const created = Prisma.sql`ft."createdAtFinix"`;
 
   const [charges, refunds, returns, fees, deposits, coverage, payoutFees, churches] = await Promise.all([
@@ -70,13 +95,14 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
       FROM "FinixTransfer" ft
       WHERE ${SUCCESSFUL_CHARGE_WHERE}
         AND EXISTS (SELECT 1 FROM "Church" c_attr WHERE c_attr."id" = ft."churchId")
+        ${scope(Prisma.sql`ft."churchId"`)}
         AND ${inRange(created, period.from, period.to)}
       GROUP BY ft."churchId"
     `,
     prisma.finixRefundOrReversal.groupBy({
       by: ["churchId"],
       where: {
-        churchId: { not: null },
+        churchId: only ? { in: only } : { not: null },
         state: { equals: "SUCCEEDED", mode: "insensitive" },
         createdAtFinix: period.from ? { gte: period.from, lt: period.to } : { lt: period.to },
       },
@@ -84,7 +110,7 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
     }),
     prisma.bankReturn.groupBy({
       by: ["churchId"],
-      where: { churchId: { not: null }, createdAtFinix: period.from ? { gte: period.from, lt: period.to } : { lt: period.to } },
+      where: { churchId: only ? { in: only } : { not: null }, createdAtFinix: period.from ? { gte: period.from, lt: period.to } : { lt: period.to } },
       _sum: { amountCents: true },
     }),
     prisma.$queryRaw<{ church_id: string; fees: number | null; donor_covered: number | null }[]>`
@@ -94,6 +120,7 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
       FROM "FinixFee" f
       WHERE (f."feeSubtype" = 'PLATFORM_FEE' OR f."feeCategory" = 'PLATFORM_FEE')
         AND f."churchId" IS NOT NULL
+        ${scope(Prisma.sql`f."churchId"`)}
         AND ${inRange(Prisma.sql`f."createdAtFinix"`, period.from, period.to)}
       GROUP BY f."churchId"
     `,
@@ -108,6 +135,7 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
       FROM "FinixFundingTransferAttempt" d
       WHERE UPPER(d."state") = 'SUCCEEDED'
         AND d."churchId" IS NOT NULL
+        ${scope(Prisma.sql`d."churchId"`)}
         AND ${inRange(Prisma.sql`d."createdAtFinix"`, period.from, period.to)}
       GROUP BY d."churchId"
     `,
@@ -120,6 +148,7 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
       FROM "Payment" p
       WHERE UPPER(p."status") = 'SUCCEEDED'
         AND p."churchId" IS NOT NULL
+        ${scope(Prisma.sql`p."churchId"`)}
         AND ${inRange(Prisma.sql`p."createdAt"`, period.from, period.to)}
       GROUP BY p."churchId"
     `,
@@ -132,10 +161,11 @@ export async function loadMerchantMoneyFlow(period: AdminPeriod): Promise<Mercha
       FROM "FinixFee" f
       WHERE f."feeType" ILIKE 'SETTLEMENT_FUNDING_TRANSFER%'
         AND f."churchId" IS NOT NULL
+        ${scope(Prisma.sql`f."churchId"`)}
         AND ${inRange(Prisma.sql`f."createdAtFinix"`, period.from, period.to)}
       GROUP BY f."churchId"
     `,
-    prisma.church.findMany({ select: { id: true, name: true } }),
+    prisma.church.findMany({ where: only ? { id: { in: only } } : undefined, select: { id: true, name: true } }),
   ]);
 
   const names = new Map(churches.map((c) => [c.id, c.name]));

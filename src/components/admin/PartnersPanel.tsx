@@ -17,6 +17,7 @@ interface PartnerRow {
   status: string;
   contactEmail: string | null;
   suppressMerchantEmails: boolean;
+  embedSignInMode?: string;
   onboardingCode: string;
   pricePerMerchantCents: number | null;
   cardBrand: string | null;
@@ -24,6 +25,12 @@ interface PartnerRow {
   users: PartnerUserRow[];
   churches: { id: string; name: string; partnerReference: string | null }[];
   invoices: { id: string; period: string; merchantCount: number; amountCents: number; status: string; failureReason: string | null }[];
+  health?: {
+    apiKey: { activeKeys: number; requests: number; errors: number; lastUsedAt: string | null; lastErrorAt: string | null };
+    webhook: { host: string | null; status: string; consecutiveFailures: number; disabledReason: string | null; lastDeliveryAt: string | null; lastSuccessAt: string | null; succeeded24h: number; failed24h: number } | null;
+    linkRequests24h: number;
+    recentDeliveries: { id: string; eventType: string | null; status: string; attempts: number; statusCode: number | null; error: string | null; at: string }[];
+  };
 }
 interface ChurchHit {
   id: string;
@@ -37,6 +44,8 @@ interface ApiData {
   partners?: PartnerRow[];
   churches?: ChurchHit[];
 }
+
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : "never");
 
 async function call(url: string, method: string, body?: unknown): Promise<{ ok: boolean; data: ApiData }> {
   const res = await fetch(url, {
@@ -193,6 +202,70 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
         </div>
       </div>
 
+      {partner.health && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3 text-sm">
+          <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Connection health</h4>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <div className="text-xs text-slate-500">API key</div>
+              <div className="font-semibold text-slate-900">
+                {partner.health.apiKey.activeKeys === 0 ? "No active key" : `${partner.health.apiKey.activeKeys} active`}
+              </div>
+              <div className="text-xs text-slate-500">
+                {partner.health.apiKey.requests.toLocaleString()} requests · {partner.health.apiKey.errors.toLocaleString()} errors · last used {when(partner.health.apiKey.lastUsedAt)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">Webhook</div>
+              {partner.health.webhook ? (
+                <>
+                  <div className={`font-semibold ${partner.health.webhook.status === "ACTIVE" ? "text-emerald-700" : "text-rose-700"}`}>
+                    {partner.health.webhook.status === "ACTIVE" ? "Working" : "Turned off"}
+                    {partner.health.webhook.consecutiveFailures > 0 ? ` · ${partner.health.webhook.consecutiveFailures} failures in a row` : ""}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {partner.health.webhook.host} · last success {when(partner.health.webhook.lastSuccessAt)} · 24h: {partner.health.webhook.succeeded24h} ok, {partner.health.webhook.failed24h} failed
+                  </div>
+                  {partner.health.webhook.disabledReason && <div className="text-xs text-rose-700">{partner.health.webhook.disabledReason}</div>}
+                </>
+              ) : (
+                <div className="font-semibold text-slate-900">Not set up</div>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-slate-500">CRM link requests (24 h)</div>
+              <div className="font-semibold text-slate-900">{partner.health.linkRequests24h.toLocaleString()}</div>
+            </div>
+          </div>
+          {partner.health.recentDeliveries.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="text-slate-500 uppercase">
+                  <tr>
+                    <th className="py-1 pr-4">Event</th>
+                    <th className="py-1 pr-4">Result</th>
+                    <th className="py-1 pr-4">Attempts</th>
+                    <th className="py-1 pr-4">Reply</th>
+                    <th className="py-1">When</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {partner.health.recentDeliveries.map((d) => (
+                    <tr key={d.id}>
+                      <td className="py-1 pr-4 font-mono">{d.eventType ?? "-"}</td>
+                      <td className="py-1 pr-4">{d.status}</td>
+                      <td className="py-1 pr-4">{d.attempts}</td>
+                      <td className="py-1 pr-4">{d.statusCode ?? d.error ?? "-"}</td>
+                      <td className="py-1">{when(d.at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       <div>
         <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Get Started link (give this to the partner)</h4>
         <code className="block break-all rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs">
@@ -281,6 +354,26 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
           screens. WGC admins are still emailed.
         </span>
       </label>
+
+      <div>
+        <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 mb-1" htmlFor={`signin-${partner.id}`}>
+          How people sign in inside the partner&apos;s frame
+        </label>
+        <select
+          id={`signin-${partner.id}`}
+          className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          value={partner.embedSignInMode ?? "CRM_IDENTITY"}
+          onChange={async (e) => {
+            const { ok, data } = await call(`/api/admin/partners/${partner.id}`, "PATCH", { embedSignInMode: e.target.value });
+            report(ok, data, "Saved.");
+            await onChanged();
+          }}
+        >
+          <option value="CRM_IDENTITY">The partner&apos;s page says who is opening it (a login per person)</option>
+          <option value="PASSCODE">Each person types their email and their own passcode (one shared partner login)</option>
+        </select>
+        <p className="text-xs text-slate-500 mt-1">With passcodes, the person filling in the application chooses the owner&apos;s passcode, and the owner sets the team&apos;s under Team.</p>
+      </div>
 
       <div>
         <h4 className="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">Partner staff</h4>

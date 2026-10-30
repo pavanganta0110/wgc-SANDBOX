@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { requirePartnerAdmin } from "@/lib/partners/requirePartnerAdmin";
+import { isEmbedSignInMode, type EmbedSignInMode } from "@/lib/partners/embedEntry";
 
 const MAX_PRICE_CENTS = 1_000_000; // $10,000 per merchant per month: a typo guard, not a business rule
 
@@ -16,11 +17,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ partne
   const { partnerId } = await params;
 
   const body = await req.json().catch(() => ({}));
-  const data: { suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null } = {};
+  const data: { suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null; embedSignInMode?: EmbedSignInMode } = {};
 
   if ("suppressMerchantEmails" in body) {
     if (typeof body.suppressMerchantEmails !== "boolean") return NextResponse.json({ error: "suppressMerchantEmails must be true or false." }, { status: 400 });
     data.suppressMerchantEmails = body.suppressMerchantEmails;
+  }
+  if ("embedSignInMode" in body) {
+    if (!isEmbedSignInMode(body.embedSignInMode)) return NextResponse.json({ error: "embedSignInMode must be CRM_IDENTITY or PASSCODE." }, { status: 400 });
+    data.embedSignInMode = body.embedSignInMode;
   }
   if ("pricePerMerchantCents" in body) {
     const price = body.pricePerMerchantCents;

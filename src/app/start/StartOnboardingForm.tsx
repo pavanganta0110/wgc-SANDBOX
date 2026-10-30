@@ -55,12 +55,16 @@ export interface StartPartnerContext {
   prefill?: StartPrefill;
   /** Where to go after submitting, instead of the success page (the partner's own status page). */
   afterSubmitPath?: string | null;
+  /** The partner's people sign in with a passcode: the person filling this in chooses theirs (the owner's). */
+  requirePasscode?: boolean;
 }
 
-export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, prefill = {}, afterSubmitPath = null }: StartPartnerContext = {}) {
+export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, prefill = {}, afterSubmitPath = null, requirePasscode = false }: StartPartnerContext = {}) {
   const router = useRouter();
   const successPath = (applicationId: string) => afterSubmitPath ?? `/onboarding/success?applicationId=${applicationId}${embed ? "&embed=1" : ""}`;
   const [step, setStep] = useState(1);
+  const [framePasscode, setFramePasscode] = useState("");
+  const [framePasscodeConfirm, setFramePasscodeConfirm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasBeneficialOwners, setHasBeneficialOwners] = useState<boolean | null>(null);
   const [attemptedNext, setAttemptedNext] = useState(false);
@@ -226,6 +230,16 @@ export default function StartOnboardingPage({ embed = false, partnerCode = null,
     e.preventDefault();
     
     if (step === 1) {
+      if (requirePasscode) {
+        if (framePasscode.length < 6) {
+          toast.error("Choose a passcode of at least 6 characters.");
+          return;
+        }
+        if (framePasscode !== framePasscodeConfirm) {
+          toast.error("The two passcodes do not match.");
+          return;
+        }
+      }
       if (!RECAPTCHA_ENABLED) {
         nextStep();
         return;
@@ -305,6 +319,7 @@ export default function StartOnboardingPage({ embed = false, partnerCode = null,
         })) : [],
         legal,
         ...(partnerCode ? { partnerCode, partnerReference } : {}),
+        ...(requirePasscode ? { framePasscode } : {}),
       };
 
       const res = await fetch("/api/onboarding", {
@@ -438,6 +453,15 @@ export default function StartOnboardingPage({ embed = false, partnerCode = null,
                   <div><label className="block text-sm font-semibold mb-2">Business Tax ID (EIN)</label><input required value={formData.businessTaxId} onChange={(e) => updateField("businessTaxId", e.target.value.replace(/\D/g, ""))} pattern="\d{9}" maxLength={9} title="Tax ID must be exactly 9 digits" className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
                   <div><label className="block text-sm font-semibold mb-2">Primary Contact Name</label><input required value={formData.contactName} onChange={(e) => updateField("contactName", e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
                   <div><label className="block text-sm font-semibold mb-2">Primary Contact Email</label><input required type="email" value={formData.contactEmail} onChange={(e) => updateField("contactEmail", e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
+                  {requirePasscode && (
+                    <>
+                      <div className="md:col-span-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+                        Choose a passcode. You will use your email and this passcode to open WGC Payments from here, so keep it private. You can set passcodes for your team later.
+                      </div>
+                      <div><label className="block text-sm font-semibold mb-2">Passcode</label><input required type="password" autoComplete="new-password" minLength={6} value={framePasscode} onChange={(e) => setFramePasscode(e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
+                      <div><label className="block text-sm font-semibold mb-2">Confirm passcode</label><input required type="password" autoComplete="new-password" minLength={6} value={framePasscodeConfirm} onChange={(e) => setFramePasscodeConfirm(e.target.value)} className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
+                    </>
+                  )}
                   <div><label className="block text-sm font-semibold mb-2">Business Phone</label><input required type="tel" value={formData.businessPhone} onChange={(e) => updateField("businessPhone", e.target.value.replace(/\D/g, ""))} pattern="\d{10}" maxLength={10} title="Phone number must be exactly 10 digits" className="w-full px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-[#eab308]" /></div>
                   <div>
                     <label className="block text-sm font-semibold mb-2">Website</label>

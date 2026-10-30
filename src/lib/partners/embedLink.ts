@@ -13,6 +13,8 @@ import crypto from "crypto";
  */
 
 export const PARTNER_EMBED_LINK_TTL_SECONDS = 15 * 60;
+/** How long the dashboard session lasts once a link has opened it. The session token itself ends then, not only the cookie. */
+export const PARTNER_EMBED_SESSION_SECONDS = 4 * 60 * 60;
 
 const SIGNING_CONTEXT = "wgc-partner-embed-link-v1";
 
@@ -24,6 +26,8 @@ export interface PartnerEmbedLinkPayload {
   email: string | null;
   /** Fills the empty boxes of the application form. The person can change them. */
   prefill: { organizationName?: string; contactName?: string; contactEmail?: string; contactPhone?: string; website?: string };
+  /** A random id for this one link. Its first use is recorded, so the link opens a dashboard once. */
+  jti: string;
   /** Unix seconds. */
   exp: number;
 }
@@ -41,9 +45,10 @@ function sign(payloadB64: string): Buffer {
   return crypto.createHmac("sha256", getSecret()).update(`${SIGNING_CONTEXT}.${payloadB64}`).digest();
 }
 
-export function createPartnerEmbedLinkToken(payload: Omit<PartnerEmbedLinkPayload, "exp">, nowMs: number = Date.now()): { token: string; expiresAt: Date } {
+export function createPartnerEmbedLinkToken(payload: Omit<PartnerEmbedLinkPayload, "exp" | "jti">, nowMs: number = Date.now()): { token: string; expiresAt: Date } {
   const exp = Math.floor(nowMs / 1000) + PARTNER_EMBED_LINK_TTL_SECONDS;
-  const payloadB64 = Buffer.from(JSON.stringify({ ...payload, exp })).toString("base64url");
+  const jti = crypto.randomBytes(16).toString("hex");
+  const payloadB64 = Buffer.from(JSON.stringify({ ...payload, jti, exp })).toString("base64url");
   return { token: `${payloadB64}.${sign(payloadB64).toString("base64url")}`, expiresAt: new Date(exp * 1000) };
 }
 
@@ -59,12 +64,14 @@ export function verifyPartnerEmbedLinkToken(token: unknown, nowMs: number = Date
   try {
     const p = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8")) as Partial<PartnerEmbedLinkPayload>;
     if (typeof p.partnerId !== "string" || typeof p.reference !== "string" || !p.reference || typeof p.exp !== "number") return null;
+    if (typeof p.jti !== "string" || !/^[0-9a-f]{32}$/.test(p.jti)) return null;
     if (p.exp < Math.floor(nowMs / 1000)) return null;
     return {
       partnerId: p.partnerId,
       reference: p.reference,
       email: typeof p.email === "string" && p.email ? p.email : null,
       prefill: p.prefill && typeof p.prefill === "object" ? p.prefill : {},
+      jti: p.jti,
       exp: p.exp,
     };
   } catch {

@@ -28,6 +28,8 @@ options: {
   /** The owner account is still created, but WGC does not email its dashboard link
    * (a partner that signs the organization in from its own screens asks for this). */
   skipAccessEmail?: boolean;
+  /** The owner's passcode for a partner's frame (already hashed), chosen on the application. */
+  framePasscodeHash?: string | null;
 } = {}) {
   const orgName = app.legalBusinessName || app.organizationName;
   const slugBase = orgName
@@ -169,6 +171,7 @@ options: {
             setPasswordTokenExpiresAt: expiresAt,
             ...(existingUser.name ? {} : { name: app.contactName }),
             ...(grantsOwner ? { role: "owner" } : {}),
+            ...(grantsOwner && options.framePasscodeHash ? { framePasscodeHash: options.framePasscodeHash, framePasscodeSetAt: new Date() } : {}),
           },
         })
       : await tx.user.create({
@@ -179,6 +182,7 @@ options: {
             churchId: church.id,
             setPasswordTokenHash: tokenHash,
             setPasswordTokenExpiresAt: expiresAt,
+            ...(grantsOwner && options.framePasscodeHash ? { framePasscodeHash: options.framePasscodeHash, framePasscodeSetAt: new Date() } : {}),
           },
         });
 

@@ -118,11 +118,11 @@ export async function consumeEmbedLoginToken(rawToken: string): Promise<Consumed
  * Partitioned, so the browser only sends it when WGC is framed by the same
  * top-level site that started it, never from any other site.
  */
-export function buildEmbedSessionCookie(cookieName: string, sessionToken: string): string {
+export function buildEmbedSessionCookie(cookieName: string, sessionToken: string, maxAgeSeconds: number = EMBED_SESSION_MAX_AGE_SECONDS): string {
   return [
     `${cookieName}=${sessionToken}`,
     "Path=/",
-    `Max-Age=${EMBED_SESSION_MAX_AGE_SECONDS}`,
+    `Max-Age=${maxAgeSeconds}`,
     "HttpOnly",
     "Secure",
     "SameSite=None",

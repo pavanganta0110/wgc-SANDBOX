@@ -115,6 +115,9 @@ model OnboardingApplication {
   // it never changes how Finix reviews the application. See model Partner.
   partnerId                         String?
   partnerReference                  String?
+  /// The owner's frame passcode, chosen on the application when the partner signs people in with passcodes.
+  /// Hashed; copied to the owner's account when it is created.
+  framePasscodeHash String?
   associatedOwners                  AssociatedOwner[]
   documents                         MerchantDocument[]
   internalDocuments                 OnboardingInternalDocument[]
@@ -530,6 +533,9 @@ model Partner {
   /// dashboard-access messages for applications of this partner: the partner
   /// shows the status inside its own screens. Off by default.
   suppressMerchantEmails Boolean @default(false)
+  /// How people are identified when WGC is shown in the partner's frame: CRM_IDENTITY (the partner's page
+  /// says who is opening it) or PASSCODE (each person types their email and their own passcode).
+  embedSignInMode String @default("CRM_IDENTITY")
   /// Which sidebar items the partner's organizations see inside the partner's own frame:
   /// { allowed: string[], known: string[] } (item links). Null = everything shows. Items WGC adds
   /// later are not in `known`, so they stay hidden until the partner ticks them (src/lib/partners/embeddedMenu.ts).
@@ -2824,6 +2830,12 @@ model User {
   // merchant-side users, who don't have a separate display name field.
   name                      String?
   passwordHash              String?
+  /// A passcode for signing in from inside a partner's frame (set by the organization, hashed like a
+  /// password). It works only there and never for a normal WGC sign-in. Five wrong tries lock it for a while.
+  framePasscodeHash           String?
+  framePasscodeSetAt          DateTime?
+  framePasscodeFailedAttempts Int       @default(0)
+  framePasscodeLockedUntil    DateTime?
   // Team-access Checkpoint 1: organization-side roles are "owner" |
   // "admin" | "fundraiser" | "viewer" (exactly one "owner" per church,
   // enforced at the application layer via Church.primaryOwnerUserId, not a
@@ -6956,4 +6968,31 @@ model EmbedLoginToken {
 
   @@index([churchId, userId])
   @@index([expiresAt])
+}
+
+/// One row per CRM-frame link that has been used to open a dashboard. A link carries a random id
+/// (stored here only as a hash); the first use writes the row and a second use fails on the unique
+/// key, so a link opens a dashboard once. Rows are kept until a day after the link would have expired.
+model PartnerEmbedEntry {
+  id        String   @id @default(cuid())
+  jtiHash   String   @unique
+  partnerId String
+  usedAt    DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+/// One row per request for a CRM-frame link, so a partner's rate limit holds across servers and
+/// there is a record of who asked for what. Holds the partner's own reference for the organization
+/// and never the person's email. Rows older than 30 days are cleared.
+model PartnerEmbedLinkRequest {
+  id           String   @id @default(cuid())
+  partnerId    String
+  partnerKeyId String
+  reference    String
+  createdAt    DateTime @default(now())
+
+  @@index([partnerKeyId, createdAt])
+  @@index([partnerId, createdAt])
 }

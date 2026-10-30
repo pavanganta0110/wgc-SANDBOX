@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { buildEmbedSessionCookie, consumeEmbedLoginToken, EMBED_ALLOWED_ROLES } from "@/lib/auth/embedLogin";
+import { buildEmbedSessionCookie, consumeEmbedLoginToken, EMBED_ALLOWED_ROLES, EMBED_SESSION_MAX_AGE_SECONDS } from "@/lib/auth/embedLogin";
 import { createSessionToken } from "@/lib/auth/session";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/sessionConstants";
 import { resolveSafeMerchantRedirect } from "@/lib/safeReturnPath";
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     role: user.role as "fundraiser" | "viewer",
     churchId: user.churchId,
     authVersion: user.authVersion,
-  });
+  }, EMBED_SESSION_MAX_AGE_SECONDS);
 
   const destination = resolveSafeMerchantRedirect(consumed.redirectTo, "/merchant/dashboard");
   const res = NextResponse.redirect(new URL(destination, req.url), 303);

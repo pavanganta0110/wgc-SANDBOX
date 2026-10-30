@@ -72,11 +72,11 @@ function base64url(input: Buffer | string): string {
  * library — matches this codebase's existing preference for no new heavy
  * dependencies. Format: base64url(payload).base64url(signature)
  */
-export function createSessionToken(payload: Omit<SessionPayload, "exp">): string {
+export function createSessionToken(payload: Omit<SessionPayload, "exp">, ttlSeconds: number = SESSION_MAX_AGE_SECONDS): string {
   const fullPayload: SessionPayload = {
     ...payload,
     authTime: payload.authTime ?? Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS,
+    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
   };
   const payloadB64 = base64url(JSON.stringify(fullPayload));
   const signature = crypto.createHmac("sha256", getSecret()).update(payloadB64).digest();

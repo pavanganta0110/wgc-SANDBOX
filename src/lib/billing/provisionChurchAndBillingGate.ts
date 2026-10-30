@@ -36,6 +36,10 @@ export async function provisionChurchAndBillingGate(app: {
   partnerId?: string | null;
   partnerReference?: string | null;
 }) {
+  // A partner whose people sign in with passcodes: the owner's was chosen on the application.
+  const framePasscodeHash = app.partnerId
+    ? ((await prisma.onboardingApplication.findUnique({ where: { id: app.id }, select: { framePasscodeHash: true } }))?.framePasscodeHash ?? null)
+    : null;
   const provisioned = await provisionChurchAccount(
     {
       id: app.id,
@@ -47,7 +51,7 @@ export async function provisionChurchAndBillingGate(app: {
       finixIdentityId: app.finixIdentityId,
       finixApplicationId: app.finixApplicationId,
     },
-    { skipAccessEmail: await partnerSuppressesMerchantEmails(app.partnerId) }
+    { skipAccessEmail: await partnerSuppressesMerchantEmails(app.partnerId), framePasscodeHash }
   );
 
   // An organization that came through a partner is billed through the partner, once, on

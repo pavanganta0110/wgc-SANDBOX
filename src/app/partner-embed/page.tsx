@@ -4,6 +4,8 @@ import { CheckCircle, Clock, FileWarning, XCircle } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import StartOnboardingForm from "@/app/start/StartOnboardingForm";
 import AutoRefresh from "./AutoRefresh";
+import EmbedPasscodeSignIn from "./EmbedPasscodeSignIn";
+import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
 import { verifyPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
 import { loadPartnerEmbedState } from "@/lib/partners/loadEmbedState";
@@ -51,6 +53,7 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
   }
 
   const state = await loadPartnerEmbedState(payload.partnerId, payload.reference);
+  const passcodeMode = (await getEmbedSignInMode(payload.partnerId)) === "PASSCODE";
   const here = `/partner-embed?link=${encodeURIComponent(link)}`;
 
   switch (state.kind) {
@@ -62,6 +65,7 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
           partnerReference={payload.reference}
           prefill={payload.prefill}
           afterSubmitPath={here}
+          requirePasscode={passcodeMode}
         />
       );
 
@@ -118,8 +122,17 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
       );
 
     case "ready":
+      // A partner whose product has one shared login: each person signs in with their own email and passcode.
+      if (passcodeMode) return <EmbedPasscodeSignIn link={link} />;
       // Opening the dashboard starts the session, which a page can't do, so a route does and comes back here if it can't.
-      if (params.problem !== "1") redirect(`/partner-embed/enter?link=${encodeURIComponent(link)}`);
+      if (!params.problem) redirect(`/partner-embed/enter?link=${encodeURIComponent(link)}`);
+      if (params.problem === "used") {
+        return (
+          <Panel icon={<Clock className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="This link was already used">
+            <p>For your security each link opens WGC Payments once. Close this and open WGC Payments again from where you came.</p>
+          </Panel>
+        );
+      }
       return (
         <Panel icon={<XCircle className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="You don't have access yet">
           <p>Your organization is set up, but your email has not been added. Ask your organization's administrator to add you under Team, using the same email you use here. Then open this page again.</p>

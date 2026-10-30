@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const prismaMock = vi.hoisted(() => ({ church: { update: vi.fn() } }));
+const prismaMock = vi.hoisted(() => ({ church: { update: vi.fn() }, onboardingApplication: { findUnique: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 const provisionChurchAccount = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/auth/provisionChurchAccount", () => ({ provisionChurchAccount }));
@@ -34,6 +34,7 @@ beforeEach(() => {
   provisionChurchAccount.mockResolvedValue({ church: { id: "c1" }, user: { id: "u1" }, emailSent: false });
   partnerSuppressesMerchantEmails.mockResolvedValue(false);
   prismaMock.church.update.mockResolvedValue({});
+  prismaMock.onboardingApplication.findUnique.mockResolvedValue({ framePasscodeHash: null });
 });
 
 describe("provisionChurchAndBillingGate", () => {
@@ -54,10 +55,21 @@ describe("provisionChurchAndBillingGate", () => {
 
   it("holds back the dashboard-access email only when the partner asked for it", async () => {
     await provisionChurchAndBillingGate({ ...app, partnerId: "p1", partnerReference: null });
-    expect(provisionChurchAccount.mock.calls[0][1]).toEqual({ skipAccessEmail: false });
+    expect(provisionChurchAccount.mock.calls[0][1]).toMatchObject({ skipAccessEmail: false });
 
     partnerSuppressesMerchantEmails.mockResolvedValue(true);
     await provisionChurchAndBillingGate({ ...app, partnerId: "p1", partnerReference: null });
-    expect(provisionChurchAccount.mock.calls[1][1]).toEqual({ skipAccessEmail: true });
+    expect(provisionChurchAccount.mock.calls[1][1]).toMatchObject({ skipAccessEmail: true });
+  });
+
+  it("passes the owner's frame passcode, chosen on the application, to the owner's account (partner applications only)", async () => {
+    prismaMock.onboardingApplication.findUnique.mockResolvedValue({ framePasscodeHash: "salt:hash" });
+    await provisionChurchAndBillingGate({ ...app, partnerId: "p1", partnerReference: "loc_1" });
+    expect(provisionChurchAccount.mock.calls[0][1]).toMatchObject({ framePasscodeHash: "salt:hash" });
+
+    provisionChurchAccount.mockClear();
+    await provisionChurchAndBillingGate({ ...app });
+    expect(provisionChurchAccount.mock.calls[0][1].framePasscodeHash).toBeNull();
   });
 });
+
