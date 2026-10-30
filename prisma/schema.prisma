@@ -321,6 +321,9 @@ model Church {
   // "who is this gift for?" picker credits gifts to, e.g. "Fall 2026".
   studentGivingEnabled          Boolean   @default(false)
   studentCurrentTerm            String?
+  // The giving link used as "the link for all students" (the Students page
+  // button). Null = fall back to the oldest active student-picker link.
+  studentGivingLinkId           String?
   primaryContactEmail           String
   onboardingApplicationId       String?
   finixMerchantId               String?

@@ -23,7 +23,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
 
   const [link, church, pricing, teamMembers] = await Promise.all([
     prisma.givingLink.findFirst({ where: { id, churchId, ...(auth.role === "fundraiser" ? { ownerUserId: auth.userId } : {}) } }),
-    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, logoUrl: true, studentGivingEnabled: true } }),
+    prisma.church.findUnique({ where: { id: churchId }, select: { name: true, logoUrl: true, studentGivingEnabled: true, studentGivingLinkId: true } }),
     prisma.churchPricing.findUnique({ where: { churchId } }),
     canAssignOwner
       ? prisma.user.findMany({
@@ -60,6 +60,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
     fundName: link.fundName || "",
     fundSelectionEnabled: link.fundSelectionEnabled,
     studentSelectionEnabled: link.studentSelectionEnabled,
+    useForAllStudents: church?.studentGivingLinkId === link.id,
     studentDefaultGivenFor: (link.studentDefaultGivenFor === "SELF" || link.studentDefaultGivenFor === "GENERAL" ? link.studentDefaultGivenFor : "SPONSOR") as "SPONSOR" | "SELF" | "GENERAL",
     allowedPaymentMethods: parseAllowedPaymentMethods(link.allowedPaymentMethodsJson),
     donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),

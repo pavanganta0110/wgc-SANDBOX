@@ -89,6 +89,7 @@ interface BuilderState {
   fundSelectionEnabled: boolean;
   studentSelectionEnabled: boolean;
   studentDefaultGivenFor: "SPONSOR" | "SELF" | "GENERAL";
+  useForAllStudents: boolean;
   allowedPaymentMethods: PaymentMethodKey[];
   donorFieldSettings: DonorFieldSettings;
   collectMailingAddress: boolean;
@@ -133,6 +134,7 @@ function defaultState(): BuilderState {
     fundSelectionEnabled: false,
     studentSelectionEnabled: false,
     studentDefaultGivenFor: "SPONSOR",
+    useForAllStudents: false,
     allowedPaymentMethods: ["CARD", "BANK", "APPLE_PAY", "GOOGLE_PAY"],
     donorFieldSettings: DEFAULT_DONOR_FIELD_SETTINGS,
     collectMailingAddress: true,
@@ -608,6 +610,7 @@ export default function GivingLinkBuilderForm({
       fundSelectionEnabled: state.fundSelectionEnabled,
       studentSelectionEnabled: studentGivingEnabled ? state.studentSelectionEnabled : false,
       studentDefaultGivenFor: state.studentDefaultGivenFor,
+      useForAllStudents: studentGivingEnabled && state.studentSelectionEnabled ? state.useForAllStudents : false,
       fundAssignments: state.fundSelectionEnabled
         ? funds.map((f) => ({ fundId: f.fundId, isDefault: f.isDefault, displayOrder: f.displayOrder }))
         : [],
@@ -833,6 +836,21 @@ export default function GivingLinkBuilderForm({
                 </p>
                 {state.fundSelectionEnabled && (
                   <p className="text-xs text-amber-700 mt-1">Turn off Gift Designations below to use Student Giving on this link.</p>
+                )}
+                {state.studentSelectionEnabled && (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={state.useForAllStudents}
+                      onChange={(e) => update("useForAllStudents", e.target.checked)}
+                      className="mt-0.5 w-4 h-4"
+                    />
+                    <span>
+                      <span className="font-semibold text-slate-700">Use this as the giving link for all students</span>
+                      <br />
+                      It becomes the link shown on the Students page, replacing the current one.
+                    </span>
+                  </label>
                 )}
                 {state.studentSelectionEnabled && (
                   <label className="block mt-2 text-xs font-semibold text-slate-500">

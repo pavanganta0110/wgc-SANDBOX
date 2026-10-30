@@ -1,10 +1,57 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { guardStudentApi } from "@/lib/students/access";
 import { generatePublicSlug } from "@/lib/givingLinks/validation";
 import { DEFAULT_DONOR_FIELD_SETTINGS } from "@/lib/givingLinks/types";
 import { resolveGivingLinkOwnerForCreate } from "@/lib/auth/givingLinkOwnership";
 import { isAuthError } from "@/lib/auth/errors";
+import { COLLEGE_LINK_ELIGIBLE, findCollegeLink } from "@/lib/students/collegeLink";
+
+/**
+ * Lists the giving links that could be the all-students link, flagging the
+ * current one.
+ */
+export async function GET() {
+  const guard = await guardStudentApi({ manage: true });
+  if (!guard.ok) return guard.response;
+  const { auth } = guard;
+  const [current, links] = await Promise.all([
+    findCollegeLink(auth.churchId),
+    prisma.givingLink.findMany({
+      where: { churchId: auth.churchId, ...COLLEGE_LINK_ELIGIBLE },
+      select: { id: true, internalName: true, publicTitle: true, publicSlug: true, studentSelectionEnabled: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  return NextResponse.json({
+    currentId: current?.id ?? null,
+    links: links.map((l) => ({ ...l, name: l.internalName || l.publicTitle })),
+  });
+}
+
+/**
+ * Attaches a different giving link as the all-students link. Turns on the
+ * "who is this gift for?" picker on it if it was off.
+ */
+export async function PUT(req: Request) {
+  const guard = await guardStudentApi({ manage: true });
+  if (!guard.ok) return guard.response;
+  const { auth } = guard;
+  const body = await req.json().catch(() => ({}));
+  const linkId = typeof body?.linkId === "string" ? body.linkId : "";
+  const link = linkId
+    ? await prisma.givingLink.findFirst({ where: { id: linkId, churchId: auth.churchId, ...COLLEGE_LINK_ELIGIBLE } })
+    : null;
+  if (!link) return NextResponse.json({ error: "Choose an active giving link that is not tied to a single student or to gift designations." }, { status: 400 });
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.church.update({ where: { id: auth.churchId }, data: { studentGivingLinkId: link.id } });
+    return link.studentSelectionEnabled ? link : tx.givingLink.update({ where: { id: link.id }, data: { studentSelectionEnabled: true } });
+  });
+  revalidatePath(`/g/${updated.publicSlug}`);
+  return NextResponse.json({ link: updated });
+}
 
 /**
  * The organization's one giving link where donors search for any student
@@ -17,10 +64,7 @@ export async function POST() {
   if (!guard.ok) return guard.response;
   const { auth } = guard;
 
-  const existing = await prisma.givingLink.findFirst({
-    where: { churchId: auth.churchId, studentSelectionEnabled: true, studentId: null, status: "ACTIVE" },
-    orderBy: { createdAt: "asc" },
-  });
+  const existing = await findCollegeLink(auth.churchId);
   if (existing) return NextResponse.json({ link: existing, created: false });
 
   const church = await prisma.church.findUnique({

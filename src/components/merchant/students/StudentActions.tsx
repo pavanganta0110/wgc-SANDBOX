@@ -12,7 +12,7 @@ const primaryBtn =
 const ghostBtn =
   "inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60";
 
-async function call<T = unknown>(url: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+async function call<T = unknown>(url: string, method: "POST" | "PATCH" | "PUT", body: unknown): Promise<T> {
   const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Something went wrong.");
@@ -435,6 +435,7 @@ export function AssignGiftControl({
 export function CollegeGivingLinkButton() {
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<{ url: string; id: string } | null>(null);
+  const [picking, setPicking] = useState(false);
   async function load() {
     setBusy(true);
     try {
@@ -467,6 +468,90 @@ export function CollegeGivingLinkButton() {
       </button>
       <a href={link.url} target="_blank" rel="noopener noreferrer" className={ghostBtn}>Open</a>
       <a href={`/merchant/giving-links/${link.id}/edit`} className={ghostBtn}>Edit &amp; preview</a>
+      <button className={ghostBtn} onClick={() => setPicking(true)}>Attach a different page</button>
+      {picking && (
+        <AttachGivingPageModal
+          currentId={link.id}
+          onClose={() => setPicking(false)}
+          onAttached={(l) => {
+            setLink({ url: `${window.location.origin}/g/${l.publicSlug}`, id: l.id });
+            setPicking(false);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+type AttachableLink = { id: string; name: string; publicSlug: string; studentSelectionEnabled: boolean };
+
+/** Lets the organization choose which existing giving page is the all-students link. */
+function AttachGivingPageModal({
+  currentId,
+  onClose,
+  onAttached,
+}: {
+  currentId: string;
+  onClose: () => void;
+  onAttached: (link: { id: string; publicSlug: string }) => void;
+}) {
+  const [links, setLinks] = useState<AttachableLink[] | null>(null);
+  const [selected, setSelected] = useState(currentId);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/merchant/students/college-link")
+      .then((r) => r.json())
+      .then((d) => setLinks(d.links ?? []))
+      .catch(() => {
+        toast.error("Could not load your giving pages.");
+        setLinks([]);
+      });
+  }, []);
+
+  async function attach() {
+    setBusy(true);
+    try {
+      const res = await call<{ link: { id: string; publicSlug: string } }>("/api/merchant/students/college-link", "PUT", { linkId: selected });
+      toast.success("Giving page attached for all students");
+      onAttached(res.link);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Attach a different giving page" onClose={onClose}>
+      <p className="text-sm text-slate-500">
+        Choose the giving page to use for all students. The student search is turned on for it if it is off. Create a page under Giving Links first if you
+        need a new one.
+      </p>
+      {links === null ? (
+        <Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-hidden />
+      ) : links.length === 0 ? (
+        <p className="text-sm text-slate-500">No eligible giving pages. Pages with gift designations turned on can&apos;t be used.</p>
+      ) : (
+        <ul className="max-h-72 space-y-1 overflow-y-auto">
+          {links.map((l) => (
+            <li key={l.id}>
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+                <input type="radio" name="college-link" checked={selected === l.id} onChange={() => setSelected(l.id)} />
+                <span className="flex-1 font-semibold text-slate-800">{l.name}</span>
+                {l.id === currentId && <span className="text-xs text-slate-500">Current</span>}
+                {!l.studentSelectionEnabled && <span className="text-xs text-amber-700">Student search off</span>}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex justify-end gap-2">
+        <button className={ghostBtn} onClick={onClose}>Cancel</button>
+        <button className={primaryBtn} onClick={attach} disabled={busy || selected === currentId}>
+          {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />} Attach
+        </button>
+      </div>
+    </Modal>
   );
 }

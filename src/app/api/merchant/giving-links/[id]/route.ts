@@ -71,6 +71,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     fundSelectionEnabled,
     studentSelectionEnabled,
     studentDefaultGivenFor,
+    useForAllStudents,
     fundAssignments,
     recurringEnabled,
     allowedFrequencies,
@@ -255,6 +256,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(isReassignment ? { ownerUserId: requestedOwnerUserId } : {}),
     },
   });
+
+  if (typeof useForAllStudents === "boolean" && !existing.studentId) {
+    const church = await prisma.church.findUnique({ where: { id: existing.churchId }, select: { studentGivingLinkId: true } });
+    if (useForAllStudents && link.studentSelectionEnabled && link.status === "ACTIVE") {
+      await prisma.church.update({ where: { id: existing.churchId }, data: { studentGivingLinkId: link.id } });
+    } else if (!useForAllStudents && church?.studentGivingLinkId === link.id) {
+      await prisma.church.update({ where: { id: existing.churchId }, data: { studentGivingLinkId: null } });
+    }
+  }
 
   if (validatedFundAssignments !== undefined) {
     // Full replace, not a diff — GivingLinkFund rows carry no historical
