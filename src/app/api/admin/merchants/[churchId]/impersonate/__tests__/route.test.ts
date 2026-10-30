@@ -12,6 +12,8 @@ const prismaMock = {
   dashboardAuditLog: { create: vi.fn().mockResolvedValue({}) },
 };
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+// Sandbox runs with admin two-factor off (no SMS provider). This test is about the rule when it is on, so turn it on here.
+vi.mock("@/lib/auth/adminMfaPolicy", () => ({ isAdminMfaEnforced: () => true }));
 
 async function loadModule() {
   vi.resetModules();
