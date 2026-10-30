@@ -498,6 +498,18 @@ function AttachGivingPageModal({
   const [links, setLinks] = useState<AttachableLink[] | null>(null);
   const [selected, setSelected] = useState(currentId);
   const [busy, setBusy] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  async function createNew() {
+    setBusy(true);
+    try {
+      const res = await call<{ link: { id: string } }>("/api/merchant/students/college-link", "POST", { createNew: true, name: newName });
+      window.location.href = `/merchant/giving-links/${res.link.id}/edit`;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong.");
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/merchant/students/college-link")
@@ -525,8 +537,7 @@ function AttachGivingPageModal({
   return (
     <Modal title="Attach a different giving page" onClose={onClose}>
       <p className="text-sm text-slate-500">
-        Choose the giving page to use for all students. The student search is turned on for it if it is off. Create a page under Giving Links first if you
-        need a new one.
+        Choose the giving page to use for all students. The student search is turned on for it if it is off.
       </p>
       {links === null ? (
         <Loader2 className="h-5 w-5 animate-spin text-slate-400" aria-hidden />
@@ -546,6 +557,15 @@ function AttachGivingPageModal({
           ))}
         </ul>
       )}
+      <div className="space-y-2 rounded-xl bg-slate-50 p-3">
+        <p className="text-xs font-semibold text-slate-600">Or start a new giving page for all students</p>
+        <div className="flex gap-2">
+          <input className={input} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Page name (optional)" aria-label="New giving page name" />
+          <button className={ghostBtn} onClick={createNew} disabled={busy}>
+            <Plus className="h-4 w-4" aria-hidden /> Create &amp; edit
+          </button>
+        </div>
+      </div>
       <div className="flex justify-end gap-2">
         <button className={ghostBtn} onClick={onClose}>Cancel</button>
         <button className={primaryBtn} onClick={attach} disabled={busy || selected === currentId}>

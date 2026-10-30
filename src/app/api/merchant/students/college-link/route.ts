@@ -59,12 +59,16 @@ export async function PUT(req: Request) {
  * there is one, otherwise creates it. It is an ordinary giving link, so it
  * also appears under Giving Links where it can be edited and previewed.
  */
-export async function POST() {
+export async function POST(req?: Request) {
   const guard = await guardStudentApi({ manage: true });
   if (!guard.ok) return guard.response;
   const { auth } = guard;
 
-  const existing = await findCollegeLink(auth.churchId);
+  const body = await req?.json().catch(() => ({}));
+  const createNew = body?.createNew === true;
+  const newName = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
+
+  const existing = createNew ? null : await findCollegeLink(auth.churchId);
   if (existing) return NextResponse.json({ link: existing, created: false });
 
   const church = await prisma.church.findUnique({
@@ -89,7 +93,7 @@ export async function POST() {
     data: {
       churchId: auth.churchId,
       publicSlug,
-      internalName: "Student Giving — all students",
+      internalName: createNew && newName ? newName : "Student Giving — all students",
       publicTitle: "Support a student",
       description: `Give toward a student's tuition at ${church?.name ?? "our school"}. Search for the student by name, or give to the general scholarship fund.`,
       status: "ACTIVE",
@@ -111,5 +115,7 @@ export async function POST() {
       ownerUserId,
     },
   });
+  // A page created on purpose from the picker becomes the all-students link.
+  if (createNew) await prisma.church.update({ where: { id: auth.churchId }, data: { studentGivingLinkId: link.id } });
   return NextResponse.json({ link, created: true }, { status: 201 });
 }
