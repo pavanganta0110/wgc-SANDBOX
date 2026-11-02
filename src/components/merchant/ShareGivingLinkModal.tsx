@@ -184,6 +184,7 @@ function SendEmailPane({
   publicUrl: string;
   onSent: () => void;
 }) {
+  const pw = usePaymentWording();
   const [recipient, setRecipient] = useState("");
   const [subject, setSubject] = useState(`${publicTitle} — Give Online`);
   const [message, setMessage] = useState("");
@@ -242,7 +243,7 @@ function SendEmailPane({
       </div>
       <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
         <p className="font-semibold text-slate-700 mb-1">Preview</p>
-        <p>{message || `Please consider giving to support us.`}</p>
+        <p>{message || pw("Please consider giving to support us.")}</p>
         <p className="text-blue-600 truncate">{publicUrl}</p>
       </div>
       <button

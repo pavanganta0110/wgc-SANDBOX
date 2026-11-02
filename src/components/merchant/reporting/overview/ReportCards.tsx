@@ -7,6 +7,7 @@ import {
   Repeat,
   UserMinus,
 } from "lucide-react";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const CARDS = [
   {
@@ -79,11 +80,12 @@ function Item({
   );
 }
 
-export default function ReportCards({
+export default async function ReportCards({
   savedCount,
 }: {
   savedCount: number | null;
 }) {
+  const { pw } = await getPaymentWording();
   const saved = savedCount ?? 0;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -97,7 +99,7 @@ export default function ReportCards({
         meta={
           saved > 0
             ? "Jump back into the report setups you've saved."
-            : "Nothing saved yet. Build a report in the Donor Report and save it to find it here."
+            : pw("Nothing saved yet. Build a report in the Donor Report and save it to find it here.")
         }
         Icon={Bookmark}
         className="sm:col-span-2"

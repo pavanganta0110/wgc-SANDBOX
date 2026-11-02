@@ -86,7 +86,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
   return (
     <div>
       <Link href={`/merchant/giving-links/${id}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
-        <ArrowLeft className="w-4 h-4" /> Back to Giving Link
+        <ArrowLeft className="w-4 h-4" /> {pw("Back to Giving Link")}
       </Link>
       <h2 className="text-lg font-bold text-slate-900 mb-6">{pw("Edit Giving Link")}</h2>
       <GivingLinkBuilderForm

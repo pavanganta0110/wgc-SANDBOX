@@ -47,7 +47,7 @@ export default function ExternalDonationsFilterBar({ canExport }: { canExport: b
       <DateRangePicker />
 
       <label className="sr-only" htmlFor="ext-donations-search">
-        Search donor name or email
+        {pw("Search donor name or email")}
       </label>
       <input
         id="ext-donations-search"

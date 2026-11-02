@@ -66,7 +66,7 @@ export default async function DonationAttemptsTable({
             <div className="px-6 py-16 text-center">
               <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("No donation attempts")}</h3>
               <p className="text-sm text-slate-500">
-                Donation attempts made through {givingLinkId ? "this giving link" : "your giving links"} will appear here.
+                {pw("Donation attempts made through")} {givingLinkId ? pw("this giving link") : pw("your giving links")} will appear here.
               </p>
             </div>
           ) : (

@@ -45,7 +45,7 @@ export default async function GivingLinkDetailPage({
   return (
     <div>
       <Link href="/merchant/giving-links" className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
-        <ArrowLeft className="w-4 h-4" /> All Giving Links
+        <ArrowLeft className="w-4 h-4" /> {pw("All Giving Links")}
       </Link>
 
       <GivingLinkDetailHeader
@@ -72,7 +72,7 @@ export default async function GivingLinkDetailPage({
       <div className="flex items-center gap-1 border-b border-slate-100 mb-6">
         {([
           { key: "overview", label: "Overview" },
-          { key: "attempts", label: "Donation Attempts" },
+          { key: "attempts", label: pw("Donation Attempts") },
           { key: "sharing", label: "Sharing History" },
           { key: "merchandise", label: "Merchandise" },
         ] as const).map((t) => (
@@ -112,6 +112,7 @@ async function LinkAttemptsSection({
   netCollectedCents: number;
   searchParams: Record<string, string | undefined>;
 }) {
+  const { pw } = await getPaymentWording();
   const attempts = await loadGivingLinkAttempts(churchId, { givingLinkId: link.id, take: 500 });
   const failed = attempts.filter(({ transfer, payment }) => (transfer?.state || payment.status || "").toUpperCase() === "FAILED").length;
   const pending = attempts.filter(({ transfer, payment }) => (transfer?.state || payment.status || "").toUpperCase() === "PENDING").length;
@@ -123,7 +124,7 @@ async function LinkAttemptsSection({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           <MetricCard label="Total Attempts" value={String(link.totalAttempts)} />
-          <MetricCard label="Successful Donations" value={String(link.successfulDonations)} />
+          <MetricCard label={pw("Successful Donations")} value={String(link.successfulDonations)} />
           <MetricCard label="Failed Attempts" value={String(failed)} />
           <MetricCard label="Pending Attempts" value={String(pending)} />
           <MetricCard label="Refunded Amount" value={formatCents(link.refundedCents)} />

@@ -277,7 +277,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
     <div className="space-y-6">
       <div>
         <Link href="/merchant/donations/external" className="text-xs font-semibold text-slate-500 hover:underline">
-          ← External Donations
+          {pw("← External Donations")}
         </Link>
         <h1 className="text-xl font-bold text-slate-900 mt-2">{pw("Import Donations")}</h1>
       </div>
@@ -567,7 +567,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
           <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
             <p className="font-semibold text-slate-900 mb-1">{pw("Donors")}</p>
             <p>
-              {matchedDonorsPreview} row{matchedDonorsPreview === 1 ? "" : "s"} matched an existing donor by email. {newDonorsPreview} new donor
+              {matchedDonorsPreview} row{matchedDonorsPreview === 1 ? "" : "s"} {pw("matched an existing donor by email.")} {newDonorsPreview} {pw("new donor")}
               {newDonorsPreview === 1 ? "" : "s"} will be created. Matching never merges on name alone — only a matching email (or, if no email,
               phone) counts as a match.
             </p>

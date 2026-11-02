@@ -35,10 +35,11 @@ const secondaryButton =
   "px-3.5 py-2 rounded-lg font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-xs flex items-center gap-1.5 whitespace-nowrap";
 
 function HealthNote({ health }: { health: MappingHealth }) {
+  const pw = usePaymentWording();
   if (health === "OK") return null;
   return (
     <p className="mt-1 text-xs text-red-600">
-      {health === "MISSING" ? "This fund no longer exists in Planning Center." : "This fund can't receive gifts in Planning Center."} Choose another.
+      {health === "MISSING" ? "This fund no longer exists in Planning Center." : pw("This fund can't receive gifts in Planning Center.")} Choose another.
     </p>
   );
 }
@@ -116,8 +117,8 @@ export default function PlanningCenterGivingSetup() {
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>
             {state.pcoAccess === "DENIED"
-              ? "The Planning Center user who connected can't access Giving. Disconnect and reconnect using a Finance Administrator account."
-              : "Giving doesn't appear to be turned on for this Planning Center organization. Enable Giving in Planning Center, then check again."}
+              ? pw("The Planning Center user who connected can't access Giving. Disconnect and reconnect using a Finance Administrator account.")
+              : pw("Giving doesn't appear to be turned on for this Planning Center organization. Enable Giving in Planning Center, then check again.")}
           </span>
         </div>
         <button onClick={() => run("recheck", async () => {})} disabled={busy !== null} className={secondaryButton}>
@@ -138,7 +139,7 @@ export default function PlanningCenterGivingSetup() {
         <div>
           <h3 className="text-sm font-bold text-slate-900">{pw("Giving setup")}</h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Get ready to record WGC gifts in {state.organizationName ? `${state.organizationName}'s` : "your"} Planning Center Giving. Nothing is sent yet.
+            {pw("Get ready to record WGC gifts in")} {state.organizationName ? `${state.organizationName}'s` : "your"} {pw("Planning Center Giving. Nothing is sent yet.")}
           </p>
         </div>
         <button onClick={() => run("refresh", async () => {})} disabled={disabled} className={secondaryButton} aria-label="Refresh from Planning Center">
@@ -179,8 +180,7 @@ export default function PlanningCenterGivingSetup() {
           <div className="min-w-0">
             <h4 id="pco-step-source" className="text-sm font-semibold text-slate-900">1. Payment source</h4>
             <p className="text-xs text-slate-500 mt-0.5 max-w-xl">
-              WGC gifts are recorded under a payment source called “{state.paymentSource.name}”, so you can tell them apart from other giving in Planning Center.
-              Setting it up also confirms your Planning Center user can make changes in Giving.
+              {pw("WGC gifts are recorded under a payment source called “")}{state.paymentSource.name}{pw("”, so you can tell them apart from other giving in Planning Center. Setting it up also confirms your Planning Center user can make changes in Giving.")}
             </p>
             {state.paymentSource.state === "MISSING" && state.paymentSource.existingWillBeReused && (
               <p className="text-xs text-slate-500 mt-1">A source with this name already exists in Planning Center and will be reused.</p>
@@ -217,7 +217,7 @@ export default function PlanningCenterGivingSetup() {
       <section aria-labelledby="pco-step-default">
         <h4 id="pco-step-default" className="text-sm font-semibold text-slate-900">2. Default fund</h4>
         <p className="text-xs text-slate-500 mt-0.5 mb-2 max-w-xl">
-          Gifts that aren&apos;t mapped to a specific fund below, or that were given without choosing one, are recorded in this fund.
+          {pw("Gifts that aren't mapped to a specific fund below, or that were given without choosing one, are recorded in this fund.")}
         </p>
         <div className="max-w-sm">
           <select
@@ -289,7 +289,7 @@ export default function PlanningCenterGivingSetup() {
 
         {state.funds.length === 0 ? (
           <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3">
-            You don&apos;t have any active funds in WGC yet, so every gift will go to your default fund.
+            {pw("You don't have any active funds in WGC yet, so every gift will go to your default fund.")}
           </p>
         ) : (
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">

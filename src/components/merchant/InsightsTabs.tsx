@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const TABS = [
   { key: "payments", label: "Payments" },
@@ -13,6 +14,7 @@ const TABS = [
 ];
 
 export default function InsightsTabs() {
+  const pw = usePaymentWording();
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentTab = searchParams.get("tab") || "payments";
@@ -35,7 +37,7 @@ export default function InsightsTabs() {
               : "text-slate-500 border-transparent hover:text-slate-700"
           }`}
         >
-          {tab.label}
+          {pw(tab.label)}
         </button>
       ))}
     </div>

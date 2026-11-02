@@ -32,15 +32,17 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-function SummaryCards({ items }: { items: { label: string; value: string }[] }) {
+async function SummaryCards({ items }: { items: { label: string; value: string }[] }) {
+  const { pw } = await getPaymentWording();
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {items.map((item) => (
           <div key={item.label}>
             <p className="text-xs text-slate-500 mb-1 underline decoration-dotted underline-offset-2">
-              {item.label}
+              {pw(item.label)}
             </p>
             <p className="text-2xl font-bold text-slate-900">{item.value}</p>
           </div>
@@ -175,6 +177,7 @@ async function ExternalDonationsTab({
   scopedUserId?: string;
   filters: { paymentMethod?: string; receiptStatus?: string; fundId?: string; source?: string };
 }) {
+  const { pw } = await getPaymentWording();
   const [{ summary, bySourceTable, byFundTable, hasData }, funds] = await Promise.all([
     getExternalDonationsInsights(churchId, dateFilter, scopedUserId, filters),
     prisma.fund.findMany({ where: { churchId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -185,17 +188,16 @@ async function ExternalDonationsTab({
       <ExternalDonationsInsightsFilterBar funds={funds} />
       <SummaryCards items={summary} />
       <p className="text-xs text-slate-400 -mt-2">
-        External donations are never sent to WGC&apos;s payment processor — they never count toward WGC-processed volume, settlement totals, or processing fees.
-        The WGC-Processed total above reflects the date range only and is not affected by the filters below.
+        {pw("External donations are never sent to WGC's payment processor — they never count toward WGC-processed volume, settlement totals, or processing fees. The WGC-Processed total above reflects the date range only and is not affected by the filters below.")}
       </p>
       <div className="grid md:grid-cols-2 gap-4">
-        <ChartCard title="External Donations by Source">
+        <ChartCard title={pw("External Donations by Source")}>
           {hasData ? (
             <div className="divide-y divide-slate-100">
               {bySourceTable.map((row) => (
                 <div key={row.source} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-slate-700">{SOURCE_LABELS[row.source as keyof typeof SOURCE_LABELS] ?? row.source}</span>
-                  <span className="text-slate-500">{row.count} donation{row.count === 1 ? "" : "s"}</span>
+                  <span className="text-slate-500">{row.count} {pw("donation")}{row.count === 1 ? "" : "s"}</span>
                   <span className="font-semibold text-slate-900">{formatCents(row.totalCents)}</span>
                 </div>
               ))}
@@ -204,13 +206,13 @@ async function ExternalDonationsTab({
             <EmptyChart />
           )}
         </ChartCard>
-        <ChartCard title="External Donations by Fund">
+        <ChartCard title={pw("External Donations by Fund")}>
           {hasData ? (
             <div className="divide-y divide-slate-100">
               {byFundTable.map((row) => (
                 <div key={row.fund} className="flex items-center justify-between py-2 text-sm">
                   <span className="text-slate-700">{row.fund}</span>
-                  <span className="text-slate-500">{row.count} donation{row.count === 1 ? "" : "s"}</span>
+                  <span className="text-slate-500">{row.count} {pw("donation")}{row.count === 1 ? "" : "s"}</span>
                   <span className="font-semibold text-slate-900">{formatCents(row.totalCents)}</span>
                 </div>
               ))}
@@ -235,6 +237,7 @@ async function PaymentsTab({
   trend: string;
   scopedUserId?: string;
 }) {
+  const { pw } = await getPaymentWording();
   const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external] = await Promise.all([
     getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
     getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),

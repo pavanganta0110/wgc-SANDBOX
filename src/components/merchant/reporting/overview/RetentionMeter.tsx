@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { retentionTone } from "@/lib/reporting/reportingPeriod";
 import InfoTip from "./InfoTip";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const TONES = {
   strong: {
@@ -35,7 +36,7 @@ const TONES = {
   },
 } as const;
 
-export default function RetentionMeter({
+export default async function RetentionMeter({
   ratePercent,
   priorYearDonors,
   retained,
@@ -48,6 +49,7 @@ export default function RetentionMeter({
   lapsed: number;
   year: number;
 }) {
+  const { pw } = await getPaymentWording();
   const r = 52;
   const c = 2 * Math.PI * r;
   const known = ratePercent !== null;
@@ -62,7 +64,7 @@ export default function RetentionMeter({
         aria-label={
           known
             ? `Donor retention ${Math.round(ratePercent)} percent`
-            : "Donor retention not available yet"
+            : pw("Donor retention not available yet")
         }
       >
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
@@ -107,9 +109,9 @@ export default function RetentionMeter({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-sm font-bold text-slate-900">
-            Donor retention
+            {pw("Donor retention")}
             <InfoTip
-              label="Donor retention"
+              label={pw("Donor retention")}
               text={`Of the donors who gave in ${year - 1}, the share who have also given in ${year}. Higher is better; around 45% is typical for nonprofit organizations.`}
             />
           </h4>
@@ -133,7 +135,7 @@ export default function RetentionMeter({
               <span className="font-semibold tabular-nums text-slate-900">
                 {retained.toLocaleString("en-US")}
               </span>{" "}
-              of {priorYearDonors.toLocaleString("en-US")} donors who gave in{" "}
+              of {priorYearDonors.toLocaleString("en-US")} {pw("donors who gave in")}{" "}
               {year - 1} have given again in {year}.{" "}
               {lapsed > 0 && (
                 <>
@@ -181,7 +183,7 @@ export default function RetentionMeter({
                     style={{ background: tone!.stroke }}
                     aria-hidden
                   />
-                  Gave again · {retained.toLocaleString("en-US")}
+                  {pw("Gave again ·")} {retained.toLocaleString("en-US")}
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span
@@ -195,9 +197,7 @@ export default function RetentionMeter({
           </>
         ) : (
           <p className="mt-2 text-sm text-slate-500">
-            Retention compares this year&apos;s donors with last year&apos;s.
-            Nobody gave in {year - 1}, so there&apos;s nothing to measure
-            against yet. It will appear once you have a full year of giving.
+            {pw("Retention compares this year's donors with last year's. Nobody gave in")} {year - 1}{pw(", so there's nothing to measure against yet. It will appear once you have a full year of giving.")}
           </p>
         )}
       </div>

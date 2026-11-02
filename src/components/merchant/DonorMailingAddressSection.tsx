@@ -81,7 +81,7 @@ export default function DonorMailingAddressSection({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-3 py-2.5 text-sm font-semibold text-slate-700"
       >
-        Donor Mailing Address
+        {pw("Donor Mailing Address")}
         <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (

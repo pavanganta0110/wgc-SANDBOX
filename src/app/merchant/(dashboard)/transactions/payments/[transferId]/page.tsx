@@ -218,7 +218,7 @@ export default async function PaymentFullDetailPage({
               </div>
             )}
             <p className="text-sm text-slate-600">
-              Donor:{" "}
+              {pw("Donor:")}{" "}
               {donor ? (
                 <Link href={`/merchant/donors/${donor.id}`} className="font-semibold text-blue-600 hover:underline">
                   {formatPersonName(contactName, instrument?.accountHolderName)}
@@ -262,7 +262,7 @@ export default async function PaymentFullDetailPage({
                     )}
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Paid By</span>
-                      <span className="font-semibold text-slate-900">{invoicePayment.customerCoveredFee ? "Donor" : "Organization"}</span>
+                      <span className="font-semibold text-slate-900">{invoicePayment.customerCoveredFee ? pw("Donor") : "Organization"}</span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold">
                       <span className="text-slate-900">{pw("Total Charged to Donor")}</span>
@@ -328,7 +328,7 @@ export default async function PaymentFullDetailPage({
                     <span className="text-slate-500">Paid By</span>
                     <span className="font-semibold text-slate-900">
                       {donorCoversFee === true
-                        ? "Donor"
+                        ? pw("Donor")
                         : donorCoversFee === false
                           ? "Organization"
                           : "Historical / Uncertain"}

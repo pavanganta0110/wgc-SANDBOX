@@ -136,8 +136,7 @@ export default function ReceiptSettingsForm({ initial }: { initial: FormValues }
         <div className="mt-4 pt-4 border-t border-slate-100">
           <p className="text-xs font-semibold text-slate-700 mb-1">Acknowledgment Wording</p>
           <p className="text-xs text-slate-500 mb-3">
-            Used on both donation receipts and year-end statements. WGC does not provide tax or legal advice — your organization is
-            responsible for ensuring this wording complies with applicable tax laws.
+            {pw("Used on both donation receipts and year-end statements. WGC does not provide tax or legal advice — your organization is responsible for ensuring this wording complies with applicable tax laws.")}
           </p>
           <div className="space-y-3">
             <div>

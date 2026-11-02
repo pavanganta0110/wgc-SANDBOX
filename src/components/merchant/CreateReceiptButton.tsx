@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function CreateReceiptButton({ transferId }: { transferId: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [sending, setSending] = useState(false);
 
@@ -17,7 +19,7 @@ export default function CreateReceiptButton({ transferId }: { transferId: string
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed to send receipt");
 
-      toast.success("Receipt sent to the donor");
+      toast.success(pw("Receipt sent to the donor"));
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Failed to send receipt");

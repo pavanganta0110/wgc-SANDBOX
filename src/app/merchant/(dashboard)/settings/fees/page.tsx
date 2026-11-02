@@ -62,7 +62,7 @@ export default async function FeesSettingsPage() {
           <div className="flex justify-between"><span className="text-slate-600">Estimated Net to Organization</span><span className="font-semibold text-slate-800">{formatCents(exampleDonationCents)}</span></div>
         </div>
         <p className="text-xs text-slate-400 mt-3">
-          This is an estimate for illustration only. Actual fees depend on the exact payment method, card type, and any donor-covered fee election at the time of the donation.
+          {pw("This is an estimate for illustration only. Actual fees depend on the exact payment method, card type, and any donor-covered fee election at the time of the donation.")}
         </p>
       </div>
 

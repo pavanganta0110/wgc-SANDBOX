@@ -70,7 +70,7 @@ export default async function ImportHistoryPage({
   return (
     <div className="p-6 md:p-8 max-w-5xl">
       <Link href="/merchant/donations/external" className="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">
-        ← External Donations
+        {pw("← External Donations")}
       </Link>
       <h1 className="text-2xl font-bold text-slate-900 mb-1">Import History</h1>
       <p className="text-sm text-slate-500 mb-6">{pw("Every CSV file your organization has uploaded to import external donations, and what happened to each row.")}</p>

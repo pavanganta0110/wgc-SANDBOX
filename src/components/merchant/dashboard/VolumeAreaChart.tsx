@@ -90,7 +90,7 @@ export default function VolumeAreaChart({ data, title }: { data: TrendPoint[]; t
           href="/merchant/giving-links"
           className="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
         >
-          Open giving pages
+          {pw("Open giving pages")}
         </Link>
       </div>
     );

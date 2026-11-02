@@ -720,7 +720,7 @@ export default function GivingLinkBuilderForm({
                     </select>
                     {mode === "edit" && (
                       <p className="text-xs text-amber-600 mt-1.5">
-                        Changing the owner only affects future donations through this link — historical transactions and their attribution remain unchanged.
+                        {pw("Changing the owner only affects future donations through this link — historical transactions and their attribution remain unchanged.")}
                       </p>
                     )}
                   </>
@@ -746,7 +746,7 @@ export default function GivingLinkBuilderForm({
                 Show “Powered by WGC”
               </label>
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Display a small ‘Powered by WGC’ link on your giving page or embedded form. You can turn this off for a fully white-labeled experience.
+                {pw("Display a small ‘Powered by WGC’ link on your giving page or embedded form. You can turn this off for a fully white-labeled experience.")}
               </p>
             </div>
             {mode === "create" && (
@@ -754,7 +754,7 @@ export default function GivingLinkBuilderForm({
                 <FieldLabel>Page Type</FieldLabel>
                 <div className="grid grid-cols-3 gap-2">
                   {([
-                    { key: "DONATIONS", label: "Donations Only" },
+                    { key: "DONATIONS", label: pw("Donations Only") },
                     { key: "MERCHANDISE", label: "Merchandise Only" },
                     { key: "BOTH", label: "Both" },
                   ] as const).map((opt) => (
@@ -781,10 +781,10 @@ export default function GivingLinkBuilderForm({
                 </div>
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                   {pageType === "DONATIONS"
-                    ? "Donors give a monetary gift. You can add merchandise to this page later from its Merchandise tab."
+                    ? pw("Donors give a monetary gift. You can add merchandise to this page later from its Merchandise tab.")
                     : pageType === "MERCHANDISE"
-                    ? "Donors shop your products — no donation-amount step. You'll pick which products to sell right after creating this page."
-                    : "Donors can give and shop in the same checkout. You'll pick which products to sell right after creating this page."}
+                    ? pw("Donors shop your products — no donation-amount step. You'll pick which products to sell right after creating this page.")
+                    : pw("Donors can give and shop in the same checkout. You'll pick which products to sell right after creating this page.")}
                 </p>
               </div>
             )}
@@ -834,7 +834,7 @@ export default function GivingLinkBuilderForm({
                   </label>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Donors choose a student, themselves, or the general scholarship fund. Gifts are credited to that student for the current term.
+                  {pw("Donors choose a student, themselves, or the general scholarship fund. Gifts are credited to that student for the current term.")}
                 </p>
                 {state.fundSelectionEnabled && (
                   <p className="text-xs text-amber-700 mt-1">{pw("Turn off Gift Designations below to use Student Giving on this link.")}</p>
@@ -1050,7 +1050,7 @@ export default function GivingLinkBuilderForm({
                         className={inputClass}
                       />
                       <p className="text-xs text-slate-400 mt-1">
-                        Shown next to the quantity selector on the giving page (e.g. "$75 / Backpack"). Donors can set quantity to 0 and give any Additional Donation Amount on its own — e.g. $25 instead of the full $75.
+                        {pw("Shown next to the quantity selector on the giving page (e.g. \"$75 / Backpack\"). Donors can set quantity to 0 and give any Additional Donation Amount on its own — e.g. $25 instead of the full $75.")}
                       </p>
                     </div>
                   </>
@@ -1161,10 +1161,10 @@ export default function GivingLinkBuilderForm({
             </div>
             <p className="text-xs text-slate-400 mb-3">
               {state.collectMailingAddress && state.donorFieldSettings.street === "REQUIRED"
-                ? "Donors must enter a complete mailing address before they can submit a gift — shown as its own section, not collapsed."
+                ? pw("Donors must enter a complete mailing address before they can submit a gift — shown as its own section, not collapsed.")
                 : state.collectMailingAddress
-                  ? 'Shows a collapsed "Add mailing address (optional)" section on this link\'s giving page. Donors are never required to open or complete it.'
-                  : "No mailing-address section is shown on this link's giving page."}
+                  ? pw("Shows a collapsed \"Add mailing address (optional)\" section on this link's giving page. Donors are never required to open or complete it.")
+                  : pw("No mailing-address section is shown on this link's giving page.")}
             </p>
             <div className="space-y-2">
               {NON_ADDRESS_DONOR_FIELDS.map((field) => (
@@ -1187,7 +1187,7 @@ export default function GivingLinkBuilderForm({
           <Section title={pw("Additional Donation Options")} defaultOpen={false}>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={state.feeCoverEnabled} onChange={(e) => update("feeCoverEnabled", e.target.checked)} />
-              Allow donor to cover processing fees
+              {pw("Allow donor to cover processing fees")}
             </label>
             {state.feeCoverEnabled && (
               <label className="flex items-center gap-2 text-sm text-slate-700 ml-6">
@@ -1197,7 +1197,7 @@ export default function GivingLinkBuilderForm({
             )}
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={state.recurringEnabled} onChange={(e) => update("recurringEnabled", e.target.checked)} />
-              Allow recurring giving
+              {pw("Allow recurring giving")}
             </label>
             {state.recurringEnabled && (
               <div className="ml-6 space-y-1.5">
@@ -1230,7 +1230,7 @@ export default function GivingLinkBuilderForm({
                     </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Which option donors see selected when they open this form. They can always switch between One-Time and Recurring.
+                    {pw("Which option donors see selected when they open this form. They can always switch between One-Time and Recurring.")}
                   </p>
                 </div>
                 {state.defaultDonationType === "RECURRING" &&
@@ -1247,12 +1247,12 @@ export default function GivingLinkBuilderForm({
                         className={inputClass}
                       />
                       <p className="text-xs text-slate-400 mt-1">
-                        Pre-selected when the form opens as Recurring. Donors can still choose another amount or enter their own. Leave blank for no pre-selected amount.
+                        {pw("Pre-selected when the form opens as Recurring. Donors can still choose another amount or enter their own. Leave blank for no pre-selected amount.")}
                       </p>
                     </div>
                   ) : (
                     <p className="text-xs text-slate-400">
-                      This form uses a set amount, so donors can&rsquo;t change it — a default recurring amount only applies to forms where donors choose their amount.
+                      {pw("This form uses a set amount, so donors can’t change it — a default recurring amount only applies to forms where donors choose their amount.")}
                     </p>
                   ))}
               </div>
@@ -1457,7 +1457,7 @@ export default function GivingLinkBuilderForm({
                 className={inputClass}
               />
               <p className="text-xs text-slate-400 mt-1">
-                A YouTube video shown on the donation success screen, right after the confirmation. Paste any youtube.com or youtu.be link — a non-YouTube URL is simply ignored.
+                {pw("A YouTube video shown on the donation success screen, right after the confirmation. Paste any youtube.com or youtu.be link — a non-YouTube URL is simply ignored.")}
               </p>
             </div>
             <div>
@@ -1505,7 +1505,7 @@ export default function GivingLinkBuilderForm({
             donorFieldSettings={state.donorFieldSettings}
             collectMailingAddress={state.collectMailingAddress}
             pricing={pricing}
-            thankYouMessage={state.receiptSettings.customMessage || "Thank you for your gift!"}
+            thankYouMessage={state.receiptSettings.customMessage || pw("Thank you for your gift!")}
             thankYouVideoUrl={state.branding.thankYouVideoUrl}
             campaignImageUrl={state.branding.campaignImageUrl || undefined}
             publicTitle={state.publicTitle}
@@ -1567,7 +1567,7 @@ export default function GivingLinkBuilderForm({
             disabled={saving || !isValid}
             className="px-5 py-2.5 rounded-xl bg-blue-600 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
           >
-            {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Retry Save" : mode === "create" ? "Create Giving Link" : "Save Changes"}
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Retry Save" : mode === "create" ? pw("Create Giving Link") : "Save Changes"}
           </button>
         </div>
       </div>

@@ -150,7 +150,7 @@ export default async function ImportBatchDetailPage({ params }: { params: Promis
                   <td className="px-6 py-3 text-right">
                     {row.externalDonationId && (
                       <Link href={`/merchant/donations/external/${row.externalDonationId}`} className="text-blue-600 hover:underline font-medium">
-                        View donation
+                        {pw("View donation")}
                       </Link>
                     )}
                   </td>

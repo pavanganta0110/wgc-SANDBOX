@@ -70,7 +70,7 @@ export default async function RefundDetailPanel({
           <p className="text-xs text-red-500 mt-1">{refund.failureCode}: {refund.failureMessage}</p>
         )}
         <p className="text-sm text-slate-600 mt-2">
-          Donor: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
+          {pw("Donor:")} <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
           {" · "}
           Instrument:{" "}
           <span className="font-semibold text-slate-900">
@@ -179,7 +179,7 @@ export default async function RefundDetailPanel({
       <div className="px-5 py-4 border-b border-slate-100">
         <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Receipt</h4>
         <p className="text-sm text-slate-500">
-          Receipts for a refunded gift are managed from the original payment.
+          {pw("Receipts for a refunded gift are managed from the original payment.")}
         </p>
       </div>
 

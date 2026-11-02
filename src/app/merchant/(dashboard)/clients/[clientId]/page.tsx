@@ -106,7 +106,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ c
           {linkedDonor && (
             <div className="flex justify-between">
               <span className="text-slate-500">{pw("Linked donor")}</span>
-              <Link href={`/merchant/donors?id=${linkedDonor.id}`} className="text-blue-600 hover:underline">{linkedDonor.name || "View donor"}</Link>
+              <Link href={`/merchant/donors?id=${linkedDonor.id}`} className="text-blue-600 hover:underline">{linkedDonor.name || pw("View donor")}</Link>
             </div>
           )}
         </div>

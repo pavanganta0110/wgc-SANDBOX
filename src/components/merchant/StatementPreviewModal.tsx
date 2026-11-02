@@ -60,7 +60,7 @@ export default function StatementPreviewModal({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h3 className="text-sm font-bold text-slate-900">
-            {taxYear} Year-End Donation Statement — {donorName}
+            {taxYear} {pw("Year-End Donation Statement —")} {donorName}
           </h3>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
             <X className="w-4 h-4" />

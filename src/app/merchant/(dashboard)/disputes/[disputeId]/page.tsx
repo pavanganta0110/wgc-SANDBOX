@@ -109,7 +109,7 @@ export default async function DisputeFullDetailPage({
               <StateBadge state={displayStatus} />
             </div>
             <p className="text-sm text-slate-600 mb-3">
-              Donor: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
+              {pw("Donor:")} <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
               {" · "}
               Organization: <span className="font-semibold text-slate-900">{church?.name || "—"}</span>
             </p>

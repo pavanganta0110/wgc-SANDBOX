@@ -5,6 +5,7 @@ import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
 import type { DonorAnalyticsExtended } from "@/lib/donors/donorAnalyticsExtended";
 import type { PaymentMethodMixRow } from "@/lib/donors/donorBreakdowns";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -36,18 +37,19 @@ function Split({ leftLabel, leftValue, leftAmount, rightLabel, rightValue, right
   );
 }
 
-export default function DonorAnalyticsExtras({
+export default async function DonorAnalyticsExtras({
   extended,
   paymentMethodMix,
 }: {
   extended: DonorAnalyticsExtended;
   paymentMethodMix: PaymentMethodMixRow[];
 }) {
+  const { pw } = await getPaymentWording();
   const { newVsReturning, oneTimeVsRecurring, statusBreakdown, retention, concentration, attentionList } = extended;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-      <Card title="New vs Returning Donors">
+      <Card title={pw("New vs Returning Donors")}>
         <Split
           leftLabel="New"
           leftValue={newVsReturning.newCount}
@@ -58,7 +60,7 @@ export default function DonorAnalyticsExtras({
         />
       </Card>
 
-      <Card title="Donation Type">
+      <Card title={pw("Donation Type")}>
         <Split
           leftLabel="Recurring"
           leftValue={oneTimeVsRecurring.recurringCount}
@@ -69,7 +71,7 @@ export default function DonorAnalyticsExtras({
         />
       </Card>
 
-      <Card title="Donor Status">
+      <Card title={pw("Donor Status")}>
         <div className="space-y-2">
           {(["ACTIVE", "RECURRING", "AT_RISK", "INACTIVE"] as const).map((s) => (
             <div key={s} className="flex items-center justify-between text-sm">
@@ -80,35 +82,35 @@ export default function DonorAnalyticsExtras({
         </div>
       </Card>
 
-      <Card title="Donor Retention">
+      <Card title={pw("Donor Retention")}>
         {retention.insufficientData ? (
           <p className="text-sm text-slate-400">Insufficient historical data for this period.</p>
         ) : (
           <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-slate-600">Returning Donor Rate</span><span className="font-semibold text-slate-900">{retention.returningDonorRate != null ? `${Math.round(retention.returningDonorRate * 100)}%` : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Repeat Donation Rate</span><span className="font-semibold text-slate-900">{retention.repeatDonationRate != null ? `${Math.round(retention.repeatDonationRate * 100)}%` : "—"}</span></div>
-            <div className="flex justify-between"><span className="text-slate-600">Recurring Donor Rate</span><span className="font-semibold text-slate-900">{retention.recurringDonorRate != null ? `${Math.round(retention.recurringDonorRate * 100)}%` : "—"}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">{pw("Returning Donor Rate")}</span><span className="font-semibold text-slate-900">{retention.returningDonorRate != null ? `${Math.round(retention.returningDonorRate * 100)}%` : "—"}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">{pw("Repeat Donation Rate")}</span><span className="font-semibold text-slate-900">{retention.repeatDonationRate != null ? `${Math.round(retention.repeatDonationRate * 100)}%` : "—"}</span></div>
+            <div className="flex justify-between"><span className="text-slate-600">{pw("Recurring Donor Rate")}</span><span className="font-semibold text-slate-900">{retention.recurringDonorRate != null ? `${Math.round(retention.recurringDonorRate * 100)}%` : "—"}</span></div>
             <div className="flex justify-between"><span className="text-slate-600">Retained</span><span className="font-semibold text-slate-900">{retention.retainedDonors}</span></div>
             <div className="flex justify-between"><span className="text-slate-600">Lapsed</span><span className="font-semibold text-slate-900">{retention.lapsedDonors}</span></div>
           </div>
         )}
       </Card>
 
-      <Card title="Donation Concentration">
+      <Card title={pw("Donation Concentration")}>
         <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between"><span className="text-slate-600">Top 1 Donor</span><span className="font-semibold text-slate-900">{concentration.top1SharePct.toFixed(1)}%</span></div>
-          <div className="flex justify-between"><span className="text-slate-600">Top 5 Donors</span><span className="font-semibold text-slate-900">{concentration.top5SharePct.toFixed(1)}%</span></div>
-          <div className="flex justify-between"><span className="text-slate-600">Top 10 Donors</span><span className="font-semibold text-slate-900">{concentration.top10SharePct.toFixed(1)}%</span></div>
-          <div className="flex justify-between"><span className="text-slate-600">Remaining Donors</span><span className="font-semibold text-slate-900">{concentration.remainingSharePct.toFixed(1)}%</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("Top 1 Donor")}</span><span className="font-semibold text-slate-900">{concentration.top1SharePct.toFixed(1)}%</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("Top 5 Donors")}</span><span className="font-semibold text-slate-900">{concentration.top5SharePct.toFixed(1)}%</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("Top 10 Donors")}</span><span className="font-semibold text-slate-900">{concentration.top10SharePct.toFixed(1)}%</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("Remaining Donors")}</span><span className="font-semibold text-slate-900">{concentration.remainingSharePct.toFixed(1)}%</span></div>
         </div>
         {concentration.top10SharePct >= 50 && (
-          <p className="text-xs text-amber-600 mt-2">Donation concentration is high.</p>
+          <p className="text-xs text-amber-600 mt-2">{pw("Donation concentration is high.")}</p>
         )}
       </Card>
 
       <Card title="Payment Method Mix">
         {paymentMethodMix.length === 0 ? (
-          <p className="text-sm text-slate-400">No donation activity for this period.</p>
+          <p className="text-sm text-slate-400">{pw("No donation activity for this period.")}</p>
         ) : (
           <div className="space-y-2">
             {paymentMethodMix.map((m) => (
@@ -121,9 +123,9 @@ export default function DonorAnalyticsExtras({
         )}
       </Card>
 
-      <Card title="Donors Requiring Attention">
+      <Card title={pw("Donors Requiring Attention")}>
         {attentionList.length === 0 ? (
-          <p className="text-sm text-slate-400">No donors currently require attention.</p>
+          <p className="text-sm text-slate-400">{pw("No donors currently require attention.")}</p>
         ) : (
           <div className="space-y-2">
             {attentionList.slice(0, 5).map((a) => (

@@ -6,6 +6,7 @@ import StateBadge from "@/components/merchant/StateBadge";
 import { formatCents } from "@/lib/format";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import StatementPreviewModal from "@/components/merchant/StatementPreviewModal";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Statement {
   id: string;
@@ -38,6 +39,7 @@ export default function DonorStatementsPanel({
   canGenerate: boolean;
   canSend: boolean;
 }) {
+  const pw = usePaymentWording();
   const [statements, setStatements] = useState<Statement[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -125,7 +127,7 @@ export default function DonorStatementsPanel({
                     {s.taxYear} · v{s.version} {s.supersededAt && <span className="text-xs text-slate-400">(superseded)</span>}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {s.donationCount} donations · {formatCents(s.eligibleAmountCents)}
+                    {s.donationCount} {pw("donations ·")} {formatCents(s.eligibleAmountCents)}
                     {s.sentAt && ` · Sent ${formatDateTimeCDT(s.sentAt)}`}
                     {s.resendCount > 0 && ` (resent ${s.resendCount}x)`}
                   </p>

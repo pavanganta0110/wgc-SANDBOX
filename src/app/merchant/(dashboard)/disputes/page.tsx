@@ -170,7 +170,7 @@ export default async function DisputesPage({
               <p className="text-sm text-slate-500 max-w-sm mx-auto">
                 {tab === "needs_attention"
                   ? "Every dispute is either resolved or has a response already submitted."
-                  : "Your organization currently has no payment disputes. Disputes will automatically appear here if donors dispute a payment."}
+                  : pw("Your organization currently has no payment disputes. Disputes will automatically appear here if donors dispute a payment.")}
               </p>
             </div>
           ) : (

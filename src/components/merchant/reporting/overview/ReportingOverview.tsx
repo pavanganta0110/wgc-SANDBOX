@@ -28,6 +28,7 @@ import YearSelect from "./YearSelect";
 import ExportButton from "./ExportButton";
 import { SERIES } from "./tokens";
 import { formatCents } from "./format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function GroupLabel({
   children,
@@ -46,7 +47,7 @@ function GroupLabel({
   );
 }
 
-export default function ReportingOverview({
+export default async function ReportingOverview({
   model,
   currentYear,
   canCreateReports,
@@ -55,6 +56,7 @@ export default function ReportingOverview({
   currentYear: number;
   canCreateReports: boolean;
 }) {
+  const { pw } = await getPaymentWording();
   const { kpis: k, year } = model;
   const icon = "h-4 w-4";
   const monthlyNet = model.trend.map((t) => t.netDonatedCents);
@@ -70,7 +72,7 @@ export default function ReportingOverview({
       <PageHeader
         current="Overview"
         title="Reporting"
-        subtitle="Donor analytics, giving reports, and exports."
+        subtitle={pw("Donor analytics, giving reports, and exports.")}
         actions={
           <>
             <YearSelect
@@ -101,13 +103,13 @@ export default function ReportingOverview({
       </PageHeader>
 
       {/* Giving */}
-      <section aria-label="Giving">
+      <section aria-label={pw("Giving")}>
         <GroupLabel
           hint={
             model.isCurrentYear ? "Net of refunds" : `${year}, net of refunds`
           }
         >
-          Giving
+          {pw("Giving")}
         </GroupLabel>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-12">
           <KpiTile
@@ -155,7 +157,7 @@ export default function ReportingOverview({
           />
           <KpiTile
             className="col-span-2 sm:col-span-1 lg:col-span-2"
-            label="Average gift"
+            label={pw("Average gift")}
             href="/merchant/reporting/donors"
             value={formatCents(k.averageGiftCents)}
             icon={<Receipt className={icon} />}
@@ -169,7 +171,7 @@ export default function ReportingOverview({
             hint={
               k.giftCount > 0
                 ? `${k.giftCount.toLocaleString("en-US")} gifts`
-                : "No gifts yet"
+                : pw("No gifts yet")
             }
             spark={<Sparkline values={monthlyAvg} color={SERIES.indigo} />}
           />
@@ -177,20 +179,20 @@ export default function ReportingOverview({
       </section>
 
       {/* Donors */}
-      <section aria-label="Donors">
+      <section aria-label={pw("Donors")}>
         <GroupLabel
           hint={model.isCurrentYear ? `${year} so far` : String(year)}
         >
-          Donors
+          {pw("Donors")}
         </GroupLabel>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
           <KpiTile
-            label="Total donors"
+            label={pw("Total donors")}
             href="/merchant/donors"
             value={k.totalDonors.toLocaleString("en-US")}
             icon={<Users className={icon} />}
             tip="Everyone on your donor list."
-            hint="On your donor list"
+            hint={pw("On your donor list")}
           />
           <KpiTile
             label="New"

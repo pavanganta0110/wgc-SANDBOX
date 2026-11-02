@@ -6,8 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import AddUnsubscribeForm from "@/components/merchant/AddUnsubscribeForm";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function UnsubscribedPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const permissions = getDonorPermissions(session?.role);
   if (!session?.churchId || !permissions.canView) redirect("/merchant/dashboard");
@@ -23,7 +25,7 @@ export default async function UnsubscribedPage() {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Unsubscribed emails</h2>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            People who used the Unsubscribe link in one of your campaign emails. They&apos;re left out of every email campaign automatically — including monthly ones. Receipts and statements for gifts they make are not affected.
+            {pw("People who used the Unsubscribe link in one of your campaign emails. They're left out of every email campaign automatically — including monthly ones. Receipts and statements for gifts they make are not affected.")}
           </p>
         </div>
         {rows.length > 0 && (

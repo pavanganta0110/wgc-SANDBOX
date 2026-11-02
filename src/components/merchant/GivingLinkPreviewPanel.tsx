@@ -7,6 +7,7 @@ import { resolveGivingPageLogo } from "@/lib/givingLinks/types";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
 import type { PublicStudentGiving } from "@/lib/givingLinks/loadPublicGivingPageData";
+import { usePaymentWording, usePaymentMode } from "@/components/merchant/PaymentModeContext";
 
 export default function GivingLinkPreviewPanel({
   churchName,
@@ -76,6 +77,8 @@ export default function GivingLinkPreviewPanel({
   previewStudents?: { id: string; name: string }[];
   pageType?: "DONATIONS" | "MERCHANDISE" | "BOTH";
 }) {
+  const paymentMode = usePaymentMode();
+  const pw = usePaymentWording();
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [previewCollapsed, setPreviewCollapsed] = useState(false);
   const [formError, setFormError] = useState(false);
@@ -119,7 +122,7 @@ export default function GivingLinkPreviewPanel({
       {!previewCollapsed && (
         <>
           <p className="text-xs text-slate-400 mb-3">
-            This renders the actual giving page component in a safe preview mode — no real payment, donation, or receipt is ever created here.
+            {pw("This renders the actual giving page component in a safe preview mode — no real payment, donation, or receipt is ever created here.")}
           </p>
 
           {/* Mobile preview uses a real narrow viewport container (not a scaled-down desktop frame) so responsive Tailwind breakpoints inside the shared form actually engage. */}
@@ -170,7 +173,7 @@ export default function GivingLinkPreviewPanel({
                 <img src={campaignImageUrl} alt="" className="w-full h-32 object-cover rounded-xl mb-6" />
               )}
               <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
-                {publicTitle || "Your Giving Link Title"}
+                {publicTitle || pw("Your Giving Link Title")}
               </h1>
               {description && (
                 <p className="text-sm text-center mb-6" style={{ color: light.bodyTextColor }}>
@@ -198,10 +201,11 @@ export default function GivingLinkPreviewPanel({
                 <>
                   {pageType === "BOTH" && (
                     <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
-                      This preview shows the donation step only — merchandise selection appears below it on the real, live page.
+                      {pw("This preview shows the donation step only — merchandise selection appears below it on the real, live page.")}
                     </p>
                   )}
                   <GivingLinkForm
+                    paymentMode={paymentMode}
                     // The form only reads its default type/amount when it
                     // mounts, so remount whenever the merchant changes them
                     // — otherwise the preview would keep showing the old

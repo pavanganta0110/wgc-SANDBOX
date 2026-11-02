@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { X } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export interface DonorFormValues {
   name: string;
@@ -46,6 +47,7 @@ export default function DonorFormModal({
   initialValues?: Partial<DonorFormValues>;
   onClose: () => void;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [values, setValues] = useState<DonorFormValues>({ ...EMPTY_FORM, ...initialValues });
   const [saving, setSaving] = useState(false);
@@ -54,7 +56,7 @@ export default function DonorFormModal({
 
   const submit = async () => {
     if (!values.name.trim()) {
-      toast.error("Donor name is required");
+      toast.error(pw("Donor name is required"));
       return;
     }
     setSaving(true);
@@ -87,7 +89,7 @@ export default function DonorFormModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900">{mode === "create" ? "Add Donor" : "Edit Donor"}</h3>
+          <h3 className="text-sm font-bold text-slate-900">{mode === "create" ? pw("Add Donor") : pw("Edit Donor")}</h3>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
             <X className="w-4 h-4" />
           </button>
@@ -110,7 +112,7 @@ export default function DonorFormModal({
           <Field label="Country" value={values.country} onChange={(v) => set("country", v)} />
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={values.anonymousPreference} onChange={(e) => set("anonymousPreference", e.target.checked)} />
-            Always display this donor as anonymous
+            {pw("Always display this donor as anonymous")}
           </label>
           {mode === "create" && (
             <div>
@@ -134,7 +136,7 @@ export default function DonorFormModal({
             disabled={saving}
             className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
           >
-            {saving ? "Saving…" : mode === "create" ? "Add Donor" : "Save Changes"}
+            {saving ? "Saving…" : mode === "create" ? pw("Add Donor") : "Save Changes"}
           </button>
         </div>
       </div>

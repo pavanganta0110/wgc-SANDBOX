@@ -27,7 +27,7 @@ export default function SendGivingLinkButton({ donorEmail }: { donorEmail: strin
       setLinks(data.links ?? []);
     } catch {
       setLinks([]);
-      toast.error("Failed to load giving links");
+      toast.error(pw("Failed to load giving links"));
     }
   };
 
@@ -58,7 +58,7 @@ export default function SendGivingLinkButton({ donorEmail }: { donorEmail: strin
         className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
       >
         <Send className="w-4 h-4" />
-        Send Giving Link
+        {pw("Send Giving Link")}
       </button>
       {open && (
         <>

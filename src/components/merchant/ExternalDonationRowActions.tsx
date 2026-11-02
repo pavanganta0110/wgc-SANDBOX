@@ -45,7 +45,7 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
       const res = await fetch(`/api/merchant/donations/external/${id}/void`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const json = await res.json();
       if (!res.ok) return toast.error(json.error || "Could not void this donation");
-      toast.success("Donation voided");
+      toast.success(pw("Donation voided"));
       router.refresh();
     } finally {
       setBusy(false);
@@ -81,7 +81,7 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
       });
       const json = await res.json();
       if (!res.ok) return toast.error(json.error || "Could not update donor");
-      toast.success("Donor updated");
+      toast.success(pw("Donor updated"));
       setMatching(false);
       router.refresh();
     } finally {
@@ -94,7 +94,7 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
       <div className="flex gap-2">
         {canMatch && (donorMatchStatus === "UNMATCHED" || donorMatchStatus === "ANONYMOUS") && (
           <button onClick={() => setMatching((v) => !v)} disabled={busy} className="text-xs font-semibold text-blue-600 hover:underline">
-            Connect donor
+            {pw("Connect donor")}
           </button>
         )}
         {canSendReceipt && status !== "VOIDED" && (
@@ -132,7 +132,7 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
           <DonorPicker selected={selectedDonor} onSelect={setSelectedDonor} onClear={() => setSelectedDonor(null)} />
           {selectedDonor ? (
             <button onClick={() => handleMatch("existing")} disabled={busy} className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
-              Connect to {selectedDonor.name || "this donor"}
+              Connect to {selectedDonor.name || pw("this donor")}
             </button>
           ) : (
             <>
@@ -142,7 +142,7 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
               <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
               <div className="flex flex-wrap gap-2 pt-1">
                 <button onClick={() => handleMatch("new")} disabled={busy} className="rounded bg-slate-900 px-2 py-1 text-[11px] font-semibold text-white">
-                  Save donor
+                  {pw("Save donor")}
                 </button>
                 <button onClick={() => handleMatch("anonymous")} disabled={busy} className="rounded border border-slate-200 px-2 py-1 text-[11px]">
                   Mark anonymous

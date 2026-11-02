@@ -25,8 +25,7 @@ export default async function GivingSettingsPage() {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Donor portal")}</h3>
       <p className="text-xs text-slate-500 mb-4">
-        Share this link so donors can sign in with their email to see their giving, receipts and statements, and manage their recurring gifts.
-        It also appears on your public giving pages and in recurring-gift confirmation emails.
+        {pw("Share this link so donors can sign in with their email to see their giving, receipts and statements, and manage their recurring gifts. It also appears on your public giving pages and in recurring-gift confirmation emails.")}
       </p>
       <CopyDonorPortalLink url={`${appUrl}/give/${church.slug}/account`} organizationName={church.name} accentColor={resolvePortalAccent(church.primaryColor)} />
       <h4 className="mt-6 mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Portal activity</h4>
@@ -35,8 +34,8 @@ export default async function GivingSettingsPage() {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Giving")}</h3>
       <p className="text-xs text-slate-500 mb-6">
-        Organization-wide giving preferences. Amount, payment method, and branding settings live on each individual{" "}
-        <a href="/merchant/giving-links" className="text-blue-600 hover:underline">{pw("Giving Link")}</a>, where you can see a live preview of exactly what donors see.
+        {pw("Organization-wide giving preferences. Amount, payment method, and branding settings live on each individual")}{" "}
+        <a href="/merchant/giving-links" className="text-blue-600 hover:underline">{pw("Giving Link")}</a>{pw(", where you can see a live preview of exactly what donors see.")}
       </p>
       <GivingSettingsForm
         initial={{

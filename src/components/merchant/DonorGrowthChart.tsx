@@ -34,7 +34,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthPoint[] })
 
       {!hasData ? (
         <div className="flex items-center justify-center h-56 text-sm text-slate-400">
-          No donor activity for this period.
+          {pw("No donor activity for this period.")}
         </div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">

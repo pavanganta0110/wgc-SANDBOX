@@ -82,6 +82,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 }
 
 function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+  const pw = usePaymentWording();
   const [step, setStep] = useState<"donor" | "terms" | "review" | "result">("donor");
   const [search, setSearch] = useState("");
   const [donors, setDonors] = useState<DonorOption[]>([]);
@@ -112,7 +113,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
         const data = await res.json();
         setDonors((data.rows || []).map((r: any) => ({ id: r.donor.id, name: r.donor.name || "—", email: r.donor.email })));
       } catch {
-        toast.error("Donor search failed. Please try again.");
+        toast.error(pw("Donor search failed. Please try again."));
       }
     }, 300);
     return () => clearTimeout(timeout);
@@ -200,7 +201,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
             <CheckCircle2 className="w-8 h-8 text-emerald-600 mb-3" />
             <h3 className="font-bold text-slate-900 mb-2">Subscription Created</h3>
             <div className="space-y-1 text-sm text-slate-600 mb-4">
-              <p>Donor: <strong>{result.donorName}</strong></p>
+              <p>{pw("Donor:")} <strong>{result.donorName}</strong></p>
               <p>Amount: <strong>{formatCents(result.amountCents)}</strong> — {result.billingInterval}</p>
               <p>Start Date: {new Date(result.startDate).toLocaleDateString("en-US")}</p>
               <p>Payment Method: •••• {result.paymentMethodLastFour}</p>
@@ -223,10 +224,10 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
 
       {step === "donor" && (
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
-          <h3 className="font-bold text-slate-900">Select Donor</h3>
+          <h3 className="font-bold text-slate-900">{pw("Select Donor")}</h3>
           <input
             type="text"
-            placeholder="Search donor name or email"
+            placeholder={pw("Search donor name or email")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none"
@@ -253,7 +254,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
               ) : paymentMethods === null ? (
                 <p className="text-sm text-slate-400">Loading payment methods…</p>
               ) : paymentMethods.length === 0 ? (
-                <p className="text-sm text-amber-600">This donor has no saved payment method. Use "Send Setup Link to Donor" instead.</p>
+                <p className="text-sm text-amber-600">{pw("This donor has no saved payment method. Use \"Send Setup Link to Donor\" instead.")}</p>
               ) : (
                 <div className="space-y-2">
                   {paymentMethods.map((m) => {
@@ -329,9 +330,9 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
 
       {step === "review" && selectedDonor && selectedMethod && (
         <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
-          <h3 className="font-bold text-slate-900">Confirm Recurring Donation</h3>
+          <h3 className="font-bold text-slate-900">{pw("Confirm Recurring Donation")}</h3>
           <div className="space-y-1.5 text-sm">
-            <div className="flex justify-between"><span className="text-slate-500">Donor</span><span className="font-semibold text-slate-800">{selectedDonor.name}</span></div>
+            <div className="flex justify-between"><span className="text-slate-500">{pw("Donor")}</span><span className="font-semibold text-slate-800">{selectedDonor.name}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Email</span><span className="font-semibold text-slate-800">{selectedDonor.email}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="font-semibold text-slate-800">{formatCents(amountCents)}</span></div>
             <div className="flex justify-between"><span className="text-slate-500">Frequency</span><span className="font-semibold text-slate-800">{FREQUENCIES.find((f) => f.value === frequency)?.label}</span></div>
@@ -341,7 +342,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
           </div>
           <label className="flex items-start gap-2 text-sm text-slate-700 bg-slate-50 rounded-xl p-3">
             <input type="checkbox" checked={consentConfirmed} onChange={(e) => setConsentConfirmed(e.target.checked)} className="mt-0.5" />
-            I confirm that the donor authorized this recurring donation and agreed to the amount, frequency, start date, and cancellation terms.
+            {pw("I confirm that the donor authorized this recurring donation and agreed to the amount, frequency, start date, and cancellation terms.")}
           </label>
           <div className="flex gap-2">
             <button onClick={() => setStep("terms")} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700">Back</button>
@@ -356,6 +357,7 @@ function ExistingPaymentMethodFlow({ onBack, onDone }: { onBack: () => void; onD
 }
 
 function SetupLinkFlow({ onBack }: { onBack: () => void }) {
+  const pw = usePaymentWording();
   const [search, setSearch] = useState("");
   const [donors, setDonors] = useState<DonorOption[]>([]);
   const [selectedDonor, setSelectedDonor] = useState<DonorOption | null>(null);
@@ -384,7 +386,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
         const data = await res.json();
         setDonors((data.rows || []).map((r: any) => ({ id: r.donor.id, name: r.donor.name || "—", email: r.donor.email })));
       } catch {
-        toast.error("Donor search failed. Please try again.");
+        toast.error(pw("Donor search failed. Please try again."));
       }
     }, 300);
     return () => clearTimeout(timeout);
@@ -435,7 +437,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
           <CheckCircle2 className="w-8 h-8 text-emerald-600 mb-3" />
           <h3 className="font-bold text-slate-900 mb-2">Setup Link Sent</h3>
           <div className="space-y-1 text-sm text-slate-600 mb-4">
-            <p>Donor: <strong>{result.link.donorEmail}</strong></p>
+            <p>{pw("Donor:")} <strong>{result.link.donorEmail}</strong></p>
             <p>Expires: {new Date(result.link.expiresAt).toLocaleDateString("en-US")}</p>
             <p>Status: {result.link.status}</p>
           </div>
@@ -458,7 +460,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
 
         {!selectedDonor ? (
           <div>
-            <label className="block text-xs font-semibold text-slate-500 mb-1">Search Existing Donor (Optional)</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">{pw("Search Existing Donor (Optional)")}</label>
             <input type="text" placeholder="Search by name or email" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none mb-2" />
             {donors.length > 0 && (
               <div className="border border-slate-100 rounded-xl divide-y divide-slate-50 max-h-40 overflow-y-auto mb-3">
@@ -470,7 +472,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
                 ))}
               </div>
             )}
-            <p className="text-xs text-slate-400 mb-3">Or enter a new donor&apos;s contact information:</p>
+            <p className="text-xs text-slate-400 mb-3">{pw("Or enter a new donor's contact information:")}</p>
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />
               <input placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />
@@ -511,7 +513,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
           </div>
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1">Message to Donor (Optional)</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">{pw("Message to Donor (Optional)")}</label>
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" rows={2} />
         </div>
 

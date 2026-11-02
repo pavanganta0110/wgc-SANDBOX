@@ -3,8 +3,10 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import ReportExplorer from "@/components/merchant/reporting/ReportExplorer";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function RecurringGivingReportPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -22,9 +24,9 @@ export default async function RecurringGivingReportPage() {
         canExportReports={hasPermission(auth, "canExportReports")}
         header={{
           current: "Recurring Giving",
-          title: "Recurring Giving",
+          title: pw("Recurring Giving"),
           subtitle:
-            "Every active, paused and canceled recurring donor, built on the same subscription data as the Recurring Donors page.",
+            pw("Every active, paused and canceled recurring donor, built on the same subscription data as the Recurring Donors page."),
         }}
       />
     </div>

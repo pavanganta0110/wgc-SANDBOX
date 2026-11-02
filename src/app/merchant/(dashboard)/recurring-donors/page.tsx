@@ -103,7 +103,7 @@ export default async function RecurringDonorsPage({
         <div className="ml-auto flex items-center gap-2">
           <Link href="/merchant/giving-links" className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <Send className="w-4 h-4" />
-            Send Giving Link
+            {pw("Send Giving Link")}
           </Link>
         </div>
       </div>
@@ -156,7 +156,7 @@ export default async function RecurringDonorsPage({
                     </div>
                     {allUnlinked && (
                       <p className="text-xs text-amber-600 text-right mt-0.5">
-                        {f.subscriptionCount} subscription{f.subscriptionCount === 1 ? "" : "s"} need{f.subscriptionCount === 1 ? "s" : ""} donor matching
+                        {f.subscriptionCount} subscription{f.subscriptionCount === 1 ? "" : "s"} need{f.subscriptionCount === 1 ? "s" : ""} {pw("donor matching")}
                       </p>
                     )}
                   </div>
@@ -202,8 +202,7 @@ export default async function RecurringDonorsPage({
                 <>
                   <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Some subscriptions need donor matching")}</h3>
                   <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                    {summary.unlinkedActiveSubscriptions} active subscription{summary.unlinkedActiveSubscriptions === 1 ? "" : "s"} could not
-                    be resolved to a donor yet — check the Subscriptions page to review or manually match them.
+                    {summary.unlinkedActiveSubscriptions} active subscription{summary.unlinkedActiveSubscriptions === 1 ? "" : "s"} {pw("could not be resolved to a donor yet — check the Subscriptions page to review or manually match them.")}
                   </p>
                 </>
               ) : (

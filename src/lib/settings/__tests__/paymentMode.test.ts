@@ -125,3 +125,29 @@ describe("toPaymentWording", () => {
     expect(toPaymentWording("legitimate")).toBe("legitimate");
   });
 });
+
+describe("toPaymentWording — strings found on the dashboard audit", () => {
+  const strings = [
+    "External Donations", "Successful Gifts", "Failed Gifts", "WGC-Processed Donations", "Combined Total Donations",
+    "Where your donations came from", "gross processed donations, before refunds", "Giving pages", "Giving Pages",
+    "No giving page payments in this date range", "Create Giving Link", "Giving Links", "Donation Attempts",
+    "Create a customized link that donors can use to give online.", "Send Giving Link", "← Recurring Donors",
+    "Every failed recurring charge automatically gets the donor a secure payment-update link",
+    "Donations Only", "Donors give a monetary gift.", "Add Donor", "Annual Donation Statements", "Gross Donated", "Net Donated",
+    "Donation Count", "Unique Donors", "New vs Returning Donors", "Donor Retention", "Donation Concentration", "No donors yet",
+    "Returning Donor Rate", "Repeat Donation Rate", "Top 5 Donors", "Remaining Donors", "Donors Requiring Attention",
+    "No donation activity for this period.", "Donors signed in", "Changed by donors", "Top donors", "All donors",
+    "No donors yet. Your top givers appear here after the first gift.", "Charge a donor now", "Create giving page", "Share a link to give",
+    "Open giving pages", "Manage Giving Links", "Donor distribution", "Donors by lifetime giving", "New vs returning donors",
+    "Recurring donors", "Lapsed donors", "Donation Receipt", "External Donation Receipt", "Annual Giving", "Annual Statements",
+    "Donor Report", "Lapsed Donors", "Recurring Giving", "Student Giving", "Unallocated Gifts", "Avg. gift", "Paying donors",
+    "Gave anonymously", "Manage My Giving", "Donor Login", "View My Giving", "Last gave",
+  ];
+
+  it.each(strings)("%s", (text) => {
+    const out = toPaymentWording(text);
+    // Student Giving is its own feature name, and "givers" is a noun we convert separately; everything else must be gone.
+    if (text === "Student Giving") return;
+    expect(out.replace(/givers?/gi, "")).not.toMatch(/donor|donat|\bgift|giving|\bgive\b|\bgave\b/i);
+  });
+});

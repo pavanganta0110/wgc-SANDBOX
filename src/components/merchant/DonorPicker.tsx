@@ -52,7 +52,7 @@ export default function DonorPicker({
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
         <div>
-          <span className="font-semibold text-slate-900">{selected.name || "Unnamed donor"}</span>
+          <span className="font-semibold text-slate-900">{selected.name || pw("Unnamed donor")}</span>
           {selected.email && <span className="text-slate-500"> · {selected.email}</span>}
         </div>
         <button type="button" onClick={onClear} className="text-xs font-semibold text-blue-600 hover:underline">
@@ -87,7 +87,7 @@ export default function DonorPicker({
                 }}
                 className="block w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
               >
-                <span className="font-medium text-slate-900">{d.name || "Unnamed donor"}</span>
+                <span className="font-medium text-slate-900">{d.name || pw("Unnamed donor")}</span>
                 {d.email && <span className="text-slate-500"> · {d.email}</span>}
               </button>
             ))}

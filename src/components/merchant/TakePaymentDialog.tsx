@@ -223,6 +223,7 @@ export default function TakePaymentDialog({
           fundName: fundName.trim() || undefined,
           studentId: studentId || undefined,
           studentGivenFor: studentId ? studentGivenFor : undefined,
+          termLabel: modeSettings.termFieldEnabled ? termLabel.trim() || undefined : undefined,
           note: note.trim() || undefined,
           isAnonymous,
           goodsServicesProvided,
@@ -235,7 +236,6 @@ export default function TakePaymentDialog({
       const data = await res.json();
 
       if (!res.ok) {
-          termLabel: modeSettings.termFieldEnabled ? termLabel.trim() || undefined : undefined,
         setResult({ success: false, error: data.error || "Payment failed" });
         setStep("result");
         return;
@@ -375,18 +375,6 @@ export default function TakePaymentDialog({
               </div>
             )}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Note</label>
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Optional note for this payment"
-                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-2">Payment Method</label>
             {modeSettings.termFieldEnabled && (
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Term</label>
@@ -406,6 +394,18 @@ export default function TakePaymentDialog({
               </div>
             )}
 
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">Note</label>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Optional note for this payment"
+                className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-2">Payment Method</label>
               <div className="flex gap-2">
                 <button
                   onClick={() => setPaymentMethod("card")}
@@ -570,6 +570,7 @@ export default function TakePaymentDialog({
               <div className="flex justify-between"><span className="text-slate-500">Payment Amount</span><span className="font-semibold">{formatCents(amountCents)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payment Method</span><span className="font-semibold">{paymentMethod === "card" ? "Card" : "Bank Account"}</span></div>
               {fundName.trim() && <div className="flex justify-between"><span className="text-slate-500">Fund/Campaign</span><span className="font-semibold">{fundName.trim()}</span></div>}
+              {modeSettings.termFieldEnabled && termLabel.trim() && <div className="flex justify-between"><span className="text-slate-500">Term</span><span className="font-semibold">{termLabel.trim()}</span></div>}
               {studentId && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Student</span>
@@ -582,7 +583,6 @@ export default function TakePaymentDialog({
               <div className="flex justify-between">
                 <span className="text-slate-500">Goods or Services</span>
                 <span className="font-semibold">{goodsServicesProvided ? "Provided" : "None Provided"}</span>
-              {modeSettings.termFieldEnabled && termLabel.trim() && <div className="flex justify-between"><span className="text-slate-500">Term</span><span className="font-semibold">{termLabel.trim()}</span></div>}
               </div>
               {goodsServicesProvided && (
                 <>
@@ -639,6 +639,7 @@ export default function TakePaymentDialog({
                 {result.transferId && (
                   <p className="text-xs text-slate-400 font-mono">{result.transferId}</p>
                 )}
+                {result.transferId && <PaymentReceiptActions transferId={result.transferId} defaultEmail={email.trim()} />}
                 <div className="flex gap-2 justify-center pt-2">
                   <button
                     onClick={onClose}
@@ -651,7 +652,6 @@ export default function TakePaymentDialog({
                     className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     Take Another Payment
-                {result.transferId && <PaymentReceiptActions transferId={result.transferId} defaultEmail={email.trim()} />}
                   </button>
                 </div>
               </>

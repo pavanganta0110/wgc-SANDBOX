@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import toast from "react-hot-toast";
 import ShareGivingLinkModal from "@/components/merchant/ShareGivingLinkModal";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function GivingLinkRowActions({
   id,
@@ -18,6 +19,7 @@ export default function GivingLinkRowActions({
   publicTitle: string;
   status: "ACTIVE" | "INACTIVE" | "EXPIRED" | "ARCHIVED";
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -81,11 +83,11 @@ export default function GivingLinkRowActions({
     setBusy(false);
     setIsOpen(false);
     if (!res.ok) {
-      toast.error("Failed to duplicate giving link");
+      toast.error(pw("Failed to duplicate giving link"));
       return;
     }
     const data = await res.json();
-    toast.success("Giving link duplicated");
+    toast.success(pw("Giving link duplicated"));
     router.push(`/merchant/giving-links/${data.link.id}/edit`);
   };
 
@@ -100,7 +102,7 @@ export default function GivingLinkRowActions({
     setBusy(false);
     setIsOpen(false);
     if (!res.ok) {
-      toast.error("Failed to update giving link status");
+      toast.error(pw("Failed to update giving link status"));
       return;
     }
     toast.success(

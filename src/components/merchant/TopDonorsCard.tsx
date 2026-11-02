@@ -54,14 +54,14 @@ export default function TopDonorsCard({ rows, metric }: { rows: TopDonorRow[]; m
               metric === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
             }`}
           >
-            {m.label}
+            {pw(m.label)}
           </button>
         ))}
       </div>
 
       {rows.length === 0 ? (
         <p className="text-sm text-slate-400 py-10 text-center">
-          Top donors will appear after successful donations are received.
+          {pw("Top donors will appear after successful donations are received.")}
         </p>
       ) : (
         <div className="space-y-3">

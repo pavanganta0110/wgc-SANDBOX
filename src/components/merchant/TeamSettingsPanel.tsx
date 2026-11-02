@@ -227,7 +227,7 @@ export default function TeamSettingsPanel({
     { key: "canViewAllTransactions", label: "View all organization transactions" },
     { key: "canIssueRefunds", label: "Issue refunds" },
     { key: "canExportReports", label: "Export reports" },
-    { key: "canManageRecurring", label: "Manage recurring donations" },
+    { key: "canManageRecurring", label: pw("Manage recurring donations") },
   ];
 
   return (

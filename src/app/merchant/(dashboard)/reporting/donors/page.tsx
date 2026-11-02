@@ -9,12 +9,14 @@ import { loadTopDonors } from "@/lib/donors/donorAnalytics";
 import { parseLeaderboardRange } from "@/lib/donors/leaderboardRange";
 import ReportExplorer from "@/components/merchant/reporting/ReportExplorer";
 import DonorLeaderboardCard from "@/components/merchant/reporting/DonorLeaderboardCard";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function DonorReportPage({
   searchParams,
 }: {
   searchParams: Promise<{ leaderboardRange?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -58,9 +60,9 @@ export default async function DonorReportPage({
         canExportReports={hasPermission(auth, "canExportReports")}
         header={{
           current: "Donor Report",
-          title: "Donor Report",
+          title: pw("Donor Report"),
           subtitle:
-            "Filter, customize and export donor giving data across every source.",
+            pw("Filter, customize and export donor giving data across every source."),
         }}
         afterHeader={
           <DonorLeaderboardCard

@@ -3,8 +3,10 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import ReportExplorer from "@/components/merchant/reporting/ReportExplorer";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function AnnualGivingReportPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -23,9 +25,9 @@ export default async function AnnualGivingReportPage() {
         canExportReports={hasPermission(auth, "canExportReports")}
         header={{
           current: "Annual Giving",
-          title: "Annual Giving Report",
+          title: pw("Annual Giving Report"),
           subtitle:
-            "Every donor's total giving for a calendar year. Uses the same rules as Annual Statements, so totals never conflict.",
+            pw("Every donor's total giving for a calendar year. Uses the same rules as Annual Statements, so totals never conflict."),
         }}
       />
     </div>

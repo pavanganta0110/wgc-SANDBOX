@@ -108,9 +108,7 @@ export default async function ExternalDonationsPage({
         <div>
           <h1 className="text-xl font-bold text-slate-900">{pw("External Donations")}</h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-            Donations your organization received outside WGC Payments — cash, check, Zelle, Venmo, Cash App, PayPal, bank transfer, or another
-            offline method. These records are never processed by Finix and are excluded from processing volume, settlements, deposits, and fee
-            totals, but they still count toward donor totals, year-end statements, and your own reports.
+            {pw("Donations your organization received outside WGC Payments — cash, check, Zelle, Venmo, Cash App, PayPal, bank transfer, or another offline method. These records are never processed by Finix and are excluded from processing volume, settlements, deposits, and fee totals, but they still count toward donor totals, year-end statements, and your own reports.")}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -122,12 +120,12 @@ export default async function ExternalDonationsPage({
           )}
           {canImport && (
             <Link href="/merchant/donations/external/import" className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              Import Donations
+              {pw("Import Donations")}
             </Link>
           )}
           {canCreate && (
             <Link href="/merchant/donations/external/new" className="rounded-lg bg-[#010409] px-4 py-2.5 text-sm font-semibold text-white">
-              Add External Donation
+              {pw("Add External Donation")}
             </Link>
           )}
         </div>
@@ -145,7 +143,7 @@ export default async function ExternalDonationsPage({
       {unmatched.length > 0 && (
         <section className="rounded-xl border border-amber-200 bg-amber-50/50">
           <div className="px-5 py-4 border-b border-amber-200">
-            <h2 className="text-sm font-semibold text-amber-900">Unmatched External Donations ({unmatched.length})</h2>
+            <h2 className="text-sm font-semibold text-amber-900">{pw("Unmatched External Donations (")}{unmatched.length})</h2>
             <p className="text-xs text-amber-700 mt-0.5">{pw("Money was received but not yet connected to a donor.")}</p>
           </div>
           <div className="divide-y divide-amber-100">
@@ -233,7 +231,7 @@ export default async function ExternalDonationsPage({
               {donations.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-5 py-10 text-center text-sm text-slate-400">
-                    {totalCount === 0 ? "No external donations recorded yet." : "No donations match these filters."}
+                    {totalCount === 0 ? pw("No external donations recorded yet.") : pw("No donations match these filters.")}
                   </td>
                 </tr>
               )}

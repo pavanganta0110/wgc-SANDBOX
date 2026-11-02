@@ -79,13 +79,13 @@ export default async function GivingLinksTable({
           <div className="px-6 py-16 text-center">
             <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Create your first giving link")}</h3>
             <p className="text-sm text-slate-500 mb-4">
-              Create a customized link that donors can use to give online.
+              {pw("Create a customized link that donors can use to give online.")}
             </p>
             <Link
               href="/merchant/giving-links/create"
               className="inline-flex items-center px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              Create Giving Link
+              {pw("Create Giving Link")}
             </Link>
           </div>
         ) : (

@@ -50,7 +50,7 @@ export default async function DonorDetailPanel({
       <div className="px-5 py-4 border-b border-slate-100">
         <div className="flex items-center justify-between mb-2">
           <p className="text-lg font-bold text-slate-900">
-            {donor.anonymousPreference ? "Anonymous Donor" : formatPersonName(donor.name)}
+            {donor.anonymousPreference ? pw("Anonymous Donor") : formatPersonName(donor.name)}
           </p>
           <StateBadge state={status} />
         </div>

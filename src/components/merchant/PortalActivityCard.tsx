@@ -1,4 +1,5 @@
 import type { PortalActivity } from "@/lib/donorPortal/portalActivity";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function Stat({ label, value, hint }: { label: string; value: number; hint?: string }) {
   return (
@@ -11,14 +12,15 @@ function Stat({ label, value, hint }: { label: string; value: number; hint?: str
 }
 
 /** How donors are using the portal — counts only, never who. The per-donor "signed in" marker lives on the Donors list. */
-export default function PortalActivityCard({ activity }: { activity: PortalActivity }) {
+export default async function PortalActivityCard({ activity }: { activity: PortalActivity }) {
+  const { pw } = await getPaymentWording();
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <Stat label="Donors signed in" value={activity.signedInPeople} hint="people, ever" />
+      <Stat label={pw("Donors signed in")} value={activity.signedInPeople} hint="people, ever" />
       <Stat label="Active, last 30 days" value={activity.activeLast30Days} />
       <Stat label="Invites sent" value={activity.invitesSent} />
       <Stat
-        label="Changed by donors"
+        label={pw("Changed by donors")}
         value={activity.amountChangesByDonors + activity.cancellationsByDonors}
         hint={`${activity.amountChangesByDonors} amount, ${activity.cancellationsByDonors} canceled`}
       />

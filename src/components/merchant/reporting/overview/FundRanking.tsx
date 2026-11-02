@@ -3,11 +3,13 @@ import Tip from "./Tip";
 import type { FundRow } from "./types";
 import { SERIES } from "./tokens";
 import { formatCents, percent } from "./format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-export default function FundRanking({ rows }: { rows: FundRow[] }) {
+export default async function FundRanking({ rows }: { rows: FundRow[] }) {
+  const { pw } = await getPaymentWording();
   const max = Math.max(...rows.map((r) => r.valueCents), 1);
   return (
-    <Card title="Giving by fund" subtitle="Ranked by amount, before refunds">
+    <Card title={pw("Giving by fund")} subtitle="Ranked by amount, before refunds">
       {rows.length === 0 ? (
         <EmptyNote
           title="No fund activity yet"

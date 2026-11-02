@@ -51,7 +51,7 @@ export default async function GivingLinksPage({
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"
         >
           <Plus className="w-4 h-4" />
-          Create Giving Link
+          {pw("Create Giving Link")}
         </Link>
       </div>
 

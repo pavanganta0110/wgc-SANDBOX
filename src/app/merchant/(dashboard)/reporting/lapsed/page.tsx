@@ -3,8 +3,10 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import ReportExplorer from "@/components/merchant/reporting/ReportExplorer";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function LapsedDonorReportPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -24,9 +26,9 @@ export default async function LapsedDonorReportPage() {
         canEmailDonors={hasPermission(auth, "canResendEmails")}
         header={{
           current: "Lapsed Donors",
-          title: "Lapsed Donors",
+          title: pw("Lapsed Donors"),
           subtitle:
-            "Donors with real giving history who haven't given recently, ready for a personal follow-up. Nothing here contacts a donor automatically.",
+            pw("Donors with real giving history who haven't given recently, ready for a personal follow-up. Nothing here contacts a donor automatically."),
         }}
       />
     </div>

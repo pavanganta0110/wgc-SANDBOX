@@ -102,8 +102,7 @@ export default function PrintfulConnectionCard() {
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-3">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800">
-              <strong>Printful bills you directly, not through WGC.</strong> Every donor purchase collects the retail
-              price through your normal WGC payment processing — but Printful separately charges{" "}
+              <strong>Printful bills you directly, not through WGC.</strong> {pw("Every donor purchase collects the retail price through your normal WGC payment processing — but Printful separately charges")}{" "}
               <em>your own</em> Printful account (its Wallet, funded by a card or PayPal you add in your Printful
               account) for the production/fulfillment cost of each order. If your Printful billing method isn't set
               up or your Wallet has no funds, orders will be accepted by WGC but fail on Printful's side and won't

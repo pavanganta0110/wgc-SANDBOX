@@ -45,7 +45,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
     <div className="p-6 md:p-8 max-w-3xl space-y-6">
       <div>
         <Link href="/merchant/donations/external" className="text-xs font-semibold text-slate-500 hover:underline">
-          ← External Donations
+          {pw("← External Donations")}
         </Link>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           <p className="text-sm text-slate-700">Anonymous</p>
         ) : donor ? (
           <div className="text-sm">
-            <p className="font-medium"><DonorNameLink donorId={donor.id} name={donor.name || "Unnamed donor"} /></p>
+            <p className="font-medium"><DonorNameLink donorId={donor.id} name={donor.name || pw("Unnamed donor")} /></p>
             {donor.email && <p className="text-slate-500">{donor.email}</p>}
           </div>
         ) : (

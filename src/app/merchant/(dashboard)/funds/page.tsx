@@ -85,7 +85,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
       <SummaryStrip
         items={[
           { label: `Given · ${RANGES[rangeKey]}`, value: formatCents(grandTotal), icon: <Wallet className="h-4 w-4" />, hint: "Before refunds" },
-          { label: "Gifts", value: giftCount.toLocaleString("en-US"), icon: <HandCoins className="h-4 w-4" /> },
+          { label: pw("Gifts"), value: giftCount.toLocaleString("en-US"), icon: <HandCoins className="h-4 w-4" /> },
           { label: "Active funds", value: activeFunds.toLocaleString("en-US"), icon: <Layers className="h-4 w-4" /> },
           {
             label: "Top fund",
@@ -115,7 +115,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
             {visible.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
-                  No funds yet. {canManage ? "Add one to let donors choose where their gift goes." : ""}
+                  No funds yet. {canManage ? pw("Add one to let donors choose where their gift goes.") : ""}
                 </td>
               </tr>
             )}
@@ -140,11 +140,11 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-slate-700">
                     {formatCents(r.onlineCents)}
-                    <span className="block text-[11px] text-slate-400">{r.onlineCount} gifts</span>
+                    <span className="block text-[11px] text-slate-400">{r.onlineCount} {pw("gifts")}</span>
                   </td>
                   <td className="px-3 py-3 text-right tabular-nums text-slate-700">
                     {formatCents(r.offlineCents)}
-                    <span className="block text-[11px] text-slate-400">{r.offlineCount} gifts</span>
+                    <span className="block text-[11px] text-slate-400">{r.offlineCount} {pw("gifts")}</span>
                   </td>
                   <td className="px-3 py-3 text-right font-bold tabular-nums text-slate-900">{formatCents(r.totalCents)}</td>
                   <td className="px-3 py-3">
@@ -163,7 +163,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
                           href={`/merchant/transactions/payments?fund=${encodeURIComponent(r.name)}`}
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50"
                         >
-                          View gifts <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                          {pw("View gifts")} <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
                         </Link>
                       )}
                       {canManage && r.inCatalog && r.fundId && (
@@ -178,8 +178,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
         </table>
       </div>
       <p className="text-xs text-slate-500">
-        Online gifts are successful payments before refunds. Recorded offline gifts are cash, checks and other gifts entered under External Donations
-        (returned checks excluded).
+        {pw("Online gifts are successful payments before refunds. Recorded offline gifts are cash, checks and other gifts entered under External Donations (returned checks excluded).")}
       </p>
     </div>
   );

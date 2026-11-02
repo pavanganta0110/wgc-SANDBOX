@@ -549,7 +549,7 @@ export default function CampaignDetailClient({
               <ol className="space-y-2">
                 {(leaderboard?.fundraisers ?? []).map((f, i) => (
                   <li key={f.id} className="flex items-center justify-between text-sm">
-                    <span>#{i + 1} {f.name} <span className="text-slate-400">({f.donorCount} donors)</span></span>
+                    <span>#{i + 1} {f.name} <span className="text-slate-400">({f.donorCount} {pw("donors)")}</span></span>
                     <span className="font-semibold">{formatCents(f.raisedCents)}</span>
                   </li>
                 ))}
@@ -561,7 +561,7 @@ export default function CampaignDetailClient({
               <ol className="space-y-2">
                 {(leaderboard?.teams ?? []).map((t, i) => (
                   <li key={t.id} className="flex items-center justify-between text-sm">
-                    <span>#{i + 1} {t.name} <span className="text-slate-400">({t.donorCount} donors)</span></span>
+                    <span>#{i + 1} {t.name} <span className="text-slate-400">({t.donorCount} {pw("donors)")}</span></span>
                     <span className="font-semibold">{formatCents(t.raisedCents)}</span>
                   </li>
                 ))}
@@ -793,7 +793,7 @@ export default function CampaignDetailClient({
                   Allow fundraisers to log in and edit their own story, goal, and photo
                 </label>
                 <p className="text-xs text-slate-400 mt-1 ml-6">
-                  Fundraisers never get access to this dashboard, donor payment details, or payouts — only their own public page.
+                  {pw("Fundraisers never get access to this dashboard, donor payment details, or payouts — only their own public page.")}
                 </p>
               </div>
               {canArchive && (
@@ -844,7 +844,7 @@ export default function CampaignDetailClient({
             <p className="text-xs text-slate-400 mb-3">
               {previewView === "page"
                 ? "This shows what your campaign's public page will look like."
-                : "This shows what the live donation wall will look like at your event."}{" "}
+                : pw("This shows what the live donation wall will look like at your event.")}{" "}
               {detailsDirty && "Unsaved changes below are shown here, but won't be public until you click Save Details."}
             </p>
             {previewView === "page" ? (

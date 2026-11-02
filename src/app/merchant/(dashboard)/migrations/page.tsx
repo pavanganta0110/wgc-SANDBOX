@@ -6,6 +6,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { listMigrationJobs } from "@/lib/migrations/migrationEngine";
 import { MIGRATION_ENTITY_LABELS, MIGRATION_SOURCE_LABELS, type MigrationEntityType, type MigrationSourceSystem } from "@/lib/migrations/types";
 import NewMigrationJobButton from "@/components/merchant/NewMigrationJobButton";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const STATUS_STYLES: Record<string, string> = {
   DRAFT: "bg-slate-100 text-slate-700",
@@ -19,6 +20,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default async function MigrationCenterPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -36,7 +38,7 @@ export default async function MigrationCenterPage() {
         <div>
           <h2 className="text-lg font-medium">Migration Center</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Bring your donors, donation history, and funds over from another system — CSV files today, direct connections coming soon.
+            {pw("Bring your donors, donation history, and funds over from another system — CSV files today, direct connections coming soon.")}
           </p>
         </div>
         <NewMigrationJobButton />

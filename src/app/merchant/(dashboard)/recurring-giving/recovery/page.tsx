@@ -44,11 +44,11 @@ export default async function RecurringGivingRecoveryPage() {
     <div>
       <div className="mb-6">
         <Link href="/merchant/recurring-donors" className="text-sm text-indigo-600 hover:underline">
-          &larr; Recurring Donors
+          {pw("&larr; Recurring Donors")}
         </Link>
         <h2 className="mt-2 text-lg font-medium">{pw("Recurring Giving Recovery")}</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Every failed recurring charge automatically gets the donor a secure payment-update link — this is where you track whether it worked.
+          {pw("Every failed recurring charge automatically gets the donor a secure payment-update link — this is where you track whether it worked.")}
         </p>
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Keyword {
   id: string;
@@ -17,6 +18,7 @@ interface Campaign {
 }
 
 export default function TextToGiveSettingsPanel() {
+  const pw = usePaymentWording();
   const [keywords, setKeywords] = useState<Keyword[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [smsLive, setSmsLive] = useState(false);
@@ -94,8 +96,7 @@ export default function TextToGiveSettingsPanel() {
     <div className="space-y-6">
       {!smsLive && (
         <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-sm text-amber-800">
-          Text to Give keywords can be set up now, but replies won&rsquo;t actually send yet — donor-facing texting needs its own approved messaging
-          campaign with our SMS provider first. We&rsquo;ll let you know the moment it&rsquo;s live.
+          {pw("Text to Give keywords can be set up now, but replies won’t actually send yet — donor-facing texting needs its own approved messaging campaign with our SMS provider first. We’ll let you know the moment it’s live.")}
         </div>
       )}
 

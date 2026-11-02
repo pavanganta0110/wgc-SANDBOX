@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function GivingLinksTabs({ active }: { active: "links" | "attempts" }) {
+  const pw = usePaymentWording();
   const tabs = [
-    { key: "links", label: "Giving Links", href: "/merchant/giving-links" },
-    { key: "attempts", label: "Donation Attempts", href: "/merchant/giving-links?tab=attempts" },
+    { key: "links", label: pw("Giving Links"), href: "/merchant/giving-links" },
+    { key: "attempts", label: pw("Donation Attempts"), href: "/merchant/giving-links?tab=attempts" },
   ] as const;
 
   return (

@@ -211,7 +211,7 @@ export default function InvoiceBuilderForm({ mode, initial }: { mode: "create" |
           {values.classification === "CHARITABLE_DONATION" && (
             <label className="flex items-start gap-2 text-xs text-slate-700">
               <input type="checkbox" checked={values.noGoodsOrServicesConfirmed} onChange={(e) => set("noGoodsOrServicesConfirmed", e.target.checked)} className="mt-0.5" />
-              I confirm no goods or services were provided to the client in exchange for this donation.
+              {pw("I confirm no goods or services were provided to the client in exchange for this donation.")}
             </label>
           )}
 

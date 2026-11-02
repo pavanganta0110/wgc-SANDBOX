@@ -44,12 +44,11 @@ export default async function PossibleDonorMatchesPage({ searchParams }: { searc
   return (
     <div className="p-6 md:p-8 max-w-6xl">
       <Link href="/merchant/donors" className="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">
-        ← Donors
+        {pw("← Donors")}
       </Link>
       <h1 className="text-2xl font-bold text-slate-900 mb-1">{pw("Possible Donor Matches")}</h1>
       <p className="text-sm text-slate-500 mb-6">
-        When a newly-entered or imported donor closely resembles an existing donor but doesn&apos;t exactly match on email, phone, or a linked
-        payment identity, it shows up here for a human decision — donors are never automatically merged on name similarity alone.
+        {pw("When a newly-entered or imported donor closely resembles an existing donor but doesn't exactly match on email, phone, or a linked payment identity, it shows up here for a human decision — donors are never automatically merged on name similarity alone.")}
       </p>
 
       <div className="flex items-center gap-2 mb-4 text-sm">

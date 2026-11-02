@@ -82,7 +82,7 @@ export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: st
   if (!open) {
     return (
       <button onClick={openPicker} className="text-xs font-semibold text-indigo-600 hover:underline">
-        Link Donation
+        {pw("Link Donation")}
       </button>
     );
   }
@@ -119,7 +119,7 @@ export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: st
         </div>
       ) : (
         <p className="text-slate-400">
-          No unlinked external donations for this donor.{" "}
+          {pw("No unlinked external donations for this donor.")}{" "}
           <button onClick={() => setOpen(false)} className="text-indigo-600 hover:underline">
             Close
           </button>

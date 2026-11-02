@@ -39,8 +39,8 @@ export default async function EmailLogsPage({
 }: {
   searchParams: Promise<{ page?: string; category?: string; status?: string; search?: string; from?: string; to?: string }>;
 }) {
-  let auth;
   const { pw } = await getPaymentWording();
+  let auth;
   try {
     auth = await requireMerchantSession();
   } catch (err) {
@@ -83,7 +83,7 @@ export default async function EmailLogsPage({
         <select name="category" defaultValue={sp.category || ""} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
           <option value="">All Types</option>
           {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
+            <option key={key} value={key}>{pw(label)}</option>
           ))}
         </select>
         <select name="status" defaultValue={sp.status || ""} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
@@ -128,7 +128,7 @@ export default async function EmailLogsPage({
                     <p className="text-xs text-slate-400">{log.recipientEmail}</p>
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-600">
-                    {CATEGORY_LABELS[log.category] || log.category}
+                    {pw(CATEGORY_LABELS[log.category] || log.category)}
                     {log.resendCount > 0 && <span className="ml-1.5 text-xs text-slate-400">(Resent)</span>}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-500 max-w-xs truncate">{log.subject}</td>

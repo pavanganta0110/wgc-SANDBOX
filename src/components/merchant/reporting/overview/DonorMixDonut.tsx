@@ -5,8 +5,9 @@ import Tip from "./Tip";
 import InfoTip from "./InfoTip";
 import { SERIES } from "./tokens";
 import { percent } from "./format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-export default function DonorMixDonut({
+export default async function DonorMixDonut({
   newCount,
   returningCount,
   recurring,
@@ -19,6 +20,7 @@ export default function DonorMixDonut({
   lapsed: number;
   year: number;
 }) {
+  const { pw } = await getPaymentWording();
   const total = newCount + returningCount;
   const r = 52;
   const c = 2 * Math.PI * r;
@@ -43,12 +45,12 @@ export default function DonorMixDonut({
 
   return (
     <Card
-      title="New vs returning donors"
+      title={pw("New vs returning donors")}
       subtitle={`Donors who gave in ${year}`}
     >
       {total === 0 ? (
         <EmptyNote
-          title="No donors have given yet"
+          title={pw("No donors have given yet")}
           body="Once donors give, you'll see how many are new and how many keep coming back."
         />
       ) : (
@@ -92,7 +94,7 @@ export default function DonorMixDonut({
                 {total.toLocaleString("en-US")}
               </span>
               <span className="text-[11px] font-medium text-slate-500">
-                donors
+                {pw("donors")}
               </span>
             </div>
           </div>
@@ -141,7 +143,7 @@ export default function DonorMixDonut({
             <div className="mt-1 text-xs text-slate-500">
               Recurring
               <InfoTip
-                label="Recurring donors"
+                label={pw("Recurring donors")}
                 text="Donors giving on a recurring schedule (monthly, weekly and so on)."
               />
             </div>
@@ -164,7 +166,7 @@ export default function DonorMixDonut({
             <div className="mt-1 text-xs text-slate-500">
               Lapsed
               <InfoTip
-                label="Lapsed donors"
+                label={pw("Lapsed donors")}
                 text={`Gave in ${year - 1} but haven't given yet in ${year}.`}
               />
             </div>

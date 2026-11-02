@@ -56,7 +56,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
           </div>
         )}
         <p className="mt-1 text-xs text-slate-400">
-          Total raised includes both fulfilled pledges and direct &quot;Give now&quot; donations that were never tied to a pledge.
+          {pw("Total raised includes both fulfilled pledges and direct \"Give now\" donations that were never tied to a pledge.")}
         </p>
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
           <div>

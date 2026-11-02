@@ -287,7 +287,7 @@ export default async function DonorsPage({
           href="/merchant/donors/annual-statements"
           className="text-sm font-semibold text-blue-600 hover:underline"
         >
-          Annual Donation Statements
+          {pw("Annual Donation Statements")}
         </Link>
         {permissions.canReviewMatches && pendingMatchCount > 0 && (
           <Link
@@ -391,11 +391,10 @@ export default async function DonorsPage({
                 <Users className="w-6 h-6 text-slate-300" />
               </div>
               <h3 className="text-sm font-bold text-slate-900 mb-1">
-                No donors yet
+                {pw("No donors yet")}
               </h3>
               <p className="text-sm text-slate-500 max-w-sm mx-auto">
-                Donors will appear here after they make a donation or are added
-                by an authorized organization user.
+                {pw("Donors will appear here after they make a donation or are added by an authorized organization user.")}
               </p>
             </div>
           ) : (
@@ -408,7 +407,7 @@ export default async function DonorsPage({
                         href={sortLink("name")}
                         className="flex items-center gap-1 hover:text-slate-800"
                       >
-                        Donor <ArrowUpDown className="w-3 h-3" />
+                        {pw("Donor")} <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
@@ -430,7 +429,7 @@ export default async function DonorsPage({
                         href={sortLink("totalDonatedCents")}
                         className="flex items-center justify-end gap-1 hover:text-slate-800"
                       >
-                        Total Donated <ArrowUpDown className="w-3 h-3" />
+                        {pw("Total Donated")} <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
@@ -449,7 +448,7 @@ export default async function DonorsPage({
                         href={sortLink("donationCount")}
                         className="flex items-center justify-end gap-1 hover:text-slate-800"
                       >
-                        Donation Count <ArrowUpDown className="w-3 h-3" />
+                        {pw("Donation Count")} <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
@@ -462,7 +461,7 @@ export default async function DonorsPage({
                         href={sortLink("firstDonationAt")}
                         className="flex items-center gap-1 hover:text-slate-800"
                       >
-                        First Donation <ArrowUpDown className="w-3 h-3" />
+                        {pw("First Donation")} <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
@@ -472,7 +471,7 @@ export default async function DonorsPage({
                         href={sortLink("lastDonationAt")}
                         className="flex items-center gap-1 hover:text-slate-800"
                       >
-                        Last Donation <ArrowUpDown className="w-3 h-3" />
+                        {pw("Last Donation")} <ArrowUpDown className="w-3 h-3" />
                       </Link>
                     </th>
                   )}
@@ -536,7 +535,7 @@ export default async function DonorsPage({
                               <div>
                                 <p className="font-semibold text-slate-800">
                                   {donor.anonymousPreference
-                                    ? "Anonymous Donor"
+                                    ? pw("Anonymous Donor")
                                     : formatPersonName(donor.name)}
                                 </p>
                                 {donor.companyName && (

@@ -139,7 +139,7 @@ export default function GivingTrend({
             id="giving-trend-title"
             className="text-sm font-bold text-slate-900"
           >
-            Giving by month
+            {pw("Giving by month")}
           </h4>
           <p className="mt-0.5 text-xs text-slate-500">{periodLabel}</p>
         </div>
@@ -197,11 +197,10 @@ export default function GivingTrend({
       {!hasData ? (
         <div className="mt-6 flex h-56 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 text-center">
           <p className="text-sm font-semibold text-slate-700">
-            No giving in this period yet
+            {pw("No giving in this period yet")}
           </p>
           <p className="mt-1 max-w-xs text-xs text-slate-500">
-            Gifts will appear here month by month as soon as your first donation
-            comes in.
+            {pw("Gifts will appear here month by month as soon as your first donation comes in.")}
           </p>
         </div>
       ) : (
@@ -240,10 +239,10 @@ export default function GivingTrend({
                       Net
                     </th>
                     <th scope="col" className="py-2 text-right font-semibold">
-                      Gifts
+                      {pw("Gifts")}
                     </th>
                     <th scope="col" className="py-2 text-right font-semibold">
-                      Donors
+                      {pw("Donors")}
                     </th>
                   </tr>
                 </thead>
@@ -399,9 +398,9 @@ export default function GivingTrend({
                     {fmt(values[active])}
                   </div>
                   <div className="mt-1 text-[11px] text-slate-500 tabular-nums">
-                    {data[active].donationCount} gift
+                    {data[active].donationCount} {pw("gift")}
                     {data[active].donationCount === 1 ? "" : "s"} ·{" "}
-                    {data[active].uniqueDonorCount} donor
+                    {data[active].uniqueDonorCount} {pw("donor")}
                     {data[active].uniqueDonorCount === 1 ? "" : "s"}
                   </div>
                 </div>

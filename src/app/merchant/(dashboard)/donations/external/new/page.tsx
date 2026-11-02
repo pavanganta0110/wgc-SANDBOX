@@ -20,8 +20,7 @@ export default async function NewExternalDonationPage() {
       <div className="max-w-2xl mb-6">
         <h1 className="text-xl font-bold text-slate-900">{pw("Record External Donation")}</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Record a donation received outside WGC Payments — cash, check, Cash App, Zelle, Venmo, PayPal, bank transfer, external card terminal, money order, or another method.
-          This is never processed by WGC Payments and never affects your processing volume, fees, or settlements.
+          {pw("Record a donation received outside WGC Payments — cash, check, Cash App, Zelle, Venmo, PayPal, bank transfer, external card terminal, money order, or another method. This is never processed by WGC Payments and never affects your processing volume, fees, or settlements.")}
         </p>
       </div>
       <RecordExternalDonationForm />

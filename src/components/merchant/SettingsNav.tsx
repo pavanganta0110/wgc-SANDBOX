@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { SETTINGS_NAV } from "@/lib/settings/settingsNav";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function SettingsNav() {
+  const pw = usePaymentWording();
   const pathname = usePathname();
   const router = useRouter();
   const active = SETTINGS_NAV.find((item) => pathname === item.href || pathname.startsWith(item.href + "/"));
@@ -22,7 +24,7 @@ export default function SettingsNav() {
                   active?.key === item.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                {item.label}
+                {pw(item.label)}
               </Link>
             </li>
           ))}
@@ -38,7 +40,7 @@ export default function SettingsNav() {
         >
           {SETTINGS_NAV.map((item) => (
             <option key={item.key} value={item.href}>
-              {item.label}
+              {pw(item.label)}
             </option>
           ))}
         </select>

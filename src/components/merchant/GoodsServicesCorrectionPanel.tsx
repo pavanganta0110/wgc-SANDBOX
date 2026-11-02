@@ -51,7 +51,7 @@ export default function GoodsServicesCorrectionPanel({ transferId, paymentAmount
       if (data.requiresResendConfirmation) {
         toast.success("Correction saved. A receipt was already sent — confirm below to resend a corrected version.");
       } else if (resend) {
-        toast.success("Correction saved and a corrected receipt was sent to the donor.");
+        toast.success(pw("Correction saved and a corrected receipt was sent to the donor."));
       } else {
         toast.success("Correction saved.");
       }

@@ -3,15 +3,17 @@ import Tip from "./Tip";
 import type { BandRow } from "./types";
 import { SERIES } from "./tokens";
 import { percent } from "./format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-export default function DonorBands({ rows }: { rows: BandRow[] }) {
+export default async function DonorBands({ rows }: { rows: BandRow[] }) {
+  const { pw } = await getPaymentWording();
   const total = rows.reduce((s, r) => s + r.donorCount, 0);
   const max = Math.max(...rows.map((r) => r.donorCount), 1);
   return (
-    <Card title="Donor distribution" subtitle="Donors by lifetime giving">
+    <Card title={pw("Donor distribution")} subtitle={pw("Donors by lifetime giving")}>
       {total === 0 ? (
         <EmptyNote
-          title="No donors yet"
+          title={pw("No donors yet")}
           body="Donors will be grouped by how much they've given over time."
         />
       ) : (

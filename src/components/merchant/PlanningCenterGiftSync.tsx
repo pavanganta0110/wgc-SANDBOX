@@ -143,8 +143,8 @@ export default function PlanningCenterGiftSync() {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
       {confirmDialog}
       <div>
-        <h3 className="text-sm font-bold text-slate-900">{isPeople ? "People sync" : "Gift sync"}</h3>
-        <p className="text-xs text-slate-500 mt-0.5">{isPeople ? "Your donors are matched to people in Planning Center, and their giving is shown on their profile. No donations are sent to Planning Center Giving." : "Every gift given through WGC is added to Planning Center Giving automatically, so your donors' giving stays in one place."}</p>
+        <h3 className="text-sm font-bold text-slate-900">{isPeople ? "People sync" : pw("Gift sync")}</h3>
+        <p className="text-xs text-slate-500 mt-0.5">{isPeople ? pw("Your donors are matched to people in Planning Center, and their giving is shown on their profile. No donations are sent to Planning Center Giving.") : pw("Every gift given through WGC is added to Planning Center Giving automatically, so your donors' giving stays in one place.")}</p>
       </div>
 
       {!data.platformEnabled && (
@@ -155,7 +155,7 @@ export default function PlanningCenterGiftSync() {
       )}
       {data.platformEnabled && !data.ready && (
         <div className="rounded-lg bg-amber-50 text-amber-800 text-xs p-3">
-          <div className="font-semibold mb-1">{isPeople ? "Fix this to turn it on:" : "Finish Giving setup to turn this on:"}</div>
+          <div className="font-semibold mb-1">{isPeople ? "Fix this to turn it on:" : pw("Finish Giving setup to turn this on:")}</div>
           <ul className="list-disc pl-5 space-y-0.5">{data.readinessReasons.map((r) => <li key={r}>{r}</li>)}</ul>
         </div>
       )}
@@ -187,7 +187,7 @@ export default function PlanningCenterGiftSync() {
                           confirmLabel: "Switch to people only",
                         }
                       : {
-                          title: "Switch to sending every gift?",
+                          title: pw("Switch to sending every gift?"),
                           body: "Only gifts paid from now on are sent. Gifts paid while you were on people only are not added to Planning Center Giving.",
                           confirmLabel: "Send every gift",
                         },
@@ -237,7 +237,7 @@ export default function PlanningCenterGiftSync() {
           })}
         </div>
         {settings.syncMode === "LIVE" && settings.enabledAt && !isPeople && (
-          <p className="text-xs text-slate-500 mt-2">On since {new Date(settings.enabledAt).toLocaleString()}. Only gifts paid after that are sent.</p>
+          <p className="text-xs text-slate-500 mt-2">On since {new Date(settings.enabledAt).toLocaleString()}{pw(". Only gifts paid after that are sent.")}</p>
         )}
       </section>
 
@@ -320,7 +320,7 @@ export default function PlanningCenterGiftSync() {
                 {item.status === "NEEDS_REVIEW" && item.code !== "REVERSAL_NOT_APPLIED" && (
                   <div className="flex gap-2 shrink-0">
                     <button className={buttonSecondary} disabled={disabled} onClick={async () => {
-                      if (await confirm({ title: "Send this gift to Planning Center?", body: "Only choose this if you checked Planning Center and this gift is NOT in the batch. WGC will then send it.", confirmLabel: "Send it" })) run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "It will be sent."; });
+                      if (await confirm({ title: pw("Send this gift to Planning Center?"), body: "Only choose this if you checked Planning Center and this gift is NOT in the batch. WGC will then send it.", confirmLabel: "Send it" })) run(`r-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "RETRY" }) }); return "It will be sent."; });
                     }}>It&apos;s not there — send it</button>
                     <button className={buttonDanger} disabled={disabled} onClick={() => run(`s-${item.donationId}`, async () => { await pcoFetch(`/sync/donations/${item.donationId}/resolve`, { method: "POST", body: JSON.stringify({ action: "SKIP" }) }); return "Skipped."; })}>Don&apos;t send</button>
                   </div>
@@ -350,12 +350,12 @@ export default function PlanningCenterGiftSync() {
       {/* Held */}
       {data.held.total > 0 && (
         <section aria-labelledby="pco-sync-held">
-          <h4 id="pco-sync-held" className="text-sm font-semibold text-slate-900 mb-1">Waiting for a donor match ({data.held.total})</h4>
+          <h4 id="pco-sync-held" className="text-sm font-semibold text-slate-900 mb-1">{pw("Waiting for a donor match (")}{data.held.total})</h4>
           <p className="text-xs text-slate-500 mb-2">Choose the right person under &ldquo;People&rdquo; above and these are sent automatically.</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.held.items.map((item) => (
               <div key={item.donationId} className="p-3 text-xs flex flex-col gap-1 sm:flex-row sm:justify-between">
-                <div><span className="font-medium text-slate-900">{item.donorName ?? "Unknown donor"}</span> · {money(item.amountCents)} · {item.receivedOn}</div>
+                <div><span className="font-medium text-slate-900">{item.donorName ?? pw("Unknown donor")}</span> · {money(item.amountCents)} · {item.receivedOn}</div>
                 <div className="text-slate-500">{item.message}</div>
               </div>
             ))}
@@ -398,7 +398,7 @@ export default function PlanningCenterGiftSync() {
       {data.skipped.total > 0 && (
         <section>
           <button className="text-xs text-blue-600 hover:underline" onClick={() => setShowSkipped((v) => !v)}>
-            {showSkipped ? "Hide" : "Show"} {data.skipped.total} gift{data.skipped.total === 1 ? "" : "s"} that WGC didn&apos;t send
+            {showSkipped ? "Hide" : "Show"} {data.skipped.total} {pw("gift")}{data.skipped.total === 1 ? "" : "s"} that WGC didn&apos;t send
           </button>
           {showSkipped && (
             <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-100">
@@ -422,13 +422,14 @@ export default function PlanningCenterGiftSync() {
  * both sides and makes no claim of a saving: whether WGC is cheaper depends on who covers the fee.
  */
 function SavingsNote({ activity }: { activity: SyncOverview["activity"] }) {
+  const pw = usePaymentWording();
   const hasGifts = activity.gifts > 0;
   const feesKnown = activity.wgcFeesPaidByChurchCents !== null && activity.wgcFeesCents !== null;
   const donorCovered = feesKnown ? Math.max((activity.wgcFeesCents as number) - (activity.wgcFeesPaidByChurchCents as number), 0) : 0;
   return (
     <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 mb-3 text-xs text-slate-700 space-y-2">
       <p>
-        <strong>Payment fees.</strong> Gifts taken through WGC are processed by WGC, so Planning Center&apos;s payment fees don&apos;t apply to them. Both choices below work the same way for this.
+        <strong>Payment fees.</strong> {pw("Gifts taken through WGC are processed by WGC, so Planning Center's payment fees don't apply to them. Both choices below work the same way for this.")}
       </p>
       {hasGifts ? (
         <div>
@@ -438,20 +439,20 @@ function SavingsNote({ activity }: { activity: SyncOverview["activity"] }) {
             <dd className="text-right font-semibold">{feesKnown ? money(activity.wgcFeesPaidByChurchCents as number) : "Not available yet"}</dd>
             {feesKnown && donorCovered > 0 && (
               <>
-                <dt className="text-slate-500">Fees your donors covered</dt>
+                <dt className="text-slate-500">{pw("Fees your donors covered")}</dt>
                 <dd className="text-right text-slate-500">{money(donorCovered)}</dd>
               </>
             )}
-            <dt>About what Planning Center would have charged on the same gifts if your church paid the fees</dt>
+            <dt>{pw("About what Planning Center would have charged on the same gifts if your church paid the fees")}</dt>
             <dd className="text-right font-semibold">{money(activity.estimatedPlanningCenterFeeCents)}</dd>
           </dl>
-          <p className="text-slate-500 mt-1">Planning Center&apos;s rates: 2.15% + $0.30 per card gift and $0.30 per bank gift. Planning Center also lets donors cover the fee, so your own result depends on who pays it.</p>
+          <p className="text-slate-500 mt-1">{pw("Planning Center's rates: 2.15% + $0.30 per card gift and $0.30 per bank gift. Planning Center also lets donors cover the fee, so your own result depends on who pays it.")}</p>
         </div>
       ) : (
-        <p>Once gifts come in, this shows what processing cost your church next to Planning Center&apos;s published rates.</p>
+        <p>{pw("Once gifts come in, this shows what processing cost your church next to Planning Center's published rates.")}</p>
       )}
       <p>
-        Planning Center also charges a separate monthly Giving fee. It depends on how many gifts it records each month (the first 10 are free). <strong>Send people only</strong> records no gifts there. Check your price on{" "}
+        {pw("Planning Center also charges a separate monthly Giving fee. It depends on how many gifts it records each month (the first 10 are free).")} <strong>Send people only</strong> {pw("records no gifts there. Check your price on")}{" "}
         <a href="https://www.planningcenter.com/pricing" target="_blank" rel="noreferrer" className="underline font-medium">Planning Center&apos;s pricing page</a>
         {hasGifts ? `, using about ${activity.gifts} gifts a month.` : "."}
       </p>
@@ -461,6 +462,7 @@ function SavingsNote({ activity }: { activity: SyncOverview["activity"] }) {
 
 /** "People only": what's been written, and a preview of exactly how a profile will read in Planning Center. */
 function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boolean }) {
+  const pw = usePaymentWording();
   const [preview, setPreview] = useState<ProfilePreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -487,9 +489,9 @@ function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boo
     <section aria-labelledby="pco-people-only" className="rounded-xl border border-slate-200 p-4 space-y-3">
       <div>
         <h4 id="pco-people-only" className="text-sm font-semibold text-slate-900">What your team will see in Planning Center</h4>
-        <p className="text-xs text-slate-500 mt-0.5">A &quot;{preview?.sectionName ?? "WGC Giving"}&quot; section on each matched person, updated when they give. It shows totals, not individual gifts: open the link on the profile for the full detail in WGC.</p>
+        <p className="text-xs text-slate-500 mt-0.5">A &quot;{preview?.sectionName ?? pw("WGC Giving")}{pw("\" section on each matched person, updated when they give. It shows totals, not individual gifts: open the link on the profile for the full detail in WGC.")}</p>
         <p className="text-xs text-amber-800 bg-amber-50 rounded-lg p-2 mt-2">
-          <strong>Who can see this.</strong> These amounts appear on people&apos;s Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can&apos;t see your giving reports. Check those settings in Planning Center. Donors who asked to stay anonymous are never written.
+          <strong>Who can see this.</strong> {pw("These amounts appear on people's Planning Center profiles to anyone your Planning Center settings allow to see that section, which may include staff who can't see your giving reports. Check those settings in Planning Center. Donors who asked to stay anonymous are never written.")}
         </p>
       </div>
 
@@ -504,12 +506,12 @@ function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boo
       {preview && (
         <>
           <p className="text-xs text-slate-600">
-            <strong>{preview.counts.matched}</strong> {preview.counts.matched === 1 ? "donor who has given is" : "donors who have given are"} matched and would get the section.
-            {preview.counts.notMatched > 0 && <> <strong>{preview.counts.notMatched}</strong> aren&apos;t matched yet: nothing is written for them and no person is created. Use "Match my donors" in the People section below to match them.</>}
+            <strong>{preview.counts.matched}</strong> {preview.counts.matched === 1 ? pw("donor who has given is") : pw("donors who have given are")} matched and would get the section.
+            {preview.counts.notMatched > 0 && <> <strong>{preview.counts.notMatched}</strong> {pw("aren't matched yet: nothing is written for them and no person is created. Use \"Match my donors\" in the People section below to match them.")}</>}
             {preview.counts.anonymous > 0 && <> {preview.counts.anonymous} asked to stay anonymous and never appear.</>}
           </p>
           {preview.samples.length === 0 ? (
-            <p className="text-xs text-slate-500">No gifts to show yet. Once donors give and are matched, you&apos;ll see exactly how their profiles will read.</p>
+            <p className="text-xs text-slate-500">{pw("No gifts to show yet. Once donors give and are matched, you'll see exactly how their profiles will read.")}</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {preview.samples.map((sample, i) => (
@@ -525,7 +527,7 @@ function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boo
                       </div>
                     ))}
                     <div className="flex justify-between gap-3 text-xs">
-                      <dt className="text-slate-500">Giving details</dt>
+                      <dt className="text-slate-500">{pw("Giving details")}</dt>
                       <dd className="text-blue-700 text-right">Opens in WGC</dd>
                     </div>
                   </dl>

@@ -19,6 +19,7 @@ import {
 import PageHeader from "./ui/PageHeader";
 import EmptyState from "./ui/EmptyState";
 import { FOCUS } from "./ui/controls";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface SavedReportSummary {
   id: string;
@@ -63,6 +64,7 @@ export default function SavedReportsList({
   reports: SavedReportSummary[];
   canManage: boolean;
 }) {
+  const pw = usePaymentWording();
   const [reports, setReports] = useState(initial);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -180,7 +182,7 @@ export default function SavedReportsList({
                       </Link>
                     )}
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
-                      <span>{meta.label}</span>
+                      <span>{pw(meta.label)}</span>
                       <span aria-hidden>·</span>
                       <span className="inline-flex items-center gap-1">
                         {r.visibility === "ORGANIZATION" ? (

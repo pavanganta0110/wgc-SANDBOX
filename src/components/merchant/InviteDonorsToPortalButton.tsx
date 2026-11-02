@@ -117,7 +117,7 @@ export default function InviteDonorsToPortalButton() {
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-bold text-slate-900">{pw("Invite donors to your giving portal")}</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Donors get an email with a link to see their giving, download statements and manage recurring gifts. They sign in with a one-time code sent to their email.
+              {pw("Donors get an email with a link to see their giving, download statements and manage recurring gifts. They sign in with a one-time code sent to their email.")}
             </p>
 
             <label className="mt-4 block text-xs font-medium text-slate-600">
@@ -157,7 +157,7 @@ export default function InviteDonorsToPortalButton() {
                       return (
                         <li key={`${d.donorId ?? "x"}-${i}`} className="flex items-center justify-between gap-3 px-3 py-2">
                           <div className="min-w-0">
-                            <p className={`truncate text-sm font-medium ${skipped ? "text-slate-400" : "text-slate-800"}`}>{d.name || "Unnamed donor"}</p>
+                            <p className={`truncate text-sm font-medium ${skipped ? "text-slate-400" : "text-slate-800"}`}>{d.name || pw("Unnamed donor")}</p>
                             <p className="truncate text-xs text-slate-400">{d.email || "No email on file"}</p>
                           </div>
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${label.className}`}>{label.text}</span>

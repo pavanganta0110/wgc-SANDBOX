@@ -835,9 +835,7 @@ export default function ReportExplorer({
       >
         {result?.truncated && (
           <div className="border-b border-amber-100 bg-amber-50 px-4 py-2.5 text-xs font-medium text-amber-800">
-            This report matched more donors than can be aggregated at once
-            (showing the first 5,000). Narrow your date range or filters for a
-            complete result.
+            {pw("This report matched more donors than can be aggregated at once (showing the first 5,000). Narrow your date range or filters for a complete result.")}
           </div>
         )}
         <div
@@ -967,7 +965,7 @@ export default function ReportExplorer({
                                     ? () =>
                                         setEmailTarget({
                                           donorId: row.donorId,
-                                          donorName: String(row.donorName ?? "this donor"),
+                                          donorName: String(row.donorName ?? pw("this donor")),
                                         })
                                     : undefined
                                 }
@@ -1025,10 +1023,9 @@ export default function ReportExplorer({
         <p className="text-xs text-slate-500">
           Tip: add{" "}
           <span className="font-semibold text-slate-700">
-            Previous Year Giving
+            {pw("Previous Year Giving")}
           </span>{" "}
-          in Columns to compare each donor with last year (shown for the current
-          year).
+          {pw("in Columns to compare each donor with last year (shown for the current year).")}
         </p>
       )}
 
@@ -1038,7 +1035,7 @@ export default function ReportExplorer({
           <div className="space-y-6">
             <fieldset>
               <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                Donation sources
+                {pw("Donation sources")}
               </legend>
               <div className="grid grid-cols-2 gap-2">
                 {SOURCE_TOGGLE_LABELS.map((s) => (
@@ -1071,12 +1068,12 @@ export default function ReportExplorer({
                 value={amountCalculation}
                 onChange={setAmountCalculation}
                 options={[
-                  { value: "NET", label: "Net giving" },
-                  { value: "GROSS", label: "Gross giving" },
+                  { value: "NET", label: pw("Net giving") },
+                  { value: "GROSS", label: pw("Gross giving") },
                 ]}
               />
               <p className="mt-2 text-xs text-slate-500">
-                Net giving = gross giving − refunds − returns.
+                {pw("Net giving = gross giving − refunds − returns.")}
               </p>
             </div>
             <div>
@@ -1102,7 +1099,7 @@ export default function ReportExplorer({
             </div>
             <div>
               <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                Donor segment
+                {pw("Donor segment")}
               </h4>
               <SelectField
                 label={pw("Donor segment")}
@@ -1130,10 +1127,10 @@ export default function ReportExplorer({
             </div>
             <fieldset>
               <legend className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                Giving link
+                {pw("Giving link")}
               </legend>
               <p className="mb-2 text-xs text-slate-500">
-                Only gifts made through the selected link(s) are counted, and only donors with such a gift are listed. Leave empty for all donors. The export uses the same filter.
+                {pw("Only gifts made through the selected link(s) are counted, and only donors with such a gift are listed. Leave empty for all donors. The export uses the same filter.")}
               </p>
               {givingLinks.length === 0 ? (
                 <p className="text-xs text-slate-500">{pw("No giving links yet.")}</p>

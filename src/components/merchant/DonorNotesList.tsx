@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export interface DonorNoteItem {
   id: string;
@@ -24,6 +25,7 @@ export default function DonorNotesList({
   editable: boolean;
   limit?: number;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [notes, setNotes] = useState(initialNotes);
   const [adding, setAdding] = useState(false);
@@ -94,7 +96,7 @@ export default function DonorNotesList({
     <div>
       {visibleNotes.length === 0 && !adding ? (
         <p className="text-sm text-slate-500">
-          Add an internal note to help your organization keep track of important donor information.
+          {pw("Add an internal note to help your organization keep track of important donor information.")}
         </p>
       ) : (
         <div className="space-y-3">

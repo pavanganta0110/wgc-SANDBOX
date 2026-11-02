@@ -51,7 +51,7 @@ export default function DonationTrendChart({ data }: { data: TrendPoint[] }) {
                 metric === m.key ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
               }`}
             >
-              {m.label}
+              {pw(m.label)}
             </button>
           ))}
         </div>
@@ -59,7 +59,7 @@ export default function DonationTrendChart({ data }: { data: TrendPoint[] }) {
 
       {!hasData ? (
         <div className="flex items-center justify-center h-56 text-sm text-slate-400">
-          No donation activity for this period.
+          {pw("No donation activity for this period.")}
         </div>
       ) : (
         <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto">

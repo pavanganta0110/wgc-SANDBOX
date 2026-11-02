@@ -77,7 +77,7 @@ export default function MergeDonorsModal({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "Failed to merge donors");
-      toast.success("Donors merged");
+      toast.success(pw("Donors merged"));
       onClose();
       router.refresh();
     } catch (err) {
@@ -92,7 +92,7 @@ export default function MergeDonorsModal({
       <div className="bg-white rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold text-slate-900 mb-1">Review before merging</h2>
         <p className="text-sm text-slate-500 mb-4">
-          Every financial transaction, note, and receipt from the duplicate moves to this donor. The duplicate record is archived, never deleted — nothing here is reversible from this screen.
+          {pw("Every financial transaction, note, and receipt from the duplicate moves to this donor. The duplicate record is archived, never deleted — nothing here is reversible from this screen.")}
         </p>
 
         {!data ? (
@@ -153,7 +153,7 @@ export default function MergeDonorsModal({
                 <p className="text-xs text-slate-400 uppercase mb-2">{pw("This donor (survives)")}</p>
                 <p className="text-sm">Total: {formatCents(data.primary.aggregates.totalDonatedCents)}</p>
                 <p className="text-sm">External: {formatCents(data.primary.aggregates.externalDonatedCents)}</p>
-                <p className="text-sm">Donations: {data.primary.aggregates.donationCount}</p>
+                <p className="text-sm">{pw("Donations:")} {data.primary.aggregates.donationCount}</p>
                 <p className="text-sm">Active recurring: {data.primary.activeSubscriptions}</p>
                 <p className="text-sm">Notes: {data.primary.noteCount}</p>
                 <p className="text-sm">Statements: {data.primary.statementCount}</p>
@@ -162,7 +162,7 @@ export default function MergeDonorsModal({
                 <p className="text-xs text-slate-400 uppercase mb-2">Duplicate (archived, merged in)</p>
                 <p className="text-sm">Total: {formatCents(data.duplicate.aggregates.totalDonatedCents)}</p>
                 <p className="text-sm">External: {formatCents(data.duplicate.aggregates.externalDonatedCents)}</p>
-                <p className="text-sm">Donations: {data.duplicate.aggregates.donationCount}</p>
+                <p className="text-sm">{pw("Donations:")} {data.duplicate.aggregates.donationCount}</p>
                 <p className="text-sm">Active recurring: {data.duplicate.activeSubscriptions}</p>
                 <p className="text-sm">Notes: {data.duplicate.noteCount}</p>
                 <p className="text-sm">Statements: {data.duplicate.statementCount}</p>
@@ -185,7 +185,7 @@ export default function MergeDonorsModal({
             disabled={!data || merging}
             className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50"
           >
-            {merging ? "Merging…" : "Merge donors"}
+            {merging ? "Merging…" : pw("Merge donors")}
           </button>
         </div>
       </div>

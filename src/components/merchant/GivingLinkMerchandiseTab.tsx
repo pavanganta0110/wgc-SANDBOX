@@ -103,8 +103,7 @@ export default function GivingLinkMerchandiseTab({ givingLinkId, publicSlug }: {
             <span className="font-bold text-slate-900">{pw("Enable Merchandise on this giving page")}</span>
           </label>
           <p className="text-sm text-slate-500 mt-1.5 ml-8 max-w-lg">
-            This is the same public link as your donation page — turning this on replaces its checkout with a combined
-            donate-and-shop experience for every visitor. It never creates a second, separate page.
+            {pw("This is the same public link as your donation page — turning this on replaces its checkout with a combined donate-and-shop experience for every visitor. It never creates a second, separate page.")}
           </p>
         </div>
         {merchandiseEnabled && (

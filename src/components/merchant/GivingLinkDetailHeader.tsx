@@ -8,6 +8,7 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import ShareGivingLinkModal from "@/components/merchant/ShareGivingLinkModal";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function GivingLinkDetailHeader({
   id,
@@ -24,6 +25,7 @@ export default function GivingLinkDetailHeader({
   status: "ACTIVE" | "INACTIVE" | "EXPIRED" | "ARCHIVED";
   createdAt: Date;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [showShare, setShowShare] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -42,10 +44,10 @@ export default function GivingLinkDetailHeader({
     setBusy(false);
     setIsMenuOpen(false);
     if (!res.ok) {
-      toast.error("Failed to update giving link status");
+      toast.error(pw("Failed to update giving link status"));
       return;
     }
-    toast.success("Giving link updated");
+    toast.success(pw("Giving link updated"));
     router.refresh();
   };
 
@@ -55,18 +57,18 @@ export default function GivingLinkDetailHeader({
     setBusy(false);
     setIsMenuOpen(false);
     if (!res.ok) {
-      toast.error("Failed to duplicate giving link");
+      toast.error(pw("Failed to duplicate giving link"));
       return;
     }
     const data = await res.json();
-    toast.success("Giving link duplicated");
+    toast.success(pw("Giving link duplicated"));
     router.push(`/merchant/giving-links/${data.link.id}/edit`);
   };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 mb-6">
       <div className="flex items-center justify-between text-xs text-slate-500 mb-3">
-        <span>Giving Link · {formatDateTimeCDT(createdAt)}</span>
+        <span>{pw("Giving Link ·")} {formatDateTimeCDT(createdAt)}</span>
         <div className="flex items-center gap-1.5">
           <CopyableIdBadge id={id} />
           <button className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="Pin">

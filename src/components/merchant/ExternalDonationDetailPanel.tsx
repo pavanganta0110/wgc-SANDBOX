@@ -69,12 +69,12 @@ export default function ExternalDonationDetailPanel({
   async function saveEdits() {
     const deductibleAmountCents = isTaxDeductible && deductibleAmount ? Math.round(parseFloat(deductibleAmount) * 100) : null;
     if (deductibleAmountCents != null && deductibleAmountCents > donation.donationAmountCents) {
-      toast.error("Deductible amount cannot be greater than the donation amount");
+      toast.error(pw("Deductible amount cannot be greater than the donation amount"));
       return;
     }
     const goodsOrServicesValueCents = goodsOrServicesProvided && goodsOrServicesValue ? Math.round(parseFloat(goodsOrServicesValue) * 100) : null;
     if (goodsOrServicesValueCents != null && goodsOrServicesValueCents > donation.donationAmountCents) {
-      toast.error("Value of goods or services cannot be greater than the donation amount");
+      toast.error(pw("Value of goods or services cannot be greater than the donation amount"));
       return;
     }
 
@@ -132,7 +132,7 @@ export default function ExternalDonationDetailPanel({
       const res = await fetch(`/api/merchant/donations/external/${donation.id}/void`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const json = await res.json();
       if (!res.ok) return toast.error(json.error || "Could not void this donation");
-      toast.success("Donation voided");
+      toast.success(pw("Donation voided"));
       router.refresh();
     } finally {
       setBusy(false);
@@ -170,7 +170,7 @@ export default function ExternalDonationDetailPanel({
     <div className="space-y-6">
       {donation.possibleDuplicate && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          This donation looked like a possible duplicate of another one when it was recorded. Double-check before including it in totals.
+          {pw("This donation looked like a possible duplicate of another one when it was recorded. Double-check before including it in totals.")}
         </div>
       )}
 
@@ -196,7 +196,7 @@ export default function ExternalDonationDetailPanel({
         </div>
         {canVoid && donation.status !== "VOIDED" && (
           <button onClick={handleVoid} disabled={busy} className="text-xs font-semibold text-red-600 hover:underline">
-            Void this donation
+            {pw("Void this donation")}
           </button>
         )}
       </section>

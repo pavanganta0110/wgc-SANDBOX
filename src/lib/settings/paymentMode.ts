@@ -143,6 +143,15 @@ const REWORDING: [RegExp, string][] = [
   [/\bdonor\b/g, "payer"],
   [/\bDonate\b/g, "Pay"],
   [/\bdonate\b/g, "pay"],
+  // Fallbacks, after every specific phrase above. "Student Giving" is a feature name and stays.
+  [/\bGiving (page)(s?)\b/g, "Payment $1$2"],
+  [/\bgiving (page)(s?)\b/g, "payment $1$2"],
+  [/\bGiving Page(s?)\b/g, "Payment Page$1"],
+  [/\bgive\b/g, "pay"],
+  [/\bGave\b/g, "Paid"],
+  [/\bgave\b/g, "paid"],
+  [/(?<!Student )\bGiving\b/g, "Payments"],
+  [/\bgiving\b/g, "payments"],
 ];
 
 /**

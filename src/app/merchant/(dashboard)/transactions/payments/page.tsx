@@ -20,6 +20,7 @@ import { getRevenueBySource, buildSourceClassifier, SOURCE_KEYS, SOURCE_LABELS, 
 import { PaymentInstrumentCell, InstrumentTypeCell } from "@/components/merchant/PaymentInstrumentDisplay";
 import { intersectIdSets, normalizeSearchQuery, resolveSearchMatchedTransferIds } from "@/lib/payments/search";
 import { modeLabel } from "@/lib/settings/paymentMode";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -40,6 +41,7 @@ export default async function PaymentsListPage({
     takePayment?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
   const viewScope = await resolveViewScope(auth);
@@ -230,7 +232,7 @@ export default async function PaymentsListPage({
           .filter((r) => r.key !== "OTHER" || r.count > 0)
           .map((r) => (
             <div key={r.key} className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{r.label}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{pw(r.label)}</p>
               <p className="mt-1 text-xl font-bold text-slate-900">{formatCents(r.grossCents)}</p>
               <p className="text-xs text-slate-400">
                 {r.count} payment{r.count === 1 ? "" : "s"}
@@ -343,7 +345,7 @@ export default async function PaymentsListPage({
                     </td>
                     <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
                       {payment
-                        ? SOURCE_LABELS[classifySource(payment)].replace(/ \(.*\)$/, "")
+                        ? pw(SOURCE_LABELS[classifySource(payment)].replace(/ \(.*\)$/, ""))
                         : "—"}
                     </td>
                     <td className="px-6 py-3">

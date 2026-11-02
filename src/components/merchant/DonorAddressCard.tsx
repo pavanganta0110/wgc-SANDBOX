@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { ADDRESS_SOURCES, type AddressSource } from "@/lib/donors/donorAddress";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const SOURCE_LABELS: Record<AddressSource, string> = {
   ONLINE_DONATION_FORM: "Online donation form",
@@ -44,6 +45,7 @@ export default function DonorAddressCard({
   canConfirm: boolean;
   canViewSource: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -173,7 +175,7 @@ export default function DonorAddressCard({
               donor.addressVerified === "UNVERIFIED" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"
             }`}
           >
-            {donor.addressVerified === "UNVERIFIED" ? "Unverified" : donor.addressVerified === "CONFIRMED_BY_DONOR" ? "Confirmed by donor" : "Confirmed by organization"}
+            {donor.addressVerified === "UNVERIFIED" ? "Unverified" : donor.addressVerified === "CONFIRMED_BY_DONOR" ? pw("Confirmed by donor") : "Confirmed by organization"}
           </span>
           {canViewSource && donor.addressSource && (
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{SOURCE_LABELS[donor.addressSource as AddressSource] || donor.addressSource}</span>

@@ -51,7 +51,7 @@ export default function GivingSettingsForm({
         if (data.fieldErrors) setFieldErrors(data.fieldErrors);
         throw new Error(data.error || "Failed to save");
       }
-      toast.success("Giving settings saved");
+      toast.success(pw("Giving settings saved"));
       Object.assign(initial, values);
     } catch (err: any) {
       setError(err.message || "Failed to save settings");
@@ -63,7 +63,7 @@ export default function GivingSettingsForm({
   return (
     <div>
       <p className="text-xs text-slate-500 mb-6">
-        Per-link donation amounts, frequencies, and fee-cover settings are managed on each individual{" "}
+        {pw("Per-link donation amounts, frequencies, and fee-cover settings are managed on each individual")}{" "}
         <a href="/merchant/giving-links" className="text-blue-600 hover:underline">{pw("Giving Link")}</a>. These settings apply organization-wide.
       </p>
       <div className="grid grid-cols-1 gap-4 max-w-lg">
@@ -100,10 +100,10 @@ export default function GivingSettingsForm({
               checked={values.defaultCollectMailingAddressOnNewLinks}
               onChange={(e) => setBool("defaultCollectMailingAddressOnNewLinks", e.target.checked)}
             />
-            Include mailing-address option on new giving links
+            {pw("Include mailing-address option on new giving links")}
           </label>
           <p className="text-xs text-slate-400 mt-1 ml-6">
-            Controls the starting value only for giving links created after this change — existing links keep whatever they're already set to.
+            {pw("Controls the starting value only for giving links created after this change — existing links keep whatever they're already set to.")}
           </p>
         </div>
         <div>

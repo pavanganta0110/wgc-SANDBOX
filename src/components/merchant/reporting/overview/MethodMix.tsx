@@ -3,15 +3,17 @@ import Tip from "./Tip";
 import type { MixRow } from "./types";
 import { METHOD_COLOR } from "./tokens";
 import { formatCents, percent } from "./format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-export default function MethodMix({ rows }: { rows: MixRow[] }) {
+export default async function MethodMix({ rows }: { rows: MixRow[] }) {
+  const { pw } = await getPaymentWording();
   const total = rows.reduce((s, r) => s + r.valueCents, 0);
   const payments = rows.reduce((s, r) => s + r.count, 0);
   const lead = [...rows].sort((a, b) => b.valueCents - a.valueCents)[0];
   return (
     <Card
       title="Payment methods"
-      subtitle="Where gifts came from, before refunds"
+      subtitle={pw("Where gifts came from, before refunds")}
     >
       {total === 0 ? (
         <EmptyNote
@@ -71,7 +73,7 @@ export default function MethodMix({ rows }: { rows: MixRow[] }) {
           </ul>
           <p className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500">
             <span className="font-semibold text-slate-700">{lead.label}</span>{" "}
-            leads with {percent(lead.sharePercent)} of giving across{" "}
+            leads with {percent(lead.sharePercent)} {pw("of giving across")}{" "}
             {payments.toLocaleString("en-US")} payment
             {payments === 1 ? "" : "s"}.
           </p>

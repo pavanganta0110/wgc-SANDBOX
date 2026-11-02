@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Archive, Loader2, Pencil, Plus, RotateCcw } from "lucide-react";
 import { useConfirm } from "@/components/common/ConfirmDialog";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const input =
   "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-indigo-500";
@@ -30,6 +31,7 @@ function FundForm({
   onSubmit: (name: string, description: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const pw = usePaymentWording();
   const ref = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
@@ -72,7 +74,7 @@ function FundForm({
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={120} required className={`${input} mt-1`} />
         </label>
         <label className="block text-xs font-semibold text-slate-600">
-          Description <span className="font-normal text-slate-400">(optional, shown to donors)</span>
+          Description <span className="font-normal text-slate-400">{pw("(optional, shown to donors)")}</span>
           <input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={300} className={`${input} mt-1`} />
         </label>
         <div className="flex justify-end gap-2 pt-2">

@@ -251,7 +251,7 @@ export default function RecordExternalDonationForm() {
     e.preventDefault();
     const donationAmountCents = Math.round((parseFloat(amount) || 0) * 100);
     if (donationAmountCents < 1) {
-      toast.error("Enter a donation amount");
+      toast.error(pw("Enter a donation amount"));
       return;
     }
     if (paymentMethod === "OTHER" && !otherPaymentMethodName.trim()) {
@@ -259,21 +259,21 @@ export default function RecordExternalDonationForm() {
       return;
     }
     if (donorMode === "new" && !donorName.trim() && !donorEmail.trim() && !donorPhone.trim()) {
-      toast.error("Enter a donor name, email, or phone — or choose Anonymous / Unmatched");
+      toast.error(pw("Enter a donor name, email, or phone — or choose Anonymous / Unmatched"));
       return;
     }
     if (donorMode === "existing" && !selectedDonor) {
-      toast.error("Search for and select an existing donor, or switch to Add a new donor");
+      toast.error(pw("Search for and select an existing donor, or switch to Add a new donor"));
       return;
     }
     const deductibleAmountCents = deductibleAmountDiffers && deductibleAmount ? Math.round(parseFloat(deductibleAmount) * 100) : undefined;
     if (typeof deductibleAmountCents === "number" && deductibleAmountCents > donationAmountCents) {
-      toast.error("Deductible amount cannot be greater than the donation amount");
+      toast.error(pw("Deductible amount cannot be greater than the donation amount"));
       return;
     }
     const goodsOrServicesValueCents = goodsOrServicesProvided && goodsOrServicesValue ? Math.round(parseFloat(goodsOrServicesValue) * 100) : undefined;
     if (typeof goodsOrServicesValueCents === "number" && goodsOrServicesValueCents > donationAmountCents) {
-      toast.error("Value of goods or services cannot be greater than the donation amount");
+      toast.error(pw("Value of goods or services cannot be greater than the donation amount"));
       return;
     }
 
@@ -351,9 +351,9 @@ export default function RecordExternalDonationForm() {
         return;
       }
       if (json.possibleDuplicate) {
-        toast("Saved — heads up, this looks similar to another recent donation. Check the list to confirm it isn't a duplicate.", { icon: "⚠️" });
+        toast(pw("Saved — heads up, this looks similar to another recent donation. Check the list to confirm it isn't a duplicate."), { icon: "⚠️" });
       } else {
-        toast.success("Donation recorded");
+        toast.success(pw("Donation recorded"));
       }
       router.push("/merchant/donations/external");
       router.refresh();
@@ -542,7 +542,7 @@ export default function RecordExternalDonationForm() {
                   if (mode !== "existing") setSelectedDonor(null);
                 }}
               />
-              {mode === "existing" ? "Select existing donor" : mode === "new" ? "Add a new donor" : mode === "anonymous" ? "Anonymous" : "I don't know yet"}
+              {mode === "existing" ? pw("Select existing donor") : mode === "new" ? pw("Add a new donor") : mode === "anonymous" ? "Anonymous" : "I don't know yet"}
             </label>
           ))}
         </div>
@@ -649,7 +649,7 @@ export default function RecordExternalDonationForm() {
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">Link to a pledge or fundraising campaign</h2>
         <p className="text-xs text-slate-500 -mt-2">
-          Optional — ties this gift back into Pledges and Fundraising Campaigns reporting, so it counts toward the right totals automatically.
+          {pw("Optional — ties this gift back into Pledges and Fundraising Campaigns reporting, so it counts toward the right totals automatically.")}
         </p>
 
         {donorMode === "existing" && selectedDonor && openPledges.length > 0 && (
@@ -752,12 +752,12 @@ export default function RecordExternalDonationForm() {
               }
             }}
           />
-          This donation is tax-deductible
+          {pw("This donation is tax-deductible")}
         </label>
         {isTaxDeductible && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={deductibleAmountDiffers} onChange={(e) => setDeductibleAmountDiffers(e.target.checked)} />
-            The deductible amount is different from the full donation amount
+            {pw("The deductible amount is different from the full donation amount")}
           </label>
         )}
         {isTaxDeductible && deductibleAmountDiffers && (
@@ -779,7 +779,7 @@ export default function RecordExternalDonationForm() {
         )}
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={goodsOrServicesProvided} onChange={(e) => setGoodsOrServicesProvided(e.target.checked)} />
-          Goods or services were provided in exchange for this donation
+          {pw("Goods or services were provided in exchange for this donation")}
         </label>
         {goodsOrServicesProvided && (
           <div className="grid grid-cols-2 gap-4">
@@ -842,7 +842,7 @@ export default function RecordExternalDonationForm() {
 
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={submitting} className="rounded-lg bg-[#010409] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
-          {submitting ? "Saving..." : "Record External Donation"}
+          {submitting ? "Saving..." : pw("Record External Donation")}
         </button>
         <button type="button" onClick={() => router.back()} className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600">
           Cancel

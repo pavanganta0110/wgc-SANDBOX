@@ -74,7 +74,7 @@ export default function StatementSettingsForm({ initial }: { initial: Settings }
         value={values.statementSenderName}
         onChange={(v) => set("statementSenderName", v)}
         placeholder={"Defaults to organization name"}
-        hint="Used as the signature on receipts, statements, and Giving Campaign emails."
+        hint={pw("Used as the signature on receipts, statements, and Giving Campaign emails.")}
       />
       <Field label="Reply-To Email" value={values.statementReplyToEmail} onChange={(v) => set("statementReplyToEmail", v)} placeholder="support@yourorganization.org" />
       <Field label="Subject Template" value={values.statementSubjectTemplate} onChange={(v) => set("statementSubjectTemplate", v)} placeholder={pw("Your [YEAR] Year-End Donation Statement from [Organization Name]")} />
@@ -104,7 +104,7 @@ export default function StatementSettingsForm({ initial }: { initial: Settings }
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={values.statementShowDonorCoveredFees} onChange={(e) => set("statementShowDonorCoveredFees", e.target.checked)} />
-        Show donor-covered processing fees separately on statements
+        {pw("Show donor-covered processing fees separately on statements")}
       </label>
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" checked={values.statementShowWebsite} onChange={(e) => set("statementShowWebsite", e.target.checked)} />

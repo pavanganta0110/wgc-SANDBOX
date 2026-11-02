@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Variant {
   id: string;
@@ -34,6 +35,7 @@ interface Product {
 }
 
 export default function MerchandiseProductsList() {
+  const pw = usePaymentWording();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -103,7 +105,7 @@ export default function MerchandiseProductsList() {
             </label>
             <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 shrink-0">
               <input type="checkbox" checked={p.visibleOnGivingPage} onChange={(e) => updateProduct(p.id, { visibleOnGivingPage: e.target.checked })} className="w-4 h-4 text-blue-600 rounded" />
-              Available for giving pages
+              {pw("Available for giving pages")}
             </label>
             <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="p-2 rounded-lg hover:bg-slate-50 shrink-0">
               {expanded === p.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

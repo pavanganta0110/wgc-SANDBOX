@@ -67,8 +67,8 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildFinixTransferScope, buildRefundScope, buildPaymentScope, resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
-
 import { getPaymentWording } from "@/lib/settings/paymentWording";
+
 const CENTRAL_TIME_ZONE = "America/Chicago";
 
 const TREND_CONFIG: Record<string, { buckets: number; stepDays: number; format: Intl.DateTimeFormatOptions }> = {
@@ -257,8 +257,8 @@ export default async function MerchantDashboardPage({
 }: {
   searchParams: Promise<{ range?: string; from?: string; to?: string; trend?: string; metrics?: string }>;
 }) {
-  let auth;
   const { pw } = await getPaymentWording();
+  let auth;
   try {
     auth = await requireMerchantSession();
   } catch (err) {

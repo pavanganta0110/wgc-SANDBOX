@@ -207,7 +207,7 @@ export default function ClientForm({
 
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1">
-          Linked donor <span className="font-normal text-slate-400">{pw("(optional — a client is not automatically a donor)")}</span>
+          {pw("Linked donor")} <span className="font-normal text-slate-400">{pw("(optional — a client is not automatically a donor)")}</span>
         </label>
         <DonorPicker
           selected={values.linkedDonor}

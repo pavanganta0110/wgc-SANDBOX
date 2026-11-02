@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HeartHandshake, Ticket, HandCoins, Inbox } from "lucide-react";
 import { formatCents } from "@/lib/format";
 import { timeAgo, type ActivityItem, type ActivityType } from "@/lib/reports/dashboardHome";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const META: Record<ActivityType, { label: string; Icon: typeof HeartHandshake; chip: string }> = {
   donation: { label: "Donation", Icon: HeartHandshake, chip: "bg-indigo-50 text-indigo-600" },
@@ -10,13 +11,14 @@ const META: Record<ActivityType, { label: string; Icon: typeof HeartHandshake; c
 };
 
 /** Latest donations, registrations and pledges, newest first. */
-export default function ActivityFeed({ items, now = new Date() }: { items: ActivityItem[]; now?: Date }) {
+export default async function ActivityFeed({ items, now = new Date() }: { items: ActivityItem[]; now?: Date }) {
+  const { pw } = await getPaymentWording();
   return (
     <div>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Recent activity</h2>
-          <p className="mt-0.5 text-xs text-slate-500">Donations, registrations and pledges as they happen</p>
+          <p className="mt-0.5 text-xs text-slate-500">{pw("Donations, registrations and pledges as they happen")}</p>
         </div>
         <Link href="/merchant/transactions/payments" className="rounded text-sm font-semibold text-indigo-600 hover:text-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
           All payments
@@ -26,18 +28,19 @@ export default function ActivityFeed({ items, now = new Date() }: { items: Activ
       {items.length === 0 ? (
         <div className="mt-5 flex flex-col items-center gap-3 rounded-xl bg-slate-50 px-4 py-10 text-center">
           <Inbox className="h-5 w-5 text-slate-400" aria-hidden />
-          <p className="text-sm text-slate-600">No activity yet. Share your giving page to get the first donation.</p>
+          <p className="text-sm text-slate-600">{pw("No activity yet. Share your giving page to get the first donation.")}</p>
           <Link
             href="/merchant/giving-links"
             className="rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
-            Open giving pages
+            {pw("Open giving pages")}
           </Link>
         </div>
       ) : (
         <ul className="mt-3 divide-y divide-slate-100">
           {items.map((item) => {
-            const { label, Icon, chip } = META[item.type];
+            const { Icon, chip } = META[item.type];
+            const label = pw(META[item.type].label);
             return (
               <li key={item.id}>
                 <Link

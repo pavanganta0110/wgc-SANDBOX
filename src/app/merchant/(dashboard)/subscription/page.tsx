@@ -14,6 +14,7 @@ import ActivationForm from "@/components/billing/ActivationForm";
 import SmsAddonCard from "@/components/billing/SmsAddonCard";
 import { createBillingActivationToken } from "@/lib/billing/billingActivation";
 import { redirect } from "next/navigation";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function titleCase(s: string | null | undefined) {
   if (!s) return "—";
@@ -23,6 +24,7 @@ function titleCase(s: string | null | undefined) {
 const formatDate = formatDateCDT;
 
 export default async function SubscriptionPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession(true); // allowlisted: billing setup/management must remain reachable while restricted
@@ -230,7 +232,7 @@ export default async function SubscriptionPage() {
           {/* Section 1: Donor Covers */}
           <div className="mb-5">
             <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
-              When the Donor Covers the Processing Fee
+              {pw("When the Donor Covers the Processing Fee")}
             </p>
             <div className="space-y-3">
               <RateRow
@@ -243,8 +245,7 @@ export default async function SubscriptionPage() {
               />
             </div>
             <p className="text-xs text-slate-400 mt-3">
-              When the donor covers the processing fee, no processing fee is deducted
-              from the organization&rsquo;s donation proceeds.
+              {pw("When the donor covers the processing fee, no processing fee is deducted from the organization’s donation proceeds.")}
             </p>
           </div>
 
@@ -253,7 +254,7 @@ export default async function SubscriptionPage() {
           {/* Section 2: Donor Does Not Cover */}
           <div>
             <p className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">
-              When the Donor Does Not Cover the Processing Fee
+              {pw("When the Donor Does Not Cover the Processing Fee")}
             </p>
             <div className="space-y-3">
               <RateRow
@@ -266,8 +267,7 @@ export default async function SubscriptionPage() {
               />
             </div>
             <p className="text-xs text-slate-400 mt-3">
-              When the donor does not cover the processing fee, the applicable processing
-              fee is deducted from the organization&rsquo;s donation proceeds.
+              {pw("When the donor does not cover the processing fee, the applicable processing fee is deducted from the organization’s donation proceeds.")}
             </p>
           </div>
         </div>

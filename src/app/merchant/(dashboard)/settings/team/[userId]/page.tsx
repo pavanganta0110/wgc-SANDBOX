@@ -129,7 +129,7 @@ export default async function TeamMemberDetailPage({
               tab === t ? "border-slate-900 text-slate-900" : "border-transparent text-slate-500 hover:text-slate-700"
             }`}
           >
-            {t === "overview" ? "Overview" : t === "giving-links" ? "Giving Links" : t === "transactions" ? "Transactions" : "Recurring Donations"}
+            {t === "overview" ? "Overview" : t === "giving-links" ? pw("Giving Links") : t === "transactions" ? "Transactions" : pw("Recurring Donations")}
           </Link>
         ))}
       </div>
@@ -143,6 +143,7 @@ export default async function TeamMemberDetailPage({
 }
 
 async function OverviewTab({ churchId, userId }: { churchId: string; userId: string }) {
+  const { pw } = await getPaymentWording();
   const [links, transactions] = await Promise.all([
     loadTeamMemberGivingLinks(churchId, userId),
     loadTeamMemberTransactions(churchId, userId),
@@ -172,16 +173,16 @@ async function OverviewTab({ churchId, userId }: { churchId: string; userId: str
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <h3 className="text-sm font-bold text-slate-900 mb-3">Recent Giving Links</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-3">{pw("Recent Giving Links")}</h3>
         {recentLinks.length === 0 ? (
-          <p className="text-sm text-slate-400">No giving links yet.</p>
+          <p className="text-sm text-slate-400">{pw("No giving links yet.")}</p>
         ) : (
           <div className="space-y-2">
             {recentLinks.map((l) => (
               <div key={l.id} className="flex items-center justify-between text-sm border-b border-slate-50 last:border-0 pb-2 last:pb-0">
                 <div>
                   <p className="font-semibold text-slate-800">{l.internalName || l.publicTitle}</p>
-                  <p className="text-xs text-slate-400">{l.successfulDonations} donation{l.successfulDonations === 1 ? "" : "s"}</p>
+                  <p className="text-xs text-slate-400">{l.successfulDonations} {pw("donation")}{l.successfulDonations === 1 ? "" : "s"}</p>
                 </div>
                 <span className="font-semibold text-slate-900">{formatCents(l.totalCollectedCents)}</span>
               </div>
@@ -194,9 +195,10 @@ async function OverviewTab({ churchId, userId }: { churchId: string; userId: str
 }
 
 async function GivingLinksTab({ churchId, userId }: { churchId: string; userId: string }) {
+  const { pw } = await getPaymentWording();
   const links = await loadTeamMemberGivingLinks(churchId, userId);
   if (links.length === 0) {
-    return <p className="text-sm text-slate-500 py-8 text-center">No giving links owned by this member.</p>;
+    return <p className="text-sm text-slate-500 py-8 text-center">{pw("No giving links owned by this member.")}</p>;
   }
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
@@ -207,7 +209,7 @@ async function GivingLinksTab({ churchId, userId }: { churchId: string; userId: 
             <th className="px-6 py-3">Status</th>
             <th className="px-6 py-3 text-right">Transactions</th>
             <th className="px-6 py-3 text-right">Gross Raised</th>
-            <th className="px-6 py-3">Last Donation</th>
+            <th className="px-6 py-3">{pw("Last Donation")}</th>
             <th className="px-6 py-3 w-10" />
           </tr>
         </thead>
@@ -233,6 +235,7 @@ async function GivingLinksTab({ churchId, userId }: { churchId: string; userId: 
 }
 
 async function TransactionsTab({ churchId, userId }: { churchId: string; userId: string }) {
+  const { pw } = await getPaymentWording();
   const transactions = await loadTeamMemberTransactions(churchId, userId);
   if (transactions.length === 0) {
     return <p className="text-sm text-slate-500 py-8 text-center">No transactions attributed to this member.</p>;
@@ -243,8 +246,8 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
         <thead>
           <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
             <th className="px-6 py-3">Date</th>
-            <th className="px-6 py-3">Donor</th>
-            <th className="px-6 py-3">Giving Link</th>
+            <th className="px-6 py-3">{pw("Donor")}</th>
+            <th className="px-6 py-3">{pw("Giving Link")}</th>
             <th className="px-6 py-3">Fund</th>
             <th className="px-6 py-3">Payment Method</th>
             <th className="px-6 py-3 text-right">Gross</th>
@@ -286,20 +289,21 @@ async function TransactionsTab({ churchId, userId }: { churchId: string; userId:
 }
 
 async function RecurringTab({ churchId, userId }: { churchId: string; userId: string }) {
+  const { pw } = await getPaymentWording();
   const subs = await loadTeamMemberRecurring(churchId, userId);
   if (subs.length === 0) {
-    return <p className="text-sm text-slate-500 py-8 text-center">No recurring donations attributed to this member.</p>;
+    return <p className="text-sm text-slate-500 py-8 text-center">{pw("No recurring donations attributed to this member.")}</p>;
   }
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
       <table className="w-full text-sm min-w-[900px]">
         <thead>
           <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
-            <th className="px-6 py-3">Donor</th>
+            <th className="px-6 py-3">{pw("Donor")}</th>
             <th className="px-6 py-3 text-right">Amount</th>
             <th className="px-6 py-3">Frequency</th>
             <th className="px-6 py-3">Status</th>
-            <th className="px-6 py-3">Giving Link</th>
+            <th className="px-6 py-3">{pw("Giving Link")}</th>
             <th className="px-6 py-3">Next Charge</th>
           </tr>
         </thead>

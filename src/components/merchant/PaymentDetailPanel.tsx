@@ -377,7 +377,7 @@ export default async function PaymentDetailPanel({
               <div className="space-y-1">
                 <Row label={pw("Donation Amount")} value={formatCents(donationAmountCents)} />
                 <Row
-                  label={feeIsActual ? "Donor-Paid Processing Fee" : "Estimated Donor-Paid Processing Fee"}
+                  label={feeIsActual ? pw("Donor-Paid Processing Fee") : pw("Estimated Donor-Paid Processing Fee")}
                   value={donorPaidFee !== null ? formatCents(donorPaidFee) : "—"}
                 />
                 <Row label={pw("Total Charged to Donor")} value={formatCents(grossCents)} />

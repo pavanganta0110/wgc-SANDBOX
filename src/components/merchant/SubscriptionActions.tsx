@@ -128,7 +128,7 @@ export default function SubscriptionActions({
       const res = await fetch(`/api/merchant/subscriptions/${subscriptionId}/send-payment-update-link`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send link");
-      toast.success("Payment update link sent to donor");
+      toast.success(pw("Payment update link sent to donor"));
       close();
     } catch (err: any) {
       toast.error(err.message || "Failed to send link");
@@ -199,7 +199,7 @@ export default function SubscriptionActions({
                 <input type="text" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" placeholder="New amount ($)" />
                 <label className="flex items-start gap-2 text-sm text-slate-700">
                   <input type="checkbox" checked={consentConfirmed} onChange={(e) => setConsentConfirmed(e.target.checked)} className="mt-0.5" />
-                  I confirm the donor authorized this new amount.
+                  {pw("I confirm the donor authorized this new amount.")}
                 </label>
                 <div className="flex gap-2">
                   <button disabled={busy || !consentConfirmed} onClick={doUpdateAmount} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
@@ -220,7 +220,7 @@ export default function SubscriptionActions({
                 </select>
                 <label className="flex items-start gap-2 text-sm text-slate-700">
                   <input type="checkbox" checked={consentConfirmed} onChange={(e) => setConsentConfirmed(e.target.checked)} className="mt-0.5" />
-                  I confirm the donor authorized this new frequency.
+                  {pw("I confirm the donor authorized this new frequency.")}
                 </label>
                 <div className="flex gap-2">
                   <button disabled={busy || !consentConfirmed} onClick={doUpdateFrequency} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">

@@ -141,7 +141,7 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
             isSourceOpen ? "border-slate-900" : "border-slate-200"
           }`}
         >
-          {SOURCES.find((s) => s.value === source)?.label ?? "Source"}
+          {pw(SOURCES.find((s) => s.value === source)?.label ?? "Source")}
           <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isSourceOpen ? "rotate-180" : ""}`} />
         </button>
         {isSourceOpen && (
@@ -166,7 +166,7 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
                   }}
                   className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
                 >
-                  {s.label}
+                  {pw(s.label)}
                 </button>
               ))}
             </div>

@@ -11,7 +11,8 @@ const LABELS: Record<string, string> = {
   GOOGLE_PAY: "Google Pay",
 };
 
-function WalletStatusCard({ title, availability }: { title: string; availability: PaymentMethodAvailability }) {
+async function WalletStatusCard({ title, availability }: { title: string; availability: PaymentMethodAvailability }) {
+  const { pw } = await getPaymentWording();
   return (
     <div className="p-4 rounded-xl border border-slate-100">
       <div className="flex items-center justify-between mb-3">
@@ -43,7 +44,7 @@ function WalletStatusCard({ title, availability }: { title: string; availability
       {availability.actionRequired && (
         <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">{availability.actionRequired}</p>
       )}
-      <p className="text-xs text-slate-400 mt-3">Available in supported browsers and devices only — this status reflects configuration, not a specific donor&apos;s device.</p>
+      <p className="text-xs text-slate-400 mt-3">{pw("Available in supported browsers and devices only — this status reflects configuration, not a specific donor's device.")}</p>
     </div>
   );
 }

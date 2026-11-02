@@ -18,3 +18,8 @@ export function usePaymentWording() {
   const paymentMode = useContext(PaymentModeContext);
   return useCallback((text: string) => (paymentMode ? toPaymentWording(text) : text), [paymentMode]);
 }
+
+/** Whether the signed-in organization is in payment mode (for passing down to components that take a flag). */
+export function usePaymentMode(): boolean {
+  return useContext(PaymentModeContext);
+}

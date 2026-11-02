@@ -109,7 +109,7 @@ export default function GivingCampaignComposer() {
     fetch("/api/merchant/giving-links")
       .then((res) => res.json())
       .then((data) => setLinks((data.links || []).filter((l: GivingLinkOption) => l.status === "ACTIVE")))
-      .catch(() => toast.error("Failed to load giving links"));
+      .catch(() => toast.error(pw("Failed to load giving links")));
   }, []);
 
   useEffect(() => {
@@ -478,7 +478,7 @@ export default function GivingCampaignComposer() {
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={channel === "TEXT" ? "Fall Giving Text Blast" : "Fall Giving Email Blast"}
+                placeholder={channel === "TEXT" ? pw("Fall Giving Text Blast") : pw("Fall Giving Email Blast")}
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
               />
             </div>
@@ -494,7 +494,7 @@ export default function GivingCampaignComposer() {
                       tieMode === mode ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
-                    {mode === "NONE" ? "Just a giving link" : mode === "FUNDRAISING" ? "Fundraising campaign" : mode === "PLEDGE" ? "Pledge campaign" : "Event invitation"}
+                    {mode === "NONE" ? pw("Just a giving link") : mode === "FUNDRAISING" ? "Fundraising campaign" : mode === "PLEDGE" ? "Pledge campaign" : "Event invitation"}
                   </button>
                 ))}
               </div>
@@ -562,7 +562,7 @@ export default function GivingCampaignComposer() {
                   )}
                   {selectedCampaignId && (
                     <p className="text-[11px] text-slate-500">
-                      Gifts from this email will count toward{" "}
+                      {pw("Gifts from this email will count toward")}{" "}
                       {campaignFundraisers.find((f) => f.id === selectedFundraiserId)?.displayName ||
                         campaignTeams.find((t) => t.id === selectedTeamId)?.name ||
                         fundraisingCampaigns?.find((c) => c.id === selectedCampaignId)?.name}
@@ -588,7 +588,7 @@ export default function GivingCampaignComposer() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-500">
-                    The link in this email goes to the event&apos;s registration page — not a giving link — so nobody is confused about what they&apos;re being asked to do. Pick &ldquo;People not registered for this event&rdquo; below to invite only those who haven&apos;t signed up.
+                    {pw("The link in this email goes to the event's registration page — not a giving link — so nobody is confused about what they're being asked to do. Pick &ldquo;People not registered for this event&rdquo; below to invite only those who haven't signed up.")}
                   </p>
                 </div>
               )}
@@ -610,7 +610,7 @@ export default function GivingCampaignComposer() {
                     ))}
                   </select>
                   <p className="text-[11px] text-slate-500">
-                    Donors go to this campaign&apos;s giving page. To credit a gift toward a specific donor&apos;s pledge, link it from Pledges afterward.
+                    {pw("Donors go to this campaign's giving page. To credit a gift toward a specific donor's pledge, link it from Pledges afterward.")}
                   </p>
                 </div>
               )}
@@ -714,14 +714,14 @@ export default function GivingCampaignComposer() {
           {audienceSource === "SELECTED" && (
             <>
           <p className="text-xs text-slate-500 mb-3">
-            {channel === "TEXT" ? "Only donors with a phone number on file can be added." : "Only donors with an email on file can be added."}
+            {channel === "TEXT" ? pw("Only donors with a phone number on file can be added.") : pw("Only donors with an email on file can be added.")}
           </p>
           <div className="relative mb-3">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={donorQuery}
               onChange={(e) => setDonorQuery(e.target.value)}
-              placeholder={channel === "TEXT" ? "Search donors by name or phone…" : "Search donors by name or email…"}
+              placeholder={channel === "TEXT" ? pw("Search donors by name or phone…") : pw("Search donors by name or email…")}
               className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
             />
             {searching && <Loader2 className="w-4 h-4 animate-spin text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />}
@@ -750,7 +750,7 @@ export default function GivingCampaignComposer() {
                       >
                         <input type="checkbox" checked={isSelected} onChange={() => {}} className="pointer-events-none shrink-0" />
                         <span className="flex flex-col min-w-0">
-                          <span className="font-medium text-slate-800 truncate">{d.name || "Unnamed donor"}</span>
+                          <span className="font-medium text-slate-800 truncate">{d.name || pw("Unnamed donor")}</span>
                           <span className="text-xs text-slate-500 truncate">{channel === "TEXT" ? d.phone : d.email}</span>
                         </span>
                       </button>
@@ -759,19 +759,19 @@ export default function GivingCampaignComposer() {
                 </div>
                 {donorListTruncated && (
                   <p className="text-[11px] text-slate-400 px-3 py-2 border-t border-slate-100">
-                    Showing the first 500 donors — search above to find someone else.
+                    {pw("Showing the first 500 donors — search above to find someone else.")}
                   </p>
                 )}
               </>
             ) : (
               <p className="text-xs text-slate-400 px-3 py-4 text-center">
                 {searching
-                  ? "Loading donors…"
+                  ? pw("Loading donors…")
                   : donorQuery.trim()
-                  ? "No matching donors found."
+                  ? pw("No matching donors found.")
                   : channel === "TEXT"
-                  ? "No donors with a phone number on file yet."
-                  : "No donors with an email on file yet."}
+                  ? pw("No donors with a phone number on file yet.")
+                  : pw("No donors with an email on file yet.")}
               </p>
             )}
           </div>
@@ -790,7 +790,7 @@ export default function GivingCampaignComposer() {
               ))}
             </div>
           )}
-          <p className="text-xs text-slate-500 mt-3">{selectedDonors.length} donor{selectedDonors.length === 1 ? "" : "s"} selected</p>
+          <p className="text-xs text-slate-500 mt-3">{selectedDonors.length} {pw("donor")}{selectedDonors.length === 1 ? "" : "s"} selected</p>
             </>
           )}
         </div>

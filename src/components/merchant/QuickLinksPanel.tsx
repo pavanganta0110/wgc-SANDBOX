@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { HeartHandshake } from "lucide-react";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-export default function QuickLinksPanel() {
+export default async function QuickLinksPanel() {
+  const { pw } = await getPaymentWording();
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-slate-100">
@@ -13,7 +15,7 @@ export default function QuickLinksPanel() {
           className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:underline"
         >
           <HeartHandshake className="w-4 h-4" />
-          Manage Giving Links
+          {pw("Manage Giving Links")}
         </Link>
       </div>
     </div>

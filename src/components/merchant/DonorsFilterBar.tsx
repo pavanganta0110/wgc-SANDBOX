@@ -213,7 +213,7 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
               </div>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={recurring} onChange={() => toggleParam("recurring", recurring)} />
-                Has active recurring donation
+                {pw("Has active recurring donation")}
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={hasFailedPayment} onChange={() => toggleParam("hasFailedPayment", hasFailedPayment)} />

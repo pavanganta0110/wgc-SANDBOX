@@ -133,7 +133,7 @@ export default function PlanningCenterPeople() {
 
       <div className="flex flex-wrap gap-2">
         <button className={buttonSecondary} disabled={disabled} onClick={() => runJob("MATCH_DONORS")}>
-          {busy === "MATCH_DONORS" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />} Match my donors
+          {busy === "MATCH_DONORS" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />} {pw("Match my donors")}
         </button>
         <button
           className={buttonSecondary}
@@ -166,7 +166,7 @@ export default function PlanningCenterPeople() {
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.review.map((item) => (
               <div key={item.donorId} className="p-3 text-xs">
-                <div className="font-medium text-slate-900">{item.donorName ?? "Unnamed donor"}</div>
+                <div className="font-medium text-slate-900">{item.donorName ?? pw("Unnamed donor")}</div>
                 <div className="text-slate-500 mb-2">{[item.donorEmail, item.donorPhone].filter(Boolean).join(" · ") || "No contact details"}</div>
                 <div className="space-y-1.5">
                   {item.candidates.map((c) => (
@@ -176,7 +176,7 @@ export default function PlanningCenterPeople() {
                         <div className="text-slate-500 break-words">{[...c.emails, ...c.phones].join(" · ") || "No contact details"}</div>
                         {c.alreadyLinkedDonorId && (
                           <div className="text-amber-700 mt-0.5">
-                            Already linked to <span className="font-semibold">{c.alreadyLinkedDonorName ?? "another WGC donor"}</span>. Are {item.donorName ?? "this donor"} and {c.alreadyLinkedDonorName ?? "that donor"} the same person?
+                            Already linked to <span className="font-semibold">{c.alreadyLinkedDonorName ?? "another WGC donor"}</span>. Are {item.donorName ?? pw("this donor")} and {c.alreadyLinkedDonorName ?? pw("that donor")} the same person?
                           </div>
                         )}
                       </div>

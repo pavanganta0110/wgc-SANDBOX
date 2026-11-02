@@ -327,13 +327,13 @@ export default function AnnualStatementsClient() {
           href={`/api/merchant/donors/annual-statements/year-totals?year=${year}`}
           className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
-          Download {year} giving totals (CSV)
+          Download {year} {pw("giving totals (CSV)")}
         </a>
         <a
           href={`/api/merchant/donors/annual-statements/year-totals?year=${year}&format=xlsx`}
           className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
-          Download {year} giving totals (Excel)
+          Download {year} {pw("giving totals (Excel)")}
         </a>
         {printMeta && printMeta.statements > 0 ? (
           Array.from({ length: printMeta.parts }, (_, i) => (
@@ -373,7 +373,7 @@ export default function AnnualStatementsClient() {
         ) : rows.length === 0 ? (
           <div className="px-6 py-16 text-center">
             <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("No eligible donors")}</h3>
-            <p className="text-sm text-slate-500">No donors have qualifying completed donations for {year}.</p>
+            <p className="text-sm text-slate-500">{pw("No donors have qualifying completed donations for")} {year}.</p>
           </div>
         ) : (
           <table className="w-full text-sm min-w-[1200px]">

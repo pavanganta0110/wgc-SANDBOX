@@ -209,7 +209,7 @@ export default function WebsiteEmbedForm({
   async function handleCopyHostedLink() {
     if (!hostedGivingLink) return;
     await navigator.clipboard.writeText(hostedGivingLink);
-    toast.success("Hosted giving link copied");
+    toast.success(pw("Hosted giving link copied"));
   }
 
   async function handleSaveDomains(e: React.FormEvent) {
@@ -239,7 +239,7 @@ export default function WebsiteEmbedForm({
   if (givingLinks.length === 0) {
     return (
       <p className="text-sm text-slate-500">
-        Create a Giving Link first, then come back here to generate a website embed for it.
+        {pw("Create a Giving Link first, then come back here to generate a website embed for it.")}
       </p>
     );
   }
@@ -262,7 +262,7 @@ export default function WebsiteEmbedForm({
             <label className="block text-xs font-semibold text-slate-600 mb-1">Embed type</label>
             <div className="flex gap-2">
               <button type="button" onClick={() => setMode("button")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${mode === "button" ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-700"}`}>
-                Donate Button
+                {pw("Donate Button")}
               </button>
               <button type="button" onClick={() => setMode("inline")} className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold border ${mode === "inline" ? "bg-slate-900 text-white border-slate-900" : "border-slate-200 text-slate-700"}`}>
                 Inline Form
@@ -317,7 +317,7 @@ export default function WebsiteEmbedForm({
                 </button>
               </div>
               <p className="text-xs text-slate-400 mt-2">
-                Color, logo, description, and Powered-by-WGC visibility follow this giving page's own saved branding — edit those in the giving link's own settings, not here, so the embed never drifts out of sync with the hosted page.
+                {pw("Color, logo, description, and Powered-by-WGC visibility follow this giving page's own saved branding — edit those in the giving link's own settings, not here, so the embed never drifts out of sync with the hosted page.")}
               </p>
             </div>
           )}
@@ -343,10 +343,10 @@ export default function WebsiteEmbedForm({
                     cursor: "pointer",
                   }}
                 >
-                  {buttonText || "Give Now"}
+                  {buttonText || pw("Give Now")}
                 </button>
                 <p className="text-xs text-slate-400 max-w-xs">
-                  Click to preview the real giving form — it opens in a secure popup window (falls back to same-tab navigation if the popup is blocked).
+                  {pw("Click to preview the real giving form — it opens in a secure popup window (falls back to same-tab navigation if the popup is blocked).")}
                 </p>
               </div>
             </div>
@@ -406,7 +406,7 @@ export default function WebsiteEmbedForm({
       {isWixInline && (
         <div className="border border-amber-200 bg-amber-50 rounded-xl p-4 space-y-3">
           <p className="text-sm text-amber-900">
-            <strong>On Wix, use Custom Code for the real inline card form.</strong> Wix&rsquo;s standard Embed HTML element always wraps content in an iframe, and our payment processor won&rsquo;t render Card/ACH fields inside any iframe — a restriction on their end, not something we or you can turn off. The code below is built for Wix&rsquo;s separate Custom Code feature instead, which avoids the iframe entirely. (If you&rsquo;d rather not deal with this, the plain Embed HTML method under &ldquo;Wix&rdquo; below still works — it just shows a &ldquo;Continue securely to donate&rdquo; button that opens the hosted form instead of inline card fields.)
+            <strong>On Wix, use Custom Code for the real inline card form.</strong> {pw("Wix’s standard Embed HTML element always wraps content in an iframe, and our payment processor won’t render Card/ACH fields inside any iframe — a restriction on their end, not something we or you can turn off. The code below is built for Wix’s separate Custom Code feature instead, which avoids the iframe entirely. (If you’d rather not deal with this, the plain Embed HTML method under &ldquo;Wix&rdquo; below still works — it just shows a &ldquo;Continue securely to donate&rdquo; button that opens the hosted form instead of inline card fields.)")}
           </p>
           <div>
             <label className="block text-xs font-semibold text-amber-900 mb-1">Container element ID (from Wix Inspect)</label>
@@ -426,7 +426,7 @@ export default function WebsiteEmbedForm({
           <label className="text-xs font-semibold text-slate-600">Embed code</label>
           <div className="flex gap-2">
             <button type="button" onClick={handleCopyHostedLink} className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50">
-              Copy Hosted Giving Link
+              {pw("Copy Hosted Giving Link")}
             </button>
             <button type="button" onClick={handleCopy} className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800">
               {mode === "button" ? "Copy Donate Button Code" : "Copy Inline Form Code"}
@@ -477,7 +477,7 @@ export default function WebsiteEmbedForm({
               className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none font-mono"
             />
             <p className="text-xs text-slate-400">
-              Enter just the domain — no <code>https://</code> and no trailing slash (e.g. <code>churchwebsite.org</code>). Adding <code>churchwebsite.org</code> automatically also allows <code>www.churchwebsite.org</code>, and vice versa — WGC treats the www and non-www versions of a domain as the same site, so you only need to list one. If a donor sees &ldquo;This domain is not authorized,&rdquo; the error shows the exact host that was blocked — add that exact value here.
+              Enter just the domain — no <code>https://</code> and no trailing slash (e.g. <code>churchwebsite.org</code>). Adding <code>churchwebsite.org</code> automatically also allows <code>www.churchwebsite.org</code>{pw(", and vice versa — WGC treats the www and non-www versions of a domain as the same site, so you only need to list one. If a donor sees &ldquo;This domain is not authorized,&rdquo; the error shows the exact host that was blocked — add that exact value here.")}
             </p>
           </>
         )}

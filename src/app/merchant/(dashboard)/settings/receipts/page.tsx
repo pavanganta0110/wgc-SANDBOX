@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma";
 import ReceiptSettingsForm from "@/components/merchant/ReceiptSettingsForm";
 import { DEFAULT_RECEIPT_SUBJECT_TEMPLATE, DEFAULT_RECEIPT_THANK_YOU_MESSAGE, DEFAULT_RECEIPT_DISCLAIMER } from "@/lib/settings/receiptDefaults";
 import { DEFAULT_NO_GOODS_SERVICES_TEXT, DEFAULT_GOODS_SERVICES_TEMPLATE } from "@/lib/settings/acknowledgmentDefaults";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function ReceiptSettingsPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const church = await prisma.church.findUnique({ where: { id: session!.churchId! } });
   if (!church) return null;
@@ -13,7 +15,7 @@ export default async function ReceiptSettingsPage() {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
       <h3 className="text-sm font-bold text-slate-900 mb-1">Receipts</h3>
       <p className="text-xs text-slate-500 mb-6">
-        Donation receipts summarize a gift for the donor's own records. WGC does not provide tax advice, and receipts never state that a gift is tax-deductible.
+        {pw("Donation receipts summarize a gift for the donor's own records. WGC does not provide tax advice, and receipts never state that a gift is tax-deductible.")}
       </p>
       <ReceiptSettingsForm
         initial={{

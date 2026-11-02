@@ -10,6 +10,7 @@ import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
 import OptionPicker from "@/components/campaigns/OptionPicker";
 import { DEFAULT_DISPLAY, FONT_STYLES, IMAGE_SIZES, QR_SIZES, TEXT_SIZES } from "@/lib/campaigns/display";
 import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS, DEFAULT_PAGE_BACKGROUND, DEFAULT_WALL_BACKGROUND } from "@/lib/campaigns/backgrounds";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -21,6 +22,7 @@ export default function NewFundraisingCampaignForm({
   churchName: string;
   churchLogoUrl?: string | null;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
@@ -241,7 +243,7 @@ export default function NewFundraisingCampaignForm({
         <p className="text-xs text-slate-400 mb-3">
           {previewView === "page"
             ? "This shows what your campaign's public page will look like."
-            : "This shows what the live donation wall will look like at your event."}{" "}
+            : pw("This shows what the live donation wall will look like at your event.")}{" "}
           Nothing here is saved or public until you click Create Campaign.
         </p>
         {previewView === "page" ? (

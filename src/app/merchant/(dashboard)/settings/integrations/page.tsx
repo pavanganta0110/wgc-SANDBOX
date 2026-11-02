@@ -117,7 +117,7 @@ export default async function IntegrationsSettingsPage() {
           <div>
             <div className="text-sm font-bold text-slate-900">Printful</div>
             <p className="text-xs text-slate-500 mt-0.5 max-w-lg">
-              Sell merchandise — t-shirts, hoodies, and more — directly on your giving page. Fulfilled and shipped by Printful.
+              {pw("Sell merchandise — t-shirts, hoodies, and more — directly on your giving page. Fulfilled and shipped by Printful.")}
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0">

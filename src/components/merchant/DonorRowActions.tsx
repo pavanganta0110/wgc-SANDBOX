@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { RowActionsMenu } from "@/components/merchant/PaymentDetailActions";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function DonorRowActions({
   donorId,
@@ -22,13 +23,14 @@ export default function DonorRowActions({
   /** Show "Send portal invite" — same permission as messaging donors. */
   canInvite?: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
 
   const archive = async () => {
     try {
       const res = await fetch(`/api/merchant/donors/${donorId}/archive`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to archive donor");
-      toast.success("Donor archived");
+      toast.success(pw("Donor archived"));
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Failed to archive donor");
@@ -39,7 +41,7 @@ export default function DonorRowActions({
     try {
       const res = await fetch(`/api/merchant/donors/${donorId}/restore`, { method: "POST" });
       if (!res.ok) throw new Error("Failed to restore donor");
-      toast.success("Donor restored");
+      toast.success(pw("Donor restored"));
       router.refresh();
     } catch (err: any) {
       toast.error(err.message || "Failed to restore donor");
@@ -62,12 +64,12 @@ export default function DonorRowActions({
       items={[
         { label: "View Profile", onClick: () => router.push(`/merchant/donors/${donorId}`) },
         {
-          label: "Edit Donor",
+          label: pw("Edit Donor"),
           onClick: () => router.push(`/merchant/donors/${donorId}?edit=1`),
           hidden: !canEdit,
         },
         {
-          label: "Export Donor",
+          label: pw("Export Donor"),
           onClick: () => window.open(`/api/merchant/donors/export?donorId=${donorId}`, "_blank"),
           hidden: !canExport,
         },
@@ -79,14 +81,14 @@ export default function DonorRowActions({
           confirmMessage: "Email this donor a link to your giving portal?",
         },
         {
-          label: "Archive Donor",
+          label: pw("Archive Donor"),
           onClick: archive,
           hidden: isArchived || !canArchive,
           requiresConfirm: true,
           confirmMessage: "Archive this donor? They'll be hidden from the default list, but all history is preserved.",
         },
         {
-          label: "Restore Donor",
+          label: pw("Restore Donor"),
           onClick: restore,
           hidden: !isArchived || !canRestore,
         },

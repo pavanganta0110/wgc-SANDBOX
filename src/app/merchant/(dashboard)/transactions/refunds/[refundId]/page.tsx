@@ -75,7 +75,7 @@ export default async function RefundFullDetailPage({
               </div>
             </div>
             <p className="text-sm text-slate-600">
-              Donor: <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
+              {pw("Donor:")} <span className="font-semibold"><DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} /></span>
               {" · "}
               Payment Instrument:{" "}
               <span className="font-semibold text-slate-900">
@@ -128,7 +128,7 @@ export default async function RefundFullDetailPage({
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-bold text-slate-900 mb-4">Receipt</h3>
             <p className="text-sm text-slate-500">
-              Receipts for a refunded gift are managed from the original payment.
+              {pw("Receipts for a refunded gift are managed from the original payment.")}
             </p>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { CheckCircle2 } from "lucide-react";
 import StateBadge from "@/components/merchant/StateBadge";
 import { isSmsConfigured } from "@/lib/sms/sendText";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function ServiceRow({ name, description, operational }: { name: string; description: string; operational: boolean }) {
   return (
@@ -14,7 +15,8 @@ function ServiceRow({ name, description, operational }: { name: string; descript
   );
 }
 
-export default function SystemStatusPage() {
+export default async function SystemStatusPage() {
+  const { pw } = await getPaymentWording();
   const finixConfigured = Boolean(process.env.FINIX_BASE_URL);
   const emailConfigured = Boolean(process.env.RESEND_API_KEY);
   // Donor/Giving Link texting specifically — deliberately NOT the auth-SMS
@@ -35,10 +37,10 @@ export default function SystemStatusPage() {
             {allOperational ? "All Systems Operational" : "Some Services Need Attention"}
           </span>
         </div>
-        <ServiceRow name="Payment Processing" description="Card and ACH donation processing" operational={finixConfigured} />
+        <ServiceRow name="Payment Processing" description={pw("Card and ACH donation processing")} operational={finixConfigured} />
         <ServiceRow name="Dashboard" description="This WGC Payments dashboard" operational />
         <ServiceRow name="Email Delivery" description="Receipts, statements, and notifications" operational={emailConfigured} />
-        <ServiceRow name="Text Message Sharing" description="Giving Link SMS sharing" operational={smsConfigured} />
+        <ServiceRow name="Text Message Sharing" description={pw("Giving Link SMS sharing")} operational={smsConfigured} />
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">

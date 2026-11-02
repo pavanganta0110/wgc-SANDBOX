@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CreditCard, HeartHandshake, CalendarPlus, Megaphone, Landmark } from "lucide-react";
 import TakePaymentAction from "./TakePaymentAction";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const CARD =
   "group flex w-full flex-col items-start gap-3 rounded-2xl border border-slate-200/70 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_6px_20px_rgba(15,23,42,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
@@ -19,7 +20,7 @@ function Inner({ icon, title, hint }: { icon: React.ReactNode; title: string; hi
   );
 }
 
-export default function QuickActions({
+export default async function QuickActions({
   finixMerchantId,
   churchName,
   pricing,
@@ -28,6 +29,7 @@ export default function QuickActions({
   churchName: string;
   pricing: { cardPercentageFee: number | null; cardFixedFeeCents: number | null; achFixedFeeCents: number | null };
 }) {
+  const { pw } = await getPaymentWording();
   const icon = "h-5 w-5";
   return (
     <section aria-labelledby="quick-actions">
@@ -36,10 +38,10 @@ export default function QuickActions({
       </h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <TakePaymentAction finixMerchantId={finixMerchantId} churchName={churchName} pricing={pricing} className={CARD}>
-          <Inner icon={<CreditCard className={icon} />} title="Take a payment" hint="Charge a donor now" />
+          <Inner icon={<CreditCard className={icon} />} title="Take a payment" hint={pw("Charge a donor now")} />
         </TakePaymentAction>
         <Link href="/merchant/giving-links/create" className={CARD}>
-          <Inner icon={<HeartHandshake className={icon} />} title="Create giving page" hint="Share a link to give" />
+          <Inner icon={<HeartHandshake className={icon} />} title={pw("Create giving page")} hint={pw("Share a link to give")} />
         </Link>
         <Link href="/merchant/events/new" className={CARD}>
           <Inner icon={<CalendarPlus className={icon} />} title="New event" hint="Sell tickets, track guests" />

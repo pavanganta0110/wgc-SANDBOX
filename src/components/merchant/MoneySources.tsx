@@ -3,6 +3,7 @@ import { formatCents } from "@/lib/format";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import ExpandableTableRow from "@/components/merchant/ExpandableTableRow";
 import { TRANSACTIONS_PER_ROW, type WhereMoneyCameFrom, type MoneyRowBase, type SourceTransaction, type EventAttendeeInfo } from "@/lib/reports/moneySources";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 /**
  * "Where your donations came from" — Transaction Insights, Payments tab.
@@ -28,7 +29,7 @@ function ViewLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function SummaryCard({
+async function SummaryCard({
   title,
   totalCents,
   donors,
@@ -39,13 +40,14 @@ function SummaryCard({
   donors: number;
   accent: string;
 }) {
+  const { pw } = await getPaymentWording();
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 relative overflow-hidden">
       <span className={`absolute left-0 top-0 h-full w-1 ${accent}`} aria-hidden />
       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">{title}</p>
       <p className={`mt-1 text-2xl font-bold text-slate-900 ${num}`}>{formatCents(totalCents)}</p>
       <p className={`text-xs text-slate-400 ${num}`}>
-        {donors} donor{donors === 1 ? "" : "s"}
+        {donors} {pw("donor")}{donors === 1 ? "" : "s"}
       </p>
     </div>
   );
@@ -100,7 +102,8 @@ function donorLabel(t: SourceTransaction) {
 }
 
 /** Who paid: the latest payments behind one row, newest first. */
-function WhoPaid({ transactions, total, label }: { transactions: SourceTransaction[]; total: number; label: string }) {
+async function WhoPaid({ transactions, total, label }: { transactions: SourceTransaction[]; total: number; label: string }) {
+  const { pw } = await getPaymentWording();
   if (transactions.length === 0) {
     return <p className="text-sm text-slate-400">No processed payments to show for {label}.</p>;
   }
@@ -111,7 +114,7 @@ function WhoPaid({ transactions, total, label }: { transactions: SourceTransacti
         <table className="w-full text-left">
           <thead className="bg-slate-50">
             <tr>
-              <th className={th}>Donor</th>
+              <th className={th}>{pw("Donor")}</th>
               <th className={th}>Date</th>
               <th className={`${th} text-right`}>Amount</th>
               <th className={th} />
@@ -130,7 +133,7 @@ function WhoPaid({ transactions, total, label }: { transactions: SourceTransacti
                   )}
                   {t.isAnonymous && (
                     <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                      Gave anonymously
+                      {pw("Gave anonymously")}
                     </span>
                   )}
                 </td>
@@ -218,15 +221,16 @@ function pct(n: number | null) {
   return n == null ? "—" : `${Math.round(n)}%`;
 }
 
-export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
+export default async function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
+  const { pw } = await getPaymentWording();
   const { givingPages, events, campaigns, pledges, other, totalCents } = data;
 
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
         <p className="text-sm font-bold text-slate-900">
-          Where your donations came from{" "}
-          <span className="font-normal text-slate-400">gross processed donations, before refunds</span>
+          {pw("Where your donations came from")}{" "}
+          <span className="font-normal text-slate-400">{pw("gross processed donations, before refunds")}</span>
         </p>
         <p className={`text-sm text-slate-500 ${num}`}>
           Total <span className="font-bold text-slate-900">{formatCents(totalCents)}</span>
@@ -234,16 +238,16 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard title="Giving pages" totalCents={givingPages.totalCents} donors={givingPages.donors} accent="bg-blue-500" />
+        <SummaryCard title={pw("Giving pages")} totalCents={givingPages.totalCents} donors={givingPages.donors} accent="bg-blue-500" />
         <SummaryCard title="Events" totalCents={events.totalCents} donors={events.donors} accent="bg-violet-500" />
         <SummaryCard title="Campaigns" totalCents={campaigns.totalCents} donors={campaigns.donors} accent="bg-emerald-500" />
         <SummaryCard title="Pledges" totalCents={pledges.totalCents} donors={pledges.donors} accent="bg-amber-500" />
       </div>
 
       <SectionShell
-        title="Giving Pages"
+        title={pw("Giving Pages")}
         totalCents={givingPages.totalCents}
-        emptyText="No giving page payments in this date range"
+        emptyText={pw("No giving page payments in this date range")}
         isEmpty={givingPages.rows.length === 0}
       >
         <div className="overflow-x-auto">
@@ -252,9 +256,9 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
               <tr>
                 <th className="w-6" /><th className={th}>Page</th>
                 <th className={`${th} text-right`}>Raised</th>
-                <th className={`${th} text-right`}>Donors</th>
-                <th className={`${th} text-right`}>Gifts</th>
-                <th className={`${th} text-right`}>Avg. gift</th>
+                <th className={`${th} text-right`}>{pw("Donors")}</th>
+                <th className={`${th} text-right`}>{pw("Gifts")}</th>
+                <th className={`${th} text-right`}>{pw("Avg. gift")}</th>
                 <th className={th} />
               </tr>
             </thead>
@@ -293,7 +297,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
                 <th className={`${th} text-right`}>Revenue</th>
                 <th className={`${th} text-right`}>Paid registrations</th>
                 <th className={`${th} text-right`}>Attendees</th>
-                <th className={`${th} text-right`}>Paying donors</th>
+                <th className={`${th} text-right`}>{pw("Paying donors")}</th>
                 <th className={`${th} text-right`}>Door cash/check</th>
                 <th className={th} />
               </tr>
@@ -335,7 +339,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
               <tr>
                 <th className="w-6" /><th className={th}>Campaign</th>
                 <th className={`${th} text-right`}>Raised (range)</th>
-                <th className={`${th} text-right`}>Donors</th>
+                <th className={`${th} text-right`}>{pw("Donors")}</th>
                 <th className={`${th} text-right`}>Goal</th>
                 <th className={`${th} text-right`}>All-time raised</th>
                 <th className={`${th} text-right`}>% of goal</th>
@@ -362,7 +366,7 @@ export default function MoneySources({ data }: { data: WhereMoneyCameFrom }) {
       <SectionShell
         title="Pledges"
         totalCents={pledges.totalCents}
-        subtitle="Paid is this date range. Pledged and fulfilment are all-time, including linked external donations."
+        subtitle={pw("Paid is this date range. Pledged and fulfilment are all-time, including linked external donations.")}
         emptyText="No pledge payments in this date range"
         isEmpty={pledges.rows.length === 0}
       >

@@ -33,7 +33,7 @@ export default async function CreateGivingLinkPage() {
   return (
     <div>
       <Link href="/merchant/giving-links" className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
-        <ArrowLeft className="w-4 h-4" /> All Giving Links
+        <ArrowLeft className="w-4 h-4" /> {pw("All Giving Links")}
       </Link>
       <h2 className="text-lg font-bold text-slate-900 mb-6">{pw("Create Giving Link")}</h2>
       <GivingLinkBuilderForm
