@@ -236,7 +236,7 @@ export default function TakePaymentDialog({
       const data = await res.json();
 
       if (!res.ok) {
-        setResult({ success: false, error: data.error || "Payment failed" });
+        setResult({ success: false, error: data.error || data.message || "Payment failed" });
         setStep("result");
         return;
       }
