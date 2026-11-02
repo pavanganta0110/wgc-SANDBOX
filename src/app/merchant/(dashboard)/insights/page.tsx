@@ -21,6 +21,7 @@ import {
   getDepositsInsights,
   getExternalDonationsInsights,
   getExternalDonationsTotal,
+  getPayerFeeBreakdown,
   PAYMENT_DIMENSIONS,
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
@@ -237,17 +238,36 @@ async function PaymentsTab({
   trend: string;
   scopedUserId?: string;
 }) {
-  const { pw } = await getPaymentWording();
-  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external] = await Promise.all([
+  const { pw, paymentMode } = await getPaymentWording();
+  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external, feeBreakdown] = await Promise.all([
     getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
     getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),
     getExternalDonationsTotal(churchId, dateFilter, scopedUserId),
+    // Payment-processor orgs: show clearly what payers were charged vs what the organization receives.
+    paymentMode ? getPayerFeeBreakdown(churchId, dateFilter, scopedUserId) : Promise.resolve(null),
   ]);
   const wgcVolumeCents = moneySources.totalCents;
 
   return (
     <>
       <SummaryCards items={summary} />
+
+      {feeBreakdown && (
+        <>
+          <SummaryCards
+            items={[
+              { label: "Charged to Payers", value: formatCents(feeBreakdown.chargedCents) },
+              { label: "Fees Covered by Payers", value: formatCents(feeBreakdown.feesCoveredCents) },
+              { label: "Amount to Organization", value: formatCents(feeBreakdown.amountToOrganizationCents) },
+            ]}
+          />
+          <p className="-mt-3 text-xs text-slate-500">
+            Total Transaction Volume is what payers were charged. A payer who covers the processing fee pays it on top of their
+            payment, so the amount your organization receives is lower than the total charged. Where a payer did not cover the
+            fee, processing fees are deducted from your deposit instead.
+          </p>
+        </>
+      )}
 
       <SummaryCards
         items={[

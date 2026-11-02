@@ -136,6 +136,61 @@ export function dimensionValue(
   }
 }
 
+/**
+ * What payers were charged versus what the organization receives, for succeeded payments. A payer who covers
+ * the processing fee is charged it on top of the payment, so "Total Transaction Volume" (the amount charged)
+ * is larger than the amount the organization receives. Pure so the arithmetic is tested on its own.
+ */
+export function computePayerFeeBreakdown(
+  transfers: { finixTransferId: string; amountCents: number | null }[],
+  payments: { finixTransferId: string | null; feeCoveredCents: number | null }[]
+) {
+  const coveredByTransfer = new Map<string, number>();
+  for (const p of payments) {
+    if (p.finixTransferId) coveredByTransfer.set(p.finixTransferId, p.feeCoveredCents ?? 0);
+  }
+  let chargedCents = 0;
+  let feesCoveredCents = 0;
+  for (const t of transfers) {
+    const charged = t.amountCents ?? 0;
+    // Never more than was charged, never negative: keeps charged = fees + amount to organization exactly.
+    const covered = Math.min(Math.max(coveredByTransfer.get(t.finixTransferId) ?? 0, 0), charged);
+    chargedCents += charged;
+    feesCoveredCents += covered;
+  }
+  return { chargedCents, feesCoveredCents, amountToOrganizationCents: chargedCents - feesCoveredCents };
+}
+
+/** Same date/scope/eligibility rules as getPaymentsInsights' successful total, so the figures line up. */
+export async function getPayerFeeBreakdown(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  attributedUserId?: string
+) {
+  const scopedTransferIds = await resolveScopedTransferIds(churchId, attributedUserId);
+  const all = await prisma.finixTransfer.findMany({
+    where: {
+      churchId,
+      ...EXCLUDE_NON_DONATION_TRANSFERS,
+      ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+      ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+    },
+    select: { finixTransferId: true, amountCents: true, state: true },
+  });
+  const succeeded = all.filter((t) => (t.state || "").toUpperCase() === "SUCCEEDED");
+  const ids = succeeded.map((t) => t.finixTransferId);
+  const payments: { finixTransferId: string | null; feeCoveredCents: number | null }[] = [];
+  for (let i = 0; i < ids.length; i += 5000) {
+    payments.push(
+      ...(await prisma.payment.findMany({
+        where: { churchId, finixTransferId: { in: ids.slice(i, i + 5000) } },
+        select: { finixTransferId: true, feeCoveredCents: true },
+      }))
+    );
+  }
+  return computePayerFeeBreakdown(succeeded, payments);
+}
+
 export async function getPaymentsInsights(
   churchId: string,
   dateFilter: { gte: Date; lte?: Date } | undefined,
