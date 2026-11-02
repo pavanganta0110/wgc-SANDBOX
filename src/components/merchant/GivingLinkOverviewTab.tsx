@@ -9,6 +9,7 @@ import {
   parseBrandingSettings,
   DONOR_FIELDS,
 } from "@/lib/givingLinks/types";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const DONOR_FIELD_LABELS: Record<string, string> = {
   firstName: "First Name",
@@ -31,6 +32,7 @@ export default async function GivingLinkOverviewTab({
 }: {
   link: NonNullable<Awaited<ReturnType<typeof prisma.givingLink.findFirst>>>;
 }) {
+  const { pw } = await getPaymentWording();
   const church = await prisma.church.findUnique({ where: { id: link.churchId } });
 
   const donorFieldSettings = parseDonorFieldSettings(link.donorFieldSettingsJson);
@@ -52,7 +54,7 @@ export default async function GivingLinkOverviewTab({
       {/* Left */}
       <div className="lg:col-span-2 space-y-6">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <h3 className="text-sm font-bold text-slate-900 mb-4">Giving Information</h3>
+          <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Giving Information")}</h3>
           <Row label="Public Title" value={link.publicTitle} />
           <Row label="Description" value={link.description || "—"} />
           <Row
@@ -74,7 +76,7 @@ export default async function GivingLinkOverviewTab({
             </>
           )}
           <Row label="Fund / Designation" value={link.fundName || "—"} />
-          <Row label="Recurring Giving" value={link.recurringEnabled ? allowedFrequencies.map(titleCase).join(", ") : "Not enabled"} />
+          <Row label={pw("Recurring Giving")} value={link.recurringEnabled ? allowedFrequencies.map(titleCase).join(", ") : "Not enabled"} />
           {link.recurringEnabled && (
             <Row
               label="Form Opens On"
@@ -94,7 +96,7 @@ export default async function GivingLinkOverviewTab({
             <h3 className="text-sm font-bold text-slate-900">Link Settings</h3>
           </div>
           <div className="px-6 py-4">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Donor Details</h4>
+            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{pw("Donor Details")}</h4>
             {DONOR_FIELDS.map((f) => (
               <Row key={f} label={DONOR_FIELD_LABELS[f]} value={titleCase(donorFieldSettings[f])} />
             ))}
@@ -119,7 +121,7 @@ export default async function GivingLinkOverviewTab({
           </div>
           <div className="px-6 py-4">
             <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Fee-Cover Settings</h4>
-            <Row label="Allow Donor to Cover Fees" value={link.feeCoverEnabled ? "Yes" : "No"} />
+            <Row label={pw("Allow Donor to Cover Fees")} value={link.feeCoverEnabled ? "Yes" : "No"} />
             <Row label="Default" value={link.feeCoverDefaultOn ? "Checked" : "Unchecked"} />
           </div>
           <div className="px-6 py-4">

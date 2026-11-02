@@ -8,8 +8,10 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { loadAllAssignedFunds } from "@/lib/giving/fundAssignment";
 import { parseDefaultDonationType } from "@/lib/givingLinks/defaultDonationSettings";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function EditGivingLinkPage({ params }: { params: Promise<{ id: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -86,7 +88,7 @@ export default async function EditGivingLinkPage({ params }: { params: Promise<{
       <Link href={`/merchant/giving-links/${id}`} className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
         <ArrowLeft className="w-4 h-4" /> Back to Giving Link
       </Link>
-      <h2 className="text-lg font-bold text-slate-900 mb-6">Edit Giving Link</h2>
+      <h2 className="text-lg font-bold text-slate-900 mb-6">{pw("Edit Giving Link")}</h2>
       <GivingLinkBuilderForm
         mode="edit"
         studentGivingEnabled={church?.studentGivingEnabled ?? false}

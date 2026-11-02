@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { Download, Printer } from "lucide-react";
 import { PORTAL_BUTTON_LABELS, buildPortalButtonSnippet, readableTextColor } from "@/lib/donorPortal/websiteSnippet";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 /** The donor portal link (copyable) plus a QR code the church can download or print for a bulletin, flyer or lobby sign. */
 export default function CopyDonorPortalLink({ url, organizationName, accentColor }: { url: string; organizationName: string; accentColor: string }) {
+  const pw = usePaymentWording();
   const [copied, setCopied] = useState(false);
   const [snippetCopied, setSnippetCopied] = useState(false);
   const [buttonLabel, setButtonLabel] = useState<string>(PORTAL_BUTTON_LABELS[0]);
@@ -62,7 +64,7 @@ export default function CopyDonorPortalLink({ url, organizationName, accentColor
     const name = organizationName.replace(/[<>&"]/g, "");
     w.document.write(`<html><head><title>${name} giving portal</title></head><body style="font-family:sans-serif;text-align:center;padding:48px;">
       <h1 style="margin:0 0 8px 0;">${name}</h1>
-      <p style="font-size:20px;margin:0 0 24px 0;">See your giving, statements and recurring gifts</p>
+      <p style="font-size:20px;margin:0 0 24px 0;">{pw("See your giving, statements and recurring gifts")}</p>
       <img src="${qrPngUrl}" style="width:360px;height:360px;" />
       <p style="font-size:16px;margin-top:24px;">Scan with your phone camera</p>
     </body></html>`);
@@ -90,7 +92,7 @@ export default function CopyDonorPortalLink({ url, organizationName, accentColor
           <div className="h-32 w-32 rounded-xl bg-slate-50" />
         )}
         <div className="space-y-2">
-          <p className="text-xs text-slate-500">Scanning this opens your donor portal. Put it on a bulletin, flyer or lobby sign.</p>
+          <p className="text-xs text-slate-500">{pw("Scanning this opens your donor portal. Put it on a bulletin, flyer or lobby sign.")}</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className={secondary} disabled={!qrPngUrl} onClick={() => qrPngUrl && save(qrPngUrl, `${fileBase}.png`)}>
               <Download className="h-3.5 w-3.5" /> PNG

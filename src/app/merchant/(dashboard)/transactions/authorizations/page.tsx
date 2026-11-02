@@ -14,6 +14,7 @@ import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import { getAuthorizationPermissions } from "@/lib/finix/authorizationPermissions";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const STATES = ["CAPTURED", "SUCCEEDED", "VOIDED", "EXPIRED", "PENDING", "FAILED"];
 
@@ -32,6 +33,7 @@ export default async function AuthorizationsListPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   // Team-access Checkpoint 4C: this page previously ran on getSession()
   // with no role check at all — any authenticated merchant user, including
   // FUNDRAISER/VIEWER, could view every organization-wide authorization.
@@ -174,7 +176,7 @@ export default async function AuthorizationsListPage({
                   <th className="px-6 py-3">ID</th>
                   <th className="px-6 py-3">Created</th>
                   <th className="px-6 py-3">Organization</th>
-                  <th className="px-6 py-3">Donor</th>
+                  <th className="px-6 py-3">{pw("Donor")}</th>
                   <th className="px-6 py-3 text-right">Amount</th>
                   <th className="px-6 py-3">State</th>
                   <th className="px-6 py-3">Payment Instrument</th>

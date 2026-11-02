@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { Loader2, CheckCircle2, XCircle, AlertTriangle, Users } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface StatusResponse {
   enabled: boolean;
@@ -29,6 +30,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function PlanningCenterConnectionCard() {
+  const pw = usePaymentWording();
   const [data, setData] = useState<StatusResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -128,7 +130,7 @@ export default function PlanningCenterConnectionCard() {
         {isConnected && data.connection?.canReadGiving === false && (
           <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 text-amber-800 text-xs p-3">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>The Planning Center user who connected can&apos;t access Giving. Reconnect with a finance administrator account so gifts can be shared with Planning Center.</span>
+            <span>{pw("The Planning Center user who connected can't access Giving. Reconnect with a finance administrator account so gifts can be shared with Planning Center.")}</span>
           </div>
         )}
 
@@ -164,12 +166,12 @@ export default function PlanningCenterConnectionCard() {
         {confirmingDisconnect && (
           <div role="alertdialog" aria-labelledby="pco-disconnect-title" className="mt-4 rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-slate-700 space-y-3">
             <p id="pco-disconnect-title" className="font-semibold text-slate-900">Disconnect Planning Center?</p>
-            <p>WGC will stop sending anything to Planning Center and can no longer reach your account. Gifts already sent stay where they are.</p>
+            <p>{pw("WGC will stop sending anything to Planning Center and can no longer reach your account. Gifts already sent stay where they are.")}</p>
             <label className="flex items-start gap-2 text-xs cursor-pointer">
               <input type="checkbox" className="mt-0.5" checked={deleteData} onChange={(e) => setDeleteData(e.target.checked)} />
               <span>
                 <span className="font-medium text-slate-900">Also delete the Planning Center people data WGC stored</span>
-                <span className="block text-slate-500">This removes the matches between your donors and Planning Center people (names, emails and phone numbers kept for matching) and the match history. Donors already in WGC, their gifts and receipts are not deleted. If you reconnect later, WGC matches again.</span>
+                <span className="block text-slate-500">{pw("This removes the matches between your donors and Planning Center people (names, emails and phone numbers kept for matching) and the match history. Donors already in WGC, their gifts and receipts are not deleted. If you reconnect later, WGC matches again.")}</span>
               </span>
             </label>
             <div className="flex gap-2">

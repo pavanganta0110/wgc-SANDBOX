@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import DonorPicker from "@/components/merchant/DonorPicker";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonorHit {
   id: string;
@@ -85,6 +86,7 @@ export default function ClientForm({
    * save. */
   onSaved?: (client: { id: string; displayName: string }) => void;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [values, setValues] = useState<ClientFormValues>({ ...EMPTY, ...initial });
   const [saving, setSaving] = useState(false);
@@ -205,7 +207,7 @@ export default function ClientForm({
 
       <div>
         <label className="block text-xs font-semibold text-slate-700 mb-1">
-          Linked donor <span className="font-normal text-slate-400">(optional — a client is not automatically a donor)</span>
+          Linked donor <span className="font-normal text-slate-400">{pw("(optional — a client is not automatically a donor)")}</span>
         </label>
         <DonorPicker
           selected={values.linkedDonor}

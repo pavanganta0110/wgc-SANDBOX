@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import MergeDonorsModal from "@/components/merchant/MergeDonorsModal";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Candidate {
   donor: { id: string; name: string | null; email: string | null; phone: string | null; createdAt: string };
@@ -11,6 +12,7 @@ interface Candidate {
 }
 
 export default function DuplicateDonorsCard({ donorId, canMerge }: { donorId: string; canMerge: boolean }) {
+  const pw = usePaymentWording();
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState<string | null>(null);
 
@@ -25,7 +27,7 @@ export default function DuplicateDonorsCard({ donorId, canMerge }: { donorId: st
 
   return (
     <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-6">
-      <h3 className="text-sm font-bold text-slate-900 mb-1">Possible Duplicate Donors</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Possible Duplicate Donors")}</h3>
       <p className="text-xs text-slate-500 mb-3">Matched by email, phone, or external identity — not by name alone.</p>
       <div className="space-y-3">
         {candidates.map((c) => (

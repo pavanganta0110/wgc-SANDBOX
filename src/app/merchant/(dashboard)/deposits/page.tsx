@@ -225,7 +225,7 @@ export default async function DepositsPage({
           )}
         </div>
 
-        {id && <DepositDetailPanel depositId={id} churchId={churchId} />}
+        {id && <DepositDetailPanel depositId={id} churchId={churchId} canExport={getSettlementPermissions(session.role).canExport} />}
       </div>
     </div>
   );

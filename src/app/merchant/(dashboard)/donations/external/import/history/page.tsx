@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const PAGE_SIZE = 25;
 
@@ -35,6 +36,7 @@ export default async function ImportHistoryPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -71,7 +73,7 @@ export default async function ImportHistoryPage({
         ← External Donations
       </Link>
       <h1 className="text-2xl font-bold text-slate-900 mb-1">Import History</h1>
-      <p className="text-sm text-slate-500 mb-6">Every CSV file your organization has uploaded to import external donations, and what happened to each row.</p>
+      <p className="text-sm text-slate-500 mb-6">{pw("Every CSV file your organization has uploaded to import external donations, and what happened to each row.")}</p>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">

@@ -9,6 +9,7 @@ import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadRefundDetail } from "@/lib/finix/refundDetail";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function RefundDetailPanel({
   refundId,
@@ -17,6 +18,7 @@ export default async function RefundDetailPanel({
   refundId: string;
   churchId: string;
 }) {
+  const { pw } = await getPaymentWording();
   const detail = await loadRefundDetail(refundId, churchId);
 
   if (!detail) {
@@ -121,7 +123,7 @@ export default async function RefundDetailPanel({
 
       {/* Donor */}
       <div className="px-5 py-4 border-b border-slate-100">
-        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Donor</h4>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{pw("Donor")}</h4>
         <div className="space-y-0.5">
           <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
           <Row label="Email" value={donor?.email || "—"} />

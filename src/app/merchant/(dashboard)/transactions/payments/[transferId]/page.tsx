@@ -25,12 +25,15 @@ import { mapFeeType } from "@/lib/fees/feeTypeLabels";
 const titleCaseFromSnake = (value: string | null | undefined) => titleCaseFromSnakeBase(value, "Fee");
 
 import { checkRefundEligibility } from "@/lib/payments/refundEligibility";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
+import TransactionDocuments from "@/components/merchant/TransactionDocuments";
 
 export default async function PaymentFullDetailPage({
   params,
 }: {
   params: Promise<{ transferId: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
   const { transferId } = await params;
@@ -245,7 +248,7 @@ export default async function PaymentFullDetailPage({
                 : 0;
               return (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                  <h3 className="text-sm font-bold text-slate-900 mb-4">Donation Breakdown</h3>
+                  <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Donation Breakdown")}</h3>
                   <div className="space-y-2 text-sm">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Invoice Amount</span>
@@ -262,7 +265,7 @@ export default async function PaymentFullDetailPage({
                       <span className="font-semibold text-slate-900">{invoicePayment.customerCoveredFee ? "Donor" : "Organization"}</span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold">
-                      <span className="text-slate-900">Total Charged to Donor</span>
+                      <span className="text-slate-900">{pw("Total Charged to Donor")}</span>
                       <span className="text-slate-900">{formatCents(netPrincipalCents + netFeeCents)}</span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold text-slate-900">
@@ -307,10 +310,10 @@ export default async function PaymentFullDetailPage({
 
             return (
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                <h3 className="text-sm font-bold text-slate-900 mb-4">Donation Breakdown</h3>
+                <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Donation Breakdown")}</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Intended Donation Amount</span>
+                    <span className="text-slate-500">{pw("Intended Donation Amount")}</span>
                     <span className="font-semibold text-slate-900">{formatCents(intendedDonation)}</span>
                   </div>
 
@@ -333,7 +336,7 @@ export default async function PaymentFullDetailPage({
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-bold">
-                    <span className="text-slate-900">Total Charged to Donor</span>
+                    <span className="text-slate-900">{pw("Total Charged to Donor")}</span>
                     <span className="text-slate-900">{formatCents(totalCharged)}</span>
                   </div>
 
@@ -516,11 +519,16 @@ export default async function PaymentFullDetailPage({
               <p className="text-sm text-slate-500">No past receipt created or sent at this time.</p>
             )}
           </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+            <h3 className="text-sm font-bold text-slate-900 mb-4">Supporting Documents</h3>
+            <TransactionDocuments transferId={transfer.finixTransferId} />
+          </div>
         </div>
 
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Donor")}</h3>
             <Row
               label="Name"
               value={

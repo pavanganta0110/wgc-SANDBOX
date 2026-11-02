@@ -9,6 +9,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { loadGivingLinkAttempts, describeInstrumentType } from "@/lib/givingLinks/attempts";
 import { describeFailureCode } from "@/lib/finix/cardDeclineReasons";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function StackedDateTime({ date }: { date: Date | null | undefined }) {
   if (!date) return <span className="text-slate-400">—</span>;
@@ -31,6 +32,7 @@ export default async function DonationAttemptsTable({
   givingLinkId?: string;
   exportHrefBase?: string;
 }) {
+  const { pw } = await getPaymentWording();
   const { state, linkName, donor: donorFilter, amount, range, from, to, id } = searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -62,7 +64,7 @@ export default async function DonationAttemptsTable({
         <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
           {rows.length === 0 ? (
             <div className="px-6 py-16 text-center">
-              <h3 className="text-sm font-bold text-slate-900 mb-1">No donation attempts</h3>
+              <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("No donation attempts")}</h3>
               <p className="text-sm text-slate-500">
                 Donation attempts made through {givingLinkId ? "this giving link" : "your giving links"} will appear here.
               </p>
@@ -73,9 +75,9 @@ export default async function DonationAttemptsTable({
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                   <th className="px-6 py-3">ID</th>
                   <th className="px-6 py-3">Created (CDT)</th>
-                  {!givingLinkId && <th className="px-6 py-3">Giving Link Name</th>}
+                  {!givingLinkId && <th className="px-6 py-3">{pw("Giving Link Name")}</th>}
                   <th className="px-6 py-3">Transaction Type</th>
-                  <th className="px-6 py-3">Donor</th>
+                  <th className="px-6 py-3">{pw("Donor")}</th>
                   <th className="px-6 py-3 text-right">Amount</th>
                   <th className="px-6 py-3">State</th>
                   <th className="px-6 py-3">Failure / Reason</th>
@@ -104,7 +106,7 @@ export default async function DonationAttemptsTable({
                       {!givingLinkId && (
                         <td className="px-6 py-3 text-slate-700">{givingLink?.internalName || "—"}</td>
                       )}
-                      <td className="px-6 py-3 text-slate-700">Donation</td>
+                      <td className="px-6 py-3 text-slate-700">{pw("Donation")}</td>
                       <td className="px-6 py-3">
                         <p className="text-slate-800 font-medium">
                           {payment.isAnonymous ? "Anonymous" : formatPersonName(donor?.name, instrument?.accountHolderName)}

@@ -47,6 +47,7 @@ import {
 import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { DONOR_SOURCE_BADGE_LABELS } from "@/lib/donors/donorSources";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const PAGE_SIZE = 25;
 
@@ -109,6 +110,7 @@ export default async function DonorsPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -279,7 +281,7 @@ export default async function DonorsPage({
   return (
     <div>
       <div className="flex items-center gap-2 mb-6">
-        <h2 className="text-lg font-bold text-slate-900">Donors</h2>
+        <h2 className="text-lg font-bold text-slate-900">{pw("Donors")}</h2>
         <PinButton />
         <Link
           href="/merchant/donors/annual-statements"
@@ -306,23 +308,23 @@ export default async function DonorsPage({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Total Donors" value={String(summary.totalDonors)} />
+        <SummaryCard label={pw("Total Donors")} value={String(summary.totalDonors)} />
         <SummaryCard
-          label="Active Donors"
+          label={pw("Active Donors")}
           value={String(summary.activeDonors)}
           sublabel="Selected period"
         />
         <SummaryCard
-          label="New Donors"
+          label={pw("New Donors")}
           value={String(summary.newDonors)}
           sublabel="Selected period"
         />
         <SummaryCard
-          label="Recurring Donors"
+          label={pw("Recurring Donors")}
           value={String(summary.recurringDonors)}
         />
         <SummaryCard
-          label="Total Donated"
+          label={pw("Total Donated")}
           value={formatCents(summary.totalDonatedCents)}
           sublabel="Selected period · WGC + external"
         />
@@ -332,21 +334,21 @@ export default async function DonorsPage({
           sublabel="Card/ACH/wallet/invoice"
         />
         <SummaryCard
-          label="External Donated"
+          label={pw("External Donated")}
           value={formatCents(summary.externalDonatedCents)}
           sublabel="Cash/check/imported/etc."
         />
         <SummaryCard
-          label="Average Donation"
+          label={pw("Average Donation")}
           value={formatCents(summary.averageDonationCents)}
           sublabel="Selected period"
         />
         <SummaryCard
-          label="Donors With Failed Payments"
+          label={pw("Donors With Failed Payments")}
           value={String(summary.donorsWithFailedPayments)}
         />
         <SummaryCard
-          label="Donors Requiring Attention"
+          label={pw("Donors Requiring Attention")}
           value={String(summary.donorsRequiringAttention)}
         />
       </div>
@@ -436,7 +438,7 @@ export default async function DonorsPage({
                     <th className="px-6 py-3 text-right">WGC Processed</th>
                   )}
                   {visibleCols.has("externalDonated") && (
-                    <th className="px-6 py-3 text-right">External Donated</th>
+                    <th className="px-6 py-3 text-right">{pw("External Donated")}</th>
                   )}
                   {visibleCols.has("sources") && (
                     <th className="px-6 py-3">Sources</th>
@@ -452,7 +454,7 @@ export default async function DonorsPage({
                     </th>
                   )}
                   {visibleCols.has("averageDonation") && (
-                    <th className="px-6 py-3 text-right">Average Donation</th>
+                    <th className="px-6 py-3 text-right">{pw("Average Donation")}</th>
                   )}
                   {visibleCols.has("firstDonation") && (
                     <th className="px-6 py-3">

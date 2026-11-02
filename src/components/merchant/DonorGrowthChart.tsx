@@ -1,8 +1,10 @@
 "use client";
 
 import type { DonorGrowthPoint } from "@/lib/donors/donorAnalyticsExtended";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function DonorGrowthChart({ data }: { data: DonorGrowthPoint[] }) {
+  const pw = usePaymentWording();
   const width = 700;
   const height = 220;
   const padding = 30;
@@ -19,7 +21,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthPoint[] })
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-slate-900">Donor Growth</h3>
+        <h3 className="text-sm font-bold text-slate-900">{pw("Donor Growth")}</h3>
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> New

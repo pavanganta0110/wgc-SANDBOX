@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Download, ChevronDown, SlidersHorizontal, X, Columns3 } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import { REFUND_COLUMNS, parseVisibleColumns, type RefundColumnKey } from "@/lib/refundColumns";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 function titleCase(s: string) {
   return s
@@ -16,6 +17,7 @@ function titleCase(s: string) {
 const STATES = ["SUCCEEDED", "FAILED", "PENDING", "CANCELED"];
 
 export default function RefundFilterBar({ exportHref }: { exportHref?: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -110,7 +112,7 @@ export default function RefundFilterBar({ exportHref }: { exportHref?: string })
       {/* Donor Name */}
       <input
         type="text"
-        placeholder="Donor Name"
+        placeholder={pw("Donor Name")}
         value={donorName}
         onChange={(e) => setParam("donor", e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-40"

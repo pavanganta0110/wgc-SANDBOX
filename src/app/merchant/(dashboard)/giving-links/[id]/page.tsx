@@ -11,6 +11,7 @@ import GivingLinkOverviewTab from "@/components/merchant/GivingLinkOverviewTab";
 import GivingLinkSharingHistoryTable from "@/components/merchant/GivingLinkSharingHistoryTable";
 import DonationAttemptsTable from "@/components/merchant/DonationAttemptsTable";
 import GivingLinkMerchandiseTab from "@/components/merchant/GivingLinkMerchandiseTab";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
@@ -28,6 +29,7 @@ export default async function GivingLinkDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const churchId = session!.churchId!;
   const { id } = await params;
@@ -62,7 +64,7 @@ export default async function GivingLinkDetailPage({
           <MetricCard label="Link Type" value={link.linkType === "ONE_TIME" ? "One-Time" : "Multi-Use"} />
           <MetricCard label="Expires" value={link.expiresAt ? new Date(link.expiresAt).toLocaleDateString() : "No expiration"} />
           <MetricCard label="Total Attempts" value={String(link.totalAttempts)} />
-          <MetricCard label="Successful Donations" value={String(link.successfulDonations)} />
+          <MetricCard label={pw("Successful Donations")} value={String(link.successfulDonations)} />
           <MetricCard label="Total Collected" value={formatCents(link.totalCollectedCents)} />
         </div>
       </div>

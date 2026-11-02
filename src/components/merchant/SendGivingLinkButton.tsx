@@ -3,6 +3,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { Send } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface GivingLinkOption {
   id: string;
@@ -10,6 +11,7 @@ interface GivingLinkOption {
 }
 
 export default function SendGivingLinkButton({ donorEmail }: { donorEmail: string }) {
+  const pw = usePaymentWording();
   const [open, setOpen] = useState(false);
   const [links, setLinks] = useState<GivingLinkOption[] | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -66,7 +68,7 @@ export default function SendGivingLinkButton({ donorEmail }: { donorEmail: strin
             {links === null ? (
               <p className="text-sm text-slate-400">Loading…</p>
             ) : links.length === 0 ? (
-              <p className="text-sm text-slate-500">No active giving links to send.</p>
+              <p className="text-sm text-slate-500">{pw("No active giving links to send.")}</p>
             ) : (
               <>
                 <select
@@ -74,7 +76,7 @@ export default function SendGivingLinkButton({ donorEmail }: { donorEmail: strin
                   onChange={(e) => setSelectedId(e.target.value)}
                   className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none mb-3"
                 >
-                  <option value="">Choose a giving link…</option>
+                  <option value="">{pw("Choose a giving link…")}</option>
                   {links.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.publicTitle}

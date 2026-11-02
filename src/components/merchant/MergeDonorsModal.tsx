@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonorSide {
   donor: {
@@ -50,6 +51,7 @@ export default function MergeDonorsModal({
   duplicateDonorId: string;
   onClose: () => void;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [data, setData] = useState<{ primary: DonorSide; duplicate: DonorSide } | null>(null);
   const [selections, setSelections] = useState<Partial<Record<FieldKey, "primary" | "duplicate">>>({});
@@ -101,7 +103,7 @@ export default function MergeDonorsModal({
               <thead>
                 <tr>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase py-2">Field</th>
-                  <th className="text-left text-xs font-semibold text-slate-500 uppercase py-2">Keep existing (this donor)</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase py-2">{pw("Keep existing (this donor)")}</th>
                   <th className="text-left text-xs font-semibold text-slate-500 uppercase py-2">Use duplicate&apos;s value</th>
                 </tr>
               </thead>
@@ -148,7 +150,7 @@ export default function MergeDonorsModal({
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="rounded-xl border border-slate-100 p-3">
-                <p className="text-xs text-slate-400 uppercase mb-2">This donor (survives)</p>
+                <p className="text-xs text-slate-400 uppercase mb-2">{pw("This donor (survives)")}</p>
                 <p className="text-sm">Total: {formatCents(data.primary.aggregates.totalDonatedCents)}</p>
                 <p className="text-sm">External: {formatCents(data.primary.aggregates.externalDonatedCents)}</p>
                 <p className="text-sm">Donations: {data.primary.aggregates.donationCount}</p>

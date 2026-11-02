@@ -8,11 +8,16 @@ import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import OrganizationBrandHeader from "@/components/merchant/OrganizationBrandHeader";
 import PoweredByWgc from "@/components/merchant/PoweredByWgc";
 import { resolvePortalAccent } from "@/lib/donorPortal/portalBrand";
+import { toPaymentWording } from "@/lib/settings/paymentMode";
 import DonorPortalLoginForm from "@/components/donorPortal/DonorPortalLoginForm";
 import RecurringGiftActions from "@/components/donorPortal/RecurringGiftActions";
 import DonorPortalLogoutButton from "@/components/donorPortal/DonorPortalLogoutButton";
 
-export const metadata: Metadata = { title: "My Giving", robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const church = await prisma.church.findUnique({ where: { slug }, select: { paymentMode: true } });
+  return { title: church?.paymentMode ? "My Payments" : "My Giving", robots: { index: false, follow: false } };
+}
 
 const dateFormat = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 
@@ -33,9 +38,11 @@ export default async function DonorAccountPage({
   const { slug } = await params;
   const { linkError } = await searchParams;
 
-  const church = await prisma.church.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true } });
+  const church = await prisma.church.findUnique({ where: { slug }, select: { name: true, slug: true, logoUrl: true, primaryColor: true, paymentMode: true } });
   if (!church) notFound();
 
+  // Wording only: payers of an org in payment mode see payment copy; everyone else sees the page unchanged.
+  const pw = (text: string) => (church.paymentMode ? toPaymentWording(text) : text);
   const accent = resolvePortalAccent(church.primaryColor);
   const accentStyle = { "--portal-accent": accent } as React.CSSProperties;
 
@@ -47,9 +54,9 @@ export default async function DonorAccountPage({
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 py-10" style={accentStyle}>
         <div className="w-full max-w-sm bg-white rounded-2xl shadow-sm border border-slate-100 border-t-4 border-t-[var(--portal-accent)] p-8">
-          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind="My Giving" kindColor={accent} />
-          <p className="text-sm text-slate-500 mb-6 text-center">Sign in to see your giving. Use the email you gave with.</p>
-          <DonorPortalLoginForm slug={slug} linkError={Boolean(linkError)} />
+          <OrganizationBrandHeader logoUrl={church.logoUrl} organizationName={church.name} kind={pw("My Giving")} kindColor={accent} />
+          <p className="text-sm text-slate-500 mb-6 text-center">{pw("Sign in to see your giving. Use the email you gave with.")}</p>
+          <DonorPortalLoginForm slug={slug} linkError={Boolean(linkError)} paymentMode={church.paymentMode} />
         </div>
         <PoweredByWgc />
       </div>
@@ -61,7 +68,7 @@ export default async function DonorAccountPage({
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <div className="max-w-sm text-center bg-white rounded-2xl border border-slate-100 p-8">
-          <p className="text-sm text-slate-600">We couldn&rsquo;t find your giving record. Please contact {church.name}.</p>
+          <p className="text-sm text-slate-600">{pw("We couldn’t find your giving record.")} Please contact {church.name}.</p>
           <div className="mt-4"><DonorPortalLogoutButton slug={slug} /></div>
         </div>
       </div>
@@ -72,7 +79,7 @@ export default async function DonorAccountPage({
     <div className="min-h-screen bg-slate-50" style={accentStyle}>
       <div className="h-1.5 w-full bg-[var(--portal-accent)]" aria-hidden />
       <div className="mx-auto max-w-3xl px-4 py-8 space-y-6">
-        <OrganizationBrandHeader logoUrl={data.church?.logoUrl ?? church.logoUrl} organizationName={session.churchName} kind="My Giving" kindColor={accent} />
+        <OrganizationBrandHeader logoUrl={data.church?.logoUrl ?? church.logoUrl} organizationName={session.churchName} kind={pw("My Giving")} kindColor={accent} />
         <div className="flex items-center justify-between gap-4">
           <h1 className="text-xl font-semibold text-slate-900">{data.donorName ? `Welcome, ${data.donorName}` : "Welcome"}</h1>
           <DonorPortalLogoutButton slug={slug} />
@@ -86,7 +93,7 @@ export default async function DonorAccountPage({
           <div className="rounded-xl border border-slate-100 bg-white p-4">
             <p className="text-xs text-slate-500">All time</p>
             <p className="text-xl font-semibold text-[var(--portal-accent)]">{formatCents(data.lifetime.netDonatedCents)}</p>
-            <p className="text-xs text-slate-400">{data.lifetime.donationCount} gifts</p>
+            <p className="text-xs text-slate-400">{data.lifetime.donationCount} {church.paymentMode ? "payments" : "gifts"}</p>
           </div>
         </section>
         {data.lifetime.recordedByChurchCents > 0 && (
@@ -96,9 +103,9 @@ export default async function DonorAccountPage({
         )}
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Recurring gifts</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">{pw("Recurring gifts")}</h2>
           {data.recurring.length === 0 ? (
-            <p className="text-sm text-slate-500">You have no active recurring gifts.</p>
+            <p className="text-sm text-slate-500">{pw("You have no active recurring gifts.")}</p>
           ) : (
             <ul className="divide-y divide-slate-100">
               {data.recurring.map((r) => (
@@ -119,7 +126,7 @@ export default async function DonorAccountPage({
 
         {data.statements.length > 0 && (
           <section className="rounded-xl border border-slate-100 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Annual giving statements</h2>
+            <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">{pw("Annual giving statements")}</h2>
             <ul className="divide-y divide-slate-100">
               {data.statements.map((st) => (
                 <li key={st.id} className="py-2 flex justify-between text-sm">
@@ -132,9 +139,9 @@ export default async function DonorAccountPage({
         )}
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Ways to give</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">{pw("Ways to give")}</h2>
           {data.waysToGive.length === 0 ? (
-            <p className="text-sm text-slate-500">No giving options are open right now.</p>
+            <p className="text-sm text-slate-500">{pw("No giving options are open right now.")}</p>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
               {data.waysToGive.map((w) => (
@@ -142,7 +149,7 @@ export default async function DonorAccountPage({
                   <a href={w.href} className="block rounded-lg border border-slate-200 p-3 hover:border-[var(--portal-accent)]">
                     <p className="text-sm font-medium text-slate-900">{w.title}</p>
                     {w.description && <p className="text-xs text-slate-500 line-clamp-2">{w.description}</p>}
-                    <p className="text-xs text-[var(--portal-accent)] mt-1">{w.kind === "CAMPAIGN" ? "Campaign" : "Give"} →</p>
+                    <p className="text-xs text-[var(--portal-accent)] mt-1">{w.kind === "CAMPAIGN" ? "Campaign" : pw("Give")} →</p>
                   </a>
                 </li>
               ))}
@@ -151,9 +158,9 @@ export default async function DonorAccountPage({
         </section>
 
         <section className="rounded-xl border border-slate-100 bg-white p-4">
-          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">Giving history</h2>
+          <h2 className="text-sm font-semibold text-slate-900 mb-3 border-l-4 border-[var(--portal-accent)] pl-2">{pw("Giving history")}</h2>
           {data.gifts.length === 0 ? (
-            <p className="text-sm text-slate-500">No gifts yet.</p>
+            <p className="text-sm text-slate-500">{pw("No gifts yet.")}</p>
           ) : (
             <table className="w-full text-sm">
               <thead>

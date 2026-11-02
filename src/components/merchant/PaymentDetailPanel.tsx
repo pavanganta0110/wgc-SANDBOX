@@ -12,6 +12,8 @@ import {
 import ViewAllDetailsLink from "@/components/merchant/ViewAllDetailsLink";
 import IssueRefundButton from "@/components/merchant/IssueRefundButton";
 import CreateReceiptButton from "@/components/merchant/CreateReceiptButton";
+import PaymentReceiptActions from "@/components/merchant/PaymentReceiptActions";
+import TransactionDocuments from "@/components/merchant/TransactionDocuments";
 import GoodsServicesCorrectionPanel from "@/components/merchant/GoodsServicesCorrectionPanel";
 import StateBadge from "@/components/merchant/StateBadge";
 import { computeRefundStatus, resolveDisplayStatus } from "@/lib/finix/refundStatus";
@@ -22,6 +24,7 @@ import { titleCaseFromSnake as titleCaseFromSnakeBase, instrumentStateLabel, sou
 const titleCaseFromSnake = (value: string | null | undefined) => titleCaseFromSnakeBase(value, "Fee");
 
 import { checkRefundEligibility } from "@/lib/payments/refundEligibility";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function PaymentDetailPanel({
   transferId,
@@ -30,6 +33,7 @@ export default async function PaymentDetailPanel({
   transferId: string;
   churchId: string;
 }) {
+  const { pw } = await getPaymentWording();
   let transfer = await prisma.finixTransfer.findFirst({
     where: { finixTransferId: transferId, churchId },
   });
@@ -251,7 +255,7 @@ export default async function PaymentDetailPanel({
             </>
           )}
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Donor</span>
+            <span className="text-slate-500">{pw("Donor")}</span>
             <span className="font-semibold text-slate-700">
               {donor ? (
                 <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">
@@ -319,14 +323,14 @@ export default async function PaymentDetailPanel({
                 <Row label="Invoice Amount" value={formatCents(netPrincipalCents)} />
                 {invoicePayment.customerCoveredFee ? (
                   <>
-                    <Row label="Donor-Paid Processing Fee" value={formatCents(netFeeCents)} />
-                    <Row label="Total Charged to Donor" value={formatCents(netPrincipalCents + netFeeCents)} />
+                    <Row label={pw("Donor-Paid Processing Fee")} value={formatCents(netFeeCents)} />
+                    <Row label={pw("Total Charged to Donor")} value={formatCents(netPrincipalCents + netFeeCents)} />
                   </>
                 ) : (
                   <Row label="Organization-Paid Processing Fee" value={formatCents(invoicePayment.processingFeeCents)} />
                 )}
                 <Row label="Net Amount" value={formatCents(invoicePayment.netAmountCents)} />
-                <Row label="Donor Covers Fee" value={invoicePayment.customerCoveredFee ? "Yes" : "No"} />
+                <Row label={pw("Donor Covers Fee")} value={invoicePayment.customerCoveredFee ? "Yes" : "No"} />
               </div>
             );
           }
@@ -371,16 +375,16 @@ export default async function PaymentDetailPanel({
             const donorPaidFee = supplementalFeeCents;
             return (
               <div className="space-y-1">
-                <Row label="Donation Amount" value={formatCents(donationAmountCents)} />
+                <Row label={pw("Donation Amount")} value={formatCents(donationAmountCents)} />
                 <Row
                   label={feeIsActual ? "Donor-Paid Processing Fee" : "Estimated Donor-Paid Processing Fee"}
                   value={donorPaidFee !== null ? formatCents(donorPaidFee) : "—"}
                 />
-                <Row label="Total Charged to Donor" value={formatCents(grossCents)} />
+                <Row label={pw("Total Charged to Donor")} value={formatCents(grossCents)} />
                 {netCents !== null && (
-                  <Row label="Net Donation to Organization" value={formatCents(netCents)} />
+                  <Row label={pw("Net Donation to Organization")} value={formatCents(netCents)} />
                 )}
-                <Row label="Donor Covers Fee" value="Yes" />
+                <Row label={pw("Donor Covers Fee")} value="Yes" />
               </div>
             );
           }
@@ -388,7 +392,7 @@ export default async function PaymentDetailPanel({
           // Organization-covered path
           return (
             <div className="space-y-1">
-              <Row label="Donation Amount" value={formatCents(donationAmountCents)} />
+              <Row label={pw("Donation Amount")} value={formatCents(donationAmountCents)} />
               <Row
                 label={feeIsActual ? "Organization-Paid Processing Fee" : "Estimated Organization-Paid Processing Fee"}
                 value={processingFeeCents !== null ? formatCents(processingFeeCents) : "—"}
@@ -396,7 +400,7 @@ export default async function PaymentDetailPanel({
               {netCents !== null && (
                 <Row label="Net Amount" value={formatCents(netCents)} />
               )}
-              <Row label="Donor Covers Fee" value="No" />
+              <Row label={pw("Donor Covers Fee")} value="No" />
             </div>
           );
         })()}
@@ -438,7 +442,7 @@ export default async function PaymentDetailPanel({
         {transfer.failureMessage && <Row label="Failure Reason" value={transfer.failureMessage} />}
       </Section>
 
-      <Section title="Donor">
+      <Section title={pw("Donor")}>
         <Row
           label="Name"
           value={
@@ -604,6 +608,15 @@ export default async function PaymentDetailPanel({
         ) : (
           <p className="text-sm text-slate-500">No past receipt created or sent at this time.</p>
         )}
+        {payment && (
+          <div className="mt-3 pt-3 border-t border-slate-100">
+            <PaymentReceiptActions transferId={transfer.finixTransferId} />
+          </div>
+        )}
+      </Section>
+
+      <Section title="Supporting Documents">
+        <TransactionDocuments transferId={transfer.finixTransferId} />
       </Section>
 
       {payment && (

@@ -13,6 +13,8 @@ import { computeRecordedContributionAmountCents } from "@/lib/giving/goodsServic
 import { describeInstrumentType } from "@/lib/givingLinks/attempts";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { notifyEvent } from "@/lib/settings/notificationDispatch";
+import { noteOnCustomerReceipt, noteOnStaffCopy, PAYMENT_MODE_RECEIPT_TEXT } from "@/lib/settings/paymentMode";
+import { escapeHtml } from "@/lib/eventRegistration/emailTemplates";
 import { DonationReceiptPdf, type DonationReceiptPdfProps } from "@/lib/giving/pdf/DonationReceiptPdf";
 
 /**
@@ -115,6 +117,8 @@ export async function buildDonationReceiptPdfProps(
     amountCents: snapshot.paymentAmountCents,
     donorCoveredFeeCents: coveredFeeForReceipt(settings.showDonorCoveredFee, payment.feeCoveredCents),
     fundName: settings.showFund ? payment.fundName : null,
+    paymentMode: Boolean(church.paymentMode),
+    paymentNote: noteOnCustomerReceipt(church.receiptNoteMode) ? payment.note?.trim() || null : null,
     paymentMethodLabel: settings.showPaymentMethodLastFour ? paymentMethodLabel : describeInstrumentType(payment.paymentMethodType),
     isRecurring: false,
     recurringInterval: null,
@@ -214,7 +218,14 @@ export async function sendDonationReceipt(
     acknowledgmentText,
   });
 
-  if (!donorEmail) throw new Error("Donor is missing an email address — receipt not sent");
+  // The payer's own email is the normal recipient. When it's missing (a phone payment taken without one), staff can
+  // still send the receipt by typing an address — that address then becomes the recipient instead of a cc.
+  const extraRecipients = additionalRecipients.map((e) => e.trim()).filter(Boolean);
+  if (!donorEmail && extraRecipients.length === 0) {
+    throw new Error(church.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.missingEmailError : "Donor is missing an email address — receipt not sent");
+  }
+  const toEmail = donorEmail ?? extraRecipients[0];
+  const ccEmails = donorEmail ? extraRecipients : extraRecipients.slice(1);
 
   const settings = resolveReceiptSettings(church);
   const orgName = church.statementSenderName || church.name;
@@ -226,17 +237,24 @@ export async function sendDonationReceipt(
   const lines: string[] = [];
   lines.push(`<p>Hi ${donorName},</p>`);
   if (settings.header) lines.push(`<p>${settings.header}</p>`);
-  lines.push(`<p>Thank you for your gift of <strong>${formatCents(paymentAmountCents)}</strong> to <strong>${orgName}</strong>.</p>`);
+  lines.push(
+    church.paymentMode
+      ? `<p>${PAYMENT_MODE_RECEIPT_TEXT.emailLine(formatCents(paymentAmountCents), orgName)}</p>`
+      : `<p>Thank you for your gift of <strong>${formatCents(paymentAmountCents)}</strong> to <strong>${orgName}</strong>.</p>`
+  );
   if (settings.showFund && payment.fundName) lines.push(`<p>Fund/Campaign: ${payment.fundName}</p>`);
+  if (pdfProps.paymentNote) lines.push(`<p>Note: ${escapeHtml(pdfProps.paymentNote)}</p>`);
   const coveredFeeCents = coveredFeeForReceipt(settings.showDonorCoveredFee, payment.feeCoveredCents);
-  if (coveredFeeCents > 0) lines.push(`<p>You generously covered ${formatCents(coveredFeeCents)} in transaction costs.</p>`);
+  if (coveredFeeCents > 0) {
+    lines.push(`<p>You ${church.paymentMode ? "covered" : "generously covered"} ${formatCents(coveredFeeCents)} in transaction costs.</p>`);
+  }
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
   lines.push(`<p>${settings.thankYouMessage}</p>`);
   lines.push(`<p>${acknowledgmentText}</p>`);
   if (goodsServicesProvided) {
-    lines.push(`<p>Payment Amount: ${formatCents(paymentAmountCents)}<br/>Fair Market Value: ${formatCents(goodsServicesFairMarketValueCents ?? 0)}<br/>Recorded Contribution Amount: ${formatCents(recordedContributionAmountCents)}</p>`);
+    lines.push(`<p>Payment Amount: ${formatCents(paymentAmountCents)}<br/>Fair Market Value: ${formatCents(goodsServicesFairMarketValueCents ?? 0)}<br/>${church.paymentMode ? "Recorded Amount" : "Recorded Contribution Amount"}: ${formatCents(recordedContributionAmountCents)}</p>`);
   }
-  lines.push(donorPortalLinkParagraph(church.slug));
+  lines.push(donorPortalLinkParagraph(church.slug, Boolean(church.paymentMode)));
   if (settings.footer) lines.push(`<p style="font-size:12px;color:#64748b;">${settings.footer}</p>`);
   lines.push(`<p style="font-size:11px;color:#94a3b8;">${settings.disclaimer}</p>`);
 
@@ -249,10 +267,10 @@ export async function sendDonationReceipt(
   }
 
   const result = await sendWgcEmail({
-    to: donorEmail,
-    cc: additionalRecipients,
+    to: toEmail,
+    cc: ccEmails,
     subject,
-    title: "Thank You for Your Gift",
+    title: church.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.emailTitle : "Thank You for Your Gift",
     badgeText: "Receipt",
     badgeColor: "#10B981",
     // Church-branded (Settings -> Branding / Receipts), matching the attached PDF.
@@ -286,7 +304,7 @@ export async function sendDonationReceipt(
         goodsServicesFairMarketValueCentsSnapshot: goodsServicesFairMarketValueCents,
         recordedContributionAmountCentsSnapshot: recordedContributionAmountCents,
         acknowledgmentTextSnapshot: acknowledgmentText,
-        recipientEmail: donorEmail,
+        recipientEmail: toEmail,
         sentAt: result.success ? new Date() : null,
         failureReason: result.success ? null : String((result as any).error ?? "Email send failed"),
         createdByUserId: actorUserId,
@@ -322,7 +340,7 @@ export async function sendDonationReceipt(
   });
 
   if (!result.success) throw new Error("Failed to send donation receipt");
-  return { receiptNumber, recipientEmail: donorEmail, version: nextVersion };
+  return { receiptNumber, recipientEmail: toEmail, version: nextVersion };
 }
 
 /**
@@ -351,6 +369,8 @@ export async function notifyMerchantOfNewDonation(paymentId: string, churchId: s
   // this never applies.
   const donorName = payment.isAnonymous ? "An anonymous donor" : formatPersonName(donor?.name || "A donor");
   const amountCents = payment.donationAmountCents ?? payment.amountCents;
+  const church = await prisma.church.findUnique({ where: { id: churchId }, select: { receiptNoteMode: true } });
+  const staffNote = noteOnStaffCopy(church?.receiptNoteMode) ? payment.note?.trim() || null : null;
 
   await notifyEvent({
     churchId,
@@ -379,6 +399,7 @@ export async function notifyMerchantOfNewDonation(paymentId: string, churchId: s
         <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Amount:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${formatCents(amountCents)}</td></tr>
         <tr><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;"><strong>Donor:</strong></td><td style="padding:8px 0;border-bottom:1px solid #E2E8F0;">${donorName}</td></tr>
         ${payment.fundName ? `<tr><td style="padding:8px 0;"><strong>Fund:</strong></td><td style="padding:8px 0;">${payment.fundName}</td></tr>` : ""}
+        ${staffNote ? `<tr><td style="padding:8px 0;"><strong>Note:</strong></td><td style="padding:8px 0;">${escapeHtml(staffNote)}</td></tr>` : ""}
       </table>
     `,
   });

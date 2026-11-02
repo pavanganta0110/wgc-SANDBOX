@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { resolveScopedUserId } from "@/lib/auth/scopes";
+import { resolveScopedUserId, buildPaymentScope, buildFinixTransferScope } from "@/lib/auth/scopes";
+import { normalizeSearchQuery, resolveSearchMatchedTransferIds } from "@/lib/payments/search";
 import { isAuthError } from "@/lib/auth/errors";
 import { buildTransactionReportData, renderTransactionReportCsv, renderTransactionReportPdf, resolveUserIdentity, type ReportScope } from "@/lib/exports/transactionReportData";
 import { buildTransactionExportFilename, csvResponse } from "@/lib/exports/transactionExport";
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
   const last4 = searchParams.get("last4") || undefined;
   const buyer = searchParams.get("buyer") || undefined;
   const fund = searchParams.get("fund") || undefined;
+  const searchQuery = normalizeSearchQuery(searchParams.get("q"));
   const range = searchParams.get("range") || undefined;
   const from = searchParams.get("from") || undefined;
   const to = searchParams.get("to") || undefined;
@@ -61,6 +63,7 @@ export async function GET(req: Request) {
     last4 ? `last4=${last4}` : null,
     buyer ? `buyer=${buyer}` : null,
     fund ? `fund=${fund}` : null,
+    searchQuery ? `search=${searchQuery}` : null,
     range ? `range=${range}` : null,
   ]
     .filter(Boolean)
@@ -79,7 +82,19 @@ export async function GET(req: Request) {
   // as a post-filter on the canonical rows rather than widening the shared
   // module's filter surface with route-specific query params.
   const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING", "PENDING"]);
+  // Free-text search resolves to transfer ids under the viewer's own scopes, then filters the canonical rows.
+  const searchMatches = searchQuery
+    ? new Set(
+        await resolveSearchMatchedTransferIds({
+          churchId: auth.churchId,
+          paymentScope: buildPaymentScope(auth, viewScope),
+          transferScope: await buildFinixTransferScope(auth, viewScope),
+          query: searchQuery,
+        })
+      )
+    : null;
   const rows = data.rows.filter((r) => {
+    if (searchMatches && !searchMatches.has(r.finixTransferId)) return false;
     if (last4 && r.lastFour !== last4) return false;
     if (buyer && !r.donorName.toLowerCase().includes(buyer.toLowerCase())) return false;
     if (fund && !(r.fundName || "").toLowerCase().includes(fund.toLowerCase())) return false;

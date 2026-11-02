@@ -10,15 +10,17 @@ import { formatDateCDT, formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { loadSubscriptionCandidates } from "@/lib/subscriptions/subscriptionAggregates";
 import { prisma } from "@/lib/prisma";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function RecurringDonorDrawer({ donorId, churchId }: { donorId: string; churchId: string }) {
+  const { pw } = await getPaymentWording();
   const donor = await prisma.donor.findFirst({ where: { id: donorId, churchId } });
   const subscriptions = await loadSubscriptionCandidates(churchId, { donorId });
 
   if (!donor || subscriptions.length === 0) {
     return (
       <div className="w-full lg:w-[420px] shrink-0 border-l border-slate-100 bg-white rounded-2xl lg:rounded-none p-6">
-        <p className="text-sm text-slate-500">This recurring donor could not be found.</p>
+        <p className="text-sm text-slate-500">{pw("This recurring donor could not be found.")}</p>
       </div>
     );
   }
@@ -42,7 +44,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
   return (
     <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm h-fit lg:sticky lg:top-6">
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-        <h3 className="text-sm font-bold text-slate-900">Recurring Donor</h3>
+        <h3 className="text-sm font-bold text-slate-900">{pw("Recurring Donor")}</h3>
         <div className="flex items-center gap-2">
           <ViewAllDetailsButton href={`/merchant/recurring-donors/${donor.id}`} />
           <ClosePanelButton />
@@ -55,7 +57,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
           <StateBadge state={overallStatus} />
         </div>
         <div className="space-y-1.5 text-sm">
-          <Row label="Donor ID" value={<CopyableIdBadge id={donor.id} />} />
+          <Row label={pw("Donor ID")} value={<CopyableIdBadge id={donor.id} />} />
         </div>
       </div>
 
@@ -74,7 +76,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
         <Row label="Next Billing Date" value={nextBillingDate ? formatCalendarDateUTC(nextBillingDate) : "—"} />
         <Row label="Last Successful Payment" value={lastPayment ? `${formatCents(lastPayment.amountCents)} on ${formatDateCDT(lastPayment.date)}` : "—"} />
         <Row label="Failed Recurring Payments" value={String(failedPayments)} />
-        <Row label="Lifetime Recurring Donated" value={formatCents(lifetimeCents)} />
+        <Row label={pw("Lifetime Recurring Donated")} value={formatCents(lifetimeCents)} />
       </Section>
 
       <Section title="Contact Information">
@@ -85,7 +87,7 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
 
       <Section title={`Active Recurring Donations (${active.length})`}>
         {active.length === 0 ? (
-          <p className="text-sm text-slate-500">No active recurring donation schedules.</p>
+          <p className="text-sm text-slate-500">{pw("No active recurring donation schedules.")}</p>
         ) : (
           <div className="space-y-2">
             {active.map((s) => (
@@ -114,10 +116,10 @@ export default async function RecurringDonorDrawer({ donorId, churchId }: { dono
 
       <Section title="Related Resources" last>
         <div className="flex flex-col gap-1.5 text-sm">
-          <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">Donor Profile</Link>
+          <Link href={`/merchant/donors/${donor.id}`} className="text-blue-600 hover:underline">{pw("Donor Profile")}</Link>
           <Link href={`/merchant/recurring-donors/${donor.id}?tab=subscriptions`} className="text-blue-600 hover:underline">Subscriptions</Link>
           <Link href={`/merchant/recurring-donors/${donor.id}?tab=payments`} className="text-blue-600 hover:underline">Recurring Payments</Link>
-          <Link href={`/merchant/recurring-donors/${donor.id}?tab=giving-links`} className="text-blue-600 hover:underline">Giving Links</Link>
+          <Link href={`/merchant/recurring-donors/${donor.id}?tab=giving-links`} className="text-blue-600 hover:underline">{pw("Giving Links")}</Link>
           <Link href={`/merchant/recurring-donors/${donor.id}?tab=refunds`} className="text-blue-600 hover:underline">Refunds</Link>
           <Link href={`/merchant/recurring-donors/${donor.id}?tab=bank-returns`} className="text-blue-600 hover:underline">Bank Returns</Link>
           <Link href={`/merchant/recurring-donors/${donor.id}?tab=disputes`} className="text-blue-600 hover:underline">Disputes</Link>

@@ -68,6 +68,7 @@ import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildFinixTransferScope, buildRefundScope, buildPaymentScope, resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 const CENTRAL_TIME_ZONE = "America/Chicago";
 
 const TREND_CONFIG: Record<string, { buckets: number; stepDays: number; format: Intl.DateTimeFormatOptions }> = {
@@ -257,6 +258,7 @@ export default async function MerchantDashboardPage({
   searchParams: Promise<{ range?: string; from?: string; to?: string; trend?: string; metrics?: string }>;
 }) {
   let auth;
+  const { pw } = await getPaymentWording();
   try {
     auth = await requireMerchantSession();
   } catch (err) {
@@ -469,12 +471,12 @@ export default async function MerchantDashboardPage({
       <Card>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Donation volume</h2>
+            <h2 className="text-sm font-semibold text-slate-900">{pw("Donation volume")}</h2>
             <p className="mt-0.5 text-xs text-slate-500">{TREND_CAPTION[trend]}, successful payments</p>
           </div>
           <TrendToggle />
         </div>
-        <VolumeAreaChart data={volumeTrend} title="Donation volume" />
+        <VolumeAreaChart data={volumeTrend} title={pw("Donation volume")} />
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">

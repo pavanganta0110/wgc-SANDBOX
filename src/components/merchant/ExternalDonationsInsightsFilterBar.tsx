@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { EXTERNAL_PAYMENT_METHODS, EXTERNAL_PAYMENT_METHOD_LABELS, RECEIPT_STATUSES, RECEIPT_STATUS_LABELS, type ExternalPaymentMethod, type ReceiptStatus } from "@/lib/donations/externalDonationTypes";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Fund {
   id: string;
@@ -9,6 +10,7 @@ interface Fund {
 }
 
 export default function ExternalDonationsInsightsFilterBar({ funds }: { funds: Fund[] }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -36,7 +38,7 @@ export default function ExternalDonationsInsightsFilterBar({ funds }: { funds: F
   };
 
   return (
-    <div className="flex items-center gap-3 flex-wrap" role="search" aria-label="Filter external donations report">
+    <div className="flex items-center gap-3 flex-wrap" role="search" aria-label={pw("Filter external donations report")}>
       <select
         aria-label="Payment method"
         value={extMethod}

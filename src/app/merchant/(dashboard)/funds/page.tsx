@@ -11,6 +11,7 @@ import { loadFundTotals } from "@/lib/giving/fundTotals";
 import { formatCents } from "@/lib/format";
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import FundActions, { AddFundButton } from "@/components/merchant/FundActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const RANGES = {
   ytd: "This year",
@@ -26,6 +27,7 @@ function resolveRange(key: RangeKey, now: Date) {
 }
 
 export default async function FundsPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -103,7 +105,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
               <th className="px-3 py-3 text-right">Recorded offline</th>
               <th className="px-3 py-3 text-right">Total</th>
               <th className="w-40 px-3 py-3">Share</th>
-              <th className="px-3 py-3">Last gift</th>
+              <th className="px-3 py-3">{pw("Last gift")}</th>
               <th className="px-5 py-3 text-right">
                 <span className="sr-only">Actions</span>
               </th>
@@ -129,7 +131,7 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
                         <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">Archived</span>
                       )}
                       {!r.inCatalog && r.name !== "No fund" && (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700" title="Gifts recorded under this name; the fund is no longer in your list.">
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700" title={pw("Gifts recorded under this name; the fund is no longer in your list.")}>
                           Not in fund list
                         </span>
                       )}

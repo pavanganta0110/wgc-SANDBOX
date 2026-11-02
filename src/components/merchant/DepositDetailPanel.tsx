@@ -6,15 +6,19 @@ import { PinButton, PaymentMoreMenu } from "@/components/merchant/PaymentDetailA
 import StateBadge from "@/components/merchant/StateBadge";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadDepositDetail } from "@/lib/finix/depositDetail";
+import { loadDepositPaymentRows } from "@/lib/finix/depositPaymentRows";
+import DepositPaymentsSection from "@/components/merchant/DepositPaymentsSection";
 import { formatFundingSpeed } from "@/lib/depositColumns";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
 
 export default async function DepositDetailPanel({
   depositId,
   churchId,
+  canExport = false,
 }: {
   depositId: string;
   churchId: string;
+  canExport?: boolean;
 }) {
   const detail = await loadDepositDetail(depositId, churchId);
 
@@ -27,6 +31,7 @@ export default async function DepositDetailPanel({
   }
 
   const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
+  const paymentRows = await loadDepositPaymentRows(churchId, settlements.map((s) => s.finixSettlementId));
   const state = (deposit.state || "").toUpperCase();
   const netAmount = deposit.netAmountCents ?? deposit.amountCents ?? 0;
   const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
@@ -159,6 +164,18 @@ export default async function DepositDetailPanel({
           </div>
         </div>
       )}
+
+      {/* Included Payments */}
+      <DepositPaymentsSection
+        rows={paymentRows}
+        depositId={deposit.finixFundingTransferAttemptId}
+        depositNetCents={deposit.netAmountCents ?? deposit.amountCents ?? 0}
+        showStudent={Boolean(church?.studentGivingEnabled)}
+        showTerm={Boolean(church?.studentGivingEnabled || church?.termFieldEnabled)}
+        paymentMode={Boolean(church?.paymentMode)}
+        canExport={canExport}
+        variant="list"
+      />
 
       {/* Related Resources */}
       <div className="px-5 py-4 border-b border-slate-100">

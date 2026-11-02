@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const ROW_STATUS_STYLES: Record<string, string> = {
   IMPORTED: "bg-emerald-50 text-emerald-700",
@@ -37,6 +38,7 @@ function rawFieldSummary(rawDataJson: unknown): string {
 }
 
 export default async function ImportBatchDetailPage({ params }: { params: Promise<{ batchId: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -111,9 +113,9 @@ export default async function ImportBatchDetailPage({ params }: { params: Promis
           <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
             <tr>
               <th className="text-left px-6 py-3 font-medium">Row</th>
-              <th className="text-left px-6 py-3 font-medium">Donor</th>
+              <th className="text-left px-6 py-3 font-medium">{pw("Donor")}</th>
               <th className="text-left px-6 py-3 font-medium">Status</th>
-              <th className="text-left px-6 py-3 font-medium">Donor resolution</th>
+              <th className="text-left px-6 py-3 font-medium">{pw("Donor resolution")}</th>
               <th className="text-left px-6 py-3 font-medium">Notes</th>
               <th className="px-6 py-3" />
             </tr>

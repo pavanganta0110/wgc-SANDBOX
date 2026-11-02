@@ -9,10 +9,12 @@ import ClientForm from "@/components/merchant/ClientForm";
 import { calculateLineItem, calculateInvoiceTotals } from "@/lib/invoices/invoiceMoney";
 import { formatCents } from "@/lib/format";
 import { EMPTY_LINE_ITEM, type LineItemForm, type InvoiceFormValues } from "@/lib/invoices/invoiceFormDefaults";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export type { InvoiceFormValues } from "@/lib/invoices/invoiceFormDefaults";
 
 export default function InvoiceBuilderForm({ mode, initial }: { mode: "create" | "edit"; initial: InvoiceFormValues }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [values, setValues] = useState<InvoiceFormValues>(initial);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
@@ -197,13 +199,13 @@ export default function InvoiceBuilderForm({ mode, initial }: { mode: "create" |
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-3">
           <h4 className="text-sm font-bold text-slate-900">Payment classification</h4>
           <select value={values.classification} onChange={(e) => set("classification", e.target.value as InvoiceFormValues["classification"])} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
-            <option value="GOODS_OR_SERVICES">Goods or Services (not a charitable donation)</option>
-            <option value="CHARITABLE_DONATION">Charitable Donation</option>
-            <option value="PARTIAL_DONATION">Partial Donation (goods/services + a charitable portion)</option>
+            <option value="GOODS_OR_SERVICES">{pw("Goods or Services (not a charitable donation)")}</option>
+            <option value="CHARITABLE_DONATION">{pw("Charitable Donation")}</option>
+            <option value="PARTIAL_DONATION">{pw("Partial Donation (goods/services + a charitable portion)")}</option>
           </select>
 
           {values.classification === "GOODS_OR_SERVICES" && (
-            <p className="text-xs text-slate-500">This payment will not be added to charitable donation totals or year-end giving statements.</p>
+            <p className="text-xs text-slate-500">{pw("This payment will not be added to charitable donation totals or year-end giving statements.")}</p>
           )}
 
           {values.classification === "CHARITABLE_DONATION" && (

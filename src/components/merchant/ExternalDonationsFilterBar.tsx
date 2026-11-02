@@ -4,8 +4,10 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import { EXTERNAL_PAYMENT_METHODS, EXTERNAL_PAYMENT_METHOD_LABELS, RECEIPT_STATUSES, RECEIPT_STATUS_LABELS, type ExternalPaymentMethod, type ReceiptStatus } from "@/lib/donations/externalDonationTypes";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function ExternalDonationsFilterBar({ canExport }: { canExport: boolean }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,7 +43,7 @@ export default function ExternalDonationsFilterBar({ canExport }: { canExport: b
   };
 
   return (
-    <div className="flex items-center gap-3 mb-4 flex-wrap" role="search" aria-label="Filter external donations">
+    <div className="flex items-center gap-3 mb-4 flex-wrap" role="search" aria-label={pw("Filter external donations")}>
       <DateRangePicker />
 
       <label className="sr-only" htmlFor="ext-donations-search">
@@ -50,7 +52,7 @@ export default function ExternalDonationsFilterBar({ canExport }: { canExport: b
       <input
         id="ext-donations-search"
         type="text"
-        placeholder="Search donor, fund, or reference number"
+        placeholder={pw("Search donor, fund, or reference number")}
         value={searchInput}
         onChange={(e) => setSearchInput(e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-64"

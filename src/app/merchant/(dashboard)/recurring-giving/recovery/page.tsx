@@ -6,6 +6,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import { loadRecurringDonorsAnalytics } from "@/lib/subscriptions/recurringDonorsAnalytics";
 import { loadRecoveryAnalytics } from "@/lib/subscriptions/recoveryAnalytics";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function SummaryCard({ label, value, sublabel }: { label: string; value: string; sublabel?: string }) {
   return (
@@ -26,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export default async function RecurringGivingRecoveryPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -44,14 +46,14 @@ export default async function RecurringGivingRecoveryPage() {
         <Link href="/merchant/recurring-donors" className="text-sm text-indigo-600 hover:underline">
           &larr; Recurring Donors
         </Link>
-        <h2 className="mt-2 text-lg font-medium">Recurring Giving Recovery</h2>
+        <h2 className="mt-2 text-lg font-medium">{pw("Recurring Giving Recovery")}</h2>
         <p className="mt-1 text-sm text-gray-500">
           Every failed recurring charge automatically gets the donor a secure payment-update link — this is where you track whether it worked.
         </p>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Past-Due Donors" value={String(donorAnalytics.summary.pastDueRecurringDonors)} />
+        <SummaryCard label={pw("Past-Due Donors")} value={String(donorAnalytics.summary.pastDueRecurringDonors)} />
         <SummaryCard label="Failed Payments (30d)" value={String(recovery.failedPaymentCount)} />
         <SummaryCard
           label="Recovered"
@@ -66,12 +68,12 @@ export default async function RecurringGivingRecoveryPage() {
           <h3 className="text-sm font-semibold text-slate-800">Needs Attention</h3>
         </div>
         {donorAnalytics.attentionList.length === 0 ? (
-          <p className="p-6 text-sm text-slate-500 text-center">No recurring donors currently require attention.</p>
+          <p className="p-6 text-sm text-slate-500 text-center">{pw("No recurring donors currently require attention.")}</p>
         ) : (
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Donor</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{pw("Donor")}</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Reason</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Monthly Value</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Recommended Action</th>

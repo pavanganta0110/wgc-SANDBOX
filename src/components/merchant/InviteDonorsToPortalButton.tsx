@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Mail } from "lucide-react";
 import toast from "react-hot-toast";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 type Source = "ALL_DONORS" | "IMPORTED_CONTACTS";
 
@@ -61,6 +62,7 @@ async function callInvites(source: Source, dryRun: boolean) {
 }
 
 export default function InviteDonorsToPortalButton() {
+  const pw = usePaymentWording();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<Source>("ALL_DONORS");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -113,7 +115,7 @@ export default function InviteDonorsToPortalButton() {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !busy && setOpen(false)}>
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-base font-bold text-slate-900">Invite donors to your giving portal</h3>
+            <h3 className="text-base font-bold text-slate-900">{pw("Invite donors to your giving portal")}</h3>
             <p className="mt-1 text-xs text-slate-500">
               Donors get an email with a link to see their giving, download statements and manage recurring gifts. They sign in with a one-time code sent to their email.
             </p>

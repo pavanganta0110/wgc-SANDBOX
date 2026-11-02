@@ -12,8 +12,10 @@ import { loadSubscriptionCandidates } from "@/lib/subscriptions/subscriptionAggr
 import { getSession } from "@/lib/auth/session";
 import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPermissions";
 import SubscriptionActions from "@/components/merchant/SubscriptionActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function SubscriptionDrawer({ subscriptionId, churchId }: { subscriptionId: string; churchId: string }) {
+  const { pw } = await getPaymentWording();
   const [s, session] = await Promise.all([loadSubscriptionCandidates(churchId, { id: subscriptionId }).then((rows) => rows[0]), getSession()]);
   const permissions = getSubscriptionPermissions(session?.role);
 
@@ -79,7 +81,7 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
         <Row label="Frequency" value={frequencyLabel(s.billingInterval)} />
         <Row label="Monthly Value" value={formatCents(s.monthlyValueCents)} />
         <Row
-          label="Donor"
+          label={pw("Donor")}
           value={
             s.donorId ? (
               <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">{s.donorName}</Link>
@@ -125,10 +127,10 @@ export default async function SubscriptionDrawer({ subscriptionId, churchId }: {
 
       <Section title="Related Resources" last>
         <div className="flex flex-col gap-1.5 text-sm">
-          {s.donorId && <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">Donor</Link>}
-          {s.donorId && <Link href={`/merchant/recurring-donors/${s.donorId}`} className="text-blue-600 hover:underline">Recurring Donor</Link>}
+          {s.donorId && <Link href={`/merchant/donors/${s.donorId}`} className="text-blue-600 hover:underline">{pw("Donor")}</Link>}
+          {s.donorId && <Link href={`/merchant/recurring-donors/${s.donorId}`} className="text-blue-600 hover:underline">{pw("Recurring Donor")}</Link>}
           <Link href={`/merchant/subscriptions/${s.id}?tab=payments`} className="text-blue-600 hover:underline">Payments</Link>
-          {s.givingLinkId && <Link href={`/merchant/giving-links/${s.givingLinkId}`} className="text-blue-600 hover:underline">Giving Link</Link>}
+          {s.givingLinkId && <Link href={`/merchant/giving-links/${s.givingLinkId}`} className="text-blue-600 hover:underline">{pw("Giving Link")}</Link>}
         </div>
       </Section>
     </div>

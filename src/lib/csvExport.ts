@@ -32,7 +32,14 @@ export type CsvColumn<T> = {
   // Column is only included when the exporting session's mask level allows it —
   // wired up per-export by the caller once role-based PII masking lands.
   requiresUnmasked?: boolean;
+  // Opt-in for money columns the exporter itself formats (e.g. "-2.55"): a
+  // value that is strictly a plain number is written as-is so a negative
+  // amount stays a number in the spreadsheet instead of being forced to
+  // text by the formula guard. Anything else in the column is still sanitized.
+  numeric?: boolean;
 };
+
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?$/;
 
 export function buildCsvExport<T>(
   rows: T[],
@@ -52,7 +59,14 @@ export function buildCsvExport<T>(
     // unauthenticated donate form) to land unsanitized in a cell an admin
     // later opens in Excel/Sheets. Headers are never attacker-controlled,
     // so only row values need this.
-    lines.push(visibleColumns.map((c) => csvEscape(sanitizeCsvFormulaValue(c.value(row)))).join(","));
+    lines.push(
+      visibleColumns
+        .map((c) => {
+          const value = c.value(row);
+          return csvEscape(c.numeric && PLAIN_NUMBER.test(value) ? value : sanitizeCsvFormulaValue(value));
+        })
+        .join(",")
+    );
   }
   return lines.join("\n");
 }

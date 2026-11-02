@@ -5,6 +5,7 @@ import { BarChart3, Table2 } from "lucide-react";
 import type { TrendRow } from "./types";
 import { SERIES } from "./tokens";
 import { compactMoney, formatCents } from "./format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const METRICS = [
   {
@@ -55,6 +56,7 @@ export default function GivingTrend({
   data: TrendRow[];
   periodLabel: string;
 }) {
+  const pw = usePaymentWording();
   const [metric, setMetric] = useState<MetricKey>("netDonatedCents");
   const [view, setView] = useState<"chart" | "table">("chart");
   const [hover, setHover] = useState<number | null>(null);
@@ -225,7 +227,7 @@ export default function GivingTrend({
           {view === "table" ? (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[420px] text-left text-sm">
-                <caption className="sr-only">Giving by month</caption>
+                <caption className="sr-only">{pw("Giving by month")}</caption>
                 <thead>
                   <tr className="border-b border-slate-200 text-xs text-slate-500">
                     <th scope="col" className="py-2 font-semibold">

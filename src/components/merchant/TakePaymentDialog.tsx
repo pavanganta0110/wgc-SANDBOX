@@ -10,6 +10,9 @@ import { formatCents } from "@/lib/format";
 import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
 import { DEFAULT_NO_GOODS_SERVICES_TEXT, DEFAULT_GOODS_SERVICES_TEMPLATE } from "@/lib/settings/acknowledgmentDefaults";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
+import PaymentReceiptActions from "@/components/merchant/PaymentReceiptActions";
+import { modeLabel } from "@/lib/settings/paymentMode";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const APPLICATION_ID = process.env.NEXT_PUBLIC_FINIX_APPLICATION_ID || "";
 
@@ -36,6 +39,7 @@ export default function TakePaymentDialog({
   /** Opened from a student's page: that student is pre-selected. */
   initialStudent?: { id: string; name: string } | null;
 }) {
+  const pw = usePaymentWording();
   const [step, setStep] = useState<Step>("form");
   const [result, setResult] = useState<PaymentResult | null>(null);
 
@@ -51,6 +55,14 @@ export default function TakePaymentDialog({
   const [studentId, setStudentId] = useState(initialStudent?.id ?? "");
   const [studentGivenFor, setStudentGivenFor] = useState<"SPONSOR" | "SELF">("SPONSOR");
   const [note, setNote] = useState("");
+  // Per-organization payment-processor mode: payer wording and the optional term field.
+  const [modeSettings, setModeSettings] = useState<{ paymentMode: boolean; termFieldEnabled: boolean; terms: string[] }>({
+    paymentMode: false,
+    termFieldEnabled: false,
+    terms: [],
+  });
+  const [termLabel, setTermLabel] = useState("");
+  const payer = modeLabel(modeSettings.paymentMode, "donor");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [coverFees, setCoverFees] = useState(false);
   const [formReady, setFormReady] = useState(false);
@@ -72,6 +84,21 @@ export default function TakePaymentDialog({
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (!cancelled && json?.enabled) setStudentOptions({ term: json.term, students: json.students });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/merchant/payment-mode")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json) {
+          setModeSettings({ paymentMode: Boolean(json.paymentMode), termFieldEnabled: Boolean(json.termFieldEnabled), terms: json.terms ?? [] });
+        }
       })
       .catch(() => {});
     return () => {
@@ -208,6 +235,7 @@ export default function TakePaymentDialog({
       const data = await res.json();
 
       if (!res.ok) {
+          termLabel: modeSettings.termFieldEnabled ? termLabel.trim() || undefined : undefined,
         setResult({ success: false, error: data.error || "Payment failed" });
         setStep("result");
         return;
@@ -264,7 +292,7 @@ export default function TakePaymentDialog({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Donor Name *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">{payer} Name *</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -273,12 +301,12 @@ export default function TakePaymentDialog({
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Donor Email *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">{payer} Email *</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="donor@example.com"
+                  placeholder={modeSettings.paymentMode ? "name@example.com" : "donor@example.com"}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -286,7 +314,7 @@ export default function TakePaymentDialog({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Donor Phone</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">{payer} Phone</label>
                 <input
                   type="tel"
                   value={phone}
@@ -337,7 +365,7 @@ export default function TakePaymentDialog({
                     value={studentGivenFor}
                     onChange={(e) => setStudentGivenFor(e.target.value as "SPONSOR" | "SELF")}
                     disabled={!studentId}
-                    aria-label="Gift type"
+                    aria-label={pw("Gift type")}
                     className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="SPONSOR">Sponsor</option>
@@ -359,6 +387,25 @@ export default function TakePaymentDialog({
 
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-2">Payment Method</label>
+            {modeSettings.termFieldEnabled && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Term</label>
+                <input
+                  value={termLabel}
+                  onChange={(e) => setTermLabel(e.target.value)}
+                  list="take-payment-terms"
+                  maxLength={40}
+                  placeholder="e.g. Fall 2026 — leave blank for the current term"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <datalist id="take-payment-terms">
+                  {modeSettings.terms.map((t) => (
+                    <option key={t} value={t} />
+                  ))}
+                </datalist>
+              </div>
+            )}
+
               <div className="flex gap-2">
                 <button
                   onClick={() => setPaymentMethod("card")}
@@ -391,18 +438,18 @@ export default function TakePaymentDialog({
             <div className="flex flex-col gap-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} />
-                Donor covers processing fees
+                {payer} covers processing fees
               </label>
               <label className="flex items-center gap-2 text-sm text-slate-700">
                 <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
-                Anonymous gift
+                Anonymous {modeSettings.paymentMode ? "payment" : "gift"}
               </label>
             </div>
 
             {amountCents >= 100 && (
               <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 space-y-1">
                 <div className="flex justify-between">
-                  <span>Gift amount</span>
+                  <span>{modeSettings.paymentMode ? "Payment" : "Gift"} amount</span>
                   <span className="font-semibold text-slate-900">{formatCents(amountCents)}</span>
                 </div>
                 {coverFees && feeCoveredCents > 0 && (
@@ -474,7 +521,7 @@ export default function TakePaymentDialog({
                         <input
                           value={goodsServicesInternalNote}
                           onChange={(e) => setGoodsServicesInternalNote(e.target.value)}
-                          placeholder="Not shown on the donor receipt"
+                          placeholder={`Not shown on the ${payer.toLowerCase()} receipt`}
                           className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
@@ -519,7 +566,7 @@ export default function TakePaymentDialog({
         {step === "review" && (
           <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
             <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
-              <div className="flex justify-between"><span className="text-slate-500">Donor</span><span className="font-semibold">{name}</span></div>
+              <div className="flex justify-between"><span className="text-slate-500">{payer}</span><span className="font-semibold">{name}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payment Amount</span><span className="font-semibold">{formatCents(amountCents)}</span></div>
               <div className="flex justify-between"><span className="text-slate-500">Payment Method</span><span className="font-semibold">{paymentMethod === "card" ? "Card" : "Bank Account"}</span></div>
               {fundName.trim() && <div className="flex justify-between"><span className="text-slate-500">Fund/Campaign</span><span className="font-semibold">{fundName.trim()}</span></div>}
@@ -535,6 +582,7 @@ export default function TakePaymentDialog({
               <div className="flex justify-between">
                 <span className="text-slate-500">Goods or Services</span>
                 <span className="font-semibold">{goodsServicesProvided ? "Provided" : "None Provided"}</span>
+              {modeSettings.termFieldEnabled && termLabel.trim() && <div className="flex justify-between"><span className="text-slate-500">Term</span><span className="font-semibold">{termLabel.trim()}</span></div>}
               </div>
               {goodsServicesProvided && (
                 <>
@@ -603,6 +651,7 @@ export default function TakePaymentDialog({
                     className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                   >
                     Take Another Payment
+                {result.transferId && <PaymentReceiptActions transferId={result.transferId} defaultEmail={email.trim()} />}
                   </button>
                 </div>
               </>

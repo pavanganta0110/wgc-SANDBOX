@@ -25,12 +25,14 @@ import DisputeFinancialImpactCard from "@/components/merchant/DisputeFinancialIm
 import DisputeAuditHistory from "@/components/merchant/DisputeAuditHistory";
 import DisputeInternalNote from "@/components/merchant/DisputeInternalNote";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function DisputeFullDetailPage({
   params,
 }: {
   params: Promise<{ disputeId: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -180,7 +182,7 @@ export default async function DisputeFullDetailPage({
                   value={instrument.cardBrand || (instrument.bankLast4 ? "Bank Account" : instrument.instrumentType || "—")}
                 />
               )}
-              {payment?.givingPageId && <Row label="Linked Giving Page" value={payment.givingPageId} />}
+              {payment?.givingPageId && <Row label={pw("Linked Giving Page")} value={payment.givingPageId} />}
             </div>
           )}
         </div>
@@ -188,7 +190,7 @@ export default async function DisputeFullDetailPage({
         <div className="space-y-6">
           {/* Donor */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Donor")}</h3>
             <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
             <Row label="Email" value={donor?.email || "—"} />
             <Row label="Phone" value={donor?.phone || "—"} />

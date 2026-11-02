@@ -6,10 +6,12 @@ import { Download, ChevronDown, SlidersHorizontal, X, Columns3 } from "lucide-re
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import { DONOR_COLUMNS, parseVisibleDonorColumns, type DonorColumnKey } from "@/lib/donorColumns";
 import { DONOR_DISPLAY_STATUS_LABELS, type DonorDisplayStatus } from "@/lib/donors/donorStatus";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const STATUSES = Object.keys(DONOR_DISPLAY_STATUS_LABELS) as DonorDisplayStatus[];
 
 export default function DonorsFilterBar({ exportHref }: { exportHref?: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -92,7 +94,7 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
 
       <input
         type="text"
-        placeholder="Search name, email, phone, or donor ID"
+        placeholder={pw("Search name, email, phone, or donor ID")}
         value={searchInput}
         onChange={(e) => setSearchInput(e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-64"
@@ -152,15 +154,15 @@ export default function DonorsFilterBar({ exportHref }: { exportHref?: string })
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1">Donation Source</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">{pw("Donation Source")}</label>
                 <select
                   value={source}
                   onChange={(e) => setParam("source", e.target.value)}
                   className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none"
                 >
-                  <option value="">All donors</option>
-                  <option value="external">External donors (cash, check, imported, etc.)</option>
-                  <option value="processed">WGC-processed donors</option>
+                  <option value="">{pw("All donors")}</option>
+                  <option value="external">{pw("External donors (cash, check, imported, etc.)")}</option>
+                  <option value="processed">{pw("WGC-processed donors")}</option>
                   <option value="both">Both external and WGC-processed</option>
                 </select>
               </div>

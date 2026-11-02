@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { X, Upload } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface PreviewRow {
   rowNumber: number;
@@ -34,6 +35,7 @@ const STATUS_COLORS: Record<PreviewRow["status"], string> = {
 };
 
 export default function DonorImportModal({ onClose }: { onClose: () => void }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export default function DonorImportModal({ onClose }: { onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900">Import Donors from CSV</h3>
+          <h3 className="text-sm font-bold text-slate-900">{pw("Import Donors from CSV")}</h3>
           <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
             <X className="w-4 h-4" />
           </button>

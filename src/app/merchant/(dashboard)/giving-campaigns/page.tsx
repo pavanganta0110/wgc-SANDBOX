@@ -6,8 +6,10 @@ import { getDonorPermissions } from "@/lib/donors/donorPermissions";
 import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import CampaignSeriesControls from "@/components/merchant/CampaignSeriesControls";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingCampaignsPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const permissions = getDonorPermissions(session?.role);
   if (!session?.churchId || !permissions.canView) {
@@ -36,8 +38,8 @@ export default async function GivingCampaignsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Giving Campaigns</h2>
-          <p className="text-sm text-slate-500 mt-1">Send a giving link to your donor list and see who gave.</p>
+          <h2 className="text-lg font-bold text-slate-900">{pw("Giving Campaigns")}</h2>
+          <p className="text-sm text-slate-500 mt-1">{pw("Send a giving link to your donor list and see who gave.")}</p>
         </div>
         <div className="flex items-center gap-3">
         <Link href="/merchant/giving-campaigns/unsubscribed" className="text-sm font-semibold text-slate-600 hover:underline">

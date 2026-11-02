@@ -9,6 +9,7 @@ import GivingLinkRowActions from "@/components/merchant/GivingLinkRowActions";
 import GivingLinksFilterBar from "@/components/merchant/GivingLinksFilterBar";
 import { resolveDateRange } from "@/lib/dateRangePresets";
 import Link from "next/link";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function StackedDateTime({ date }: { date: Date | null | undefined }) {
   if (!date) return <span className="text-slate-400">—</span>;
@@ -36,6 +37,7 @@ export default async function GivingLinksTable({
   ownerFilterOptions?: { id: string; email: string; disabledAt: Date | null }[];
   currentUserId?: string;
 }) {
+  const { pw } = await getPaymentWording();
   const { status, linkType, amountType, name, range, from, to, owner } = searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
@@ -75,7 +77,7 @@ export default async function GivingLinksTable({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         {links.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <h3 className="text-sm font-bold text-slate-900 mb-1">Create your first giving link</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Create your first giving link")}</h3>
             <p className="text-sm text-slate-500 mb-4">
               Create a customized link that donors can use to give online.
             </p>
@@ -92,13 +94,13 @@ export default async function GivingLinksTable({
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                 <th className="px-6 py-3">ID</th>
                 <th className="px-6 py-3">Created (CDT)</th>
-                <th className="px-6 py-3">Giving Link Name</th>
+                <th className="px-6 py-3">{pw("Giving Link Name")}</th>
                 {canFilterByOwner && <th className="px-6 py-3">Owner</th>}
                 <th className="px-6 py-3">Amount Type</th>
                 <th className="px-6 py-3">Link Type</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Total Attempts</th>
-                <th className="px-6 py-3 text-right">Successful Donations</th>
+                <th className="px-6 py-3 text-right">{pw("Successful Donations")}</th>
                 <th className="px-6 py-3 text-right">Total Collected</th>
                 <th className="px-6 py-3">Last Used</th>
                 <th className="px-6 py-3">Expires</th>

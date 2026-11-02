@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { formatCents } from "@/lib/format";
 import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonationOption {
   id: string;
@@ -23,6 +24,7 @@ interface DonationOption {
  * this is the one path that changes a pledge's status.
  */
 export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -97,7 +99,7 @@ export default function LinkPledgeFulfillmentButton({ pledgeId }: { pledgeId: st
             onChange={(e) => setSelectedId(e.target.value)}
             className="rounded-md border border-slate-300 px-1.5 py-1 text-xs max-w-[180px]"
           >
-            <option value="">— Select donation —</option>
+            <option value="">{pw("— Select donation —")}</option>
             {donations.map((d) => (
               <option key={d.id} value={d.id}>
                 {formatCents(d.donationAmountCents)} · {formatDateCDT(d.donationDate)}

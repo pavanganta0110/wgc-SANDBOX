@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { loadPledgesList } from "@/lib/pledges/loadPledgesList";
 import RecordPledgeForm from "@/components/merchant/RecordPledgeForm";
 import LinkPledgeFulfillmentButton from "@/components/merchant/LinkPledgeFulfillmentButton";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
@@ -20,6 +21,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 export default async function PledgesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -75,7 +77,7 @@ export default async function PledgesPage({ searchParams }: { searchParams: Prom
               <table className="min-w-full divide-y divide-slate-100">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Donor</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{pw("Donor")}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Campaign</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Pledged</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Fulfilled</th>

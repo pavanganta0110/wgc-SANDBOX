@@ -2,10 +2,11 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { Download, ChevronDown } from "lucide-react";
+import { Download, ChevronDown, Search, X } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import PillFilterInput from "@/components/merchant/PillFilterInput";
 import ExportOptionsDialog from "@/components/merchant/ExportOptionsDialog";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const STATES = [
   "SUCCEEDED",
@@ -26,6 +27,7 @@ const SOURCES = [
 ];
 
 export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSuggestions?: string[] }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [exportFormat, setExportFormat] = useState<"csv" | "pdf" | null>(null);
@@ -34,6 +36,8 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
   const donorName = searchParams.get("buyer") || "";
   const fund = searchParams.get("fund") || "";
   const source = searchParams.get("source") || "";
+  const query = searchParams.get("q") || "";
+  const [searchDraft, setSearchDraft] = useState(query);
   const [isStateOpen, setIsStateOpen] = useState(false);
   const [isSourceOpen, setIsSourceOpen] = useState(false);
 
@@ -53,6 +57,39 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
 
   return (
     <div className="flex items-center gap-3 mb-4 flex-wrap">
+      <form
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setParam("q", searchDraft.trim());
+        }}
+        className="relative w-full sm:w-80"
+      >
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+        <input
+          type="search"
+          value={searchDraft}
+          maxLength={100}
+          onChange={(e) => setSearchDraft(e.target.value)}
+          placeholder="Search name, student ID, amount, note…"
+          aria-label="Search payments"
+          className="w-full pl-9 pr-8 py-2 rounded-full border border-slate-200 bg-white text-sm outline-none focus:border-slate-900"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearchDraft("");
+              setParam("q", "");
+            }}
+            aria-label="Clear search"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </form>
+
       <DateRangePicker />
 
       <div className="relative">
@@ -156,10 +193,10 @@ export default function PaymentsFilterBar({ fundSuggestions = [] }: { fundSugges
       />
 
       <PillFilterInput
-        label="Donor Name"
+        label={pw("Donor Name")}
         value={donorName}
         width="w-56"
-        placeholder="Donor or payment instrument name"
+        placeholder={pw("Donor or payment instrument name")}
         onApply={(v) => setParam("buyer", v)}
       />
 

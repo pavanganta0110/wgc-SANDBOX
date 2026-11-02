@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import StateBadge from "@/components/merchant/StateBadge";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 type Role = "owner" | "admin" | "fundraiser" | "viewer" | "church_admin";
 type AssignableRole = Exclude<Role, "church_admin">;
@@ -60,6 +61,7 @@ export default function TeamSettingsPanel({
   /** People sign in from the partner's frame with a passcode the team sets, instead of an emailed invitation. */
   passcodeMode?: boolean;
 }) {
+  const pw = usePaymentWording();
   const assignableRoles = canManageOwners ? OWNER_ASSIGNABLE_ROLES : INVITABLE_ROLES;
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -433,7 +435,7 @@ export default function TeamSettingsPanel({
                     <th className="py-2 pr-4 text-right">Gross</th>
                     <th className="py-2 pr-4 text-right">Refunds</th>
                     <th className="py-2 pr-4 text-right">Net</th>
-                    <th className="py-2 pr-4 text-right">Recurring Donors</th>
+                    <th className="py-2 pr-4 text-right">{pw("Recurring Donors")}</th>
                     <th className="py-2 pr-4">Last Activity</th>
                     <th className="py-2 pr-4" />
                   </tr>

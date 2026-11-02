@@ -2,6 +2,7 @@ import { getSession } from "@/lib/auth/session";
 import Link from "next/link";
 import StateBadge from "@/components/merchant/StateBadge";
 import { getPaymentMethodAvailability, type PaymentMethodAvailability } from "@/lib/payments/paymentMethodAvailability";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const LABELS: Record<string, string> = {
   CARD: "Credit/Debit Card",
@@ -42,12 +43,13 @@ function WalletStatusCard({ title, availability }: { title: string; availability
       {availability.actionRequired && (
         <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3">{availability.actionRequired}</p>
       )}
-      <p className="text-xs text-slate-400 mt-3">Available in supported browsers and devices only — this status reflects configuration, not a specific donor's device.</p>
+      <p className="text-xs text-slate-400 mt-3">Available in supported browsers and devices only — this status reflects configuration, not a specific donor&apos;s device.</p>
     </div>
   );
 }
 
 export default async function PaymentMethodsSettingsPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const availability = await getPaymentMethodAvailability(session!.churchId!);
   const [card, ach, applePay, googlePay] = availability;
@@ -58,7 +60,7 @@ export default async function PaymentMethodsSettingsPage() {
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <h3 className="text-sm font-bold text-slate-900 mb-1">Payment Methods</h3>
-        <p className="text-xs text-slate-500 mb-6">Payment methods available to donors on your Giving Links.</p>
+        <p className="text-xs text-slate-500 mb-6">{pw("Payment methods available to donors on your Giving Links.")}</p>
 
         <div className="space-y-3">
           {[card, ach].map((m) => (

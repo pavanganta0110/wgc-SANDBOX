@@ -6,6 +6,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { Loader2, X, Search, Mail, MessageSquare, Lock } from "lucide-react";
 import { EVENT_AUDIENCE_SCOPES, EVENT_AUDIENCE_SCOPE_LABELS } from "@/lib/eventRegistration/audience";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface GivingLinkOption {
   id: string;
@@ -52,6 +53,7 @@ const DEFAULT_EVENT_BODY =
 const DEFAULT_TEXT_BODY = "Hi {{firstName}}, {{orgName}} would be grateful for your support. Give securely here: {{link}}";
 
 export default function GivingCampaignComposer() {
+  const pw = usePaymentWording();
   const router = useRouter();
 
   const [channel, setChannel] = useState<Channel>("EMAIL");
@@ -503,7 +505,7 @@ export default function GivingCampaignComposer() {
                   onChange={(e) => setGivingLinkId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400"
                 >
-                  <option value="">Select a giving link…</option>
+                  <option value="">{pw("Select a giving link…")}</option>
                   {links.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.internalName}
@@ -625,17 +627,17 @@ export default function GivingCampaignComposer() {
             onChange={(e) => setAudienceSource(e.target.value as AudienceSource)}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white"
           >
-            <option value="SELECTED">Specific donors (choose below)</option>
-            <option value="ALL_DONORS">All donors</option>
-            <option value="GIVING_PAGE">Donors from one giving page</option>
+            <option value="SELECTED">{pw("Specific donors (choose below)")}</option>
+            <option value="ALL_DONORS">{pw("All donors")}</option>
+            <option value="GIVING_PAGE">{pw("Donors from one giving page")}</option>
             {events && channel === "EMAIL" && <option value="EVENT">Event attendees</option>}
             <option value="IMPORTED_CONTACTS">Imported contacts</option>
             <option value="NOT_GIVEN">People who haven&apos;t given yet</option>
             {tieMode === "EVENT" && <option value="NOT_REGISTERED">People not registered for this event</option>}
           </select>
           {audienceSource === "GIVING_PAGE" && (
-            <select aria-label="Giving page" value={audienceLinkId} onChange={(e) => setAudienceLinkId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white">
-              <option value="">Choose a giving page…</option>
+            <select aria-label={pw("Giving page")} value={audienceLinkId} onChange={(e) => setAudienceLinkId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm mb-3 bg-white">
+              <option value="">{pw("Choose a giving page…")}</option>
               {links.map((l) => (
                 <option key={l.id} value={l.id}>{l.internalName || l.publicTitle}</option>
               ))}
@@ -660,8 +662,8 @@ export default function GivingCampaignComposer() {
             <div className="mb-3">
               <label htmlFor="not-registered-base" className="block text-xs font-semibold text-slate-500 mb-1">Invite</label>
               <select id="not-registered-base" value={notRegisteredBase} onChange={(e) => setNotRegisteredBase(e.target.value as "EVERYONE" | "DONORS")} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm bg-white">
-                <option value="EVERYONE">Everyone on file who isn&apos;t registered (donors, imported contacts, newsletter list)</option>
-                <option value="DONORS">Only donors who haven&apos;t registered</option>
+                <option value="EVERYONE">{pw("Everyone on file who isn't registered (donors, imported contacts, newsletter list)")}</option>
+                <option value="DONORS">{pw("Only donors who haven't registered")}</option>
               </select>
             </div>
           )}
@@ -691,7 +693,7 @@ export default function GivingCampaignComposer() {
                 <input type="radio" name="send-timing" className="mt-1" checked={repeatMonthly} onChange={() => setRepeatMonthly(true)} />
                 <span>
                   Send automatically every month
-                  <span className="block text-xs text-slate-500">Each month goes to whoever matches this audience that day — new donors are included, and anyone who unsubscribed is skipped.</span>
+                  <span className="block text-xs text-slate-500">{pw("Each month goes to whoever matches this audience that day — new donors are included, and anyone who unsubscribed is skipped.")}</span>
                 </span>
               </label>
               {repeatMonthly && (
@@ -775,7 +777,7 @@ export default function GivingCampaignComposer() {
           </div>
 
           {selectedDonors.length === 0 ? (
-            <p className="text-xs text-slate-400">No donors added yet.</p>
+            <p className="text-xs text-slate-400">{pw("No donors added yet.")}</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {selectedDonors.map((d) => (

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Sparkles } from "lucide-react";
 import type { GivingSetupState, MappingHealth } from "@/lib/integrations/planningcenter/givingTypes";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const API = "/api/merchant/settings/integrations/planning-center/giving";
 
@@ -43,6 +44,7 @@ function HealthNote({ health }: { health: MappingHealth }) {
 }
 
 export default function PlanningCenterGivingSetup() {
+  const pw = usePaymentWording();
   const [state, setState] = useState<GivingSetupState | null>(null);
   const [hidden, setHidden] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export default function PlanningCenterGivingSetup() {
   if (loadError && !state) {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-2">Giving setup</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-2">{pw("Giving setup")}</h3>
         <p className="text-xs text-red-600 mb-3">{loadError}</p>
         <button onClick={() => load()} className={secondaryButton}>
           <RefreshCw className="w-3.5 h-3.5" /> Try again
@@ -102,14 +104,14 @@ export default function PlanningCenterGivingSetup() {
   }
 
   if (!state) {
-    return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">Loading Giving setup…</div>;
+    return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">{pw("Loading Giving setup…")}</div>;
   }
 
   // Giving unreachable: explain exactly what to fix instead of showing steps that can't work.
   if (state.pcoAccess !== "OK") {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-3">Giving setup</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-3">{pw("Giving setup")}</h3>
         <div className="flex items-start gap-2 rounded-lg bg-amber-50 text-amber-800 text-xs p-3 mb-4">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>
@@ -134,7 +136,7 @@ export default function PlanningCenterGivingSetup() {
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Giving setup</h3>
+          <h3 className="text-sm font-bold text-slate-900">{pw("Giving setup")}</h3>
           <p className="text-xs text-slate-500 mt-0.5">
             Get ready to record WGC gifts in {state.organizationName ? `${state.organizationName}'s` : "your"} Planning Center Giving. Nothing is sent yet.
           </p>
@@ -149,7 +151,7 @@ export default function PlanningCenterGivingSetup() {
         <div className="flex items-start gap-2 rounded-lg bg-green-50 text-green-800 text-xs p-3">
           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
-            <div className="font-semibold">Giving setup is complete.</div>
+            <div className="font-semibold">{pw("Giving setup is complete.")}</div>
             {state.readiness.notes.map((n) => (
               <div key={n} className="mt-0.5">{n}</div>
             ))}
@@ -352,7 +354,7 @@ export default function PlanningCenterGivingSetup() {
             ))}
           </div>
         )}
-        <p className="text-xs text-slate-400 mt-2">New funds created here are hidden from your Church Center donation form, so donors don&apos;t see them unless you choose to show them in Planning Center.</p>
+        <p className="text-xs text-slate-400 mt-2">{pw("New funds created here are hidden from your Church Center donation form, so donors don't see them unless you choose to show them in Planning Center.")}</p>
       </section>
     </div>
   );

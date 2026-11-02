@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { extractApiErrorMessage } from "@/lib/utils/apiErrors";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function NewPledgeCampaignForm({
   funds,
@@ -11,6 +12,7 @@ export default function NewPledgeCampaignForm({
   funds: { id: string; name: string }[];
   givingLinks: { id: string; publicTitle: string; publicSlug: string }[];
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +119,7 @@ export default function NewPledgeCampaignForm({
       </div>
       <div className="border-t border-slate-100 pt-4">
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Link to Giving Page for "Give now" (optional)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">{pw("Link to Giving Page for \"Give now\" (optional)")}</label>
           <select name="givingLinkId" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
             <option value="">— None —</option>
             {givingLinks.map((g) => (
@@ -127,7 +129,7 @@ export default function NewPledgeCampaignForm({
         </div>
         <div className="flex items-center gap-2 mt-3">
           <input id="publish-campaign" name="publish" type="checkbox" />
-          <label htmlFor="publish-campaign" className="text-sm text-slate-700">Publish a public donor-facing page for this campaign</label>
+          <label htmlFor="publish-campaign" className="text-sm text-slate-700">{pw("Publish a public donor-facing page for this campaign")}</label>
         </div>
       </div>
       <button

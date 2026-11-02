@@ -15,6 +15,7 @@ import {
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import StateBadge from "@/components/merchant/StateBadge";
 import ViewMemberDashboardButton from "@/components/merchant/ViewMemberDashboardButton";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const ROLE_LABELS: Record<string, string> = { owner: "Owner", admin: "Admin", fundraiser: "Fundraiser", viewer: "Viewer", church_admin: "Admin" };
 const TABS = ["overview", "giving-links", "transactions", "recurring"] as const;
@@ -42,6 +43,7 @@ export default async function TeamMemberDetailPage({
   params: Promise<{ userId: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -111,11 +113,11 @@ export default async function TeamMemberDetailPage({
         <KpiCard label="Gross Raised" value={formatCents(summary.grossRaisedCents)} href={tabHref(summary.userId, "transactions")} />
         <KpiCard label="Net Raised" value={formatCents(summary.netRaisedCents)} href={tabHref(summary.userId, "transactions")} />
         <KpiCard label="Total Transactions" value={String(summary.transactionCount)} href={tabHref(summary.userId, "transactions")} />
-        <KpiCard label="Active Giving Links" value={String(summary.activeGivingLinkCount)} href={tabHref(summary.userId, "giving-links")} />
-        <KpiCard label="Recurring Donors" value={String(summary.recurringDonorCount)} href={tabHref(summary.userId, "recurring")} />
+        <KpiCard label={pw("Active Giving Links")} value={String(summary.activeGivingLinkCount)} href={tabHref(summary.userId, "giving-links")} />
+        <KpiCard label={pw("Recurring Donors")} value={String(summary.recurringDonorCount)} href={tabHref(summary.userId, "recurring")} />
         <KpiCard label="Refund Amount" value={formatCents(summary.refundAmountCents)} href={tabHref(summary.userId, "transactions")} />
-        <KpiCard label="Average Donation" value={formatCents(summary.averageDonationCents)} />
-        <KpiCard label="Last Donation" value={summary.lastDonationAt ? formatDateCDT(summary.lastDonationAt) : "Never"} />
+        <KpiCard label={pw("Average Donation")} value={formatCents(summary.averageDonationCents)} />
+        <KpiCard label={pw("Last Donation")} value={summary.lastDonationAt ? formatDateCDT(summary.lastDonationAt) : "Never"} />
       </div>
 
       <div className="flex items-center gap-1 border-b border-slate-100 mb-6">

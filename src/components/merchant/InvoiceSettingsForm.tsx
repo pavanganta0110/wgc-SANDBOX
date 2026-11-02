@@ -3,6 +3,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { Upload } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface InvoiceSettingsValues {
   invoiceNumberPrefix: string;
@@ -49,6 +50,7 @@ export default function InvoiceSettingsForm({
   fallbackOrgName: string;
   fallbackLogoUrl: string | null;
 }) {
+  const pw = usePaymentWording();
   const [values, setValues] = useState<InvoiceSettingsValues>({
     invoiceNumberPrefix: String(initial.invoiceNumberPrefix ?? "INV-"),
     nextInvoiceSequence: Number(initial.nextInvoiceSequence ?? 1),
@@ -227,8 +229,8 @@ export default function InvoiceSettingsForm({
               <label className="block text-xs font-semibold text-slate-700 mb-1">Default classification</label>
               <select value={values.defaultClassification} onChange={(e) => set("defaultClassification", e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm">
                 <option value="GOODS_OR_SERVICES">Goods or Services</option>
-                <option value="CHARITABLE_DONATION">Charitable Donation</option>
-                <option value="PARTIAL_DONATION">Partial Donation</option>
+                <option value="CHARITABLE_DONATION">{pw("Charitable Donation")}</option>
+                <option value="PARTIAL_DONATION">{pw("Partial Donation")}</option>
               </select>
             </div>
           </div>

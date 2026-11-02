@@ -11,6 +11,7 @@ import BackgroundPicker from "@/components/campaigns/BackgroundPicker";
 import OptionPicker from "@/components/campaigns/OptionPicker";
 import { FONT_STYLES, IMAGE_SIZES, QR_SIZES, TEXT_SIZES } from "@/lib/campaigns/display";
 import { PAGE_BACKGROUNDS, WALL_BACKGROUNDS } from "@/lib/campaigns/backgrounds";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 type Tab = "overview" | "teams" | "fundraisers" | "leaderboard" | "sharing" | "settings";
 
@@ -116,6 +117,7 @@ export default function CampaignDetailClient({
   canManageRoster: boolean;
   canArchive: boolean;
 }) {
+  const pw = usePaymentWording();
   const [campaign, setCampaign] = useState(initialCampaign);
   const [tab, setTab] = useState<Tab>("overview");
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -399,17 +401,17 @@ export default function CampaignDetailClient({
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <StatCard label="Raised" value={formatCents(overview.raisedCents)} sublabel={overview.percentOfGoal != null ? `${overview.percentOfGoal}% of goal` : undefined} />
                 <StatCard label="Goal" value={overview.goalAmountCents != null ? formatCents(overview.goalAmountCents) : "—"} />
-                <StatCard label="Donors" value={String(overview.donorCount)} />
-                <StatCard label="Average Gift" value={formatCents(overview.averageGiftCents)} />
-                <StatCard label="Recurring Donors" value={String(overview.recurringDonorCount)} />
+                <StatCard label={pw("Donors")} value={String(overview.donorCount)} />
+                <StatCard label={pw("Average Gift")} value={formatCents(overview.averageGiftCents)} />
+                <StatCard label={pw("Recurring Donors")} value={String(overview.recurringDonorCount)} />
                 <StatCard label="Top Fundraiser" value={overview.topFundraiser?.name ?? "—"} sublabel={overview.topFundraiser ? formatCents(overview.topFundraiser.raisedCents) : undefined} />
                 <StatCard label="Top Team" value={overview.topTeam?.name ?? "—"} sublabel={overview.topTeam ? formatCents(overview.topTeam.raisedCents) : undefined} />
               </div>
 
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-                <h3 className="text-sm font-semibold text-slate-900 mb-4">Recent Donations</h3>
+                <h3 className="text-sm font-semibold text-slate-900 mb-4">{pw("Recent Donations")}</h3>
                 {overview.recentGifts.length === 0 ? (
-                  <p className="text-sm text-slate-400">No donations yet.</p>
+                  <p className="text-sm text-slate-400">{pw("No donations yet.")}</p>
                 ) : (
                   <ul className="divide-y divide-slate-100">
                     {overview.recentGifts.map((g) => (
@@ -575,7 +577,7 @@ export default function CampaignDetailClient({
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
             <h3 className="text-sm font-semibold text-slate-900 mb-2">Campaign link</h3>
             <p className="text-sm text-indigo-600 mb-4">wgcpayments.com/c/{campaign.slug}</p>
-            <h3 className="text-sm font-semibold text-slate-900 mb-2">Live donation wall</h3>
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">{pw("Live donation wall")}</h3>
             <p className="text-sm text-indigo-600 mb-4">wgcpayments.com/c/{campaign.slug}/wall</p>
             <p className="text-xs text-slate-400">Share a fundraiser or team&apos;s own link from the Fundraisers/Teams tabs — each has its own page and URL.</p>
           </div>

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ChevronDown, X, Download } from "lucide-react";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import ExportOptionsDialog from "@/components/merchant/ExportOptionsDialog";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const STATES = ["SUCCEEDED", "PENDING", "FAILED", "CANCELED", "REFUNDED", "PARTIALLY_REFUNDED", "RETURNED"];
 
@@ -19,6 +20,7 @@ export default function DonationAttemptsFilterBar({
   exportHref?: string;
   showGivingLinkFilter?: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -81,7 +83,7 @@ export default function DonationAttemptsFilterBar({
       {showGivingLinkFilter && (
         <input
           type="text"
-          placeholder="Giving Link Name"
+          placeholder={pw("Giving Link Name")}
           value={givingLinkName}
           onChange={(e) => setParam("linkName", e.target.value)}
           className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-44"
@@ -90,7 +92,7 @@ export default function DonationAttemptsFilterBar({
 
       <input
         type="text"
-        placeholder="Donor Name"
+        placeholder={pw("Donor Name")}
         value={donor}
         onChange={(e) => setParam("donor", e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-40"

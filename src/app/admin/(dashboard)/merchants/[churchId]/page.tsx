@@ -8,6 +8,8 @@ import OpenMerchantDashboardButton from "@/components/admin/OpenMerchantDashboar
 import ResyncFinixTerminationButton from "@/components/admin/ResyncFinixTerminationButton";
 import StateBadge from "@/components/merchant/StateBadge";
 import StudentGivingToggle from "@/components/admin/StudentGivingToggle";
+import PaymentModeSettings from "@/components/admin/PaymentModeSettings";
+import { parseReceiptNoteMode } from "@/lib/settings/paymentMode";
 
 // Hoisted out of the component body so the impure Date.now() call isn't
 // made directly during render (react-hooks/purity) — same value either way.
@@ -114,6 +116,15 @@ export default async function MerchantOverviewPage({ params }: { params: Promise
   return (
     <div className="space-y-6">
       <StudentGivingToggle churchId={church.id} enabled={church.studentGivingEnabled} />
+      <PaymentModeSettings
+        churchId={church.id}
+        settings={{
+          paymentMode: church.paymentMode,
+          receiptNoteMode: parseReceiptNoteMode(church.receiptNoteMode),
+          termFieldEnabled: church.termFieldEnabled,
+          brandedDashboard: church.brandedDashboard,
+        }}
+      />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold leading-6 text-gray-900">Merchant Overview</h2>

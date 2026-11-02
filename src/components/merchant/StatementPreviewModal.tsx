@@ -4,6 +4,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import { X, RefreshCw } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export default function StatementPreviewModal({
   donorId,
@@ -30,6 +31,7 @@ export default function StatementPreviewModal({
   onClose: () => void;
   onSent?: () => void;
 }) {
+  const pw = usePaymentWording();
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [previewAttempt, setPreviewAttempt] = useState(0);
@@ -82,11 +84,11 @@ export default function StatementPreviewModal({
             <div>
               <p className="text-sm font-semibold text-slate-800 mb-2">Confirm send</p>
               <div className="grid grid-cols-2 gap-2 text-sm mb-4">
-                <Row label="Donor" value={donorName} />
+                <Row label={pw("Donor")} value={donorName} />
                 <Row label="Email" value={donorEmail || "Missing"} />
                 <Row label="Statement Year" value={String(taxYear)} />
                 <Row label="Version" value={String(version)} />
-                <Row label="Donation Count" value={String(donationCount)} />
+                <Row label={pw("Donation Count")} value={String(donationCount)} />
                 <Row label="Recorded Total" value={formatCents(recordedTotalCents)} />
               </div>
               <div className="flex items-center gap-2">

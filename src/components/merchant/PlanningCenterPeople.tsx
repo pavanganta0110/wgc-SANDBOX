@@ -6,6 +6,7 @@ import { Loader2, RefreshCw, UserPlus, Users } from "lucide-react";
 import type { PeopleJobSummary, PeopleOverview } from "@/lib/integrations/planningcenter/peopleTypes";
 import { buttonSecondary, PcoApiError, pcoFetch } from "./planningCenterApi";
 import { useConfirm } from "@/components/common/ConfirmDialog";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const MAX_JOB_STEPS = 2000; // a runaway guard, not a limit anyone should reach
 
@@ -28,6 +29,7 @@ function JobProgress({ job }: { job: PeopleJobSummary }) {
 }
 
 export default function PlanningCenterPeople() {
+  const pw = usePaymentWording();
   const [data, setData] = useState<PeopleOverview | null>(null);
   const [hidden, setHidden] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export default function PlanningCenterPeople() {
       {confirmDialog}
       <div>
         <h3 className="text-sm font-bold text-slate-900">People</h3>
-        <p className="text-xs text-slate-500 mt-0.5">Link each WGC donor to the right person in Planning Center so their gifts land on their own giving record. WGC never links on a name alone.</p>
+        <p className="text-xs text-slate-500 mt-0.5">{pw("Link each WGC donor to the right person in Planning Center so their gifts land on their own giving record. WGC never links on a name alone.")}</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-center">
@@ -160,7 +162,7 @@ export default function PlanningCenterPeople() {
       {data.review.length > 0 && (
         <section aria-labelledby="pco-people-review">
           <h4 id="pco-people-review" className="text-sm font-semibold text-slate-900 mb-1">Choose the right person ({data.counts.needsReview})</h4>
-          <p className="text-xs text-slate-500 mb-2">WGC isn&apos;t sure who this is, and it won&apos;t guess. Gifts from these donors are already in Planning Center; the person is added once you choose.</p>
+          <p className="text-xs text-slate-500 mb-2">{pw("WGC isn't sure who this is, and it won't guess. Gifts from these donors are already in Planning Center; the person is added once you choose.")}</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.review.map((item) => (
               <div key={item.donorId} className="p-3 text-xs">

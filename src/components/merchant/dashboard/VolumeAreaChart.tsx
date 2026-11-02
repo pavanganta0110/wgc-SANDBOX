@@ -5,6 +5,7 @@ import Link from "next/link";
 import { HeartHandshake } from "lucide-react";
 import { useChartWidth } from "./useChartWidth";
 import { CHART_BLUE, INK, niceTicks, compactDollars, fullDollars, labelIndices } from "./chartUtils";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 export interface TrendPoint {
   label: string;
@@ -19,6 +20,7 @@ export interface TrendPoint {
  * sr-only table of every value.
  */
 export default function VolumeAreaChart({ data, title }: { data: TrendPoint[]; title: string }) {
+  const pw = usePaymentWording();
   const { ref, width } = useChartWidth<HTMLDivElement>();
   const gradientId = useId();
   const [active, setActive] = useState<number | null>(null);
@@ -81,8 +83,8 @@ export default function VolumeAreaChart({ data, title }: { data: TrendPoint[]; t
           <HeartHandshake className="h-5 w-5" aria-hidden />
         </span>
         <div>
-          <p className="text-sm font-semibold text-slate-700">No donations in this period yet</p>
-          <p className="text-sm text-slate-500">Share your giving page to start collecting.</p>
+          <p className="text-sm font-semibold text-slate-700">{pw("No donations in this period yet")}</p>
+          <p className="text-sm text-slate-500">{pw("Share your giving page to start collecting.")}</p>
         </div>
         <Link
           href="/merchant/giving-links"

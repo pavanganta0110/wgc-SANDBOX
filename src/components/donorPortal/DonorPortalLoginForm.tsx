@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DonorPortalLoginForm({ slug, linkError }: { slug: string; linkError?: boolean }) {
+export default function DonorPortalLoginForm({ slug, linkError, paymentMode = false }: { slug: string; linkError?: boolean; paymentMode?: boolean }) {
   const router = useRouter();
   const [step, setStep] = useState<"EMAIL" | "CODE">("EMAIL");
   const [email, setEmail] = useState("");
@@ -56,7 +56,7 @@ export default function DonorPortalLoginForm({ slug, linkError }: { slug: string
     return (
       <form onSubmit={verifyCode} className="space-y-3">
         <p className="text-sm text-slate-600 text-center">
-          If we found giving under that email, we&rsquo;ve sent a 6-digit code. Enter it below.
+          {paymentMode ? "If we found payments under that email" : "If we found giving under that email"}, we&rsquo;ve sent a 6-digit code. Enter it below.
         </p>
         <input
           inputMode="numeric"

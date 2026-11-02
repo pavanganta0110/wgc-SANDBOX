@@ -324,6 +324,19 @@ model Church {
   // The giving link used as "the link for all students" (the Students page
   // button). Null = fall back to the oldest active student-picker link.
   studentGivingLinkId           String?
+  // "Payment processor" mode (e.g. MBTS) — per-organization switches that
+  // change wording/receipts/fields for orgs using WGC as a general card
+  // processor instead of a donation platform. All default to the existing
+  // behavior; WGC staff turn them on per organization (admin merchant page).
+  //  - paymentMode: payer/payment wording instead of donor/donation/giving
+  //  - receiptNoteMode: NONE | CUSTOMER | STAFF | BOTH — where the payment's
+  //    internal note is shown (customer receipt, staff notification, both)
+  //  - termFieldEnabled: staff can tag a term on Take a Payment
+  //  - brandedDashboard: org logo + colors applied to its own dashboard
+  paymentMode                   Boolean   @default(false)
+  receiptNoteMode               String    @default("NONE")
+  termFieldEnabled              Boolean   @default(false)
+  brandedDashboard              Boolean   @default(false)
   primaryContactEmail           String
   onboardingApplicationId       String?
   finixMerchantId               String?
@@ -1036,6 +1049,28 @@ model SupportTicketAttachment {
   message SupportTicketMessage @relation(fields: [messageId], references: [id])
 
   @@index([messageId])
+}
+
+// Supporting documents (invoices, approvals, audit evidence) attached to a
+// transaction. Attached to the Finix transfer id so they work for every
+// payment, including invoice payments that have no Payment row. Bytes live in
+// WGC's private object storage (never public); this row is the index.
+// Deletes are soft (deletedAt) so the audit trail of what was attached stays.
+model TransactionDocument {
+  id               String    @id @default(cuid())
+  churchId         String
+  finixTransferId  String
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  storageKey       String
+  uploadedByUserId String?
+  uploadedByEmail  String?
+  createdAt        DateTime  @default(now())
+  deletedAt        DateTime?
+  deletedByUserId  String?
+
+  @@index([churchId, finixTransferId])
 }
 
 model Donor {

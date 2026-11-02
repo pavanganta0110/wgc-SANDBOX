@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Search } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonorOption {
   id: string;
@@ -13,6 +14,7 @@ interface DonorOption {
 }
 
 export default function SubscriptionDonorMatcher({ subscriptionId }: { subscriptionId: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DonorOption[]>([]);
@@ -57,13 +59,13 @@ export default function SubscriptionDonorMatcher({ subscriptionId }: { subscript
 
   return (
     <div className="mt-1">
-      <p className="text-xs font-semibold text-amber-600 mb-1.5">Needs donor matching</p>
+      <p className="text-xs font-semibold text-amber-600 mb-1.5">{pw("Needs donor matching")}</p>
       <div className="relative max-w-xs">
         <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
         <input
           value={query}
           onChange={(e) => search(e.target.value)}
-          placeholder="Search donors by name, email, phone"
+          placeholder={pw("Search donors by name, email, phone")}
           disabled={saving}
           className="w-full pl-8 pr-2 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:ring-2 focus:ring-blue-500"
         />
@@ -72,7 +74,7 @@ export default function SubscriptionDonorMatcher({ subscriptionId }: { subscript
             {searching ? (
               <p className="px-3 py-2 text-xs text-slate-400">Searching…</p>
             ) : results.length === 0 ? (
-              <p className="px-3 py-2 text-xs text-slate-400">No matching donors</p>
+              <p className="px-3 py-2 text-xs text-slate-400">{pw("No matching donors")}</p>
             ) : (
               results.map((donor) => (
                 <button

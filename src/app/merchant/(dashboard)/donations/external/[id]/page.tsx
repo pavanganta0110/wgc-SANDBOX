@@ -11,8 +11,10 @@ import ExternalDonationDetailPanel from "@/components/merchant/ExternalDonationD
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 import ExternalDonationReceiptCard from "@/components/merchant/ExternalDonationReceiptCard";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function ExternalDonationDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -60,7 +62,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
       </div>
 
       <section className="rounded-xl border border-slate-100 bg-white p-5">
-        <h2 className="text-sm font-semibold text-slate-900 mb-2">Donor</h2>
+        <h2 className="text-sm font-semibold text-slate-900 mb-2">{pw("Donor")}</h2>
         {donation.isAnonymous ? (
           <p className="text-sm text-slate-700">Anonymous</p>
         ) : donor ? (
@@ -69,7 +71,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
             {donor.email && <p className="text-slate-500">{donor.email}</p>}
           </div>
         ) : (
-          <p className="text-sm text-amber-600">Unmatched — connect a donor from the External Donations list</p>
+          <p className="text-sm text-amber-600">{pw("Unmatched — connect a donor from the External Donations list")}</p>
         )}
       </section>
 

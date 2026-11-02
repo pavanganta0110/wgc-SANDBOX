@@ -4,6 +4,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import SettingsSaveBar from "@/components/merchant/SettingsSaveBar";
 import { useUnsavedChangesWarning } from "@/lib/settings/useUnsavedChanges";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface FormValues {
   receiptAutoSend: boolean;
@@ -43,6 +44,7 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 }
 
 export default function ReceiptSettingsForm({ initial }: { initial: FormValues }) {
+  const pw = usePaymentWording();
   const [values, setValues] = useState<FormValues>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -104,11 +106,11 @@ export default function ReceiptSettingsForm({ initial }: { initial: FormValues }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <div>
-        <Toggle label="Automatically Send Donation Receipt" checked={values.receiptAutoSend} onChange={(v) => set("receiptAutoSend", v)} />
+        <Toggle label={pw("Automatically Send Donation Receipt")} checked={values.receiptAutoSend} onChange={(v) => set("receiptAutoSend", v)} />
         <div className="space-y-3 mt-3">
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Sender Name</label><input className={inputClass} value={values.receiptSenderName} onChange={(e) => set("receiptSenderName", e.target.value)} placeholder="Defaults to organization name" /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Reply-To Email</label><input className={inputClass} value={values.receiptReplyToEmail} onChange={(e) => set("receiptReplyToEmail", e.target.value)} /></div>
-          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Subject Template</label><input className={inputClass} value={values.receiptSubjectTemplate} onChange={(e) => set("receiptSubjectTemplate", e.target.value)} placeholder="Thank you for your gift to [Organization Name]" /></div>
+          <div><label className="block text-xs font-semibold text-slate-500 mb-1">Subject Template</label><input className={inputClass} value={values.receiptSubjectTemplate} onChange={(e) => set("receiptSubjectTemplate", e.target.value)} placeholder={pw("Thank you for your gift to [Organization Name]")} /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Header</label><input className={inputClass} value={values.receiptHeader} onChange={(e) => set("receiptHeader", e.target.value)} /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Thank-You Message</label><textarea className={inputClass} rows={2} value={values.receiptThankYouMessage} onChange={(e) => set("receiptThankYouMessage", e.target.value)} /></div>
           <div><label className="block text-xs font-semibold text-slate-500 mb-1">Receipt Footer</label><textarea className={inputClass} rows={2} value={values.receiptFooter} onChange={(e) => set("receiptFooter", e.target.value)} /></div>
@@ -123,10 +125,10 @@ export default function ReceiptSettingsForm({ initial }: { initial: FormValues }
           <Toggle label="Include Organization Email" checked={values.receiptShowEmail} onChange={(v) => set("receiptShowEmail", v)} />
           <Toggle label="Include Organization Website" checked={values.receiptShowWebsite} onChange={(v) => set("receiptShowWebsite", v)} />
           <Toggle label="Include Fund/Campaign" checked={values.receiptShowFund} onChange={(v) => set("receiptShowFund", v)} />
-          <Toggle label="Include Donor-Covered Fee" checked={values.receiptShowDonorCoveredFee} onChange={(v) => set("receiptShowDonorCoveredFee", v)} />
+          <Toggle label={pw("Include Donor-Covered Fee")} checked={values.receiptShowDonorCoveredFee} onChange={(v) => set("receiptShowDonorCoveredFee", v)} />
           <Toggle label="Include Payment Method Last Four" checked={values.receiptShowPaymentMethodLastFour} onChange={(v) => set("receiptShowPaymentMethodLastFour", v)} />
           <Toggle label="Include Recurring Schedule Details" checked={values.receiptShowRecurringSchedule} onChange={(v) => set("receiptShowRecurringSchedule", v)} />
-          <Toggle label="Include Donation Reference" checked={values.receiptShowDonationReference} onChange={(v) => set("receiptShowDonationReference", v)} />
+          <Toggle label={pw("Include Donation Reference")} checked={values.receiptShowDonationReference} onChange={(v) => set("receiptShowDonationReference", v)} />
           <Toggle label="Include EIN / Tax ID" checked={values.receiptShowTaxId} onChange={(v) => set("receiptShowTaxId", v)} />
           <Toggle label="Send Copy to Organization" checked={values.receiptSendCopyToOrg} onChange={(v) => set("receiptSendCopyToOrg", v)} />
         </div>

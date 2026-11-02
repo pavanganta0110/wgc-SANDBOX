@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TrendPoint } from "@/lib/donors/donorAnalytics";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const METRICS = [
   { key: "grossDonatedCents", label: "Gross Donated" },
@@ -14,6 +15,7 @@ const METRICS = [
 type MetricKey = (typeof METRICS)[number]["key"];
 
 export default function DonationTrendChart({ data }: { data: TrendPoint[] }) {
+  const pw = usePaymentWording();
   const [metric, setMetric] = useState<MetricKey>("grossDonatedCents");
 
   const values = data.map((d) => d[metric]);
@@ -39,7 +41,7 @@ export default function DonationTrendChart({ data }: { data: TrendPoint[] }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-slate-900">Donation Trend</h3>
+        <h3 className="text-sm font-bold text-slate-900">{pw("Donation Trend")}</h3>
         <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1">
           {METRICS.map((m) => (
             <button

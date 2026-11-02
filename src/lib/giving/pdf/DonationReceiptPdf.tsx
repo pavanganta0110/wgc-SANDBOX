@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import type { PdfImage } from "@/lib/pdf/pdfImage";
+import { PAYMENT_MODE_RECEIPT_TEXT } from "@/lib/settings/paymentMode";
 
 const styles = StyleSheet.create({
   page: { padding: 36, fontSize: 10, fontFamily: "Helvetica" },
@@ -46,6 +47,10 @@ export interface DonationReceiptPdfProps {
    * setting "show donor-covered fee" is on and the donor actually covered one; omitted/0 otherwise. */
   donorCoveredFeeCents?: number;
   fundName: string | null;
+  /** Payment-processor mode: "Payment Receipt" / "Payer" wording instead of donation wording. */
+  paymentMode?: boolean;
+  /** The payment's note, shown only when the org's receipt-note setting puts it on the payer's receipt. */
+  paymentNote?: string | null;
   paymentMethodLabel: string;
   isRecurring: boolean;
   recurringInterval: string | null;
@@ -63,6 +68,9 @@ export interface DonationReceiptPdfProps {
 }
 
 export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
+  const text = props.paymentMode
+    ? PAYMENT_MODE_RECEIPT_TEXT
+    : { pdfTitle: "Donation Receipt", pdfPayerSection: "Donor", pdfPaymentSection: "Donation", pdfCoveredFee: "Processing Fee Covered by Donor" };
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
@@ -80,31 +88,32 @@ export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
           </View>
         </View>
 
-        <Text style={styles.title}>Donation Receipt</Text>
+        <Text style={styles.title}>{text.pdfTitle}</Text>
 
         {props.externalDonationNote && <Text style={styles.externalNote}>{props.externalDonationNote}</Text>}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donor</Text>
+          <Text style={styles.sectionTitle}>{text.pdfPayerSection}</Text>
           <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{props.donorName}</Text></View>
           {props.donorEmail && <View style={styles.row}><Text style={styles.label}>Email</Text><Text style={styles.value}>{props.donorEmail}</Text></View>}
           {props.donorAddress && <View style={styles.row}><Text style={styles.label}>Address</Text><Text style={styles.value}>{props.donorAddress}</Text></View>}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Donation</Text>
+          <Text style={styles.sectionTitle}>{text.pdfPaymentSection}</Text>
           <View style={styles.row}><Text style={styles.label}>Receipt Number</Text><Text style={styles.value}>{props.receiptNumber}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Transaction Reference</Text><Text style={styles.value}>{props.transactionReference}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Date</Text><Text style={styles.value}>{formatDate(props.donationDate)}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Amount</Text><Text style={styles.value}>{formatCents(props.amountCents)}</Text></View>
           {!!props.donorCoveredFeeCents && props.donorCoveredFeeCents > 0 && (
             <>
-              <View style={styles.row}><Text style={styles.label}>Processing Fee Covered by Donor</Text><Text style={styles.value}>{formatCents(props.donorCoveredFeeCents)}</Text></View>
+              <View style={styles.row}><Text style={styles.label}>{text.pdfCoveredFee}</Text><Text style={styles.value}>{formatCents(props.donorCoveredFeeCents)}</Text></View>
               <View style={styles.row}><Text style={styles.label}>Total Charged</Text><Text style={styles.value}>{formatCents(props.amountCents + props.donorCoveredFeeCents)}</Text></View>
             </>
           )}
           {props.fundName && <View style={styles.row}><Text style={styles.label}>Fund / Campaign</Text><Text style={styles.value}>{props.fundName}</Text></View>}
           <View style={styles.row}><Text style={styles.label}>Payment Method</Text><Text style={styles.value}>{props.paymentMethodLabel}</Text></View>
+          {props.paymentNote && <View style={styles.row}><Text style={styles.label}>Note</Text><Text style={styles.value}>{props.paymentNote}</Text></View>}
           <View style={styles.row}>
             <Text style={styles.label}>Frequency</Text>
             <Text style={styles.value}>{props.isRecurring ? `Recurring (${props.recurringInterval || "—"})` : "One-Time"}</Text>
@@ -117,7 +126,7 @@ export function DonationReceiptPdf(props: DonationReceiptPdfProps) {
           <View style={{ marginTop: 6 }}>
             <View style={styles.row}><Text style={styles.label}>Payment Amount</Text><Text style={styles.value}>{formatCents(props.amountCents)}</Text></View>
             <View style={styles.row}><Text style={styles.label}>Fair Market Value</Text><Text style={styles.value}>{formatCents(props.goodsServicesFairMarketValueCents ?? 0)}</Text></View>
-            <View style={styles.row}><Text style={styles.label}>Recorded Contribution Amount</Text><Text style={styles.value}>{formatCents(props.recordedContributionAmountCents ?? props.amountCents)}</Text></View>
+            <View style={styles.row}><Text style={styles.label}>{props.paymentMode ? "Recorded Amount" : "Recorded Contribution Amount"}</Text><Text style={styles.value}>{formatCents(props.recordedContributionAmountCents ?? props.amountCents)}</Text></View>
             <Text style={{ fontSize: 8, color: "#94a3b8", marginTop: 2 }}>
               This calculation is for acknowledgment and record-keeping purposes only. The organization is responsible for confirming the correct fair market value.
             </Text>

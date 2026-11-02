@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Copy, X } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const FREQUENCIES = [
   { value: "WEEKLY", label: "Weekly" },
@@ -37,6 +38,7 @@ export default function SubscriptionActions({
   canUpdateFrequency: boolean;
   canSendPaymentUpdateLink: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [modal, setModal] = useState<"cancel" | "amount" | "frequency" | "payment-link" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -178,7 +180,7 @@ export default function SubscriptionActions({
 
             {modal === "cancel" && (
               <div className="space-y-3">
-                <p className="text-sm text-slate-600">This immediately cancels the subscription with the processor. This cannot be undone, though the donor's donation history is preserved.</p>
+                <p className="text-sm text-slate-600">{pw("This immediately cancels the subscription with the processor. This cannot be undone, though the donor's donation history is preserved.")}</p>
                 <textarea placeholder="Reason (optional)" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" rows={2} />
                 <div className="flex gap-2">
                   <button disabled={busy} onClick={doCancel} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50">
@@ -231,7 +233,7 @@ export default function SubscriptionActions({
 
             {modal === "payment-link" && (
               <div className="space-y-3">
-                <p className="text-sm text-slate-600">Sends the donor a secure, single-use link to provide a new payment method. Completing it cancels this subscription and creates a replacement.</p>
+                <p className="text-sm text-slate-600">{pw("Sends the donor a secure, single-use link to provide a new payment method. Completing it cancels this subscription and creates a replacement.")}</p>
                 <div className="flex gap-2">
                   <button disabled={busy} onClick={doSendPaymentUpdateLink} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50">
                     {busy ? "Sending…" : "Send Link"}

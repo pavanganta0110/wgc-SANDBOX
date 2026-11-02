@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Download, ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const STATUSES = [
   { value: "ACTIVE", label: "Active" },
@@ -21,6 +22,7 @@ const FREQUENCIES = [
 ];
 
 export default function SubscriptionsFilterBar({ exportHref }: { exportHref: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -70,7 +72,7 @@ export default function SubscriptionsFilterBar({ exportHref }: { exportHref: str
     <div className="flex items-center gap-3 mb-4 flex-wrap">
       <input
         type="text"
-        placeholder="Search subscription ID, donor, email, last four"
+        placeholder={pw("Search subscription ID, donor, email, last four")}
         value={searchInput}
         onChange={(e) => setSearchInput(e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-72"

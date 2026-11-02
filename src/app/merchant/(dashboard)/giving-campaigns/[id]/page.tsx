@@ -8,8 +8,10 @@ import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import CampaignSeriesControls from "@/components/merchant/CampaignSeriesControls";
 import CampaignDownloadMenu from "@/components/merchant/CampaignDownloadMenu";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingCampaignDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const permissions = getDonorPermissions(session?.role);
   if (!session?.churchId || !permissions.canView) {
@@ -90,7 +92,7 @@ export default async function GivingCampaignDetailPage({ params }: { params: Pro
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
-              <th className="px-6 py-3">Donor</th>
+              <th className="px-6 py-3">{pw("Donor")}</th>
               <th className="px-6 py-3">Sent</th>
               <th className="px-6 py-3">Clicked</th>
               <th className="px-6 py-3">Paid</th>

@@ -9,6 +9,7 @@ import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
 import { loadDonorAggregates } from "@/lib/donors/donorAggregates";
 import PossibleMatchActions from "@/components/merchant/PossibleMatchActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function Field({ label, existing, candidate, isConflict }: { label: string; existing: string | number | null; candidate: string | number | null; isConflict?: boolean }) {
   return (
@@ -21,6 +22,7 @@ function Field({ label, existing, candidate, isConflict }: { label: string; exis
 }
 
 export default async function PossibleDonorMatchDetailPage({ params }: { params: Promise<{ matchId: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -67,8 +69,8 @@ export default async function PossibleDonorMatchDetailPage({ params }: { params:
           <thead className="bg-slate-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Field</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Existing donor</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">New / imported donor</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{pw("Existing donor")}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">{pw("New / imported donor")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -83,8 +85,8 @@ export default async function PossibleDonorMatchDetailPage({ params }: { params:
             />
             <Field label="Lifetime total" existing={formatCents(existingAggregates.totalDonatedCents)} candidate={formatCents(candidateAggregates.totalDonatedCents)} />
             <Field label="WGC processed" existing={formatCents(existingAggregates.totalDonatedCents - existingAggregates.externalDonatedCents)} candidate={formatCents(candidateAggregates.totalDonatedCents - candidateAggregates.externalDonatedCents)} />
-            <Field label="External donated" existing={formatCents(existingAggregates.externalDonatedCents)} candidate={formatCents(candidateAggregates.externalDonatedCents)} />
-            <Field label="Donation count" existing={existingAggregates.donationCount} candidate={candidateAggregates.donationCount} />
+            <Field label={pw("External donated")} existing={formatCents(existingAggregates.externalDonatedCents)} candidate={formatCents(candidateAggregates.externalDonatedCents)} />
+            <Field label={pw("Donation count")} existing={existingAggregates.donationCount} candidate={candidateAggregates.donationCount} />
             <Field label="Active recurring" existing={existingAggregates.activeSubscriptionCount} candidate={candidateAggregates.activeSubscriptionCount} />
             <Field label="Notes" existing={null} candidate={candidateNoteCount} />
             <Field label="Source identifier" existing={existingDonor.finixIdentityId} candidate={candidateDonor.finixIdentityId} />
@@ -93,9 +95,9 @@ export default async function PossibleDonorMatchDetailPage({ params }: { params:
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 mb-6">
-        <h2 className="text-sm font-semibold text-slate-700 mb-3">Transactions that would move to the existing donor if confirmed</h2>
+        <h2 className="text-sm font-semibold text-slate-700 mb-3">{pw("Transactions that would move to the existing donor if confirmed")}</h2>
         {candidateExternalDonations.length === 0 ? (
-          <p className="text-sm text-slate-400">No external donations recorded against the new donor yet.</p>
+          <p className="text-sm text-slate-400">{pw("No external donations recorded against the new donor yet.")}</p>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-xs text-slate-400 uppercase">

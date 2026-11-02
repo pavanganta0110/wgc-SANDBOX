@@ -9,6 +9,8 @@ import ComplianceBanner from "@/components/merchant/ComplianceBanner";
 import BillingGateBanner from "@/components/merchant/BillingGateBanner";
 import ImpersonationBanner from "@/components/merchant/ImpersonationBanner";
 import { IMPERSONATION_COOKIE_NAME } from "@/lib/auth/impersonation";
+import { PaymentModeProvider } from "@/components/merchant/PaymentModeContext";
+import { resolveDashboardBrand } from "@/lib/organization/dashboardBrand";
 
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { reconcileComplianceFormsForChurch, resolveComplianceStatus } from "@/lib/finix/sync/complianceForms";
@@ -121,6 +123,8 @@ export default async function MerchantDashboardLayout({
   }
 
   const isDemoMode = (await cookies()).has("wgc_demo_mode");
+  // The organization's own logo/colors, only for orgs with the branded dashboard switched on (validated in the helper).
+  const brand = resolveDashboardBrand(church);
   const navAccess = {
     canViewEvents: hasPermission(auth, "canViewEvents"),
     canViewFundraisingCampaigns: hasPermission(auth, "canViewFundraisingCampaigns"),
@@ -131,10 +135,20 @@ export default async function MerchantDashboardLayout({
     canViewBillingPlan: !church.partnerId,
     // Inside a partner's frame, only the items that partner chose (null = everything).
     embeddedMenu: auth.embedded && church.partnerId ? await loadEmbeddedMenu(church.partnerId) : null,
+    paymentMode: church.paymentMode,
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50">
+    <PaymentModeProvider paymentMode={church.paymentMode}>
+    <div
+      className="flex flex-col min-h-screen bg-slate-50"
+      style={
+        brand
+          ? ({ "--brand-primary": brand.primaryColor ?? undefined, "--brand-accent": brand.accentColor ?? undefined } as React.CSSProperties)
+          : undefined
+      }
+    >
+      {brand?.primaryColor && <div aria-hidden="true" style={{ height: 4, backgroundColor: brand.primaryColor }} />}
       {auth.impersonation && <ImpersonationBanner orgName={auth.impersonation.targetChurchName} />}
       <ComplianceBanner status={complianceStatus} />
       {billingGateActive && <BillingGateBanner state={auth.orgAccessState ?? "NO_GATE"} />}
@@ -144,9 +158,13 @@ export default async function MerchantDashboardLayout({
           <div className="flex items-center justify-between px-4 md:px-10 py-6 border-b border-slate-100 bg-white">
             <div className="flex items-center gap-2">
               <MobileSidebar role={auth.role ?? undefined} access={navAccess} />
-              <Link href="/merchant/dashboard" className="block hover:opacity-80 transition-opacity">
+              <Link href="/merchant/dashboard" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+                {brand?.logoUrl && !isDemoMode && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={brand.logoUrl} alt={church.name} className="h-9 w-auto max-w-[160px] object-contain" />
+                )}
                 <div>
-                <h1 className="text-lg font-bold text-slate-900">
+                <h1 className="text-lg font-bold text-slate-900" style={{ color: brand?.primaryColor ?? undefined }}>
                   {isDemoMode ? "Grace Community Church" : church.name}
                 </h1>
                 <p className="text-[11px] text-slate-500">Powered by WGC Payments</p>
@@ -171,5 +189,6 @@ export default async function MerchantDashboardLayout({
         </div>
       </div>
     </div>
+    </PaymentModeProvider>
   );
 }

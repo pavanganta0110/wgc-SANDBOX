@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import GatewayIcon from "@/components/ui/GatewayIcon";
+import { toPaymentWording } from "@/lib/settings/paymentMode";
 
 export interface NavItem {
   name: string;
@@ -72,17 +73,27 @@ export interface NavAccess {
   canViewBillingPlan: boolean;
   /** Inside a partner's frame: the links the partner chose to show. Absent or null shows everything. */
   embeddedMenu?: string[] | null;
+  /** Payment-processor mode: nav labels use payer/payment wording instead of donor/giving. */
+  paymentMode?: boolean;
 }
 
 /** Shared by the desktop and mobile sidebars. */
 export function visibleNavItems(role: string | undefined, access?: NavAccess): NavItem[] {
   const isOrgLevelRole = role === "owner" || role === "admin" || role === "church_admin" || !role;
-  return NAV_ITEMS.filter((item) => {
+  const items = NAV_ITEMS.filter((item) => {
     if (item.organizationOnly && !isOrgLevelRole) return false;
     if (item.access && access && !access[item.access]) return false;
     if (access?.embeddedMenu && !access.embeddedMenu.includes(item.href)) return false;
     return true;
   });
+  if (!access?.paymentMode) return items;
+  // Wording only — same links, same order, same access rules.
+  return items.map((item) => ({
+    ...item,
+    name: toPaymentWording(item.name),
+    section: toPaymentWording(item.section) as NavItem["section"],
+    children: item.children?.map((child) => ({ ...child, name: toPaymentWording(child.name) })),
+  }));
 }
 
 export const NAV_ITEMS: NavItem[] = [

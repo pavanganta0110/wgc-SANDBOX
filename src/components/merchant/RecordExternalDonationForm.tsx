@@ -12,6 +12,7 @@ import {
 import DonorPicker from "@/components/merchant/DonorPicker";
 import DonorMailingAddressSection, { EMPTY_DONOR_ADDRESS, type DonorAddressValue } from "@/components/merchant/DonorMailingAddressSection";
 import type { AddressSource } from "@/lib/donors/donorAddress";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 type DonorMode = "existing" | "new" | "anonymous" | "unmatched";
 interface DonorHit {
@@ -35,6 +36,7 @@ function todayISO() {
 }
 
 export default function RecordExternalDonationForm() {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
 
@@ -365,10 +367,10 @@ export default function RecordExternalDonationForm() {
   return (
     <form onSubmit={handleSubmit} className="max-w-2xl space-y-8">
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900">Donation</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{pw("Donation")}</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Donation amount</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{pw("Donation amount")}</label>
             <input
               type="number"
               step="0.01"
@@ -381,7 +383,7 @@ export default function RecordExternalDonationForm() {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Donation date</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{pw("Donation date")}</label>
             <input
               type="date"
               required
@@ -474,7 +476,7 @@ export default function RecordExternalDonationForm() {
               <input value={accountOrDestinationLabel} onChange={(e) => setAccountOrDestinationLabel(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="e.g. Org CashApp" />
             </div>
           </div>
-          <p className="text-xs text-slate-400">Never enter the donor's private login credentials.</p>
+          <p className="text-xs text-slate-400">{pw("Never enter the donor's private login credentials.")}</p>
         </section>
       )}
 
@@ -527,7 +529,7 @@ export default function RecordExternalDonationForm() {
       )}
 
       <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-slate-900">Donor</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{pw("Donor")}</h2>
         <div className="flex flex-wrap gap-4 text-sm">
           {(["existing", "new", "anonymous", "unmatched"] as DonorMode[]).map((mode) => (
             <label key={mode} className="flex items-center gap-1.5">
@@ -553,15 +555,15 @@ export default function RecordExternalDonationForm() {
         {donorMode === "new" && (
           <>
             <div className="grid grid-cols-3 gap-4">
-              <input placeholder="Donor name" value={donorName} onChange={(e) => setDonorName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              <input placeholder="Donor email (optional)" value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              <input placeholder="Donor phone (optional)" value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <input placeholder={pw("Donor name")} value={donorName} onChange={(e) => setDonorName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <input placeholder={pw("Donor email (optional)")} value={donorEmail} onChange={(e) => setDonorEmail(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              <input placeholder={pw("Donor phone (optional)")} value={donorPhone} onChange={(e) => setDonorPhone(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             </div>
             <DonorMailingAddressSection value={donorAddress} onChange={setDonorAddress} />
           </>
         )}
         {donorMode === "unmatched" && (
-          <p className="text-xs text-slate-500">This donation will show up under Unmatched External Donations until it's connected to a donor.</p>
+          <p className="text-xs text-slate-500">{pw("This donation will show up under Unmatched External Donations until it's connected to a donor.")}</p>
         )}
       </section>
 
@@ -627,7 +629,7 @@ export default function RecordExternalDonationForm() {
                   onChange={(e) => setStudentGivenFor(e.target.value as "SPONSOR" | "SELF")}
                   disabled={!studentId}
                   className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
-                  aria-label="Gift type"
+                  aria-label={pw("Gift type")}
                 >
                   <option value="SPONSOR">Sponsor</option>
                   <option value="SELF">Self-paid</option>
@@ -636,11 +638,11 @@ export default function RecordExternalDonationForm() {
             </div>
           )}
           <input placeholder="Campaign" value={campaign} onChange={(e) => setCampaign(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          <input placeholder="Giving page" value={givingPageLabel} onChange={(e) => setGivingPageLabel(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          <input placeholder="Donation purpose" value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input placeholder={pw("Giving page")} value={givingPageLabel} onChange={(e) => setGivingPageLabel(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          <input placeholder={pw("Donation purpose")} value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
         </div>
         {!isCash && (
-          <textarea placeholder="Internal note (never shown to the donor)" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
+          <textarea placeholder={pw("Internal note (never shown to the donor)")} value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
         )}
       </section>
 
@@ -671,7 +673,7 @@ export default function RecordExternalDonationForm() {
           </div>
         )}
         {donorMode === "existing" && selectedDonor && openPledges.length === 0 && (
-          <p className="text-xs text-slate-400">This donor has no open pledges to link this donation to.</p>
+          <p className="text-xs text-slate-400">{pw("This donor has no open pledges to link this donation to.")}</p>
         )}
 
         <div className="grid grid-cols-3 gap-4">

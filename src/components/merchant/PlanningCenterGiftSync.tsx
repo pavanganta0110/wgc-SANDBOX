@@ -7,6 +7,7 @@ import { describeSyncUnit, SYNC_STATUS_LABELS, type SendTiming, type SyncMode, t
 import type { ProfilePreview } from "@/lib/integrations/planningcenter/profilePreview";
 import { useConfirm } from "@/components/common/ConfirmDialog";
 import { buttonDanger, buttonPrimary, buttonSecondary, money, PcoApiError, pcoFetch } from "./planningCenterApi";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const TONE: Record<string, string> = {
   ok: "bg-green-50 text-green-700",
@@ -61,6 +62,7 @@ const POLICIES: Array<{ value: UnmatchedDonorPolicy; label: string; hint: string
 ];
 
 export default function PlanningCenterGiftSync() {
+  const pw = usePaymentWording();
   const [data, setData] = useState<SyncOverview | null>(null);
   const [hidden, setHidden] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -114,13 +116,13 @@ export default function PlanningCenterGiftSync() {
   if (loadError && !data) {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-        <h3 className="text-sm font-bold text-slate-900 mb-2">Gift sync</h3>
+        <h3 className="text-sm font-bold text-slate-900 mb-2">{pw("Gift sync")}</h3>
         <p className="text-xs text-red-600 mb-3">{loadError}</p>
         <button onClick={() => load()} className={buttonSecondary}><RefreshCw className="w-3.5 h-3.5" /> Try again</button>
       </div>
     );
   }
-  if (!data) return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">Loading gift sync…</div>;
+  if (!data) return <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">{pw("Loading gift sync…")}</div>;
 
   const { settings } = data;
   const isPeople = settings.syncTarget === "PROFILE_FIELDS";
@@ -148,7 +150,7 @@ export default function PlanningCenterGiftSync() {
       {!data.platformEnabled && (
         <div className="flex items-start gap-2 rounded-lg bg-slate-50 text-slate-600 text-xs p-3">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>Gift sync isn&apos;t switched on for WGC yet. Your setup is saved, and you&apos;ll be able to turn it on here as soon as it is.</span>
+          <span>{pw("Gift sync isn't switched on for WGC yet. Your setup is saved, and you'll be able to turn it on here as soon as it is.")}</span>
         </div>
       )}
       {data.platformEnabled && !data.ready && (
@@ -243,7 +245,7 @@ export default function PlanningCenterGiftSync() {
       <section aria-labelledby="pco-sync-settings" className="space-y-4">
         {!isPeople && (<>
         <div>
-          <h4 className="text-sm font-semibold text-slate-900 mb-1">When gifts are sent</h4>
+          <h4 className="text-sm font-semibold text-slate-900 mb-1">{pw("When gifts are sent")}</h4>
           <div className="space-y-1.5">
             {TIMINGS.map((t) => (
               <label key={t.value} className="flex items-start gap-2 text-xs cursor-pointer">
@@ -254,7 +256,7 @@ export default function PlanningCenterGiftSync() {
           </div>
         </div>
         <div>
-          <h4 id="pco-sync-settings" className="text-sm font-semibold text-slate-900 mb-1">If a donor can&apos;t be matched to a person in Planning Center</h4>
+          <h4 id="pco-sync-settings" className="text-sm font-semibold text-slate-900 mb-1">{pw("If a donor can't be matched to a person in Planning Center")}</h4>
           <div className="space-y-1.5">
             {POLICIES.map((p) => (
               <label key={p.value} className="flex items-start gap-2 text-xs cursor-pointer">
@@ -268,7 +270,7 @@ export default function PlanningCenterGiftSync() {
           <input type="checkbox" className="mt-0.5" disabled={disabled} checked={settings.autoCommitBatches} onChange={(e) => putSettings({ autoCommitBatches: e.target.checked }, "Saved.")} />
           <span>
             <span className="font-medium text-slate-900">Commit each batch automatically</span>
-            <span className="block text-slate-500">Off by default: batches wait in Planning Center for your finance team to review and commit. Until a batch is committed, its gifts aren&apos;t in donors&apos; giving history or statements.</span>
+            <span className="block text-slate-500">{pw("Off by default: batches wait in Planning Center for your finance team to review and commit. Until a batch is committed, its gifts aren't in donors' giving history or statements.")}</span>
           </span>
         </label>
         </>)}
@@ -300,7 +302,7 @@ export default function PlanningCenterGiftSync() {
       {data.needsReview.length > 0 && (
         <section aria-labelledby="pco-sync-review">
           <h4 id="pco-sync-review" className="text-sm font-semibold text-red-700 mb-1">Needs your review ({data.needsReview.length})</h4>
-          <p className="text-xs text-slate-500 mb-2">WGC couldn&apos;t confirm what happened with these gifts, so it set them aside. Open the batch in Planning Center Giving and look for them before choosing.</p>
+          <p className="text-xs text-slate-500 mb-2">{pw("WGC couldn't confirm what happened with these gifts, so it set them aside. Open the batch in Planning Center Giving and look for them before choosing.")}</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-red-100">
             {data.needsReview.map((item) => (
               <div key={item.donationId} className="p-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -333,7 +335,7 @@ export default function PlanningCenterGiftSync() {
       {data.needsAttention.length > 0 && (
         <section aria-labelledby="pco-sync-attention">
           <h4 id="pco-sync-attention" className="text-sm font-semibold text-amber-700 mb-1">Changed after it was sent ({data.needsAttention.length})</h4>
-          <p className="text-xs text-slate-500 mb-2">WGC doesn&apos;t change gifts already in Planning Center. Update these there so your records match.</p>
+          <p className="text-xs text-slate-500 mb-2">{pw("WGC doesn't change gifts already in Planning Center. Update these there so your records match.")}</p>
           <div className="divide-y divide-slate-100 rounded-xl border border-amber-100">
             {data.needsAttention.map((item) => (
               <div key={item.paymentId} className="p-3 text-xs">
@@ -365,7 +367,7 @@ export default function PlanningCenterGiftSync() {
       <section aria-labelledby="pco-sync-deposits">
         <h4 id="pco-sync-deposits" className="text-sm font-semibold text-slate-900 mb-2">Recent batches</h4>
         {data.records.length === 0 ? (
-          <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3">Nothing yet. Once gift sync is on, each day&apos;s gifts appear here as they&apos;re sent.</p>
+          <p className="text-xs text-slate-500 rounded-lg bg-slate-50 p-3">{pw("Nothing yet. Once gift sync is on, each day's gifts appear here as they're sent.")}</p>
         ) : (
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {data.records.map((r) => (
@@ -503,7 +505,7 @@ function PeopleOnlyPanel({ data, disabled }: { data: SyncOverview; disabled: boo
         <>
           <p className="text-xs text-slate-600">
             <strong>{preview.counts.matched}</strong> {preview.counts.matched === 1 ? "donor who has given is" : "donors who have given are"} matched and would get the section.
-            {preview.counts.notMatched > 0 && <> <strong>{preview.counts.notMatched}</strong> aren&apos;t matched yet: nothing is written for them and no person is created. Use &quot;Match my donors&quot; in the People section below to match them.</>}
+            {preview.counts.notMatched > 0 && <> <strong>{preview.counts.notMatched}</strong> aren&apos;t matched yet: nothing is written for them and no person is created. Use "Match my donors" in the People section below to match them.</>}
             {preview.counts.anonymous > 0 && <> {preview.counts.anonymous} asked to stay anonymous and never appear.</>}
           </p>
           {preview.samples.length === 0 ? (

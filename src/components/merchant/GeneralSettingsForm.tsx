@@ -4,6 +4,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import SettingsSaveBar from "@/components/merchant/SettingsSaveBar";
 import { useUnsavedChangesWarning } from "@/lib/settings/useUnsavedChanges";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const ORG_TYPE_OPTIONS = [
   { value: "NONPROFIT", label: "Nonprofit" },
@@ -64,6 +65,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const inputClass = "w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-slate-400";
 
 export default function GeneralSettingsForm({ initial }: { initial: FormValues }) {
+  const pw = usePaymentWording();
   const [values, setValues] = useState<FormValues>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export default function GeneralSettingsForm({ initial }: { initial: FormValues }
           <input className={inputClass} value={values.technicalContactEmail} onChange={(e) => set("technicalContactEmail", e.target.value)} />
         </Field>
         <Field label="Public Support Contact">
-          <input className={inputClass} value={values.publicSupportContact} onChange={(e) => set("publicSupportContact", e.target.value)} placeholder="Shown to donors" />
+          <input className={inputClass} value={values.publicSupportContact} onChange={(e) => set("publicSupportContact", e.target.value)} placeholder={pw("Shown to donors")} />
         </Field>
       </div>
 

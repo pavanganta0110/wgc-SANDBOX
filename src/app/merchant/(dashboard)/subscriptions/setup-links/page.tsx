@@ -6,8 +6,10 @@ import { formatDateTimeCDT as formatDateTime } from "@/lib/formatDateTimeCDT";
 import StateBadge from "@/components/merchant/StateBadge";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import SetupLinkRowActions from "@/components/merchant/SetupLinkRowActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function SetupLinksPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const churchId = session!.churchId!;
 
@@ -28,13 +30,13 @@ export default async function SetupLinksPage() {
               <Send className="w-6 h-6 text-slate-300" />
             </div>
             <h3 className="text-sm font-bold text-slate-900 mb-1">No setup links</h3>
-            <p className="text-sm text-slate-500 max-w-sm mx-auto">Secure setup links sent to donors will appear here.</p>
+            <p className="text-sm text-slate-500 max-w-sm mx-auto">{pw("Secure setup links sent to donors will appear here.")}</p>
           </div>
         ) : (
           <table className="w-full text-sm min-w-[1000px]">
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
-                <th className="px-6 py-3">Donor</th>
+                <th className="px-6 py-3">{pw("Donor")}</th>
                 <th className="px-6 py-3 text-right">Amount</th>
                 <th className="px-6 py-3">Frequency</th>
                 <th className="px-6 py-3">Status</th>

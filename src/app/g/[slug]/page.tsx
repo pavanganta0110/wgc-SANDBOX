@@ -55,7 +55,7 @@ export default async function GivingLinkPublicPage({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branding.campaignImageUrl} alt="" className="w-full h-32 object-cover rounded-xl mb-6" />
         )}
-        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind="Secure Giving" nameColor={light.headingColor} kindColor={light.bodyTextColor} />
+        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} nameColor={light.headingColor} kindColor={light.bodyTextColor} />
         <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
           {link.publicTitle}
         </h1>
@@ -122,12 +122,13 @@ export default async function GivingLinkPublicPage({
             assignedFunds={assignedFunds}
             studentGiving={studentGiving}
             pledgeId={pledgeId}
+            paymentMode={church.paymentMode}
           />
         )}
 
         <p className="text-center mt-6 text-xs">
           <a href={`/give/${church.slug}/account`} className="underline" style={{ color: light.bodyTextColor }}>
-            View my giving
+            {church.paymentMode ? "View my payments" : "View my giving"}
           </a>
         </p>
 

@@ -8,6 +8,8 @@ import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import StateBadge from "@/components/merchant/StateBadge";
 import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadDepositDetail } from "@/lib/finix/depositDetail";
+import { loadDepositPaymentRows } from "@/lib/finix/depositPaymentRows";
+import DepositPaymentsSection from "@/components/merchant/DepositPaymentsSection";
 import { formatFundingSpeed } from "@/lib/depositColumns";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
 
@@ -39,6 +41,7 @@ export default async function DepositFullDetailPage({
   }
 
   const { deposit, church, settlements, payments, affectingRefunds, affectingReturns, depositBankAccount, resolvedBankAccount } = detail;
+  const paymentRows = await loadDepositPaymentRows(churchId, settlements.map((s) => s.finixSettlementId));
   const bankName = depositBankAccount?.bankName || deposit.bankName || resolvedBankAccount?.bankName || null;
   const bankAccountLast4 = depositBankAccount?.last4 || deposit.bankAccountLast4 || resolvedBankAccount?.last4 || null;
   const bankAccountType = depositBankAccount?.accountType || deposit.bankAccountType || resolvedBankAccount?.accountType || null;
@@ -169,6 +172,18 @@ export default async function DepositFullDetailPage({
               </table>
             )}
           </div>
+
+          {/* Included Payments — every payment in this deposit, for matching the bank deposit */}
+          <DepositPaymentsSection
+            rows={paymentRows}
+            depositId={deposit.finixFundingTransferAttemptId}
+            depositNetCents={netAmount}
+            showStudent={Boolean(church?.studentGivingEnabled)}
+        showTerm={Boolean(church?.studentGivingEnabled || church?.termFieldEnabled)}
+            paymentMode={Boolean(church?.paymentMode)}
+            canExport={getSettlementPermissions(session.role).canExport}
+            variant="table"
+          />
         </div>
 
         {/* Right column */}

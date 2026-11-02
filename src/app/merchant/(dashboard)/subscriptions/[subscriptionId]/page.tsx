@@ -16,6 +16,7 @@ import { getSubscriptionPermissions } from "@/lib/subscriptions/subscriptionPerm
 import SubscriptionActions from "@/components/merchant/SubscriptionActions";
 import SubscriptionDonorMatcher from "@/components/merchant/SubscriptionDonorMatcher";
 import { needsReconciliation, reconcileSubscription } from "@/lib/subscriptions/subscriptionReconciliation";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -45,6 +46,7 @@ export default async function SubscriptionDetailPage({
   params: Promise<{ subscriptionId: string }>;
   searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
 
   // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
@@ -109,7 +111,7 @@ export default async function SubscriptionDetailPage({
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
           <div>
-            <p className="text-xs text-slate-500">Donor</p>
+            <p className="text-xs text-slate-500">{pw("Donor")}</p>
             {s.donorId ? (
               <Link href={`/merchant/donors/${s.donorId}`} className="text-sm font-bold text-blue-600 hover:underline">
                 {s.donorName}

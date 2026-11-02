@@ -3,8 +3,10 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { formatCents } from "@/lib/format";
 import { calculateWgcFeeAmounts, WGC_PRICING } from "@/lib/giving/feeCalculator";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function FeesSettingsPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const churchId = session!.churchId!;
   const pricing = await prisma.churchPricing.findUnique({ where: { churchId } });
@@ -54,9 +56,9 @@ export default async function FeesSettingsPage() {
       <div className="p-4 rounded-xl bg-slate-50 mb-6">
         <p className="text-xs font-semibold text-slate-500 mb-3">Example Calculation (Estimate)</p>
         <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between"><span className="text-slate-600">Donation</span><span className="font-semibold text-slate-800">{formatCents(exampleDonationCents)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("Donation")}</span><span className="font-semibold text-slate-800">{formatCents(exampleDonationCents)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">Estimated Processing Fees</span><span className="font-semibold text-slate-800">{formatCents(estimatedFeeCents)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-600">If Donor Covers Fees, Total Charged</span><span className="font-semibold text-slate-800">{formatCents(totalCents)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{pw("If Donor Covers Fees, Total Charged")}</span><span className="font-semibold text-slate-800">{formatCents(totalCents)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">Estimated Net to Organization</span><span className="font-semibold text-slate-800">{formatCents(exampleDonationCents)}</span></div>
         </div>
         <p className="text-xs text-slate-400 mt-3">

@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LeaderboardCard } from "@/components/ui/leaderboard-card";
 import type { TopDonorRow } from "@/lib/donors/donorAnalytics";
 import { LEADERBOARD_RUN_OPTIONS, type LeaderboardRangeId } from "@/lib/donors/leaderboardRange";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 // Reads/writes ?leaderboardRange=this_week|mtd — same searchParams-driven
 // server re-fetch pattern TopDonorsCard already uses for its metric toggle
@@ -21,6 +22,7 @@ export default function DonorLeaderboardCard({
   fromDate: Date;
   toDate: Date;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -50,7 +52,7 @@ export default function DonorLeaderboardCard({
 
   return (
     <LeaderboardCard
-      title="Top Donors"
+      title={pw("Top Donors")}
       fromDate={fromDate}
       toDate={toDate}
       podiumRankings={podiumRankings}

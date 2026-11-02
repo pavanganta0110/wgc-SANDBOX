@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { formatCalendarDateUTC } from "@/lib/formatDateTimeCDT";
 import { IMPORT_FIELD_KEYS, IMPORT_FIELD_LABELS, REQUIRED_IMPORT_FIELDS, type ImportFieldKey } from "@/lib/donations/externalDonationImport";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const STEP_LABELS = ["Upload file", "Map columns", "Validate & preview", "Resolve funds", "Confirm", "Results"];
@@ -72,6 +73,7 @@ const STATUS_PILL: Record<PreviewRow["status"], string> = {
 };
 
 export default function ExternalDonationImportWizard({ canManageFunds }: { canManageFunds: boolean }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -277,7 +279,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
         <Link href="/merchant/donations/external" className="text-xs font-semibold text-slate-500 hover:underline">
           ← External Donations
         </Link>
-        <h1 className="text-xl font-bold text-slate-900 mt-2">Import Donations</h1>
+        <h1 className="text-xl font-bold text-slate-900 mt-2">{pw("Import Donations")}</h1>
       </div>
 
       <nav aria-label="Import steps" className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -457,7 +459,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
                 <tr>
                   <th className="text-left px-3 py-2">Row</th>
                   <th className="text-left px-3 py-2">Status</th>
-                  <th className="text-left px-3 py-2">Donor</th>
+                  <th className="text-left px-3 py-2">{pw("Donor")}</th>
                   <th className="text-right px-3 py-2">Amount</th>
                   <th className="text-left px-3 py-2">Date</th>
                   <th className="text-left px-3 py-2">Notes</th>
@@ -520,7 +522,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
 
       {step === 4 && preview && (
         <section className="rounded-xl border border-slate-100 bg-white p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-900">Step 4 — Resolve funds and donors</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{pw("Step 4 — Resolve funds and donors")}</h2>
 
           {preview.unresolvedFunds.length === 0 ? (
             <p className="text-sm text-slate-500">Every fund in this file already matches your fund catalog. Nothing to resolve.</p>
@@ -563,7 +565,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
           )}
 
           <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
-            <p className="font-semibold text-slate-900 mb-1">Donors</p>
+            <p className="font-semibold text-slate-900 mb-1">{pw("Donors")}</p>
             <p>
               {matchedDonorsPreview} row{matchedDonorsPreview === 1 ? "" : "s"} matched an existing donor by email. {newDonorsPreview} new donor
               {newDonorsPreview === 1 ? "" : "s"} will be created. Matching never merges on name alone — only a matching email (or, if no email,
@@ -605,7 +607,7 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
 
           <dl className="grid grid-cols-2 gap-4 text-sm rounded-lg bg-slate-50 p-4">
             <div>
-              <dt className="text-xs text-slate-400">Donations to import</dt>
+              <dt className="text-xs text-slate-400">{pw("Donations to import")}</dt>
               <dd className="font-semibold text-slate-900">{includedRows.length}</dd>
             </div>
             <div>
@@ -613,11 +615,11 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
               <dd className="font-semibold text-slate-900">{formatCents(totalIncludedAmountCents)}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">New donors to be created</dt>
+              <dt className="text-xs text-slate-400">{pw("New donors to be created")}</dt>
               <dd className="font-semibold text-slate-900">{newDonorsPreview}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">Existing donors matched</dt>
+              <dt className="text-xs text-slate-400">{pw("Existing donors matched")}</dt>
               <dd className="font-semibold text-slate-900">{matchedDonorsPreview}</dd>
             </div>
             <div>
@@ -680,11 +682,11 @@ export default function ExternalDonationImportWizard({ canManageFunds }: { canMa
 
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <dt className="text-xs text-slate-400">New donor records created</dt>
+              <dt className="text-xs text-slate-400">{pw("New donor records created")}</dt>
               <dd className="font-semibold text-slate-900">{result.newDonorsCreated}</dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-400">Existing donors matched</dt>
+              <dt className="text-xs text-slate-400">{pw("Existing donors matched")}</dt>
               <dd className="font-semibold text-slate-900">{result.donorsMatched}</dd>
             </div>
             <div>

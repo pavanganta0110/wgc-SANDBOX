@@ -22,6 +22,7 @@ import StudentGiftPicker, {
   studentChoicePayload,
   type StudentChoice,
 } from "@/components/giving/StudentGiftPicker";
+import { toPaymentWording } from "@/lib/settings/paymentMode";
 import { trackMetaEvent } from "@/components/common/MetaPixel";
 import { resolveInitialDonationState } from "@/lib/givingLinks/defaultDonationSettings";
 
@@ -106,6 +107,7 @@ export default function GivingLinkForm({
   previewStudents,
   pledgeId,
   eventMode,
+  paymentMode = false,
   onFormError,
   onResult,
 }: {
@@ -178,11 +180,15 @@ export default function GivingLinkForm({
       mailingAddress: Record<string, string | undefined> | undefined;
     }) => Promise<{ registrationId: string } | null>;
   };
+  /** Payment-processor mode: payment/payer wording instead of donation/gift/donor on this page. Wording only; the flow is identical. */
+  paymentMode?: boolean;
   /** Called when the secure payment form fails to load, so a preview wrapper can show a visible retry state instead of leaving an empty area. */
   onFormError?: () => void;
   /** Called on every result-state change (form/processing/success/pending/failed) — additive, optional, used by the embed bridge to relay a safe confirmation over postMessage without this component needing any embed-specific logic. */
   onResult?: (result: ResultState) => void;
 }) {
+  // Wording only: donation-style copy becomes payment copy for orgs in payment mode, untouched for everyone else.
+  const w = (text: string) => (paymentMode ? toPaymentWording(text) : text);
   // What the form opens on — computed once at mount (like every other
   // initial value here), so it never fights the donor's own later choices.
   const [initialDonation] = useState(() =>
@@ -546,7 +552,7 @@ export default function GivingLinkForm({
 
       if (!res.ok || !data?.success) {
         setWalletProcessing(null);
-        const errMsg = data?.message || (typeof data?.error === 'string' ? data.error : data?.error?.message) || "We couldn’t complete your donation. Please try again.";
+        const errMsg = data?.message || (typeof data?.error === 'string' ? data.error : data?.error?.message) || w("We couldn’t complete your donation. Please try again.");
         setResult({ step: "failed", error: errMsg });
         return { success: false };
       }
@@ -592,7 +598,7 @@ export default function GivingLinkForm({
       // stays generic; this is only visible in sandbox.
       walletLog(`${method}: submitWalletPayment threw`, err);
       setWalletProcessing(null);
-      setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
+      setResult({ step: "failed", error: w("Something went wrong submitting your gift. Please try again.") });
       return { success: false };
     } finally {
       // Every exit path clears it — a stuck overlay would trap the donor
@@ -618,17 +624,17 @@ export default function GivingLinkForm({
       toast.error(
         !donorInfoValid
           ? donorInfoMessageText
-          : "A mailing address is required for this gift."
+          : w("A mailing address is required for this gift.")
       );
       focusFirstMissingDonorField();
       return;
     }
     if (fundSelectionRequired) {
-      toast.error("Please select where you'd like your gift to go.");
+      toast.error(w("Please select where you'd like your gift to go."));
       return;
     }
     if (studentSelectionRequired) {
-      toast.error("Please choose who this gift is for.");
+      toast.error(w("Please choose who this gift is for."));
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -693,17 +699,17 @@ export default function GivingLinkForm({
       toast.error(
         !donorInfoValid
           ? donorInfoMessageText
-          : "A mailing address is required for this gift."
+          : w("A mailing address is required for this gift.")
       );
       focusFirstMissingDonorField();
       return;
     }
     if (fundSelectionRequired) {
-      toast.error("Please select where you'd like your gift to go.");
+      toast.error(w("Please select where you'd like your gift to go."));
       return;
     }
     if (studentSelectionRequired) {
-      toast.error("Please choose who this gift is for.");
+      toast.error(w("Please choose who this gift is for."));
       return;
     }
     if (effectiveAmountCents < 100) {
@@ -850,7 +856,7 @@ export default function GivingLinkForm({
       merchantId: googlePayMerchantId || undefined,
       merchantName: churchName,
     };
-    createGooglePayButton(config, () => handleGooglePayClickRef.current(), eventMode ? "pay" : "donate")
+    createGooglePayButton(config, () => handleGooglePayClickRef.current(), eventMode || paymentMode ? "pay" : "donate")
       .then((button) => {
         if (cancelled || !googlePayButtonRef.current) {
           walletLog("Google Pay: button created but discarded (cancelled or ref gone)");
@@ -932,7 +938,7 @@ export default function GivingLinkForm({
 
   const handleSubmit = async () => {
     if (previewMode) {
-      toast("This is a preview — no real donation is submitted.");
+      toast(w("This is a preview — no real donation is submitted."));
       return;
     }
     if (amountType === "VARIABLE") {
@@ -958,17 +964,17 @@ export default function GivingLinkForm({
       toast.error(
         !donorInfoValid
           ? donorInfoMessageText
-          : "A mailing address is required for this gift."
+          : w("A mailing address is required for this gift.")
       );
       focusFirstMissingDonorField();
       return;
     }
     if (fundSelectionRequired) {
-      toast.error("Please select where you'd like your gift to go.");
+      toast.error(w("Please select where you'd like your gift to go."));
       return;
     }
     if (studentSelectionRequired) {
-      toast.error("Please choose who this gift is for.");
+      toast.error(w("Please choose who this gift is for."));
       return;
     }
     if (!formInstanceRef.current || !formReady) {
@@ -1108,7 +1114,7 @@ export default function GivingLinkForm({
           }
         } catch {
           setSubmitting(false);
-          setResult({ step: "failed", error: "Something went wrong submitting your gift. Please try again." });
+          setResult({ step: "failed", error: w("Something went wrong submitting your gift. Please try again.") });
         }
       });
     } catch {
@@ -1128,16 +1134,16 @@ export default function GivingLinkForm({
       <div className="text-center space-y-4 py-4">
         <CheckCircle className="w-12 h-12 mx-auto text-green-500" />
         <h2 className="text-lg font-bold" style={{ color: light.headingColor }}>
-          {result.recurring ? "Recurring Giving Set Up" : "Thank You for Your Gift"}
+          {result.recurring ? w("Recurring Giving Set Up") : w("Thank You for Your Gift")}
         </h2>
         {result.recurring ? (
           <p className="text-sm" style={{ color: light.bodyTextColor }}>
-            Your {FREQUENCY_LABELS[result.frequency as FrequencyKey] || "recurring"} gift of{" "}
+            Your {FREQUENCY_LABELS[result.frequency as FrequencyKey] || "recurring"} {paymentMode ? "payment" : "gift"} of{" "}
             {formatCents(result.donationAmountCents)} to {churchName} has been scheduled.
           </p>
         ) : (
           <div className="text-sm space-y-1" style={{ color: light.bodyTextColor }}>
-            <p>Donation Amount: <span className="font-semibold">{formatCents(result.donationAmountCents)}</span></p>
+            <p>{w("Donation Amount")}: <span className="font-semibold">{formatCents(result.donationAmountCents)}</span></p>
             {result.feeCoveredCents > 0 && (
               <p>Transaction Cost Covered: <span className="font-semibold">{formatCents(result.feeCoveredCents)}</span></p>
             )}
@@ -1151,7 +1157,7 @@ export default function GivingLinkForm({
           className="mt-2 px-5 py-2 rounded-xl text-sm font-semibold"
           style={{ backgroundColor: light.buttonBackground, color: light.buttonText }}
         >
-          Make Another Donation
+          {w("Make Another Donation")}
         </button>
         {(() => {
           const embed = resolveThankYouVideoEmbed(thankYouVideoUrl || "");
@@ -1186,10 +1192,10 @@ export default function GivingLinkForm({
       <div className="text-center space-y-4 py-4">
         <Clock className="w-12 h-12 mx-auto text-amber-500" />
         <h2 className="text-lg font-bold" style={{ color: light.headingColor }}>
-          Donation Received — Processing
+          {w("Donation Received — Processing")}
         </h2>
         <p className="text-sm" style={{ color: light.bodyTextColor }}>
-          Your {formatCents(result.totalCents)} bank donation is being processed. ACH transfers can take a few
+          Your {formatCents(result.totalCents)} bank {paymentMode ? "payment" : "donation"} is being processed. ACH transfers can take a few
           business days to complete.
         </p>
         {result.transferId && <p className="text-xs text-slate-300 font-mono">{result.transferId}</p>}
@@ -1202,7 +1208,7 @@ export default function GivingLinkForm({
       <div className="text-center space-y-4 py-4">
         <AlertCircle className="w-12 h-12 mx-auto text-red-500" />
         <h2 className="text-lg font-bold" style={{ color: light.headingColor }}>
-          {eventMode ? "Payment Was Not Completed" : "Donation Was Not Completed"}
+          {eventMode || paymentMode ? "Payment Was Not Completed" : "Donation Was Not Completed"}
         </h2>
         <p className="text-sm text-red-600">{result.error}</p>
         <button
@@ -1235,7 +1241,7 @@ export default function GivingLinkForm({
           aria-live="polite"
         >
           <Loader2 className="w-8 h-8 animate-spin text-white" />
-          <p className="text-base font-semibold text-white">Completing your gift…</p>
+          <p className="text-base font-semibold text-white">{w("Completing your gift…")}</p>
           <p className="text-sm text-white/80">Please don’t close or refresh this page.</p>
         </div>
       )}
@@ -1276,7 +1282,7 @@ export default function GivingLinkForm({
           {frequency === "MONTHLY" && (
             <div className="mt-3">
               <label className="block text-xs font-semibold mb-1.5" style={{ color: light.bodyTextColor }}>
-                Day of the month for future gifts
+                {w("Day of the month for future gifts")}
               </label>
               <select
                 value={pullDay}
@@ -1290,7 +1296,7 @@ export default function GivingLinkForm({
                 ))}
               </select>
               <p className="mt-1 text-xs opacity-70" style={{ color: light.bodyTextColor }}>
-                Your first gift is charged today. After that, gifts are charged on the day you choose.
+                {w("Your first gift is charged today. After that, gifts are charged on the day you choose.")}
               </p>
             </div>
           )}
@@ -1407,7 +1413,7 @@ export default function GivingLinkForm({
       {fundSelectionEnabled && !studentGiving && assignedFunds.length > 0 && (
         <div>
           <label className="block text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
-            Where would you like your gift to go?
+            {w("Where would you like your gift to go?")}
           </label>
           <select
             value={selectedFundId}
@@ -1436,7 +1442,7 @@ export default function GivingLinkForm({
           number), so this was previously uncollectable for wallet gifts. */}
       <div>
         <h3 className="text-xs font-semibold mb-2" style={{ color: light.bodyTextColor }}>
-          {eventMode ? "Registrant Information" : "Donor Information"}
+          {eventMode ? "Registrant Information" : w("Donor Information")}
         </h3>
         {!eventMode && donorFieldSettings.salutation !== "HIDDEN" && (
           <div className="mb-3">
@@ -1568,8 +1574,8 @@ export default function GivingLinkForm({
               <div className="space-y-2 border-t px-3 py-3" style={{ borderColor: light.borderColor }}>
                 <p className="text-xs" style={{ color: light.bodyTextColor, opacity: 0.7 }}>
                   {addressRequired
-                    ? "Required for this gift — used to send you a thank-you card, mailed receipts, and annual giving statements."
-                    : "Used for mailed receipts and annual giving statements."}
+                    ? w("Required for this gift — used to send you a thank-you card, mailed receipts, and annual giving statements.")
+                    : w("Used for mailed receipts and annual giving statements.")}
                 </p>
                 <input
                   ref={addressLine1Ref}
@@ -1675,7 +1681,7 @@ export default function GivingLinkForm({
         {!eventMode && isFieldVisible("anonymousDonation") && (
           <label className="flex items-center gap-2 text-sm mt-3" style={{ color: light.bodyTextColor }}>
             <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} />
-            Give anonymously
+            {w("Give anonymously")}
           </label>
         )}
       </div>
@@ -1685,7 +1691,7 @@ export default function GivingLinkForm({
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
             I&apos;ll cover the {formatCents(feeCoveredCents)} transaction cost so my full{" "}
-            {formatCents(effectiveAmountCents)} {eventMode ? "goes" : "gift goes"} to {churchName}.
+            {formatCents(effectiveAmountCents)} {eventMode ? "goes" : paymentMode ? "payment goes" : "gift goes"} to {churchName}.
           </span>
         </label>
       )}
@@ -1711,8 +1717,7 @@ export default function GivingLinkForm({
             // basis, wallets stay one-time-only and this note explains why
             // they're gone instead of just silently vanishing.
             <p className="text-xs" style={{ color: light.bodyTextColor }}>
-              Apple Pay and Google Pay are currently available for one-time gifts. Use card or bank account for
-              recurring gifts.
+              {w("Apple Pay and Google Pay are currently available for one-time gifts. Use card or bank account for recurring gifts.")}
             </p>
           ) : (
             <>
@@ -1752,14 +1757,14 @@ export default function GivingLinkForm({
                       <apple-pay-button
                         ref={applePayButtonRef}
                         buttonstyle={light.buttonBackground === "#000000" ? "white" : "black"}
-                        type={eventMode ? "plain" : "donate"}
+                        type={eventMode ? "plain" : paymentMode ? "pay" : "donate"}
                         locale="en-US"
                         style={{ width: "100%", height: "44px", display: "block" }}
                       />
                     </>
                   )}
                   {walletProcessing === "apple_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : w("Processing donation…")}</p>
                   )}
                 </div>
               )}
@@ -1777,14 +1782,14 @@ export default function GivingLinkForm({
                       className="w-full flex items-center justify-center gap-2 rounded-lg select-none"
                       style={{ height: 44, backgroundColor: "#000", color: "#fff", cursor: "default" }}
                     >
-                      <span className="text-sm font-semibold">Donate with</span>
+                      <span className="text-sm font-semibold">{w("Donate with")}</span>
                       <span className="text-sm font-bold">G Pay</span>
                     </div>
                   ) : (
                     <div ref={googlePayButtonRef} className={walletProcessing === "google_pay" ? "opacity-50 pointer-events-none" : ""} />
                   )}
                   {walletProcessing === "google_pay" && (
-                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : "Processing donation…"}</p>
+                    <p className="text-xs text-center mt-1" style={{ color: light.bodyTextColor }}>{eventMode ? "Processing registration…" : w("Processing donation…")}</p>
                   )}
                 </div>
               )}
@@ -1839,10 +1844,10 @@ export default function GivingLinkForm({
         {submitting
           ? eventMode
             ? "Processing registration…"
-            : "Processing donation…"
+            : w("Processing donation…")
           : eventMode
             ? `Pay ${formatCents(totalCents)} & Register`
-            : `Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`}
+            : w(`Give ${effectiveAmountCents ? formatCents(totalCents) : ""}${isRecurring ? ` / ${frequency.toLowerCase()}` : ""}`)}
       </button>
     </div>
   );

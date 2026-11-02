@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
 import PossibleMatchActions from "@/components/merchant/PossibleMatchActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const CONFIDENCE_STYLES: Record<string, string> = {
   HIGH: "bg-emerald-50 text-emerald-700",
@@ -16,6 +17,7 @@ const CONFIDENCE_STYLES: Record<string, string> = {
 };
 
 export default async function PossibleDonorMatchesPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -44,7 +46,7 @@ export default async function PossibleDonorMatchesPage({ searchParams }: { searc
       <Link href="/merchant/donors" className="text-sm text-slate-500 hover:text-slate-700 mb-2 inline-block">
         ← Donors
       </Link>
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">Possible Donor Matches</h1>
+      <h1 className="text-2xl font-bold text-slate-900 mb-1">{pw("Possible Donor Matches")}</h1>
       <p className="text-sm text-slate-500 mb-6">
         When a newly-entered or imported donor closely resembles an existing donor but doesn&apos;t exactly match on email, phone, or a linked
         payment identity, it shows up here for a human decision — donors are never automatically merged on name similarity alone.
@@ -82,12 +84,12 @@ export default async function PossibleDonorMatchesPage({ searchParams }: { searc
 
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div className="rounded-xl border border-slate-100 p-3">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Existing donor</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{pw("Existing donor")}</p>
                   <p className="font-semibold text-slate-800">{formatPersonName(existing?.name)}</p>
                   <p className="text-xs text-slate-500">{existing?.email || "—"} · {existing?.phone || "—"}</p>
                 </div>
                 <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-3">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">New / imported donor</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">{pw("New / imported donor")}</p>
                   <p className="font-semibold text-slate-800">{formatPersonName(candidate?.name)}</p>
                   <p className="text-xs text-slate-500">{candidate?.email || "—"} · {candidate?.phone || "—"}</p>
                   {m.donationAmountCents != null && (

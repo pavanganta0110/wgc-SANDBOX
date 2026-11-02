@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { CurrentTermForm } from "@/components/merchant/students/StudentActions";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 /**
  * Organization-level switch for Student Giving. Turning it on adds the
@@ -21,6 +22,7 @@ export default function StudentGivingSettings({
   currentTerm: string | null;
   canManage: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +49,7 @@ export default function StudentGivingSettings({
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-1">Student Giving</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Student Giving")}</h3>
             <p className="text-xs text-slate-500 max-w-xl">
               For schools and colleges: tie each gift to a student, see per term who is fully credited and who gave, and export a reconciliation
               file for your finance team. Turning it on adds a <strong>Students</strong> section to your sidebar. Turning it off hides it again;
@@ -58,7 +60,7 @@ export default function StudentGivingSettings({
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-label="Student Giving"
+            aria-label={pw("Student Giving")}
             disabled={!canManage || busy}
             onClick={() => setEnabled(!enabled)}
             className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${enabled ? "bg-indigo-600" : "bg-slate-300"}`}

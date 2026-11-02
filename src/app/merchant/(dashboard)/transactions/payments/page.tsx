@@ -7,6 +7,7 @@ import PaymentsFilterBar from "@/components/merchant/PaymentsFilterBar";
 import PaymentsHeaderActions from "@/components/merchant/PaymentsHeaderActions";
 import CopyableIdBadge from "@/components/merchant/CopyableIdBadge";
 import ClickableTableRow from "@/components/merchant/ClickableTableRow";
+import { Printer } from "lucide-react";
 import PaymentDetailPanel from "@/components/merchant/PaymentDetailPanel";
 import StateBadge from "@/components/merchant/StateBadge";
 import { resolveDateRange } from "@/lib/dateRangePresets";
@@ -17,6 +18,8 @@ import { reconcilePendingPayments } from "@/lib/finix/sync/paymentReconciliation
 import { resolveFundFilteredTransferIds } from "@/lib/giving/fundAssignment";
 import { getRevenueBySource, buildSourceClassifier, SOURCE_KEYS, SOURCE_LABELS, type RevenueSourceKey } from "@/lib/reporting/revenueBySource";
 import { PaymentInstrumentCell, InstrumentTypeCell } from "@/components/merchant/PaymentInstrumentDisplay";
+import { intersectIdSets, normalizeSearchQuery, resolveSearchMatchedTransferIds } from "@/lib/payments/search";
+import { modeLabel } from "@/lib/settings/paymentMode";
 
 const REFUND_DERIVED_STATES = new Set(["REFUNDED", "PARTIALLY_REFUNDED", "REFUND_PENDING"]);
 
@@ -27,6 +30,7 @@ export default async function PaymentsListPage({
     state?: string;
     last4?: string;
     buyer?: string;
+    q?: string;
     range?: string;
     from?: string;
     to?: string;
@@ -44,7 +48,7 @@ export default async function PaymentsListPage({
   // (see that helper's comment). Organization scope still includes
   // unattributed transfers, matching the approved payment-scope policy.
   const transferScope = await buildFinixTransferScope(auth, viewScope);
-  const { state, last4, buyer, range, from, to, id, fund, source, takePayment } = await searchParams;
+  const { state, last4, buyer, q, range, from, to, id, fund, source, takePayment } = await searchParams;
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
@@ -110,6 +114,14 @@ export default async function PaymentsListPage({
       .map((p) => p.finixTransferId as string);
   }
 
+  // Free-text search (payer, student ID/name, amount, note, term, transaction id), resolved server-side against the
+  // same scopes as the table and intersected with the other id-based filters below.
+  const searchQuery = normalizeSearchQuery(q);
+  const searchMatchedTransferIds = searchQuery
+    ? await resolveSearchMatchedTransferIds({ churchId, paymentScope, transferScope, query: searchQuery })
+    : null;
+  const idFilter = intersectIdSets([fundMatchedTransferIds, sourceMatchedTransferIds, searchMatchedTransferIds]);
+
   const transfers = await prisma.finixTransfer.findMany({
     where: {
       ...transferScope,
@@ -118,17 +130,7 @@ export default async function PaymentsListPage({
       ],
       ...(state && !isRefundDerivedFilter ? { state } : {}),
       ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
-      ...(fundMatchedTransferIds || sourceMatchedTransferIds
-        ? {
-            finixTransferId: {
-              in: sourceMatchedTransferIds
-                ? fundMatchedTransferIds
-                  ? sourceMatchedTransferIds.filter((x) => fundMatchedTransferIds.includes(x))
-                  : sourceMatchedTransferIds
-                : (fundMatchedTransferIds as string[]),
-            },
-          }
-        : {}),
+      ...(idFilter ? { finixTransferId: { in: idFilter } } : {}),
     },
     orderBy: { createdAtFinix: "desc" },
     take: 100,
@@ -167,9 +169,14 @@ export default async function PaymentsListPage({
   const payments = transferIds.length
     ? await prisma.payment.findMany({
         where: { churchId, finixTransferId: { in: transferIds } },
-        select: { id: true, givingLinkId: true, finixTransferId: true, fundName: true },
+        select: { id: true, givingLinkId: true, finixTransferId: true, fundName: true, note: true, studentId: true, studentTermLabel: true },
       })
     : [];
+  const studentIds = [...new Set(payments.map((p) => p.studentId).filter((sid): sid is string => Boolean(sid)))];
+  const students = studentIds.length
+    ? await prisma.student.findMany({ where: { churchId, id: { in: studentIds } }, select: { id: true, studentNumber: true, firstName: true, lastName: true } })
+    : [];
+  const studentById = new Map(students.map((st) => [st.id, st]));
   const paymentByTransfer = new Map(payments.filter((p) => p.finixTransferId).map((p) => [p.finixTransferId as string, p]));
 
   const rows = transfers
@@ -194,6 +201,12 @@ export default async function PaymentsListPage({
       // Fund filtering already happened server-side above (fundMatchedTransferIds).
       return true;
     });
+
+  // Columns that only matter to orgs using them: student ID/name (Student Giving), the term field, and the payment
+  // note (payment mode, where staff identify payments by note). Everyone else sees the table exactly as before.
+  const showStudentCols = Boolean(church?.studentGivingEnabled);
+  const showTermCol = Boolean(church?.studentGivingEnabled || church?.termFieldEnabled);
+  const showNoteCol = Boolean(church?.paymentMode);
 
   return (
     <div>
@@ -247,13 +260,18 @@ export default async function PaymentsListPage({
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                 <th className="px-6 py-3">ID</th>
                 <th className="px-6 py-3">Created</th>
-                <th className="px-6 py-3">Donor</th>
+                <th className="px-6 py-3">{modeLabel(church?.paymentMode, "donor")}</th>
+                {showStudentCols && <th className="px-6 py-3">Student ID</th>}
+                {showStudentCols && <th className="px-6 py-3">Student</th>}
+                {showTermCol && <th className="px-6 py-3">Term</th>}
+                {showNoteCol && <th className="px-6 py-3">Note</th>}
                 <th className="px-6 py-3 text-right">Amount</th>
                 <th className="px-6 py-3">State</th>
                 <th className="px-6 py-3">Payment Instrument</th>
                 <th className="px-6 py-3">Instrument Type</th>
                 <th className="px-6 py-3">Fund</th>
                 <th className="px-6 py-3">Source</th>
+                <th className="px-6 py-3">Receipt</th>
               </tr>
             </thead>
             <tbody>
@@ -278,6 +296,20 @@ export default async function PaymentsListPage({
                     <td className="px-6 py-3 text-slate-700">
                       {formatPersonName(donor?.name, instrument?.accountHolderName)}
                     </td>
+                    {showStudentCols && (
+                      <td className="px-6 py-3 text-slate-600 whitespace-nowrap">
+                        {payment?.studentId ? studentById.get(payment.studentId)?.studentNumber ?? "—" : "—"}
+                      </td>
+                    )}
+                    {showStudentCols && (
+                      <td className="px-6 py-3 text-slate-700">
+                        {payment?.studentId && studentById.get(payment.studentId)
+                          ? `${studentById.get(payment.studentId)!.firstName} ${studentById.get(payment.studentId)!.lastName}`
+                          : "—"}
+                      </td>
+                    )}
+                    {showTermCol && <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{payment?.studentTermLabel || "—"}</td>}
+                    {showNoteCol && <td className="px-6 py-3 text-slate-600 max-w-[220px] break-words">{payment?.note || "—"}</td>}
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(t.amountCents ?? 0)}
                       {refund.refundStatus !== "NONE" && refund.refundStatus !== "PENDING" && (
@@ -313,6 +345,22 @@ export default async function PaymentsListPage({
                       {payment
                         ? SOURCE_LABELS[classifySource(payment)].replace(/ \(.*\)$/, "")
                         : "—"}
+                    </td>
+                    <td className="px-6 py-3">
+                      {payment ? (
+                        <a
+                          href={`/api/merchant/transactions/payments/${t.finixTransferId}/receipt-view`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="View / print receipt"
+                          aria-label="View or print receipt"
+                          className="inline-flex text-slate-400 hover:text-blue-600"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </a>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                   </ClickableTableRow>
                 );

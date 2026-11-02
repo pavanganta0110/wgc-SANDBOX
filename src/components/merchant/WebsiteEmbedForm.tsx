@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import GivingLinkPreviewPanel from "@/components/merchant/GivingLinkPreviewPanel";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface GivingLinkOption {
   id: string;
@@ -115,6 +116,7 @@ export default function WebsiteEmbedForm({
   initialEmbedDomainRestrictionEnabled: boolean;
   initialAllowedDomains: string[];
 }) {
+  const pw = usePaymentWording();
   const [slug, setSlug] = useState(givingLinks[0]?.publicSlug || "");
   const [mode, setMode] = useState<"button" | "inline">("button");
   const [buttonText, setButtonText] = useState("Give Now");
@@ -248,7 +250,7 @@ export default function WebsiteEmbedForm({
       <div className="grid md:grid-cols-2 gap-6">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-600 mb-1">Giving page</label>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">{pw("Giving page")}</label>
             <select value={slug} onChange={(e) => setSlug(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none">
               {givingLinks.map((l) => (
                 <option key={l.id} value={l.publicSlug}>{l.publicTitle}</option>

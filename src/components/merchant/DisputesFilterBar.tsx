@@ -6,6 +6,7 @@ import { Download, ChevronDown, SlidersHorizontal, X, Columns3 } from "lucide-re
 import DateRangePicker from "@/components/merchant/DateRangePicker";
 import { DISPUTE_COLUMNS, parseVisibleDisputeColumns, type DisputeColumnKey } from "@/lib/disputeColumns";
 import { DISPUTE_DISPLAY_STATUS_LABELS, type DisputeDisplayStatus } from "@/lib/finix/disputeStatus";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const STATUSES = Object.keys(DISPUTE_DISPLAY_STATUS_LABELS) as DisputeDisplayStatus[];
 const RESPONSE_STATUSES = [
@@ -18,6 +19,7 @@ const PAYMENT_METHODS = [
 ];
 
 export default function DisputesFilterBar({ exportHref }: { exportHref?: string }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -99,7 +101,7 @@ export default function DisputesFilterBar({ exportHref }: { exportHref?: string 
 
       <input
         type="text"
-        placeholder="Donor Name"
+        placeholder={pw("Donor Name")}
         value={donor}
         onChange={(e) => setParam("donor", e.target.value)}
         className="px-4 py-2 rounded-full border border-slate-200 text-sm text-slate-700 bg-white outline-none w-40"

@@ -71,7 +71,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branding.campaignImageUrl} alt="" className="w-full h-28 object-cover rounded-xl mb-5" />
         )}
-        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind="Secure Giving" compact nameColor={light.headingColor} kindColor={light.bodyTextColor} />
+        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} compact nameColor={light.headingColor} kindColor={light.bodyTextColor} />
         <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
           {link.publicTitle}
         </h1>
@@ -112,6 +112,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           fundSelectionEnabled={fundSelectionEnabled}
           studentGiving={studentGiving}
           assignedFunds={assignedFunds}
+          paymentMode={church.paymentMode}
         />
 
         {!branding.hideFooter && (

@@ -4,6 +4,7 @@ import { useState } from "react";
 import toast from "react-hot-toast";
 import { formatCents } from "@/lib/format";
 import { validateGoodsServicesInput, computeRecordedContributionAmountCents } from "@/lib/giving/goodsServices";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Props {
   transferId: string;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export default function GoodsServicesCorrectionPanel({ transferId, paymentAmountCents, receiptAlreadySent, initial }: Props) {
+  const pw = usePaymentWording();
   const [editing, setEditing] = useState(false);
   const [provided, setProvided] = useState(initial.goodsServicesProvided);
   const [description, setDescription] = useState(initial.goodsServicesDescription || "");
@@ -138,7 +140,7 @@ export default function GoodsServicesCorrectionPanel({ transferId, paymentAmount
           <input
             value={internalNote}
             onChange={(e) => setInternalNote(e.target.value)}
-            placeholder="Internal note (optional, not shown to donor)"
+            placeholder={pw("Internal note (optional, not shown to donor)")}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:ring-2 focus:ring-blue-500"
           />
           <p className="text-xs text-slate-500">Recorded Contribution Amount: {formatCents(recordedContributionAmountCents)}</p>

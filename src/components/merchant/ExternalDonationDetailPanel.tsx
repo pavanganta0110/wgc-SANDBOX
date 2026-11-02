@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { EXTERNAL_DONATION_STATUSES, CHECK_DEPOSIT_STATUSES } from "@/lib/donations/externalDonationTypes";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Donation {
   id: string;
@@ -41,6 +42,7 @@ export default function ExternalDonationDetailPanel({
   canVoid: boolean;
   canViewProof: boolean;
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -268,7 +270,7 @@ export default function ExternalDonationDetailPanel({
               <input placeholder="Fund" value={fundName} onChange={(e) => setFundName(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               <input placeholder="Campaign" value={campaign} onChange={(e) => setCampaign(e.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             </div>
-            <input placeholder="Donation purpose" value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            <input placeholder={pw("Donation purpose")} value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             <input placeholder="Provider fee" type="number" step="0.01" value={providerFee} onChange={(e) => setProviderFee(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             <textarea placeholder="Internal note" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
             <label className="flex items-center gap-2 text-sm">
@@ -333,7 +335,7 @@ export default function ExternalDonationDetailPanel({
       {canViewProof && (
         <section className="rounded-xl border border-slate-100 bg-white p-5 space-y-3">
           <h2 className="text-sm font-semibold text-slate-900">Proof of payment</h2>
-          <p className="text-xs text-slate-400">Private — never shown on the donor receipt.</p>
+          <p className="text-xs text-slate-400">{pw("Private — never shown on the donor receipt.")}</p>
           {donation.proofOfPaymentFileName ? (
             <div className="flex items-center gap-3 text-sm">
               <span className="text-slate-700">{donation.proofOfPaymentFileName}</span>

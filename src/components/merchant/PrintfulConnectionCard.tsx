@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { Loader2, CheckCircle2, XCircle, RefreshCw, Package, FlaskConical, AlertTriangle } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface StatusResponse {
   enabled: boolean;
@@ -21,6 +22,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function PrintfulConnectionCard() {
+  const pw = usePaymentWording();
   const [data, setData] = useState<StatusResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [privateToken, setPrivateToken] = useState("");
@@ -74,7 +76,7 @@ export default function PrintfulConnectionCard() {
             </div>
             <div>
               <h3 className="text-sm font-bold text-slate-900">Printful</h3>
-              <p className="text-xs text-slate-500">Merchandise fulfillment for your giving page.</p>
+              <p className="text-xs text-slate-500">{pw("Merchandise fulfillment for your giving page.")}</p>
             </div>
           </div>
           {isMock && (
@@ -160,7 +162,7 @@ export default function PrintfulConnectionCard() {
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6 flex items-center justify-between">
           <div>
             <p className="text-sm font-bold text-slate-900">{data.productCount ?? 0} products synced</p>
-            <p className="text-xs text-slate-500">Manage which products are active and visible on your giving pages.</p>
+            <p className="text-xs text-slate-500">{pw("Manage which products are active and visible on your giving pages.")}</p>
           </div>
           <Link href="/merchant/merchandise" className="px-5 py-2.5 rounded-xl font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 text-sm">
             Manage Products

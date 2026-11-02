@@ -7,6 +7,7 @@ import { isAuthError } from "@/lib/auth/errors";
 import { isSmsConfigured } from "@/lib/sms/sendText";
 import { INTEGRATION_CATALOG, CATEGORY_ORDER } from "@/lib/integrations/catalog";
 import { isPlanningCenterIntegrationEnabled } from "@/lib/integrations/planningcenter/config";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function IntegrationRow({ name, description, enabled }: { name: string; description: string; enabled: boolean }) {
   return (
@@ -21,6 +22,7 @@ function IntegrationRow({ name, description, enabled }: { name: string; descript
 }
 
 export default async function IntegrationsSettingsPage() {
+  const { pw } = await getPaymentWording();
   // Donor/Giving Link texting specifically — deliberately NOT the auth-SMS
   // check, since this row is about donor messaging, which is hard-disabled
   // until its own separate Twilio number/campaign exists (see sendText.ts).
@@ -62,7 +64,7 @@ export default async function IntegrationsSettingsPage() {
         <div>
           <IntegrationRow name="Payment Processing" description="Card and ACH payment processing via WGC's payment processor." enabled />
           <IntegrationRow name="Email Delivery" description="Receipts, statements, and notification emails." enabled />
-          <IntegrationRow name="Text Message Sharing" description="Send Giving Link shares by text message." enabled={smsConfigured} />
+          <IntegrationRow name="Text Message Sharing" description={pw("Send Giving Link shares by text message.")} enabled={smsConfigured} />
         </div>
         <p className="text-xs text-slate-400 mt-6">
           Need a different integration? <Link href="/merchant/support/tickets/new" className="text-blue-600 hover:underline">Contact Support</Link>.
@@ -172,7 +174,7 @@ export default async function IntegrationsSettingsPage() {
                 >
                   <div>
                     <div className="text-sm font-bold text-slate-900">Planning Center</div>
-                    <p className="text-xs text-slate-500 mt-0.5 max-w-lg">Connect your Planning Center account to sync people and giving records with WGC Payments.</p>
+                    <p className="text-xs text-slate-500 mt-0.5 max-w-lg">{pw("Connect your Planning Center account to sync people and giving records with WGC Payments.")}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <StateBadge state={planningCenterStatus} />

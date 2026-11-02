@@ -17,6 +17,7 @@ import TakePaymentAction from "@/components/merchant/dashboard/TakePaymentAction
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import StatusBadge from "@/components/merchant/students/StatusBadge";
 import { SetChargeForm, StudentGivingLinkButton } from "@/components/merchant/students/StudentActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function StudentDetailPage({
   params,
@@ -25,6 +26,7 @@ export default async function StudentDetailPage({
   params: Promise<{ studentId: string }>;
   searchParams: Promise<{ term?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -124,10 +126,10 @@ export default async function StudentDetailPage({
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-500">
               <th className="px-5 py-3">Date</th>
-              <th className="px-3 py-3">Donor</th>
+              <th className="px-3 py-3">{pw("Donor")}</th>
               <th className="px-3 py-3">Type</th>
               <th className="px-3 py-3">Source</th>
-              <th className="px-3 py-3 text-right">Gift</th>
+              <th className="px-3 py-3 text-right">{pw("Gift")}</th>
               <th className="px-5 py-3 text-right">Credited</th>
             </tr>
           </thead>

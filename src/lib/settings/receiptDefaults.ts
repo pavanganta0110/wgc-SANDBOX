@@ -3,7 +3,11 @@ export const DEFAULT_RECEIPT_THANK_YOU_MESSAGE = "Thank you for your generosity 
 export const DEFAULT_RECEIPT_DISCLAIMER =
   "This receipt confirms a donation recorded by the organization. It is provided for record-keeping purposes only and does not constitute tax advice. Donors should consult a qualified tax professional regarding their individual circumstances.";
 
+import { PAYMENT_MODE_RECEIPT_TEXT } from "@/lib/settings/paymentMode";
+
 export interface ReceiptSettingsSource {
+  /** Payment-processor mode: swaps only the built-in default texts below for payment wording. */
+  paymentMode?: boolean | null;
   receiptAutoSend?: boolean | null;
   receiptSenderName?: string | null;
   receiptReplyToEmail?: string | null;
@@ -31,9 +35,11 @@ export function resolveReceiptSettings(church: ReceiptSettingsSource | null) {
     autoSend: church?.receiptAutoSend ?? true,
     senderName: church?.receiptSenderName || null,
     replyToEmail: church?.receiptReplyToEmail || null,
-    subjectTemplate: church?.receiptSubjectTemplate || DEFAULT_RECEIPT_SUBJECT_TEMPLATE,
+    subjectTemplate:
+      church?.receiptSubjectTemplate || (church?.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.subject : DEFAULT_RECEIPT_SUBJECT_TEMPLATE),
     header: church?.receiptHeader || null,
-    thankYouMessage: church?.receiptThankYouMessage || DEFAULT_RECEIPT_THANK_YOU_MESSAGE,
+    thankYouMessage:
+      church?.receiptThankYouMessage || (church?.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.thankYou : DEFAULT_RECEIPT_THANK_YOU_MESSAGE),
     footer: church?.receiptFooter || null,
     showAddress: church?.receiptShowAddress ?? true,
     showPhone: church?.receiptShowPhone ?? false,
@@ -45,7 +51,7 @@ export function resolveReceiptSettings(church: ReceiptSettingsSource | null) {
     showDonationReference: church?.receiptShowDonationReference ?? true,
     showTaxId: church?.receiptShowTaxId ?? false,
     showWebsite: church?.receiptShowWebsite ?? false,
-    disclaimer: church?.receiptDisclaimer || DEFAULT_RECEIPT_DISCLAIMER,
+    disclaimer: church?.receiptDisclaimer || (church?.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.disclaimer : DEFAULT_RECEIPT_DISCLAIMER),
     language: church?.receiptLanguage || "en",
   };
 }

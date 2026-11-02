@@ -237,3 +237,61 @@ describe("buildDonationReceiptPdfProps", () => {
     });
   });
 });
+
+describe("buildDonationReceiptPdfProps — payment note", () => {
+  const snapshot = {
+    receiptNumber: "TC-0001",
+    paymentAmountCents: 5000,
+    goodsServicesProvided: false,
+    goodsServicesDescription: null,
+    goodsServicesFairMarketValueCents: null,
+    recordedContributionAmountCents: 5000,
+    acknowledgmentText: "Thanks",
+  };
+  const noted = { ...payment, note: "  apply to previous semester  " };
+
+  async function noteFor(receiptNoteMode: string | undefined, p = noted) {
+    mockPrisma.church.findUnique.mockResolvedValue({ ...church, receiptNoteMode });
+    const { buildDonationReceiptPdfProps } = await loadModule();
+    return (await buildDonationReceiptPdfProps(p, "church-1", snapshot)).props.paymentNote;
+  }
+
+  it("leaves the note off the receipt by default, so existing orgs are unchanged", async () => {
+    expect(await noteFor(undefined)).toBeNull();
+    expect(await noteFor("NONE")).toBeNull();
+  });
+
+  it("shows the trimmed note when the setting puts it on the payer's receipt", async () => {
+    expect(await noteFor("CUSTOMER")).toBe("apply to previous semester");
+    expect(await noteFor("BOTH")).toBe("apply to previous semester");
+  });
+
+  it("keeps the note off the payer's receipt when it is staff-copy only", async () => {
+    expect(await noteFor("STAFF")).toBeNull();
+  });
+
+  it("shows nothing for a payment with no note", async () => {
+    expect(await noteFor("CUSTOMER", { ...payment, note: null })).toBeNull();
+    expect(await noteFor("CUSTOMER", { ...payment, note: "   " })).toBeNull();
+  });
+});
+
+describe("buildDonationReceiptPdfProps — payment mode", () => {
+  const snapshot = {
+    receiptNumber: "TC-0001",
+    paymentAmountCents: 5000,
+    goodsServicesProvided: false,
+    goodsServicesDescription: null,
+    goodsServicesFairMarketValueCents: null,
+    recordedContributionAmountCents: 5000,
+    acknowledgmentText: "Thanks",
+  };
+
+  it("marks the receipt as a payment receipt only for orgs in payment mode", async () => {
+    const { buildDonationReceiptPdfProps } = await loadModule();
+    mockPrisma.church.findUnique.mockResolvedValue({ ...church, paymentMode: true });
+    expect((await buildDonationReceiptPdfProps(payment, "church-1", snapshot)).props.paymentMode).toBe(true);
+    mockPrisma.church.findUnique.mockResolvedValue({ ...church, paymentMode: false });
+    expect((await buildDonationReceiptPdfProps(payment, "church-1", snapshot)).props.paymentMode).toBe(false);
+  });
+});

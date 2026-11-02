@@ -16,6 +16,7 @@ import { resolveDisputeDisplayStatus } from "@/lib/finix/disputeStatus";
 import DisputeDeadlineBanner from "@/components/merchant/DisputeDeadlineBanner";
 import DisputeFinancialImpactCard from "@/components/merchant/DisputeFinancialImpactCard";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function DisputeDetailPanel({
   disputeId,
@@ -24,6 +25,7 @@ export default async function DisputeDetailPanel({
   disputeId: string;
   churchId: string;
 }) {
+  const { pw } = await getPaymentWording();
   const detail = await loadDisputeDetail(disputeId, churchId);
 
   if (!detail) {
@@ -71,7 +73,7 @@ export default async function DisputeDetailPanel({
 
         <div className="mt-3 space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-slate-500">Donor</span>
+            <span className="text-slate-500">{pw("Donor")}</span>
             <span className="font-semibold text-slate-700">
               <DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />
             </span>

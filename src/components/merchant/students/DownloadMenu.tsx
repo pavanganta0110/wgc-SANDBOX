@@ -1,6 +1,7 @@
 "use client";
 
 import { Download } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 /**
  * Downloads the Students list exactly as filtered on screen. Plain links to
@@ -8,6 +9,7 @@ import { Download } from "lucide-react";
  * client state to get out of sync with what the user is looking at.
  */
 export default function DownloadMenu({ term, filterKey, filterLabel, count }: { term: string; filterKey: string; filterLabel: string; count: number }) {
+  const pw = usePaymentWording();
   const q = (extra: string) => `/api/merchant/students/export?term=${encodeURIComponent(term)}&filter=${filterKey}&${extra}`;
   const item = "block px-3 py-2 text-sm text-slate-700 hover:bg-slate-50";
   return (
@@ -21,7 +23,7 @@ export default function DownloadMenu({ term, filterKey, filterLabel, count }: { 
         </p>
         <a className={item} href={q("type=ledger&format=csv")}>Student list (CSV)</a>
         <a className={item} href={q("type=ledger&format=pdf")}>Student list (PDF)</a>
-        <a className={item} href={q("type=gifts&format=csv")}>Every gift for these students (CSV)</a>
+        <a className={item} href={q("type=gifts&format=csv")}>{pw("Every gift for these students (CSV)")}</a>
       </div>
     </details>
   );

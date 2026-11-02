@@ -8,8 +8,10 @@ import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import StateBadge from "@/components/merchant/StateBadge";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ clientId: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -103,7 +105,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ c
           {client.contactPersonName && <div className="flex justify-between"><span className="text-slate-500">Contact person</span><span>{client.contactPersonName}</span></div>}
           {linkedDonor && (
             <div className="flex justify-between">
-              <span className="text-slate-500">Linked donor</span>
+              <span className="text-slate-500">{pw("Linked donor")}</span>
               <Link href={`/merchant/donors?id=${linkedDonor.id}`} className="text-blue-600 hover:underline">{linkedDonor.name || "View donor"}</Link>
             </div>
           )}

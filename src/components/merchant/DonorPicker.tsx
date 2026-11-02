@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonorHit {
   id: string;
@@ -18,6 +19,7 @@ export default function DonorPicker({
   onClear: () => void;
   selected: DonorHit | null;
 }) {
+  const pw = usePaymentWording();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DonorHit[]>([]);
   const [open, setOpen] = useState(false);
@@ -67,7 +69,7 @@ export default function DonorPicker({
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Search existing donors by name, email, or phone"
+        placeholder={pw("Search existing donors by name, email, or phone")}
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
       />
       {open && (loading || results.length > 0) && (
@@ -89,7 +91,7 @@ export default function DonorPicker({
                 {d.email && <span className="text-slate-500"> · {d.email}</span>}
               </button>
             ))}
-          {!loading && results.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">No matching donors — you can still create a new one below.</div>}
+          {!loading && results.length === 0 && <div className="px-3 py-2 text-xs text-slate-400">{pw("No matching donors — you can still create a new one below.")}</div>}
         </div>
       )}
     </div>

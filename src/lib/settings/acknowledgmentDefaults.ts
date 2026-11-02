@@ -1,4 +1,5 @@
 import { formatCents } from "@/lib/format";
+import { PAYMENT_MODE_RECEIPT_TEXT } from "@/lib/settings/paymentMode";
 
 /**
  * IRS-style "no goods or services" / quid-pro-quo acknowledgment language,
@@ -17,14 +18,20 @@ export const DEFAULT_GOODS_SERVICES_TEMPLATE =
   "Goods or services described as [DESCRIPTION], with an estimated fair market value of [VALUE], were provided in exchange for this contribution.";
 
 export interface AcknowledgmentSettingsSource {
+  /** Payment-processor mode: the built-in defaults become plain payment wording; saved text still wins. */
+  paymentMode?: boolean | null;
   acknowledgmentNoGoodsServicesText?: string | null;
   acknowledgmentGoodsServicesTemplate?: string | null;
 }
 
 export function resolveAcknowledgmentSettings(church: AcknowledgmentSettingsSource | null) {
   return {
-    noGoodsServicesText: church?.acknowledgmentNoGoodsServicesText || DEFAULT_NO_GOODS_SERVICES_TEXT,
-    goodsServicesTemplate: church?.acknowledgmentGoodsServicesTemplate || DEFAULT_GOODS_SERVICES_TEMPLATE,
+    noGoodsServicesText:
+      church?.acknowledgmentNoGoodsServicesText ||
+      (church?.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.noGoodsServices : DEFAULT_NO_GOODS_SERVICES_TEXT),
+    goodsServicesTemplate:
+      church?.acknowledgmentGoodsServicesTemplate ||
+      (church?.paymentMode ? PAYMENT_MODE_RECEIPT_TEXT.goodsServicesTemplate : DEFAULT_GOODS_SERVICES_TEMPLATE),
   };
 }
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { DEFAULT_THANK_YOU_MESSAGE, STATEMENT_DISCLAIMER } from "@/lib/donors/generateStatementDefaults";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Settings {
   logoUrl: string | null;
@@ -22,6 +23,7 @@ interface Settings {
 }
 
 export default function StatementSettingsForm({ initial }: { initial: Settings }) {
+  const pw = usePaymentWording();
   const [values, setValues] = useState({
     logoUrl: initial.logoUrl || "",
     taxId: initial.taxId || "",
@@ -75,7 +77,7 @@ export default function StatementSettingsForm({ initial }: { initial: Settings }
         hint="Used as the signature on receipts, statements, and Giving Campaign emails."
       />
       <Field label="Reply-To Email" value={values.statementReplyToEmail} onChange={(v) => set("statementReplyToEmail", v)} placeholder="support@yourorganization.org" />
-      <Field label="Subject Template" value={values.statementSubjectTemplate} onChange={(v) => set("statementSubjectTemplate", v)} placeholder="Your [YEAR] Year-End Donation Statement from [Organization Name]" />
+      <Field label="Subject Template" value={values.statementSubjectTemplate} onChange={(v) => set("statementSubjectTemplate", v)} placeholder={pw("Your [YEAR] Year-End Donation Statement from [Organization Name]")} />
 
       <div>
         <label className="block text-xs font-semibold text-slate-500 mb-1">Thank-You Message</label>

@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { formatCents } from "@/lib/format";
 import StateBadge from "@/components/merchant/StateBadge";
 import StatementPreviewModal from "@/components/merchant/StatementPreviewModal";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface Row {
   donorId: string;
@@ -59,6 +60,7 @@ interface BulkJob {
 }
 
 export default function AnnualStatementsClient() {
+  const pw = usePaymentWording();
   const [year, setYear] = useState(currentYear - 1);
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -226,7 +228,7 @@ export default function AnnualStatementsClient() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
-        <h2 className="text-lg font-bold text-slate-900">Annual Donation Statements</h2>
+        <h2 className="text-lg font-bold text-slate-900">{pw("Annual Donation Statements")}</h2>
         <select value={year} onChange={(e) => setYear(parseInt(e.target.value, 10))} className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none">
           {Array.from({ length: 6 }).map((_, i) => {
             const y = currentYear - i;
@@ -279,7 +281,7 @@ export default function AnnualStatementsClient() {
         </select>
         <input
           type="text"
-          placeholder="Donor name"
+          placeholder={pw("Donor name")}
           value={nameInput}
           onChange={(e) => setNameInput(e.target.value)}
           className="px-3 py-1.5 rounded-lg border border-slate-200 text-sm outline-none w-40"
@@ -370,7 +372,7 @@ export default function AnnualStatementsClient() {
           <p className="px-6 py-10 text-center text-sm text-slate-400">Loading…</p>
         ) : rows.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <h3 className="text-sm font-bold text-slate-900 mb-1">No eligible donors</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("No eligible donors")}</h3>
             <p className="text-sm text-slate-500">No donors have qualifying completed donations for {year}.</p>
           </div>
         ) : (
@@ -378,10 +380,10 @@ export default function AnnualStatementsClient() {
             <thead>
               <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide bg-slate-50">
                 <th className="px-4 py-3"><input type="checkbox" checked={selected.size === rows.length && rows.length > 0} onChange={toggleAll} /></th>
-                <th className="px-4 py-3">Donor</th>
+                <th className="px-4 py-3">{pw("Donor")}</th>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">Mailing Address</th>
-                <th className="px-4 py-3 text-right">Donations</th>
+                <th className="px-4 py-3 text-right">{pw("Donations")}</th>
                 <th className="px-4 py-3 text-right">Recorded Total</th>
                 <th className="px-4 py-3">Statement Status</th>
                 <th className="px-4 py-3">Delivery Status</th>

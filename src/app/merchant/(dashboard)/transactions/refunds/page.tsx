@@ -15,6 +15,7 @@ import { parseVisibleColumns } from "@/lib/refundColumns";
 import RefundRowActions from "@/components/merchant/RefundRowActions";
 import { computeRefundStatus } from "@/lib/finix/refundStatus";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function StackedDateTime({ date }: { date: Date | null | undefined }) {
   if (!date) return <span className="text-slate-400">—</span>;
@@ -41,6 +42,7 @@ export default async function RefundsPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
   const viewScope = await resolveViewScope(auth);
@@ -150,7 +152,7 @@ export default async function RefundsPage({
                   <th className="px-6 py-3">ID</th>
                   {visibleCols.has("created") && <th className="px-6 py-3">Created (CDT)</th>}
                   {visibleCols.has("organization") && <th className="px-6 py-3">Organization</th>}
-                  {visibleCols.has("donor") && <th className="px-6 py-3">Donor</th>}
+                  {visibleCols.has("donor") && <th className="px-6 py-3">{pw("Donor")}</th>}
                   {visibleCols.has("amount") && <th className="px-6 py-3 text-right">Refund Amount</th>}
                   {visibleCols.has("state") && <th className="px-6 py-3">State</th>}
                   {visibleCols.has("originalPayment") && <th className="px-6 py-3">Original Payment</th>}

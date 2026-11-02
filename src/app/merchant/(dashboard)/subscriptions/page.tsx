@@ -17,6 +17,7 @@ import { loadSubscriptionsList, type SubscriptionsSortKey } from "@/lib/subscrip
 import { loadSubscriptionsAnalytics } from "@/lib/subscriptions/subscriptionsAnalytics";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const PAGE_SIZE = 25;
 
@@ -47,6 +48,7 @@ export default async function SubscriptionsPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -153,7 +155,7 @@ export default async function SubscriptionsPage({
           <h3 className="text-sm font-bold text-slate-900 mb-3">Subscriptions Requiring Attention</h3>
           {attentionList.length === 0 ? (
             <div>
-              <p className="text-sm font-semibold text-slate-900">No recurring donation issues</p>
+              <p className="text-sm font-semibold text-slate-900">{pw("No recurring donation issues")}</p>
               <p className="text-sm text-slate-500">No subscriptions currently require attention.</p>
             </div>
           ) : (
@@ -182,14 +184,14 @@ export default async function SubscriptionsPage({
                 <Repeat className="w-6 h-6 text-slate-300" />
               </div>
               <h3 className="text-sm font-bold text-slate-900 mb-1">No subscriptions</h3>
-              <p className="text-sm text-slate-500 max-w-sm mx-auto">Recurring donation schedules will appear here after they are created.</p>
+              <p className="text-sm text-slate-500 max-w-sm mx-auto">{pw("Recurring donation schedules will appear here after they are created.")}</p>
             </div>
           ) : (
             <table className="w-full text-sm min-w-[1500px]">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
                   <th className="px-6 py-3">Subscription ID</th>
-                  <th className="px-6 py-3">Donor</th>
+                  <th className="px-6 py-3">{pw("Donor")}</th>
                   <th className="px-6 py-3 text-right">Amount</th>
                   <th className="px-6 py-3">Frequency</th>
                   <th className="px-6 py-3 text-right">Monthly Value</th>

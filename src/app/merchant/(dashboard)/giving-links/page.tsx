@@ -9,12 +9,14 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingLinksPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -43,7 +45,7 @@ export default async function GivingLinksPage({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold text-slate-900">Giving Links</h2>
+        <h2 className="text-lg font-bold text-slate-900">{pw("Giving Links")}</h2>
         <Link
           href="/merchant/giving-links/create"
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 text-sm font-semibold text-white hover:bg-blue-700"

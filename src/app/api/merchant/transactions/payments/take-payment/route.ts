@@ -16,6 +16,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { resolveOrCreateDonor } from "@/lib/donors/resolveOrCreateDonor";
 import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationGuard";
+import { resolvePaymentTerm } from "@/lib/settings/paymentMode";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
       fundName,
       studentId: submittedStudentId,
       studentGivenFor: submittedStudentGivenFor,
+      termLabel: submittedTermLabel,
       note,
       isAnonymous,
       goodsServicesProvided,
@@ -325,7 +327,11 @@ export async function POST(req: Request) {
         fraudSessionId,
         fundName: fundName || null,
         studentId: resolvedStudent.studentId,
-        studentTermLabel: resolvedStudent.termLabel,
+        studentTermLabel: resolvePaymentTerm({
+          termFieldEnabled: church.termFieldEnabled,
+          submittedTerm: submittedTermLabel,
+          studentTerm: resolvedStudent.termLabel,
+        }),
         studentGivenFor: resolvedStudent.givenFor,
         note: note || null,
         isAnonymous: isAnonymous ?? false,

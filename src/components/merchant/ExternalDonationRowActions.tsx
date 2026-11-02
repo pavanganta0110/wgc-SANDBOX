@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import DonorPicker from "@/components/merchant/DonorPicker";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface DonorHit {
   id: string;
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function ExternalDonationRowActions({ id, status, donorMatchStatus, canVoid, canSendReceipt, canMatch, hasDonorEmail, receiptAlreadySent }: Props) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [matching, setMatching] = useState(false);
@@ -134,8 +136,8 @@ export default function ExternalDonationRowActions({ id, status, donorMatchStatu
             </button>
           ) : (
             <>
-              <p className="text-[11px] text-slate-400">Or add a new donor:</p>
-              <input placeholder="Donor name" value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
+              <p className="text-[11px] text-slate-400">{pw("Or add a new donor:")}</p>
+              <input placeholder={pw("Donor name")} value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
               <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
               <input placeholder="Phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full rounded border border-slate-200 px-2 py-1 text-xs" />
               <div className="flex flex-wrap gap-2 pt-1">

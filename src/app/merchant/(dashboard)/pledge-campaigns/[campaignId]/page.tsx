@@ -10,8 +10,10 @@ import { computeCampaignProgress } from "@/lib/pledges/pledgeFulfillment";
 import { loadPledgesList } from "@/lib/pledges/loadPledgesList";
 import RecordPledgeForm from "@/components/merchant/RecordPledgeForm";
 import LinkPledgeFulfillmentButton from "@/components/merchant/LinkPledgeFulfillmentButton";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function PledgeCampaignDetailPage({ params }: { params: Promise<{ campaignId: string }> }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -66,7 +68,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
             <p className="font-semibold text-slate-900">{formatCents(progress.totalFulfilledCents)}</p>
           </div>
           <div>
-            <p className="text-slate-500">Direct Donations</p>
+            <p className="text-slate-500">{pw("Direct Donations")}</p>
             <p className="font-semibold text-slate-900">{formatCents(progress.totalDirectDonationCents)}</p>
           </div>
           <div>
@@ -90,7 +92,7 @@ export default async function PledgeCampaignDetailPage({ params }: { params: Pro
               <table className="min-w-full divide-y divide-slate-100">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Donor</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">{pw("Donor")}</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Pledged</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Fulfilled</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500">Status</th>

@@ -26,6 +26,7 @@ import {
   DISPUTE_DISPLAY_STATUS_LABELS,
 } from "@/lib/finix/disputeStatus";
 import { PinButton } from "@/components/merchant/PaymentDetailActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function StackedDateTime({ date }: { date: Date | null | undefined }) {
   if (!date) return <span className="text-slate-400">—</span>;
@@ -59,6 +60,7 @@ export default async function DisputesPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -190,7 +192,7 @@ export default async function DisputesPage({
                       </Link>
                     </th>
                   )}
-                  {visibleCols.has("donor") && <th className="px-6 py-3">Donor</th>}
+                  {visibleCols.has("donor") && <th className="px-6 py-3">{pw("Donor")}</th>}
                   {visibleCols.has("paymentAmount") && (
                     <th className="px-6 py-3 text-right">
                       <Link href={sortLink("paymentAmount")} className="flex items-center justify-end gap-1 hover:text-slate-800">

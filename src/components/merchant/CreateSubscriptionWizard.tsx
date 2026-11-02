@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { CreditCard, Send, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { formatCents } from "@/lib/format";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const FREQUENCIES = [
   { value: "WEEKLY", label: "Weekly" },
@@ -36,13 +37,14 @@ interface PaymentMethodOption {
 type Flow = "choose" | "existing" | "setup-link";
 
 export default function CreateSubscriptionWizard() {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [flow, setFlow] = useState<Flow>("choose");
 
   return (
     <div>
       <h2 className="text-lg font-bold text-slate-900 mb-1">Create Subscription</h2>
-      <p className="text-sm text-slate-500 mb-6">Set up a new recurring donation schedule for a donor.</p>
+      <p className="text-sm text-slate-500 mb-6">{pw("Set up a new recurring donation schedule for a donor.")}</p>
 
       {flow === "choose" && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
@@ -52,15 +54,15 @@ export default function CreateSubscriptionWizard() {
           >
             <CreditCard className="w-6 h-6 text-slate-700 mb-3" />
             <h3 className="font-bold text-slate-900 mb-1">Use Existing Payment Method</h3>
-            <p className="text-sm text-slate-500">Create a recurring donation using an enabled payment method already saved for this donor.</p>
+            <p className="text-sm text-slate-500">{pw("Create a recurring donation using an enabled payment method already saved for this donor.")}</p>
           </button>
           <button
             onClick={() => setFlow("setup-link")}
             className="text-left p-6 rounded-2xl border border-slate-200 bg-white hover:border-slate-900 hover:shadow-sm transition"
           >
             <Send className="w-6 h-6 text-slate-700 mb-3" />
-            <h3 className="font-bold text-slate-900 mb-1">Send Setup Link to Donor</h3>
-            <p className="text-sm text-slate-500">Send the donor a secure link where they can review the recurring terms, provide payment information, and consent.</p>
+            <h3 className="font-bold text-slate-900 mb-1">{pw("Send Setup Link to Donor")}</h3>
+            <p className="text-sm text-slate-500">{pw("Send the donor a secure link where they can review the recurring terms, provide payment information, and consent.")}</p>
           </button>
         </div>
       )}
@@ -468,7 +470,7 @@ function SetupLinkFlow({ onBack }: { onBack: () => void }) {
                 ))}
               </div>
             )}
-            <p className="text-xs text-slate-400 mb-3">Or enter a new donor's contact information:</p>
+            <p className="text-xs text-slate-400 mb-3">Or enter a new donor&apos;s contact information:</p>
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />
               <input placeholder="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none" />

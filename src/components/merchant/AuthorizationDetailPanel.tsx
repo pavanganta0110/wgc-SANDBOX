@@ -7,6 +7,7 @@ import { formatPersonName } from "@/lib/formatPersonName";
 import { resolveAuthorizationEffectiveStatus, isAuthorizationCaptured } from "@/lib/finix/authorizationStatus";
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 function formatDateTime(date: Date | null | undefined) {
   if (!date) return "—";
@@ -72,6 +73,7 @@ export default async function AuthorizationDetailPanel({
   authorizationId: string;
   churchId: string;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await prisma.finixAuthorization.findFirst({
     where: { finixAuthorizationId: authorizationId, churchId },
   });
@@ -127,7 +129,7 @@ export default async function AuthorizationDetailPanel({
 
       {/* Donor */}
       <div className="px-5 py-4 border-b border-slate-100">
-        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Donor</h4>
+        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{pw("Donor")}</h4>
         <div className="space-y-0.5">
           <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
           <Row label="Email" value={donor?.email || "—"} />

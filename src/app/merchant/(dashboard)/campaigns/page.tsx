@@ -6,8 +6,10 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import { prisma } from "@/lib/prisma";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function FundraisingCampaignsPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -31,7 +33,7 @@ export default async function FundraisingCampaignsPage() {
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div>
           <h2 className="text-lg font-medium">Fundraising Campaigns</h2>
-          <p className="mt-1 text-sm text-gray-500">Peer-to-peer fundraising drives — teams, individual fundraisers, and live donation walls.</p>
+          <p className="mt-1 text-sm text-gray-500">{pw("Peer-to-peer fundraising drives — teams, individual fundraisers, and live donation walls.")}</p>
         </div>
         {hasPermission(auth, "canCreateFundraisingCampaign") && (
           <Link

@@ -5,8 +5,10 @@ import CopyDonorPortalLink from "@/components/merchant/CopyDonorPortalLink";
 import PortalActivityCard from "@/components/merchant/PortalActivityCard";
 import { resolvePortalAccent } from "@/lib/donorPortal/portalBrand";
 import { loadPortalActivity } from "@/lib/donorPortal/portalActivity";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingSettingsPage() {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
   const churchId = session!.churchId!;
   const [church, givingLinks] = await Promise.all([
@@ -21,7 +23,7 @@ export default async function GivingSettingsPage() {
   return (
     <div className="space-y-6">
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-      <h3 className="text-sm font-bold text-slate-900 mb-1">Donor portal</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Donor portal")}</h3>
       <p className="text-xs text-slate-500 mb-4">
         Share this link so donors can sign in with their email to see their giving, receipts and statements, and manage their recurring gifts.
         It also appears on your public giving pages and in recurring-gift confirmation emails.
@@ -31,10 +33,10 @@ export default async function GivingSettingsPage() {
       <PortalActivityCard activity={portalActivity} />
     </div>
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-      <h3 className="text-sm font-bold text-slate-900 mb-1">Giving</h3>
+      <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Giving")}</h3>
       <p className="text-xs text-slate-500 mb-6">
         Organization-wide giving preferences. Amount, payment method, and branding settings live on each individual{" "}
-        <a href="/merchant/giving-links" className="text-blue-600 hover:underline">Giving Link</a>, where you can see a live preview of exactly what donors see.
+        <a href="/merchant/giving-links" className="text-blue-600 hover:underline">{pw("Giving Link")}</a>, where you can see a live preview of exactly what donors see.
       </p>
       <GivingSettingsForm
         initial={{

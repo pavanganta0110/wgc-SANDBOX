@@ -16,7 +16,9 @@ import { isAuthError } from "@/lib/auth/errors";
 // what was actually sent and had no confirmed working behavior. This
 // button now uses the same generator as every other receipt send, so it
 // actually works and creates a real, viewable DonationReceipt row.
-export async function POST(_req: Request, { params }: { params: Promise<{ transferId: string }> }) {
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function POST(req: Request, { params }: { params: Promise<{ transferId: string }> }) {
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -43,8 +45,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ transf
     return NextResponse.json({ error: "Payment not found" }, { status: 404 });
   }
 
+  // Optional body { email }: send to a typed address — for a payer who has none on file, or a different recipient.
+  const body = await req.json().catch(() => ({}));
+  const typedEmail = typeof body?.email === "string" ? body.email.trim() : "";
+  if (typedEmail && !EMAIL_PATTERN.test(typedEmail)) {
+    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
+
   try {
-    await sendDonationReceipt(payment.id, auth.churchId, auth.userId);
+    await sendDonationReceipt(payment.id, auth.churchId, auth.userId, typedEmail ? [typedEmail] : []);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error(`Receipt send failed for transfer ${transferId}:`, error);

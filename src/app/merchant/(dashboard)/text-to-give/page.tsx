@@ -3,8 +3,10 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
 import TextToGiveSettingsPanel from "@/components/merchant/TextToGiveSettingsPanel";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function TextToGivePage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -17,8 +19,8 @@ export default async function TextToGivePage() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-lg font-medium">Text to Give</h2>
-        <p className="mt-1 text-sm text-gray-500">A donor texts a keyword and gets back a link to give — set up your keywords ahead of launch.</p>
+        <h2 className="text-lg font-medium">{pw("Text to Give")}</h2>
+        <p className="mt-1 text-sm text-gray-500">{pw("A donor texts a keyword and gets back a link to give — set up your keywords ahead of launch.")}</p>
       </div>
       <TextToGiveSettingsPanel />
     </div>

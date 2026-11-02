@@ -5,6 +5,7 @@ import { UserPlus } from "lucide-react";
 import { useChartWidth } from "./useChartWidth";
 import { CHART_BLUE, INK, niceTicks, labelIndices } from "./chartUtils";
 import type { DonorGrowthBucket } from "@/lib/reports/dashboardHome";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 // New donors carry the chart's one accent hue; returning donors recede in a
 // neutral, so the eye lands on growth. A legend is always shown (2 series).
@@ -16,6 +17,7 @@ const RETURNING = "#c3c2b7";
  * stacked segments, each column its own hover/focus target.
  */
 export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }) {
+  const pw = usePaymentWording();
   const { ref, width } = useChartWidth<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
 
@@ -40,8 +42,8 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Donor growth</h2>
-          <p className="mt-0.5 text-xs text-slate-500">New and returning donors per period</p>
+          <h2 className="text-sm font-semibold text-slate-900">{pw("Donor growth")}</h2>
+          <p className="mt-0.5 text-xs text-slate-500">{pw("New and returning donors per period")}</p>
         </div>
         <ul className="flex items-center gap-4 text-xs text-slate-600">
           <li className="flex items-center gap-1.5">
@@ -56,7 +58,7 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
       {!hasData ? (
         <div className="mt-5 flex flex-1 flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 px-4 py-8 text-center" style={{ minHeight: 160 }}>
           <UserPlus className="h-5 w-5 text-slate-400" aria-hidden />
-          <p className="text-sm text-slate-600">No donor activity in this period yet.</p>
+          <p className="text-sm text-slate-600">{pw("No donor activity in this period yet.")}</p>
         </div>
       ) : (
         <div ref={ref} className="relative mt-4" style={{ minHeight: height }}>
@@ -148,12 +150,12 @@ export default function DonorGrowthChart({ data }: { data: DonorGrowthBucket[] }
             </div>
           )}
           <table className="sr-only">
-            <caption>Donor growth</caption>
+            <caption>{pw("Donor growth")}</caption>
             <thead>
               <tr>
                 <th scope="col">Period</th>
-                <th scope="col">New donors</th>
-                <th scope="col">Returning donors</th>
+                <th scope="col">{pw("New donors")}</th>
+                <th scope="col">{pw("Returning donors")}</th>
               </tr>
             </thead>
             <tbody>

@@ -40,6 +40,7 @@ import {
   ToolButton,
   FOCUS,
 } from "./ui/controls";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const DONOR_REPORT_COLUMNS = [
   "donorName",
@@ -266,6 +267,7 @@ export default function ReportExplorer({
   /** Optional content rendered between the page header and the summary strip (e.g. the Top Donors leaderboard). */
   afterHeader?: React.ReactNode;
 }) {
+  const pw = usePaymentWording();
   const [dateRangeKey, setDateRangeKey] = useState(
     fixedDateRange?.key ?? "ytd",
   );
@@ -678,7 +680,7 @@ export default function ReportExplorer({
   ) : activeFilterCount > 0 ? (
     <EmptyState
       icon={<SearchX className="h-5 w-5" />}
-      title="No donors match these filters"
+      title={pw("No donors match these filters")}
       body="Try a wider date range or clear a filter to see more."
       actionLabel="Clear filters"
       onAction={clearFilters}
@@ -686,7 +688,7 @@ export default function ReportExplorer({
   ) : reportType === "LAPSED" ? (
     <EmptyState
       icon={<Users className="h-5 w-5" />}
-      title="No lapsed donors. Nice!"
+      title={pw("No lapsed donors. Nice!")}
       body={`Everyone who has given before has given in the last ${lapsedDays} days.`}
     />
   ) : (
@@ -721,7 +723,7 @@ export default function ReportExplorer({
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/70 bg-white p-2 shadow-sm">
           <label className="relative min-w-[200px] flex-1">
-            <span className="sr-only">Search donors</span>
+            <span className="sr-only">{pw("Search donors")}</span>
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
               aria-hidden
@@ -851,7 +853,7 @@ export default function ReportExplorer({
                 <tr className="border-b border-slate-200">
                   {reportType === "RECURRING" ? (
                     <>
-                      <Th first>Donor</Th>
+                      <Th first>{pw("Donor")}</Th>
                       <Th align="right">Monthly value</Th>
                       <Th>Frequency</Th>
                       <Th>Status</Th>
@@ -1103,27 +1105,27 @@ export default function ReportExplorer({
                 Donor segment
               </h4>
               <SelectField
-                label="Donor segment"
+                label={pw("Donor segment")}
                 value={segment}
                 onChange={(e) => setSegment(e.target.value)}
                 className="w-full"
               >
-                <option value="">All Donors</option>
-                <option value="NEW">New Donors</option>
-                <option value="RETURNING">Returning Donors</option>
-                <option value="RECURRING">Recurring Donors</option>
-                <option value="LAPSED">Lapsed Donors</option>
-                <option value="MAJOR_DONOR">Major Donors</option>
-                <option value="INCREASED_GIVING">Increased Giving</option>
-                <option value="DECREASED_GIVING">Decreased Giving</option>
-                <option value="ONE_TIME">One-Time Donors</option>
+                <option value="">{pw("All Donors")}</option>
+                <option value="NEW">{pw("New Donors")}</option>
+                <option value="RETURNING">{pw("Returning Donors")}</option>
+                <option value="RECURRING">{pw("Recurring Donors")}</option>
+                <option value="LAPSED">{pw("Lapsed Donors")}</option>
+                <option value="MAJOR_DONOR">{pw("Major Donors")}</option>
+                <option value="INCREASED_GIVING">{pw("Increased Giving")}</option>
+                <option value="DECREASED_GIVING">{pw("Decreased Giving")}</option>
+                <option value="ONE_TIME">{pw("One-Time Donors")}</option>
                 <option value="MONTHLY_RECURRING">Monthly Recurring</option>
                 <option value="WEEKLY_RECURRING">Weekly Recurring</option>
                 <option value="FAILED_RECURRING">Failed Recurring</option>
                 <option value="NO_EMAIL">No Email</option>
                 <option value="NO_ADDRESS">No Mailing Address</option>
-                <option value="EXTERNAL_ONLY">External-Only Donors</option>
-                <option value="IN_KIND_DONOR">In-Kind Donors</option>
+                <option value="EXTERNAL_ONLY">{pw("External-Only Donors")}</option>
+                <option value="IN_KIND_DONOR">{pw("In-Kind Donors")}</option>
               </SelectField>
             </div>
             <fieldset>
@@ -1134,7 +1136,7 @@ export default function ReportExplorer({
                 Only gifts made through the selected link(s) are counted, and only donors with such a gift are listed. Leave empty for all donors. The export uses the same filter.
               </p>
               {givingLinks.length === 0 ? (
-                <p className="text-xs text-slate-500">No giving links yet.</p>
+                <p className="text-xs text-slate-500">{pw("No giving links yet.")}</p>
               ) : (
                 <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-2">
                   {givingLinks.map((l) => (
@@ -1225,7 +1227,7 @@ export default function ReportExplorer({
                 id="save-report-name"
                 value={saveName}
                 onChange={(e) => setSaveName(e.target.value)}
-                placeholder="e.g. Board Annual Giving Report"
+                placeholder={pw("e.g. Board Annual Giving Report")}
                 className={`h-10 w-full rounded-xl border border-slate-200 px-3 text-sm ${FOCUS}`}
               />
             </div>

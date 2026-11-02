@@ -42,3 +42,19 @@ describe("buildCsvExport — formula-injection sanitization is applied centrally
     expect(csv).toBe("Name\nJane Donor");
   });
 });
+
+describe("buildCsvExport — numeric columns", () => {
+  const rows = [{ amount: "-2.55", other: "-2.55" }];
+
+  it("keeps a plain negative number as a number in an opted-in column", () => {
+    const csv = buildCsvExport(rows, [{ header: "Amount", value: (r) => r.amount, numeric: true }]);
+    expect(csv.split("\n")[1]).toBe("-2.55");
+  });
+
+  it("still sanitizes everything else, including non-numbers in a numeric column", () => {
+    const plain = buildCsvExport(rows, [{ header: "Other", value: (r) => r.other }]);
+    expect(plain.split("\n")[1]).toBe("'-2.55");
+    const formula = buildCsvExport([{ v: "-1+2" }], [{ header: "V", value: (r) => r.v, numeric: true }]);
+    expect(formula.split("\n")[1]).toBe("'-1+2");
+  });
+});

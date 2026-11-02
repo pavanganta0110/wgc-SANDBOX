@@ -5,8 +5,10 @@ import { prisma } from "@/lib/prisma";
 import GivingLinkBuilderForm from "@/components/merchant/GivingLinkBuilderForm";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function CreateGivingLinkPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -33,7 +35,7 @@ export default async function CreateGivingLinkPage() {
       <Link href="/merchant/giving-links" className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
         <ArrowLeft className="w-4 h-4" /> All Giving Links
       </Link>
-      <h2 className="text-lg font-bold text-slate-900 mb-6">Create Giving Link</h2>
+      <h2 className="text-lg font-bold text-slate-900 mb-6">{pw("Create Giving Link")}</h2>
       <GivingLinkBuilderForm
         mode="create"
         studentGivingEnabled={church?.studentGivingEnabled ?? false}

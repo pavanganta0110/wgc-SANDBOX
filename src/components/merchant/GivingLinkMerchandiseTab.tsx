@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import toast from "react-hot-toast";
 import { Loader2, GripVertical, Star, ExternalLink } from "lucide-react";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 interface AvailableProduct {
   id: string;
@@ -28,6 +29,7 @@ interface Assignment {
  * existing; nothing here runs until a merchant opens this tab.
  */
 export default function GivingLinkMerchandiseTab({ givingLinkId, publicSlug }: { givingLinkId: string; publicSlug: string }) {
+  const pw = usePaymentWording();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [merchandiseEnabled, setMerchandiseEnabled] = useState(false);
@@ -98,7 +100,7 @@ export default function GivingLinkMerchandiseTab({ givingLinkId, publicSlug }: {
         <div>
           <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" checked={merchandiseEnabled} onChange={(e) => setMerchandiseEnabled(e.target.checked)} className="w-5 h-5 text-blue-600 rounded" />
-            <span className="font-bold text-slate-900">Enable Merchandise on this giving page</span>
+            <span className="font-bold text-slate-900">{pw("Enable Merchandise on this giving page")}</span>
           </label>
           <p className="text-sm text-slate-500 mt-1.5 ml-8 max-w-lg">
             This is the same public link as your donation page — turning this on replaces its checkout with a combined

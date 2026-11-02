@@ -9,6 +9,7 @@ import { loadEmailLogsList } from "@/lib/emailLogs/loadEmailLogsList";
 import StateBadge from "@/components/merchant/StateBadge";
 import Pagination from "@/components/merchant/Pagination";
 import EmailLogResendButton from "@/components/merchant/EmailLogResendButton";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const CATEGORY_LABELS: Record<string, string> = {
   DONATION_RECEIPT: "Donation Receipt",
@@ -39,6 +40,7 @@ export default async function EmailLogsPage({
   searchParams: Promise<{ page?: string; category?: string; status?: string; search?: string; from?: string; to?: string }>;
 }) {
   let auth;
+  const { pw } = await getPaymentWording();
   try {
     auth = await requireMerchantSession();
   } catch (err) {
@@ -61,13 +63,13 @@ export default async function EmailLogsPage({
       <div className="sm:flex sm:items-center sm:justify-between mb-6">
         <div>
           <h2 className="text-lg font-medium">Email Logs</h2>
-          <p className="mt-1 text-sm text-gray-500">Every email sent to your donors and contacts — receipts, statements, invoices, and more.</p>
+          <p className="mt-1 text-sm text-gray-500">{pw("Every email sent to your donors and contacts — receipts, statements, invoices, and more.")}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <SummaryCard label="Emails Sent" value={String(summary.totalSent)} />
-        <SummaryCard label="Unique Donors Reached" value={String(summary.uniqueDonorsReached)} />
+        <SummaryCard label={pw("Unique Donors Reached")} value={String(summary.uniqueDonorsReached)} />
       </div>
 
       <form className="flex flex-wrap gap-3 mb-4" method="GET">

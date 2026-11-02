@@ -16,6 +16,7 @@ import { loadRecurringDonorsList, type RecurringDonorsSortKey } from "@/lib/subs
 import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 import { loadRecurringDonorsAnalytics } from "@/lib/subscriptions/recurringDonorsAnalytics";
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const PAGE_SIZE = 25;
 
@@ -46,6 +47,7 @@ export default async function RecurringDonorsPage({
     id?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -97,7 +99,7 @@ export default async function RecurringDonorsPage({
   return (
     <div>
       <div className="flex items-center gap-2 mb-6">
-        <h2 className="text-lg font-bold text-slate-900">Recurring Donors</h2>
+        <h2 className="text-lg font-bold text-slate-900">{pw("Recurring Donors")}</h2>
         <div className="ml-auto flex items-center gap-2">
           <Link href="/merchant/giving-links" className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <Send className="w-4 h-4" />
@@ -108,18 +110,18 @@ export default async function RecurringDonorsPage({
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <SummaryCard label="Active Recurring Donors" value={String(summary.activeRecurringDonors)} />
+        <SummaryCard label={pw("Active Recurring Donors")} value={String(summary.activeRecurringDonors)} />
         <SummaryCard label="Monthly Recurring Value" value={formatCents(summary.monthlyRecurringValueCents)} />
         <SummaryCard label="Annualized Recurring Value" value={formatCents(summary.annualizedRecurringValueCents)} />
-        <SummaryCard label="New Recurring Donors" value={String(summary.newRecurringDonors)} sublabel="Last 30 days" />
-        <SummaryCard label="Paused Recurring Donors" value={String(summary.pausedRecurringDonors)} />
-        <SummaryCard label="Past-Due Recurring Donors" value={String(summary.pastDueRecurringDonors)} />
-        <SummaryCard label="Canceled Recurring Donors" value={String(summary.canceledRecurringDonors)} />
+        <SummaryCard label={pw("New Recurring Donors")} value={String(summary.newRecurringDonors)} sublabel="Last 30 days" />
+        <SummaryCard label={pw("Paused Recurring Donors")} value={String(summary.pausedRecurringDonors)} />
+        <SummaryCard label={pw("Past-Due Recurring Donors")} value={String(summary.pastDueRecurringDonors)} />
+        <SummaryCard label={pw("Canceled Recurring Donors")} value={String(summary.canceledRecurringDonors)} />
         <SummaryCard label="Failed Recurring Payments" value={String(summary.failedRecurringPayments)} />
-        <SummaryCard label="Donors Requiring Attention" value={String(summary.donorsRequiringAttention)} />
+        <SummaryCard label={pw("Donors Requiring Attention")} value={String(summary.donorsRequiringAttention)} />
         <SummaryCard label="Upcoming Charges (7 Days)" value={String(summary.upcomingCharges7Days.count)} sublabel={formatCents(summary.upcomingCharges7Days.amountCents)} />
         <SummaryCard label="Upcoming Charges (30 Days)" value={String(summary.upcomingCharges30Days.count)} sublabel={formatCents(summary.upcomingCharges30Days.amountCents)} />
-        <SummaryCard label="Lifetime Recurring Donations" value={formatCents(summary.lifetimeRecurringDonatedCents)} />
+        <SummaryCard label={pw("Lifetime Recurring Donations")} value={formatCents(summary.lifetimeRecurringDonatedCents)} />
         {summary.unlinkedActiveSubscriptions > 0 && (
           <SummaryCard
             label="Unlinked Subscriptions"
@@ -134,7 +136,7 @@ export default async function RecurringDonorsPage({
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <h3 className="text-sm font-bold text-slate-900 mb-3">Frequency Mix</h3>
           {frequencyMix.length === 0 ? (
-            <p className="text-sm text-slate-400">No active recurring donations for this period.</p>
+            <p className="text-sm text-slate-400">{pw("No active recurring donations for this period.")}</p>
           ) : (
             <div className="space-y-2">
               {frequencyMix.map((f) => {
@@ -165,11 +167,11 @@ export default async function RecurringDonorsPage({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="text-sm font-bold text-slate-900 mb-3">Donors Requiring Attention</h3>
+          <h3 className="text-sm font-bold text-slate-900 mb-3">{pw("Donors Requiring Attention")}</h3>
           {attentionList.length === 0 ? (
             <div>
-              <p className="text-sm font-semibold text-slate-900">No recurring donation issues</p>
-              <p className="text-sm text-slate-500">No recurring donors currently require attention.</p>
+              <p className="text-sm font-semibold text-slate-900">{pw("No recurring donation issues")}</p>
+              <p className="text-sm text-slate-500">{pw("No recurring donors currently require attention.")}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -198,7 +200,7 @@ export default async function RecurringDonorsPage({
               </div>
               {summary.unlinkedActiveSubscriptions > 0 ? (
                 <>
-                  <h3 className="text-sm font-bold text-slate-900 mb-1">Some subscriptions need donor matching</h3>
+                  <h3 className="text-sm font-bold text-slate-900 mb-1">{pw("Some subscriptions need donor matching")}</h3>
                   <p className="text-sm text-slate-500 max-w-sm mx-auto">
                     {summary.unlinkedActiveSubscriptions} active subscription{summary.unlinkedActiveSubscriptions === 1 ? "" : "s"} could not
                     be resolved to a donor yet — check the Subscriptions page to review or manually match them.
@@ -207,7 +209,7 @@ export default async function RecurringDonorsPage({
               ) : (
                 <>
                   <h3 className="text-sm font-bold text-slate-900 mb-1">No recurring subscriptions yet</h3>
-                  <p className="text-sm text-slate-500 max-w-sm mx-auto">Donors with recurring donation schedules will appear here.</p>
+                  <p className="text-sm text-slate-500 max-w-sm mx-auto">{pw("Donors with recurring donation schedules will appear here.")}</p>
                 </>
               )}
             </div>
@@ -215,7 +217,7 @@ export default async function RecurringDonorsPage({
             <table className="w-full text-sm min-w-[1400px]">
               <thead>
                 <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
-                  <th className="px-6 py-3">Donor</th>
+                  <th className="px-6 py-3">{pw("Donor")}</th>
                   <th className="px-6 py-3">Contact</th>
                   <th className="px-6 py-3">Recurring Status</th>
                   <th className="px-6 py-3 text-right">Monthly Value</th>
@@ -226,7 +228,7 @@ export default async function RecurringDonorsPage({
                   <th className="px-6 py-3">Next Billing</th>
                   <th className="px-6 py-3">Last Payment</th>
                   <th className="px-6 py-3 text-right">Failed</th>
-                  <th className="px-6 py-3 text-right">Lifetime Donated</th>
+                  <th className="px-6 py-3 text-right">{pw("Lifetime Donated")}</th>
                 </tr>
               </thead>
               <tbody>

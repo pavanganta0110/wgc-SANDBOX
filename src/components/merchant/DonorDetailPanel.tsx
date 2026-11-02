@@ -12,6 +12,7 @@ import { titleCaseFromSnake as titleCase } from "@/lib/finix/displayFormatters";
 import { loadDonorDetail } from "@/lib/donors/donorDetail";
 import { DONOR_DISPLAY_STATUS_LABELS } from "@/lib/donors/donorStatus";
 import DonorNotesList from "@/components/merchant/DonorNotesList";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function DonorDetailPanel({
   donorId,
@@ -22,12 +23,13 @@ export default async function DonorDetailPanel({
   churchId: string;
   canAddNote: boolean;
 }) {
+  const { pw } = await getPaymentWording();
   const detail = await loadDonorDetail(donorId, churchId);
 
   if (!detail) {
     return (
       <div className="w-full lg:w-[420px] shrink-0 border-l border-slate-100 bg-white rounded-2xl lg:rounded-none p-6">
-        <p className="text-sm text-slate-500">This donor could not be found.</p>
+        <p className="text-sm text-slate-500">{pw("This donor could not be found.")}</p>
       </div>
     );
   }
@@ -38,7 +40,7 @@ export default async function DonorDetailPanel({
   return (
     <div className="w-full lg:w-[420px] shrink-0 bg-white border border-slate-100 rounded-2xl shadow-sm h-fit lg:sticky lg:top-6">
       <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-        <h3 className="text-sm font-bold text-slate-900">Donor</h3>
+        <h3 className="text-sm font-bold text-slate-900">{pw("Donor")}</h3>
         <div className="flex items-center gap-2">
           <ViewAllDetailsButton href={`/merchant/donors/${donor.id}`} />
           <ClosePanelButton />
@@ -54,7 +56,7 @@ export default async function DonorDetailPanel({
         </div>
         {donor.companyName && <p className="text-sm text-slate-500 mb-2">{donor.companyName}</p>}
         <div className="space-y-1.5 text-sm">
-          <Row label="Donor ID" value={<CopyableIdBadge id={donor.id} />} />
+          <Row label={pw("Donor ID")} value={<CopyableIdBadge id={donor.id} />} />
           <Row label="Created" value={formatDateTime(donor.createdAt)} />
         </div>
       </div>
@@ -66,15 +68,15 @@ export default async function DonorDetailPanel({
         </div>
       )}
 
-      <Section title="Giving Summary">
-        <Row label="Total Donated" value={formatCents(aggregates.totalDonatedCents)} />
-        <Row label="Net Donated" value={formatCents(aggregates.netDonatedCents)} />
-        <Row label="Donation Count" value={String(aggregates.donationCount)} />
-        <Row label="Average Donation" value={formatCents(aggregates.averageDonationCents)} />
-        <Row label="Largest Donation" value={formatCents(aggregates.largestDonationCents)} />
-        <Row label="First Donation" value={aggregates.firstDonationAt ? formatDateCDT(aggregates.firstDonationAt) : "—"} />
-        <Row label="Last Donation" value={aggregates.lastDonationAt ? formatDateCDT(aggregates.lastDonationAt) : "—"} />
-        <Row label="Active Recurring Donations" value={String(aggregates.activeSubscriptionCount)} />
+      <Section title={pw("Giving Summary")}>
+        <Row label={pw("Total Donated")} value={formatCents(aggregates.totalDonatedCents)} />
+        <Row label={pw("Net Donated")} value={formatCents(aggregates.netDonatedCents)} />
+        <Row label={pw("Donation Count")} value={String(aggregates.donationCount)} />
+        <Row label={pw("Average Donation")} value={formatCents(aggregates.averageDonationCents)} />
+        <Row label={pw("Largest Donation")} value={formatCents(aggregates.largestDonationCents)} />
+        <Row label={pw("First Donation")} value={aggregates.firstDonationAt ? formatDateCDT(aggregates.firstDonationAt) : "—"} />
+        <Row label={pw("Last Donation")} value={aggregates.lastDonationAt ? formatDateCDT(aggregates.lastDonationAt) : "—"} />
+        <Row label={pw("Active Recurring Donations")} value={String(aggregates.activeSubscriptionCount)} />
         {aggregates.refundedAmountCents > 0 && <Row label="Lifetime Refunded" value={formatCents(aggregates.refundedAmountCents)} />}
         {aggregates.returnedAmountCents > 0 && <Row label="Lifetime Returned" value={formatCents(aggregates.returnedAmountCents)} />}
         {aggregates.disputedAmountCents > 0 && <Row label="Lifetime Disputed" value={formatCents(aggregates.disputedAmountCents)} />}
@@ -88,7 +90,7 @@ export default async function DonorDetailPanel({
 
       <Section title={`Recent Donations (${recentTransfers.length})`}>
         {recentTransfers.length === 0 ? (
-          <p className="text-sm text-slate-500">This donor&apos;s donation history will appear here.</p>
+          <p className="text-sm text-slate-500">{pw("This donor's donation history will appear here.")}</p>
         ) : (
           <div className="space-y-2">
             {recentTransfers.map((t) => (
@@ -109,7 +111,7 @@ export default async function DonorDetailPanel({
       </Section>
 
       {activeSubscriptions.length > 0 && (
-        <Section title="Recurring Donations">
+        <Section title={pw("Recurring Donations")}>
           <div className="space-y-2">
             {activeSubscriptions.map((s) => (
               <div key={s.id} className="flex items-center justify-between text-sm">

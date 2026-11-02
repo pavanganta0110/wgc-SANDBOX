@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { ADDRESS_SOURCES, type AddressSource } from "@/lib/donors/donorAddress";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const SOURCE_LABELS: Record<AddressSource, string> = {
   ONLINE_DONATION_FORM: "Online donation form",
@@ -56,6 +57,7 @@ export default function DonorMailingAddressSection({
    * existing donor rather than typing a brand-new address. */
   readOnlyPreview?: { addressLine1: string | null; city: string | null; state: string | null; postalCode: string | null } | null;
 }) {
+  const pw = usePaymentWording();
   const [open, setOpen] = useState(false);
   const set = (field: keyof DonorAddressValue, v: string) => onChange({ ...value, [field]: v });
 
@@ -63,13 +65,13 @@ export default function DonorMailingAddressSection({
     if (readOnlyPreview?.addressLine1) {
       return (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p className="text-xs font-semibold text-slate-500 mb-1">Donor Mailing Address (on file)</p>
+          <p className="text-xs font-semibold text-slate-500 mb-1">{pw("Donor Mailing Address (on file)")}</p>
           <p className="text-slate-700">{readOnlyPreview.addressLine1}</p>
           <p className="text-slate-700">{[readOnlyPreview.city, readOnlyPreview.state, readOnlyPreview.postalCode].filter(Boolean).join(", ")}</p>
         </div>
       );
     }
-    return <p className="text-xs text-slate-400">This donor has no mailing address on file.</p>;
+    return <p className="text-xs text-slate-400">{pw("This donor has no mailing address on file.")}</p>;
   }
 
   return (

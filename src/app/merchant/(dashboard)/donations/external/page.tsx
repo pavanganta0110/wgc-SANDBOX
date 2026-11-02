@@ -14,6 +14,7 @@ import Pagination from "@/components/merchant/Pagination";
 import { resolveExternalDonationScopedUserId } from "@/lib/donations/externalDonationScope";
 import { loadExternalDonationsList, loadExternalDonationSummary } from "@/lib/donations/externalDonationsList";
 import { resolveDateRange } from "@/lib/dateRangePresets";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const PAGE_SIZE = 25;
 
@@ -43,6 +44,7 @@ export default async function ExternalDonationsPage({
     unmatched?: string;
   }>;
 }) {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -104,7 +106,7 @@ export default async function ExternalDonationsPage({
     <div className="p-6 md:p-8 space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">External Donations</h1>
+          <h1 className="text-xl font-bold text-slate-900">{pw("External Donations")}</h1>
           <p className="text-sm text-slate-500 mt-1 max-w-2xl">
             Donations your organization received outside WGC Payments — cash, check, Zelle, Venmo, Cash App, PayPal, bank transfer, or another
             offline method. These records are never processed by Finix and are excluded from processing volume, settlements, deposits, and fee
@@ -132,7 +134,7 @@ export default async function ExternalDonationsPage({
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <SummaryCard label="Total external donations" value={formatCents(summary.totalAmountCents)} sublabel={`${summary.totalCount} donation${summary.totalCount === 1 ? "" : "s"}`} />
+        <SummaryCard label={pw("Total external donations")} value={formatCents(summary.totalAmountCents)} sublabel={`${summary.totalCount} donation${summary.totalCount === 1 ? "" : "s"}`} />
         <SummaryCard label="Receipts sent" value={String(summary.receiptSent)} />
         <SummaryCard label="Receipts not sent" value={String(summary.receiptNotSent)} />
         <SummaryCard label="Receipts failed" value={String(summary.receiptFailed)} />
@@ -144,7 +146,7 @@ export default async function ExternalDonationsPage({
         <section className="rounded-xl border border-amber-200 bg-amber-50/50">
           <div className="px-5 py-4 border-b border-amber-200">
             <h2 className="text-sm font-semibold text-amber-900">Unmatched External Donations ({unmatched.length})</h2>
-            <p className="text-xs text-amber-700 mt-0.5">Money was received but not yet connected to a donor.</p>
+            <p className="text-xs text-amber-700 mt-0.5">{pw("Money was received but not yet connected to a donor.")}</p>
           </div>
           <div className="divide-y divide-amber-100">
             {unmatched.map((d) => (
@@ -175,7 +177,7 @@ export default async function ExternalDonationsPage({
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="text-left px-5 py-3">Donor</th>
+                <th className="text-left px-5 py-3">{pw("Donor")}</th>
                 <th className="text-right px-5 py-3">Amount</th>
                 <th className="text-left px-5 py-3">Date</th>
                 <th className="text-left px-5 py-3">Method</th>

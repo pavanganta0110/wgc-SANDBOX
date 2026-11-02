@@ -33,8 +33,14 @@ export async function uploadPrivateFile(storageKey: string, bytes: Buffer, conte
  * never a permanent URL, and the caller must never persist this value
  * anywhere (DB, logs, audit records).
  */
-export async function createSignedDownloadUrl(storageKey: string, expiresInSeconds = 300): Promise<string> {
-  const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(storageKey, expiresInSeconds);
+export async function createSignedDownloadUrl(
+  storageKey: string,
+  expiresInSeconds = 300,
+  options?: { /** Forces a download with this file name instead of rendering the file in the browser. */ download?: string },
+): Promise<string> {
+  const { data, error } = await getClient()
+    .storage.from(BUCKET)
+    .createSignedUrl(storageKey, expiresInSeconds, options?.download ? { download: options.download } : undefined);
   if (error || !data?.signedUrl) throw new Error(`Failed to create signed URL: ${error?.message || "unknown error"}`);
   return data.signedUrl;
 }

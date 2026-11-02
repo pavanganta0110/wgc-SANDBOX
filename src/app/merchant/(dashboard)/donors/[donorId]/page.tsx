@@ -41,6 +41,7 @@ import DonorStatementsPanel from "@/components/merchant/DonorStatementsPanel";
 import SendGivingLinkButton from "@/components/merchant/SendGivingLinkButton";
 import DonationTrendChart from "@/components/merchant/DonationTrendChart";
 import Pagination from "@/components/merchant/Pagination";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 const TABS = [
   { key: "overview", label: "Overview" },
@@ -67,6 +68,7 @@ export default async function DonorProfilePage({
   params: Promise<{ donorId: string }>;
   searchParams: Promise<{ tab?: string; page?: string; edit?: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
   const permissions = getDonorPermissions(auth.impersonation ? "owner" : auth.rawRole);
@@ -92,7 +94,7 @@ export default async function DonorProfilePage({
         <Link href="/merchant/donors" className="text-sm text-blue-600 hover:underline flex items-center gap-1 mb-4">
           <ArrowLeft className="w-4 h-4" /> All Donors
         </Link>
-        <p className="text-sm text-slate-500">This donor could not be found.</p>
+        <p className="text-sm text-slate-500">{pw("This donor could not be found.")}</p>
       </div>
     );
   }
@@ -122,7 +124,7 @@ export default async function DonorProfilePage({
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
           <div>
-            <p className="text-xs text-slate-500">Total Donated</p>
+            <p className="text-xs text-slate-500">{pw("Total Donated")}</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.totalDonatedCents)}</p>
           </div>
           <div>
@@ -130,21 +132,21 @@ export default async function DonorProfilePage({
             <p className="font-bold text-slate-900">{formatCents(aggregates.totalDonatedCents - aggregates.externalDonatedCents)}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">External Donations</p>
+            <p className="text-xs text-slate-500">{pw("External Donations")}</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.externalDonatedCents)}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Net Donated</p>
+            <p className="text-xs text-slate-500">{pw("Net Donated")}</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.netDonatedCents)}</p>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
           <div>
-            <p className="text-xs text-slate-500">Donation Count</p>
+            <p className="text-xs text-slate-500">{pw("Donation Count")}</p>
             <p className="font-bold text-slate-900">{aggregates.donationCount}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Average Donation</p>
+            <p className="text-xs text-slate-500">{pw("Average Donation")}</p>
             <p className="font-bold text-slate-900">{formatCents(aggregates.averageDonationCents)}</p>
           </div>
           <div>
@@ -152,7 +154,7 @@ export default async function DonorProfilePage({
             <p className="font-bold text-slate-900">{aggregates.activeSubscriptionCount}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Last Donation</p>
+            <p className="text-xs text-slate-500">{pw("Last Donation")}</p>
             <p className="font-bold text-slate-900">{aggregates.lastDonationAt ? formatDateCDT(aggregates.lastDonationAt) : "—"}</p>
           </div>
         </div>

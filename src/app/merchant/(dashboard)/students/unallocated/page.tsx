@@ -8,8 +8,10 @@ import { canManageStudents, canViewStudents } from "@/lib/students/access";
 import { loadUnallocatedGifts } from "@/lib/students/ledger";
 import { studentDisplayName } from "@/lib/students/constants";
 import { AssignGiftControl } from "@/components/merchant/students/StudentActions";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function UnallocatedGiftsPage() {
+  const { pw } = await getPaymentWording();
   let auth;
   try {
     auth = await requireMerchantSession();
@@ -33,7 +35,7 @@ export default async function UnallocatedGiftsPage() {
     <div className="space-y-6">
       <header>
         <Link href="/merchant/students" className="text-xs font-semibold text-indigo-600 hover:underline">← All students</Link>
-        <h2 className="mt-1 text-lg font-bold text-slate-900">Unallocated gifts</h2>
+        <h2 className="mt-1 text-lg font-bold text-slate-900">{pw("Unallocated gifts")}</h2>
         <p className="mt-1 text-sm text-slate-500">
           Gifts to the general scholarship fund that haven&apos;t been assigned to a student yet. Assigning credits them to
           {church.studentCurrentTerm ? ` ${church.studentCurrentTerm}` : " the current term (set it on the Students page first)"}.
@@ -45,7 +47,7 @@ export default async function UnallocatedGiftsPage() {
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs font-semibold text-slate-500">
               <th className="px-5 py-3">Date</th>
-              <th className="px-3 py-3">Donor</th>
+              <th className="px-3 py-3">{pw("Donor")}</th>
               <th className="px-3 py-3">Source</th>
               <th className="px-3 py-3 text-right">Amount</th>
               <th className="px-5 py-3 text-right">{canManage ? "Assign" : ""}</th>
@@ -53,7 +55,7 @@ export default async function UnallocatedGiftsPage() {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {gifts.length === 0 && (
-              <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">Nothing waiting — every general gift has a student.</td></tr>
+              <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-500">{pw("Nothing waiting — every general gift has a student.")}</td></tr>
             )}
             {gifts.map((g) => (
               <tr key={g.key}>

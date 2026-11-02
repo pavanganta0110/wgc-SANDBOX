@@ -21,12 +21,14 @@ import { computeReconciliation } from "@/lib/finix/settlementReconciliation";
 import { getSettlementPermissions } from "@/lib/finix/settlementPermissions";
 import SettlementReconciliationPanel from "@/components/merchant/SettlementReconciliationPanel";
 import SettlementAuditHistory from "@/components/merchant/SettlementAuditHistory";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function SettlementFullDetailPage({
   params,
 }: {
   params: Promise<{ settlementId: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   const session = await getSession();
 
   // Team-access Checkpoint 4A: explicit wgc_admin rejection — see the
@@ -169,7 +171,7 @@ export default async function SettlementFullDetailPage({
                     <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">
                       <th className="py-2 pr-4">Payment ID</th>
                       <th className="py-2 pr-4">Created</th>
-                      <th className="py-2 pr-4">Donor</th>
+                      <th className="py-2 pr-4">{pw("Donor")}</th>
                       <th className="py-2 pr-4 text-right">Gross</th>
                       <th className="py-2 pr-4 text-right">Fees</th>
                       <th className="py-2 pr-4 text-right">Refunds</th>

@@ -19,6 +19,7 @@ import {
   BrandingSettings,
   DEFAULT_BRANDING_SETTINGS,
 } from "@/lib/givingLinks/types";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const DONOR_FIELD_LABELS: Record<DonorFieldKey, string> = {
   salutation: "Salutation (e.g. Mr. and Mrs.)",
@@ -231,6 +232,7 @@ export default function GivingLinkBuilderForm({
   /** Existing fund assignments (edit mode only) — includes archived funds so an admin can see and knowingly remove a stale assignment. */
   initialFundAssignments?: FundRow[];
 }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const [state, setState] = useState<BuilderState>({ ...defaultState(), ...(initial || {}) });
   // Create-mode-only concept — not a stored field. Existing links (edit
@@ -795,7 +797,7 @@ export default function GivingLinkBuilderForm({
                 placeholder="e.g. Building Fund Summer Campaign"
                 className={inputClass}
               />
-              <p className="text-xs text-slate-400 mt-1">Not shown to donors.</p>
+              <p className="text-xs text-slate-400 mt-1">{pw("Not shown to donors.")}</p>
             </div>
             <div>
               <FieldLabel>Public Title *</FieldLabel>
@@ -819,9 +821,9 @@ export default function GivingLinkBuilderForm({
             {studentGivingEnabled && (
               <div className="border border-slate-200 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-1">
-                  <h5 className="text-sm font-bold text-slate-900">Student Giving</h5>
+                  <h5 className="text-sm font-bold text-slate-900">{pw("Student Giving")}</h5>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <span className="text-xs font-semibold text-slate-500">Ask which student this gift is for</span>
+                    <span className="text-xs font-semibold text-slate-500">{pw("Ask which student this gift is for")}</span>
                     <input
                       type="checkbox"
                       checked={state.studentSelectionEnabled}
@@ -835,7 +837,7 @@ export default function GivingLinkBuilderForm({
                   Donors choose a student, themselves, or the general scholarship fund. Gifts are credited to that student for the current term.
                 </p>
                 {state.fundSelectionEnabled && (
-                  <p className="text-xs text-amber-700 mt-1">Turn off Gift Designations below to use Student Giving on this link.</p>
+                  <p className="text-xs text-amber-700 mt-1">{pw("Turn off Gift Designations below to use Student Giving on this link.")}</p>
                 )}
                 {state.studentSelectionEnabled && (
                   <label className="mt-2 flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
@@ -846,7 +848,7 @@ export default function GivingLinkBuilderForm({
                       className="mt-0.5 w-4 h-4"
                     />
                     <span>
-                      <span className="font-semibold text-slate-700">Use this as the giving link for all students</span>
+                      <span className="font-semibold text-slate-700">{pw("Use this as the giving link for all students")}</span>
                       <br />
                       It becomes the link shown on the Students page, replacing the current one.
                     </span>
@@ -871,7 +873,7 @@ export default function GivingLinkBuilderForm({
 
             <div className="border border-slate-200 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1">
-                <h5 className="text-sm font-bold text-slate-900">Gift Designations</h5>
+                <h5 className="text-sm font-bold text-slate-900">{pw("Gift Designations")}</h5>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <span className="text-xs font-semibold text-slate-500">Enable fund selection</span>
                   <input
@@ -1112,7 +1114,7 @@ export default function GivingLinkBuilderForm({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <FieldLabel>Max Successful Donations</FieldLabel>
+                <FieldLabel>{pw("Max Successful Donations")}</FieldLabel>
                 <input type="number" min="1" value={state.maxSuccessfulUses} onChange={(e) => update("maxSuccessfulUses", e.target.value)} placeholder="Unlimited" className={inputClass} />
               </div>
               <div>
@@ -1138,7 +1140,7 @@ export default function GivingLinkBuilderForm({
             </div>
           </Section>
 
-          <Section title="Donor Details" defaultOpen={false}>
+          <Section title={pw("Donor Details")} defaultOpen={false}>
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="text-sm text-slate-700">Mailing Address</span>
               <select
@@ -1182,7 +1184,7 @@ export default function GivingLinkBuilderForm({
             </div>
           </Section>
 
-          <Section title="Additional Donation Options" defaultOpen={false}>
+          <Section title={pw("Additional Donation Options")} defaultOpen={false}>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input type="checkbox" checked={state.feeCoverEnabled} onChange={(e) => update("feeCoverEnabled", e.target.checked)} />
               Allow donor to cover processing fees
@@ -1210,7 +1212,7 @@ export default function GivingLinkBuilderForm({
             {state.recurringEnabled && (
               <div className="ml-6 space-y-3 border-t border-slate-100 pt-3">
                 <div>
-                  <FieldLabel>Default Donation Type</FieldLabel>
+                  <FieldLabel>{pw("Default Donation Type")}</FieldLabel>
                   <div className="flex rounded-xl border border-slate-200 p-1 max-w-xs">
                     <button
                       type="button"

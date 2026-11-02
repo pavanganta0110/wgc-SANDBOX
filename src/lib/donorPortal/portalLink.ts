@@ -9,7 +9,10 @@ export function donorPortalUrl(churchSlug: string): string {
  * The link is just the portal page — never a credential — so a forwarded email
  * opens nothing; the recipient still signs in with a one-time emailed code.
  */
-export function donorPortalLinkParagraph(churchSlug: string | null | undefined): string {
+export function donorPortalLinkParagraph(churchSlug: string | null | undefined, paymentMode = false): string {
   if (!churchSlug) return "";
+  if (paymentMode) {
+    return `<p style="font-size:13px;color:#475569;">See your payments and download receipts: <a href="${donorPortalUrl(churchSlug)}">View my payments</a>.</p>`;
+  }
   return `<p style="font-size:13px;color:#475569;">See all your giving, download statements and manage recurring gifts: <a href="${donorPortalUrl(churchSlug)}">View my giving</a>.</p>`;
 }

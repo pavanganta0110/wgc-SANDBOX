@@ -5,6 +5,7 @@ import { Repeat, AlertTriangle } from "lucide-react";
 import type { TopDonorMetric, TopDonorRow } from "@/lib/donors/donorAnalytics";
 import { formatCents } from "@/lib/format";
 import { formatDateCDT } from "@/lib/formatDateTimeCDT";
+import { usePaymentWording } from "@/components/merchant/PaymentModeContext";
 
 const METRICS: { key: TopDonorMetric; label: string }[] = [
   { key: "gross", label: "Gross Donated" },
@@ -23,6 +24,7 @@ function initials(name: string) {
 }
 
 export default function TopDonorsCard({ rows, metric }: { rows: TopDonorRow[]; metric: TopDonorMetric }) {
+  const pw = usePaymentWording();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -41,7 +43,7 @@ export default function TopDonorsCard({ rows, metric }: { rows: TopDonorRow[]; m
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 h-full">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-slate-900">Top Donors</h3>
+        <h3 className="text-sm font-bold text-slate-900">{pw("Top Donors")}</h3>
       </div>
       <div className="flex items-center gap-1 bg-slate-50 rounded-lg p-1 mb-3 flex-wrap">
         {METRICS.map((m) => (

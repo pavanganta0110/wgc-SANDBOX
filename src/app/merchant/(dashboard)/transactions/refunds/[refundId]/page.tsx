@@ -9,12 +9,14 @@ import { formatDateTimeCDT } from "@/lib/formatDateTimeCDT";
 import { loadRefundDetail } from "@/lib/finix/refundDetail";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
+import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function RefundFullDetailPage({
   params,
 }: {
   params: Promise<{ refundId: string }>;
 }) {
+  const { pw } = await getPaymentWording();
   const auth = await requireMerchantSession();
   const churchId = auth.churchId;
   const { refundId } = await params;
@@ -135,7 +137,7 @@ export default async function RefundFullDetailPage({
         <div className="space-y-6">
           {/* Donor */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">Donor</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-4">{pw("Donor")}</h3>
             <Row label="Name" value={<DonorNameLink donorId={donor?.id} name={formatPersonName(donor?.name, instrument?.accountHolderName)} />} />
             <Row label="Email" value={donor?.email || "—"} />
             <Row label="Phone" value={donor?.phone || "—"} />
