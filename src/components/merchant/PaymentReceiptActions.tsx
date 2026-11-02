@@ -13,6 +13,41 @@ export default function PaymentReceiptActions({ transferId, defaultEmail = "" }:
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState(defaultEmail);
   const [sending, setSending] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const receiptUrl = `/api/merchant/transactions/payments/${transferId}/receipt-view`;
+
+  /**
+   * Opens the browser's print dialog for the receipt PDF. The PDF is loaded into a hidden frame and printed from
+   * there; where a browser can't print a PDF that way (or has no PDF viewer), it falls back to opening the PDF.
+   */
+  async function printReceipt() {
+    setPrinting(true);
+    try {
+      const res = await fetch(receiptUrl);
+      if (!res.ok) throw new Error("Receipt unavailable");
+      const objectUrl = URL.createObjectURL(await res.blob());
+      const frame = document.createElement("iframe");
+      frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+      frame.src = objectUrl;
+      frame.onload = () => {
+        try {
+          frame.contentWindow?.focus();
+          frame.contentWindow?.print();
+        } catch {
+          window.open(objectUrl, "_blank", "noopener");
+        }
+        setTimeout(() => {
+          frame.remove();
+          URL.revokeObjectURL(objectUrl);
+        }, 60_000);
+      };
+      document.body.appendChild(frame);
+    } catch {
+      window.open(receiptUrl, "_blank", "noopener");
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   async function sendEmail() {
     const typed = email.trim();
@@ -41,14 +76,14 @@ export default function PaymentReceiptActions({ transferId, defaultEmail = "" }:
   return (
     <div className="space-y-2">
       <div className="flex gap-2 justify-center">
-        <a
-          href={`/api/merchant/transactions/payments/${transferId}/receipt-view`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        <button
+          type="button"
+          onClick={printReceipt}
+          disabled={printing}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
         >
-          <Printer className="w-4 h-4" /> Print receipt
-        </a>
+          <Printer className="w-4 h-4" /> {printing ? "Preparing…" : "Print receipt"}
+        </button>
         <button
           type="button"
           onClick={() => setEmailOpen((o) => !o)}
@@ -57,6 +92,11 @@ export default function PaymentReceiptActions({ transferId, defaultEmail = "" }:
           <Mail className="w-4 h-4" /> Email receipt
         </button>
       </div>
+      <p className="text-center text-xs">
+        <a href={receiptUrl} target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-blue-600 underline">
+          Open or download PDF
+        </a>
+      </p>
       {emailOpen && (
         <div className="flex gap-2 justify-center">
           <input
