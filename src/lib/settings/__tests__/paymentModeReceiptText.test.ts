@@ -74,3 +74,17 @@ describe("donorPortalLinkParagraph", () => {
     expect(donorPortalLinkParagraph(null, true)).toBe("");
   });
 });
+
+describe("receipt covered-fee line", () => {
+  it("is shown for payment-mode orgs even when the saved setting is off", () => {
+    expect(resolveReceiptSettings({ paymentMode: true, receiptShowDonorCoveredFee: false }).showDonorCoveredFee).toBe(true);
+    expect(resolveReceiptSettings({ paymentMode: true }).showDonorCoveredFee).toBe(true);
+  });
+
+  it("is unchanged for every other organization", () => {
+    expect(resolveReceiptSettings({ receiptShowDonorCoveredFee: false }).showDonorCoveredFee).toBe(false);
+    expect(resolveReceiptSettings({ receiptShowDonorCoveredFee: true }).showDonorCoveredFee).toBe(true);
+    expect(resolveReceiptSettings(null).showDonorCoveredFee).toBe(false);
+    expect(resolveReceiptSettings({ paymentMode: false }).showDonorCoveredFee).toBe(false);
+  });
+});

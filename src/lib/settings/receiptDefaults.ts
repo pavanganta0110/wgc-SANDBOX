@@ -45,7 +45,9 @@ export function resolveReceiptSettings(church: ReceiptSettingsSource | null) {
     showPhone: church?.receiptShowPhone ?? false,
     showEmail: church?.receiptShowEmail ?? true,
     showFund: church?.receiptShowFund ?? true,
-    showDonorCoveredFee: church?.receiptShowDonorCoveredFee ?? false,
+    // A payment-mode org's receipt always itemizes a fee the payer covered, so the receipt adds up to the card
+    // charge the payer sees. Other organizations keep the saved setting (off by default).
+    showDonorCoveredFee: church?.paymentMode ? true : (church?.receiptShowDonorCoveredFee ?? false),
     showPaymentMethodLastFour: church?.receiptShowPaymentMethodLastFour ?? true,
     showRecurringSchedule: church?.receiptShowRecurringSchedule ?? true,
     showDonationReference: church?.receiptShowDonationReference ?? true,
