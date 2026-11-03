@@ -26,6 +26,8 @@ import {
   type PaymentDimensionKey,
 } from "@/lib/reports/insightsData";
 import { getWhereMoneyCameFrom } from "@/lib/reports/moneySources";
+import { getBankReconciliation } from "@/lib/reports/bankReconciliation";
+import { buildReconciliationCards } from "@/lib/reports/reconciliationCards";
 import { SOURCE_LABELS } from "@/lib/donations/externalDonationTypes";
 import { formatCents } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -35,7 +37,7 @@ import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
 
-async function SummaryCards({ items }: { items: { label: string; value: string }[] }) {
+async function SummaryCards({ items }: { items: { label: string; value: string; note?: string }[] }) {
   const { pw } = await getPaymentWording();
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
@@ -46,6 +48,7 @@ async function SummaryCards({ items }: { items: { label: string; value: string }
               {pw(item.label)}
             </p>
             <p className="text-2xl font-bold text-slate-900">{item.value}</p>
+            {item.note && <p className="mt-1 text-xs text-slate-500">{item.note}</p>}
           </div>
         ))}
       </div>
@@ -239,12 +242,14 @@ async function PaymentsTab({
   scopedUserId?: string;
 }) {
   const { pw, paymentMode } = await getPaymentWording();
-  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external, feeBreakdown] = await Promise.all([
+  const [{ summary, byMethod, byMethodCount, byFailureCode, hasData }, moneySources, external, feeBreakdown, recon] = await Promise.all([
     getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
     getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),
     getExternalDonationsTotal(churchId, dateFilter, scopedUserId),
     // What was charged vs what the organization receives (the difference is any processing fee a payer covered).
     getPayerFeeBreakdown(churchId, dateFilter, scopedUserId),
+    // Organization-wide views only: fees, payouts and refunds can't be split by team member.
+    scopedUserId ? Promise.resolve(null) : getBankReconciliation(churchId, dateFilter),
   ]);
   const wgcVolumeCents = moneySources.totalCents;
 
@@ -252,23 +257,61 @@ async function PaymentsTab({
     <>
       <SummaryCards items={summary} />
 
-      {/* Always for payment-mode orgs; for everyone else whenever someone covered a processing fee in this period. */}
-      {(paymentMode || feeBreakdown.feesCoveredCents > 0) && (
+      {/* Without organization-wide records (a team member's own view): the payment itself vs the covered fee on top. */}
+      {!recon && (paymentMode || feeBreakdown.feesCoveredCents > 0) && (
         <>
           <SummaryCards
             items={[
               { label: paymentMode ? "Charged to Payers" : "Total Charged", value: formatCents(feeBreakdown.chargedCents) },
-              { label: paymentMode ? "Fees Covered by Payers" : "Processing Fees Covered", value: formatCents(feeBreakdown.feesCoveredCents) },
-              { label: "Amount to Organization", value: formatCents(feeBreakdown.amountToOrganizationCents) },
+              { label: "Fees Covered by Payers", value: formatCents(feeBreakdown.feesCoveredCents) },
+              { label: "Payment Amount (excluding covered fees)", value: formatCents(feeBreakdown.amountToOrganizationCents) },
             ]}
           />
           <p className="-mt-3 text-xs text-slate-500">
-            Total Transaction Volume is what was charged. A payer who covers the processing fee pays it on top of their
-            payment, so the amount your organization receives is lower than the total charged. Where a payer did not cover the
-            fee, processing fees are deducted from your deposit instead.
+            A payer who covers the processing fee pays it on top of their payment: Total Charged = Payment Amount + Fees
+            Covered by Payers. This is not what reaches your bank.
           </p>
         </>
       )}
+
+      {/* What reaches the bank, from Finix's own fee, refund and payout records (the same figures as the WGC admin view). */}
+      {recon && (recon.feesCents > 0 || recon.depositedCents > 0) && (() => {
+        const cards = buildReconciliationCards(recon, feeBreakdown.feesCoveredCents);
+        return (
+          <>
+            <SummaryCards items={cards.charges} />
+            <SummaryCards items={cards.bank} />
+            {cards.showFeeTypes && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
+                <p className="text-sm font-bold text-slate-900 mb-3">Fees charged, by type</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
+                      <th className="py-2">Fee</th>
+                      <th className="py-2 text-right">Charges</th>
+                      <th className="py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recon.feeTypes.map((f) => (
+                      <tr key={f.key} className="border-b border-slate-50 last:border-0">
+                        <td className="py-2 text-slate-700">{f.label}</td>
+                        <td className="py-2 text-right text-slate-500">{f.count}</td>
+                        <td className="py-2 text-right font-semibold text-slate-900">{formatCents(f.amountCents)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-3 text-xs text-slate-500">
+                  Only fees that were charged in this period are listed. Other charges, such as ACH returns, chargebacks, bank account
+                  validation or refund fees, appear here as soon as one is charged.
+                </p>
+              </div>
+            )}
+            <p className="-mt-3 text-xs text-slate-500">{cards.caption}</p>
+          </>
+        );
+      })()}
 
       <SummaryCards
         items={[
