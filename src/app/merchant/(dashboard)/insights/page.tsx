@@ -243,8 +243,8 @@ async function PaymentsTab({
     getPaymentsInsights(churchId, dateFilter, trend, scopedUserId),
     getWhereMoneyCameFrom(churchId, dateFilter, scopedUserId),
     getExternalDonationsTotal(churchId, dateFilter, scopedUserId),
-    // Payment-processor orgs: show clearly what payers were charged vs what the organization receives.
-    paymentMode ? getPayerFeeBreakdown(churchId, dateFilter, scopedUserId) : Promise.resolve(null),
+    // What was charged vs what the organization receives (the difference is any processing fee a payer covered).
+    getPayerFeeBreakdown(churchId, dateFilter, scopedUserId),
   ]);
   const wgcVolumeCents = moneySources.totalCents;
 
@@ -252,17 +252,18 @@ async function PaymentsTab({
     <>
       <SummaryCards items={summary} />
 
-      {feeBreakdown && (
+      {/* Always for payment-mode orgs; for everyone else whenever someone covered a processing fee in this period. */}
+      {(paymentMode || feeBreakdown.feesCoveredCents > 0) && (
         <>
           <SummaryCards
             items={[
-              { label: "Charged to Payers", value: formatCents(feeBreakdown.chargedCents) },
-              { label: "Fees Covered by Payers", value: formatCents(feeBreakdown.feesCoveredCents) },
+              { label: paymentMode ? "Charged to Payers" : "Total Charged", value: formatCents(feeBreakdown.chargedCents) },
+              { label: paymentMode ? "Fees Covered by Payers" : "Processing Fees Covered", value: formatCents(feeBreakdown.feesCoveredCents) },
               { label: "Amount to Organization", value: formatCents(feeBreakdown.amountToOrganizationCents) },
             ]}
           />
           <p className="-mt-3 text-xs text-slate-500">
-            Total Transaction Volume is what payers were charged. A payer who covers the processing fee pays it on top of their
+            Total Transaction Volume is what was charged. A payer who covers the processing fee pays it on top of their
             payment, so the amount your organization receives is lower than the total charged. Where a payer did not cover the
             fee, processing fees are deducted from your deposit instead.
           </p>
