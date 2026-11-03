@@ -18,7 +18,7 @@ export function buildReconciliationCards(recon: BankReconciliation, coveredByPay
   const paidByOrganization = recon.feesCents - covered;
 
   const charges: ReconCard[] = [{ label: "Total Charged", value: formatCents(recon.chargedCents) }];
-  if (recon.feesCents > 0) charges.push({ label: "Fees Charged", value: formatCents(recon.feesCents), note: "All fees Finix charged, listed below" });
+  if (recon.feesCents > 0) charges.push({ label: "Fees Charged", value: formatCents(recon.feesCents), note: "All fees charged, listed below" });
   if (covered > 0) {
     charges.push({
       label: "Fees Covered by Payers",
@@ -50,7 +50,7 @@ export function buildReconciliationCards(recon: BankReconciliation, coveredByPay
   const subtract = [recon.refundedCents !== 0 ? "Refunds & Returns" : null, recon.feesCents > 0 ? "Fees Charged" : null].filter(Boolean);
   const sentences: string[] = [`Net After Fees = Total Charged${subtract.map((s) => ` − ${s}`).join("")}.`];
   if (covered > 0 && paidByOrganization > 0) sentences.push("Fees Charged = Fees Covered by Payers + Fees Paid by Organization.");
-  if (recon.payoutFeeCount > 0) sentences.push("Finix charges a fixed fee, about 50¢, each time a payout is sent to your bank.");
+  if (recon.payoutFeeCount > 0) sentences.push("A fixed fee, about 50¢, is charged each time a payout is sent to your bank.");
   sentences.push(
     recon.feesCents > 0 || recon.pendingFeeCount > 0
       ? "Net After Fees should match Deposited to Bank once money has landed: payouts arrive one to two business days after payments, and processing fees can take until about the 15th of the next month to finalize."
