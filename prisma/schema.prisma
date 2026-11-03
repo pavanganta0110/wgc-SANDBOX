@@ -7034,3 +7034,19 @@ model PartnerEmbedLinkRequest {
   @@index([partnerKeyId, createdAt])
   @@index([partnerId, createdAt])
 }
+
+// What people typed into the Help Center "Ask a question" box, so we can see which questions the articles do not
+// answer and write the missing ones. The text is stored masked (long numbers and email addresses removed) and capped.
+model HelpSearchLog {
+  id        String   @id @default(cuid())
+  churchId  String
+  userId    String?
+  query     String
+  matched   Boolean
+  topSlug   String?
+  topScore  Float?
+  createdAt DateTime @default(now())
+
+  @@index([churchId, createdAt])
+  @@index([matched, createdAt])
+}

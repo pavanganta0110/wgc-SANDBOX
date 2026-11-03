@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getArticlesByCategory } from "@/lib/support/helpArticles";
+import HelpSearchBox from "@/components/merchant/HelpSearchBox";
 
 export default function HelpCenterPage() {
   const grouped = getArticlesByCategory();
@@ -7,6 +8,7 @@ export default function HelpCenterPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <h2 className="text-lg font-bold text-slate-900">Help Center</h2>
+      <HelpSearchBox />
       {Object.entries(grouped).map(([category, articles]) =>
         articles.length === 0 ? null : (
           <div key={category} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">

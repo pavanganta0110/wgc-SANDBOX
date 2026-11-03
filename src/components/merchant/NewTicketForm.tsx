@@ -13,10 +13,11 @@ export default function NewTicketForm() {
   const initialCategory = searchParams.get("category");
   const validInitialCategory = TICKET_CATEGORIES.some((c) => c.value === initialCategory) ? initialCategory! : "OTHER";
 
-  const [subject, setSubject] = useState("");
+  // Contact Support from a Help Center search arrives with the question already filled in.
+  const [subject, setSubject] = useState((searchParams.get("subject") ?? "").slice(0, 150));
   const [category, setCategory] = useState(validInitialCategory);
   const [priority, setPriority] = useState("NORMAL");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState((searchParams.get("description") ?? "").slice(0, 2000));
   const [contactEmail, setContactEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
