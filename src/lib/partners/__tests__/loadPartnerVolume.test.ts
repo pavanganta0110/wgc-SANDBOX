@@ -25,11 +25,11 @@ beforeEach(() => {
   db.bankReturn.aggregate.mockResolvedValue({ _sum: { amountCents: 200 } });
   db.$queryRaw
     .mockResolvedValueOnce([
-      { church_id: "c1", method: "CARD", amount: 10000n, count: 4n },
-      { church_id: "c1", method: "ACH", amount: 5000n, count: 1n },
-      { church_id: "c2", method: "CARD", amount: 2000n, count: 2n },
+      { church_id: "c1", method: "CARD", amount: BigInt(10000), count: BigInt(4) },
+      { church_id: "c1", method: "ACH", amount: BigInt(5000), count: BigInt(1) },
+      { church_id: "c2", method: "CARD", amount: BigInt(2000), count: BigInt(2) },
     ])
-    .mockResolvedValueOnce([{ id: "t1", created: new Date("2026-02-10T12:00:00Z"), church_id: "c1", method: "CARD", amount: 2500n }]);
+    .mockResolvedValueOnce([{ id: "t1", created: new Date("2026-02-10T12:00:00Z"), church_id: "c1", method: "CARD", amount: BigInt(2500) }]);
 });
 
 describe("loadPartnerVolume", () => {
@@ -59,7 +59,7 @@ describe("loadPartnerVolume", () => {
     db.$queryRaw.mockReset();
     db.$queryRaw
       .mockResolvedValueOnce([])
-      .mockResolvedValueOnce(Array.from({ length: TRANSACTION_LIMIT + 1 }, (_, i) => ({ id: `t${i}`, created: new Date(), church_id: "c1", method: "CARD", amount: 100n })));
+      .mockResolvedValueOnce(Array.from({ length: TRANSACTION_LIMIT + 1 }, (_, i) => ({ id: `t${i}`, created: new Date(), church_id: "c1", method: "CARD", amount: BigInt(100) })));
     const v = await loadPartnerVolume({ partnerId: "p1", from, to });
     expect(v.transactionsTruncated).toBe(true);
     expect(v.transactions).toHaveLength(TRANSACTION_LIMIT);
