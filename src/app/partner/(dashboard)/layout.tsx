@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Percent, Users, Webhook } from "lucide-react";
+import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Percent, Receipt, TrendingUp, Users, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -8,11 +8,13 @@ import PartnerViewBanner from "@/components/partner/PartnerViewBanner";
 
 export const dynamic = "force-dynamic";
 
-// An agent's login sees only the commission page.
-const AGENT_NAV_HREFS = ["/partner/commissions"];
+// An agent's login sees only these pages, each limited to the clients they brought in.
+const AGENT_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions"];
 
 const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
+  { name: "Volume", href: "/partner/volume", icon: TrendingUp },
+  { name: "Transactions", href: "/partner/transactions", icon: Receipt },
   { name: "Commission", href: "/partner/commissions", icon: Percent },
   { name: "API Key", href: "/partner/api-keys", icon: KeyRound },
   { name: "Webhook", href: "/partner/webhook", icon: Webhook },
