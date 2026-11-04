@@ -29,7 +29,7 @@ interface EstimateMonth {
   estimatedResidualCents: number | null;
 }
 interface Stats {
-  partner: { id: string; name: string; pricePerMerchantCents: number | null };
+  partner: { id: string; name: string; partnerType?: string; pricePerMerchantCents: number | null };
   merchants: { linked: number; processing: number; active: number };
   processed: { amountCents: number; count: number };
   byMethod: Record<"CARD" | "ACH" | "OTHER", { amountCents: number; count: number }>;
@@ -142,9 +142,11 @@ export default function PartnerPerformance({ partnerId }: { partnerId: string })
         <Link href="/admin/partners" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
           <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> All partners
         </Link>
-        <Link href={`/admin/partners/${partnerId}/commission`} className="ml-4 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-          Commission and agents
-        </Link>
+        {stats?.partner.partnerType === "REFERRAL" && (
+          <Link href={`/admin/partners/${partnerId}/commission`} className="ml-4 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+            Commission and agents
+          </Link>
+        )}
         <h1 className="mt-2 text-2xl font-bold text-slate-900 flex items-center gap-2">
           <Handshake className="h-6 w-6 text-indigo-600" />
           {stats?.partner.name ?? "Partner"}

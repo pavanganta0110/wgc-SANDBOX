@@ -1,3 +1,4 @@
+import { requireSoftwarePartner } from "@/lib/partners/partnerPageGuards";
 import { headers } from "next/headers";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 
@@ -73,6 +74,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default async function PartnerDocsPage() {
+  await requireSoftwarePartner();
   const headerList = await headers();
   const host = headerList.get("x-forwarded-host") || headerList.get("host") || "your WGC address";
   const proto = host.startsWith("localhost") ? "http" : "https";

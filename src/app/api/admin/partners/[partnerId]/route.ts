@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isPartnerType, type PartnerType } from "@/lib/partners/partnerType";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { requirePartnerAdmin } from "@/lib/partners/requirePartnerAdmin";
@@ -17,8 +18,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ partne
   const { partnerId } = await params;
 
   const body = await req.json().catch(() => ({}));
-  const data: { suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null; embedSignInMode?: EmbedSignInMode } = {};
+  const data: { partnerType?: PartnerType; suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null; embedSignInMode?: EmbedSignInMode } = {};
 
+  if ("partnerType" in body) {
+    if (!isPartnerType(body.partnerType)) return NextResponse.json({ error: "partnerType must be SOFTWARE or REFERRAL." }, { status: 400 });
+    data.partnerType = body.partnerType;
+  }
   if ("suppressMerchantEmails" in body) {
     if (typeof body.suppressMerchantEmails !== "boolean") return NextResponse.json({ error: "suppressMerchantEmails must be true or false." }, { status: 400 });
     data.suppressMerchantEmails = body.suppressMerchantEmails;

@@ -5,11 +5,9 @@ import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
 import PartnerViewBanner from "@/components/partner/PartnerViewBanner";
+import { navHrefsFor } from "@/lib/partners/partnerType";
 
 export const dynamic = "force-dynamic";
-
-// An agent's login sees only these pages, each limited to the clients they brought in.
-const AGENT_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions"];
 
 const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
@@ -27,7 +25,9 @@ const NAV_ITEMS = [
 export default async function PartnerDashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getPartnerSession({ allowAgent: true });
   if (!session) redirect("/partner/login");
-  const navItems = session.agentId ? NAV_ITEMS.filter((i) => AGENT_NAV_HREFS.includes(i.href)) : NAV_ITEMS;
+  // A software partner and a referral partner get different menus; an agent only the pages for their own clients.
+  const allowed = navHrefsFor(session.partnerType, Boolean(session.agentId));
+  const navItems = NAV_ITEMS.filter((i) => allowed.includes(i.href));
   const live = partnerKeyEnvironment() === "live";
 
   return (

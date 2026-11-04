@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { requirePartnerAdmin } from "@/lib/partners/requirePartnerAdmin";
 import { slugifyPartnerName } from "@/lib/partners/partnerAccounts";
+import { isPartnerType } from "@/lib/partners/partnerType";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
 import { DEFAULT_PARTNER_PRICE_PER_MERCHANT_CENTS } from "@/lib/partners/partnerPricing";
@@ -17,6 +18,7 @@ export async function GET() {
       id: true,
       name: true,
       slug: true,
+      partnerType: true,
       status: true,
       contactEmail: true,
       suppressMerchantEmails: true,
@@ -123,11 +125,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "A partner with that short name already exists." }, { status: 409 });
   }
 
-  const partner = await prisma.partner.create({ data: { name, slug, contactEmail, pricePerMerchantCents: DEFAULT_PARTNER_PRICE_PER_MERCHANT_CENTS } });
+  if ("partnerType" in body && !isPartnerType(body.partnerType)) {
+    return NextResponse.json({ error: "Choose software partner or referral partner." }, { status: 400 });
+  }
+  const partnerType = isPartnerType(body.partnerType) ? body.partnerType : "SOFTWARE";
+  // A referral partner earns a share of WGC's profit; it is not billed per merchant like a software partner.
+  const pricePerMerchantCents = partnerType === "REFERRAL" ? null : DEFAULT_PARTNER_PRICE_PER_MERCHANT_CENTS;
+  const partner = await prisma.partner.create({ data: { name, slug, contactEmail, partnerType, pricePerMerchantCents } });
   await createAuditLog({
     action: "PARTNER_CREATED",
     actorEmail: auth.session.email,
-    metadata: { partnerId: partner.id, slug, pricePerMerchantCents: DEFAULT_PARTNER_PRICE_PER_MERCHANT_CENTS },
+    metadata: { partnerId: partner.id, slug, partnerType, pricePerMerchantCents },
   });
   return NextResponse.json({ partner }, { status: 201 });
 }

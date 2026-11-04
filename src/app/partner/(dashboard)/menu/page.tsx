@@ -1,8 +1,10 @@
+import { requireSoftwarePartner } from "@/lib/partners/partnerPageGuards";
 import PartnerMenuPanel from "@/components/partner/PartnerMenuPanel";
 
 export const metadata = { title: "Menu | Partner dashboard" };
 
-export default function PartnerMenuPage() {
+export default async function PartnerMenuPage() {
+  await requireSoftwarePartner();
   return (
     <div className="space-y-6">
       <div>

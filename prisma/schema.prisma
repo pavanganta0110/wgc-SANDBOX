@@ -541,6 +541,9 @@ model Partner {
   name                       String
   slug                       String    @unique
   contactEmail               String?
+  /// SOFTWARE (a software company whose customers use WGC) or REFERRAL (brings clients, earns a share of WGC's
+  /// profit). Decides which dashboard the partner sees. See src/lib/partners/partnerType.ts.
+  partnerType                String    @default("SOFTWARE")
   // ACTIVE | SUSPENDED. A suspended partner's staff are signed out and can't
   // sign in; its organizations and their payments are not affected.
   status                     String    @default("ACTIVE")

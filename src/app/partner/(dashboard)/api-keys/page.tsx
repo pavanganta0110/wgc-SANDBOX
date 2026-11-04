@@ -1,8 +1,10 @@
+import { requireSoftwarePartner } from "@/lib/partners/partnerPageGuards";
 import PartnerApiKeysPanel from "@/components/partner/PartnerApiKeysPanel";
 
 export const metadata = { title: "API Key | Partner dashboard" };
 
-export default function PartnerApiKeysPage() {
+export default async function PartnerApiKeysPage() {
+  await requireSoftwarePartner();
   return (
     <div className="space-y-6">
       <div>

@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PartnerCommissionsPage() {
   const session = await getPartnerSession({ allowAgent: true });
   if (!session) redirect("/partner/login");
+  if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
 
   // An agent sees only their own commission; partner staff see the partner's share and how it divides.
   const data = await loadCommission(session.partnerId, session.agentId ? { kind: "agent", agentId: session.agentId } : { kind: "partner" });

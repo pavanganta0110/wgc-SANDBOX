@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import { getAdminSession } from "@/lib/auth/session";
 import { PARTNER_SESSION_COOKIE_NAME } from "./partnerSessionConstants";
+import { parsePartnerType, type PartnerType } from "./partnerType";
 
 /**
  * Session for partner staff (a PartnerUser). It is deliberately its own cookie,
@@ -114,6 +115,7 @@ export interface PartnerSession {
   partnerUserId: string;
   partnerId: string;
   partnerName: string;
+  partnerType: PartnerType;
   email: string;
   name: string | null;
   /** True for a WGC admin looking at the dashboard: reads work, every change is refused. */
@@ -135,9 +137,9 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
     // signed in, so signing out of the admin ends it.
     const admin = await getAdminSession();
     if (!admin || admin.userId !== payload.viewAsAdminUserId || admin.role !== "wgc_super_admin") return null;
-    const partner = await prisma.partner.findUnique({ where: { id: payload.partnerId }, select: { name: true } });
+    const partner = await prisma.partner.findUnique({ where: { id: payload.partnerId }, select: { name: true, partnerType: true } });
     if (!partner) return null;
-    return { partnerUserId: payload.partnerUserId, partnerId: payload.partnerId, partnerName: partner.name, email: admin.email, name: admin.name, readOnly: true };
+    return { partnerUserId: payload.partnerUserId, partnerId: payload.partnerId, partnerName: partner.name, partnerType: parsePartnerType(partner.partnerType), email: admin.email, name: admin.name, readOnly: true };
   }
 
   const user = await prisma.partnerUser.findUnique({
@@ -150,7 +152,7 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
       disabledAt: true,
       authVersion: true,
       agentId: true,
-      partner: { select: { name: true, status: true } },
+      partner: { select: { name: true, status: true, partnerType: true } },
     },
   });
   if (!user || user.disabledAt) return null;
@@ -165,6 +167,7 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
     partnerUserId: user.id,
     partnerId: user.partnerId,
     partnerName: user.partner.name,
+    partnerType: parsePartnerType(user.partner.partnerType),
     email: user.email,
     name: user.name,
     ...(user.agentId ? { agentId: user.agentId } : {}),

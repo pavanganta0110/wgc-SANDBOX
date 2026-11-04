@@ -12,6 +12,7 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", time
 export default async function PartnerTransactionsPage({ searchParams }: { searchParams: Promise<{ period?: string; client?: string; method?: string }> }) {
   const session = await getPartnerSession({ allowAgent: true });
   if (!session) redirect("/partner/login");
+  if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
   const sp = await searchParams;
   const p = parseVolumePeriod(sp.period);
   const method = sp.method === "CARD" || sp.method === "ACH" ? sp.method : undefined;

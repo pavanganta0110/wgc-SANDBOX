@@ -16,6 +16,7 @@ interface PartnerRow {
   slug: string;
   status: string;
   contactEmail: string | null;
+  partnerType: "SOFTWARE" | "REFERRAL";
   suppressMerchantEmails: boolean;
   embedSignInMode?: string;
   onboardingCode: string;
@@ -65,6 +66,7 @@ export default function PartnersPanel() {
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newType, setNewType] = useState<"SOFTWARE" | "REFERRAL">("SOFTWARE");
 
   const [reloadKey, setReloadKey] = useState(0);
   const load = useCallback(async () => setReloadKey((k) => k + 1), []);
@@ -86,7 +88,7 @@ export default function PartnersPanel() {
 
   async function createPartner(e: React.FormEvent) {
     e.preventDefault();
-    const { ok, data } = await call("/api/admin/partners", "POST", { name: newName, contactEmail: newEmail });
+    const { ok, data } = await call("/api/admin/partners", "POST", { name: newName, contactEmail: newEmail, partnerType: newType });
     report(ok, data, "Partner created.");
     if (ok) {
       setNewName("");
@@ -115,6 +117,15 @@ export default function PartnersPanel() {
             Contact email (optional)
           </label>
           <input id="partner-contact" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 mb-1" htmlFor="partner-type">
+            Type
+          </label>
+          <select id="partner-type" value={newType} onChange={(e) => setNewType(e.target.value as "SOFTWARE" | "REFERRAL")} className={inputClass}>
+            <option value="SOFTWARE">Software partner (CRM, API, webhook)</option>
+            <option value="REFERRAL">Referral partner (earns a share, has agents)</option>
+          </select>
         </div>
         <button type="submit" className={buttonClass}>
           Create partner
@@ -180,7 +191,7 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
         <div>
           <h3 className="text-base font-bold text-slate-900">{partner.name}</h3>
           <p className="text-xs text-slate-500">
-            {partner.slug} · {partner.status}
+            {partner.partnerType === "REFERRAL" ? "Referral partner" : "Software partner"} · {partner.slug} · {partner.status}
             {partner.contactEmail ? ` · ${partner.contactEmail}` : ""}
           </p>
         </div>

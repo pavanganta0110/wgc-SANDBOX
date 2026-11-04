@@ -3,5 +3,6 @@ import { getPartnerSession } from "@/lib/partners/partnerSession";
 
 export default async function PartnerIndexPage() {
   const session = await getPartnerSession({ allowAgent: true });
-  redirect(session?.agentId ? "/partner/commissions" : "/partner/organizations");
+  if (session?.agentId) redirect("/partner/commissions");
+  redirect(session?.partnerType === "REFERRAL" ? "/partner/volume" : "/partner/organizations");
 }

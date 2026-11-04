@@ -1,8 +1,10 @@
+import { requireSoftwarePartner } from "@/lib/partners/partnerPageGuards";
 import PartnerBillingPanel from "@/components/partner/PartnerBillingPanel";
 
 export const metadata = { title: "Billing | Partner dashboard" };
 
-export default function PartnerBillingPage() {
+export default async function PartnerBillingPage() {
+  await requireSoftwarePartner();
   return (
     <div className="space-y-6">
       <div>

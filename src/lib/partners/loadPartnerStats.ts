@@ -53,7 +53,7 @@ export interface ResidualEstimateMonth {
 }
 
 export interface PartnerStats {
-  partner: { id: string; name: string; pricePerMerchantCents: number | null };
+  partner: { id: string; name: string; partnerType: string; pricePerMerchantCents: number | null };
   from: string;
   to: string;
   merchants: { linked: number; processing: number; active: number };
@@ -86,7 +86,7 @@ const monthKey = (d: Date) => monthStart(d).toISOString();
 const invoicePeriod = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
 export async function loadPartnerStats(partnerId: string, from: Date, to: Date): Promise<PartnerStats | null> {
-  const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true, name: true, pricePerMerchantCents: true } });
+  const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true, name: true, partnerType: true, pricePerMerchantCents: true } });
   if (!partner) return null;
 
   const churches = await prisma.church.findMany({

@@ -1,3 +1,4 @@
+import { requireSoftwarePartner } from "@/lib/partners/partnerPageGuards";
 import { redirect } from "next/navigation";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { loadPartnerOrganizations } from "@/lib/partners/loadPartnerOrganizations";
@@ -8,6 +9,7 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" 
 const dateFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
 
 export default async function PartnerOrganizationsPage() {
+  await requireSoftwarePartner();
   const session = await getPartnerSession();
   if (!session) redirect("/partner/login");
 
