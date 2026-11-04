@@ -20,7 +20,7 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
 }
 
 export default async function PartnerVolumePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
-  const session = await getPartnerSession({ allowAgent: true });
+  const session = await getPartnerSession({ allowAgent: true, allowViewer: true });
   if (!session) redirect("/partner/login");
   if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
   const { period } = await searchParams;

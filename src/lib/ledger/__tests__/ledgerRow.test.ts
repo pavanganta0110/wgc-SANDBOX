@@ -152,6 +152,15 @@ describe("buildPaymentLedgerRow", () => {
     expect(row.cardBrand).toBeNull();
   });
 
+  it("carries the recurring commitment's current schedule on every renewal, and none on a one-time gift", () => {
+    const subs = new Map([["SUB_1", { state: "CANCELED", billingInterval: "MONTHLY", nextBillingDate: new Date("2026-12-01T00:00:00Z") }]]);
+    const renewal = buildPaymentLedgerRow(payment({ finixSubscriptionId: "SUB_1" }), lookups({ subscriptionsByFinixId: subs }));
+    expect(renewal.subscription).toEqual({ state: "CANCELED", billingInterval: "MONTHLY", nextBillingDate: "2026-12-01T00:00:00.000Z" });
+    expect(buildPaymentLedgerRow(payment(), lookups({ subscriptionsByFinixId: subs })).subscription).toBeNull();
+    // A subscription that has not synced yet: still recurring, schedule unknown.
+    expect(buildPaymentLedgerRow(payment({ finixSubscriptionId: "SUB_9" }), lookups({ subscriptionsByFinixId: subs })).subscription).toBeNull();
+  });
+
   it("flags refunds, disputes and bank returns", () => {
     const refunded = buildPaymentLedgerRow(payment(), lookups({ refundedCentsByPaymentId: new Map([["pay1", 4_000]]) }));
     expect(refunded).toMatchObject({ refunded: true, refundedCents: 4_000, disputed: false, disputeState: null });

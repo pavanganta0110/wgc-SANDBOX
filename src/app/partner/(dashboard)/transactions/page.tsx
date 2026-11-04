@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const dateTimeFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" });
 
 export default async function PartnerTransactionsPage({ searchParams }: { searchParams: Promise<{ period?: string; client?: string; method?: string }> }) {
-  const session = await getPartnerSession({ allowAgent: true });
+  const session = await getPartnerSession({ allowAgent: true, allowViewer: true });
   if (!session) redirect("/partner/login");
   if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
   const sp = await searchParams;

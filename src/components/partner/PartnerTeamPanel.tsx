@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 interface Member {
   id: string;
   email: string;
+  role?: "FULL" | "VIEWER" | "AGENT";
   name: string | null;
   status: "active" | "invite_pending" | "disabled";
   lastLoginAt: string | null;
@@ -19,6 +20,7 @@ export default function PartnerTeamPanel() {
   const [members, setMembers] = useState<Member[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"FULL" | "VIEWER">("FULL");
   const [name, setName] = useState("");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -39,7 +41,7 @@ export default function PartnerTeamPanel() {
   async function invite(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const res = await fetch("/api/partner/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, name }) });
+    const res = await fetch("/api/partner/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, name, role }) });
     const body = await res.json().catch(() => ({}));
     setMessage(res.ok ? { text: body.message, error: false } : { text: body.error || "Couldn't send the invitation.", error: true });
     if (res.ok) {
@@ -76,11 +78,20 @@ export default function PartnerTeamPanel() {
           </label>
           <input id="team-email" type="email" required placeholder=" " value={email} onChange={(e) => setEmail(e.target.value)} className={`${inputClass} w-64`} />
         </div>
+        <div>
+          <label htmlFor="team-role" className="block text-xs font-semibold text-slate-600 mb-1">
+            Access
+          </label>
+          <select id="team-role" value={role} onChange={(e) => setRole(e.target.value as "FULL" | "VIEWER")} className={inputClass}>
+            <option value="FULL">Full access</option>
+            <option value="VIEWER">View-only (reporting)</option>
+          </select>
+        </div>
         <button type="submit" className={buttonClass}>
           Send invitation
         </button>
       </form>
-      <p className="text-xs text-slate-500">Everyone on the account has the same access: your organizations, API key, webhook and billing. Each person signs in with their own password and an emailed code.</p>
+      <p className="text-xs text-slate-500">Full access sees everything on the account, including keys, webhook and billing. View-only sees reporting only. Each person signs in with their own password and an emailed code.</p>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">

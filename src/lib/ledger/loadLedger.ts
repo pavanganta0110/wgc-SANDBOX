@@ -107,7 +107,9 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
   const transferIds = [...new Set(payments.map((p) => p.finixTransferId).filter((id): id is string => !!id))];
   const studentIds = [...new Set([...payments.map((p) => p.studentId), ...externals.map((e) => e.studentId)].filter((id): id is string => !!id))];
 
-  const [donorRows, refundRows, disputeRows, transferRows, studentRows] = await Promise.all([
+  const subscriptionIds = [...new Set(payments.map((p) => p.finixSubscriptionId).filter((id): id is string => !!id))];
+
+  const [donorRows, refundRows, disputeRows, transferRows, studentRows, subscriptionRows] = await Promise.all([
     Promise.all(chunk(donorIds, IN_CLAUSE_CHUNK).map((ids) => prisma.donor.findMany({ where: { churchId, id: { in: ids } }, select: DONOR_SELECT }))).then((r) => r.flat()),
     Promise.all(
       chunk(paymentIds, IN_CLAUSE_CHUNK).map((ids) =>
@@ -125,6 +127,11 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
     Promise.all(
       chunk(studentIds, IN_CLAUSE_CHUNK).map((ids) =>
         prisma.student.findMany({ where: { churchId, id: { in: ids } }, select: { id: true, studentNumber: true, firstName: true, lastName: true } })
+      )
+    ).then((r) => r.flat()),
+    Promise.all(
+      chunk(subscriptionIds, IN_CLAUSE_CHUNK).map((ids) =>
+        prisma.finixSubscription.findMany({ where: { churchId, finixSubscriptionId: { in: ids } }, select: { finixSubscriptionId: true, state: true, billingInterval: true, nextBillingDate: true } })
       )
     ).then((r) => r.flat()),
   ]);
@@ -148,7 +155,11 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
     transferRows.map((t) => [t.finixTransferId, { settlementId: t.finixSettlementId, feeCents: t.feeCents }])
   );
 
-  return { donors, students, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId };
+  const subscriptionsByFinixId = new Map(
+    subscriptionRows.map((sub) => [sub.finixSubscriptionId, { state: sub.state, billingInterval: sub.billingInterval, nextBillingDate: sub.nextBillingDate }])
+  );
+
+  return { donors, students, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId, subscriptionsByFinixId };
 }
 
 export interface LoadLedgerParams {

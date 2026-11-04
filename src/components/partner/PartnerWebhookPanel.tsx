@@ -39,6 +39,7 @@ const statusLabel: Record<string, string> = { ACTIVE: "Active", DISABLED: "Turne
 
 export default function PartnerWebhookPanel() {
   const [data, setData] = useState<WebhookResponse | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [url, setUrl] = useState("");
   const [events, setEvents] = useState<string[]>([]);
@@ -53,6 +54,7 @@ export default function PartnerWebhookPanel() {
       .then((d) => {
         if (cancelled) return;
         if (d.error) return setMessage({ text: d.error, error: true });
+        setLoadFailed(false);
         setData(d);
         // Fill the form once per endpoint, from what is saved (or the defaults for a new one).
         const key = d.endpoint?.id ?? "new";
@@ -61,6 +63,10 @@ export default function PartnerWebhookPanel() {
           setUrl(d.endpoint?.url ?? "");
           setEvents(d.endpoint?.subscribedEventsJson ?? d.defaultEvents ?? []);
         }
+      })
+      // A failed load must never look like "no webhook yet": that would invite creating a second one over a live endpoint.
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
@@ -98,6 +104,18 @@ export default function PartnerWebhookPanel() {
         : { text: `Test event failed: ${body.error || "no response"}.`, error: true }
     );
     reload();
+  }
+
+  if (loadFailed) {
+    return (
+      <div className="space-y-3">
+        <p role="alert" className="text-sm text-red-600">We couldn&apos;t load your webhook. Your webhook has not been changed.</p>
+        <button type="button" onClick={() => { setLoadFailed(false); reload(); }} className={buttonClass}>Try again</button>
+      </div>
+    );
+  }
+  if (!data) {
+    return message ? <p role="alert" className="text-sm text-red-600">{message.text}</p> : <p className="text-sm text-slate-500">Loading your webhook…</p>;
   }
 
   const toggle = (type: string) => setEvents((cur) => (cur.includes(type) ? cur.filter((t) => t !== type) : [...cur, type]));

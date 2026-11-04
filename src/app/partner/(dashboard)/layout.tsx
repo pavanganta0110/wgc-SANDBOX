@@ -23,10 +23,10 @@ const NAV_ITEMS = [
 ];
 
 export default async function PartnerDashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getPartnerSession({ allowAgent: true });
+  const session = await getPartnerSession({ allowAgent: true, allowViewer: true });
   if (!session) redirect("/partner/login");
   // A software partner and a referral partner get different menus; an agent only the pages for their own clients.
-  const allowed = navHrefsFor(session.partnerType, Boolean(session.agentId));
+  const allowed = navHrefsFor(session.partnerType, Boolean(session.agentId), session.staffRole === "VIEWER");
   const navItems = NAV_ITEMS.filter((i) => allowed.includes(i.href));
   const live = partnerKeyEnvironment() === "live";
 

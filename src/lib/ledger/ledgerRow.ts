@@ -77,6 +77,12 @@ export interface LedgerRow {
   voided: boolean;
   /** Ties every renewal to one recurring commitment. */
   subscriptionId: string | null;
+  /**
+   * The recurring commitment's current schedule, for a recurring gift: the processor's state (ACTIVE, CANCELED, ...),
+   * how often it bills, and the next billing date. Null for a one-time or external gift, or before the subscription
+   * has synced. Reflects now, not the moment of this gift, so don't use it to date the gift.
+   */
+  subscription: { state: string | null; billingInterval: string | null; nextBillingDate: string | null } | null;
   fairMarketValueCents: number | null;
   goodsDescription: string | null;
   /** Settlement / deposit the gift landed in. Null until it settles. */
@@ -167,6 +173,8 @@ export interface LedgerLookups {
   disputeStateByPaymentId: Map<string, string | null>;
   /** Settlement and fee per Finix transfer id. */
   transfersByFinixTransferId: Map<string, { settlementId: string | null; feeCents: number | null }>;
+  /** Schedule per Finix subscription id. */
+  subscriptionsByFinixId?: Map<string, { state: string | null; billingInterval: string | null; nextBillingDate: Date | null }>;
 }
 
 /**
@@ -217,6 +225,11 @@ export function toLedgerPerson(
   };
 }
 
+function toLedgerSubscription(finixSubscriptionId: string | null, lookups: LedgerLookups): LedgerRow["subscription"] {
+  const sub = finixSubscriptionId ? lookups.subscriptionsByFinixId?.get(finixSubscriptionId) : undefined;
+  return sub ? { state: sub.state, billingInterval: sub.billingInterval, nextBillingDate: sub.nextBillingDate?.toISOString() ?? null } : null;
+}
+
 export function buildPaymentLedgerRow(payment: LedgerPaymentSource, lookups: LedgerLookups): LedgerRow {
   const transfer = payment.finixTransferId ? lookups.transfersByFinixTransferId.get(payment.finixTransferId) : undefined;
   const processingFeeCents = payment.actualFinixFeesCents ?? transfer?.feeCents ?? null;
@@ -249,6 +262,7 @@ export function buildPaymentLedgerRow(payment: LedgerPaymentSource, lookups: Led
     returned: payment.status === "RETURNED",
     voided: false,
     subscriptionId: payment.finixSubscriptionId,
+    subscription: toLedgerSubscription(payment.finixSubscriptionId, lookups),
     fairMarketValueCents: payment.goodsServicesProvided ? payment.goodsServicesFairMarketValueCents : null,
     goodsDescription: payment.goodsServicesProvided ? payment.goodsServicesDescription : null,
     payoutId: transfer?.settlementId ?? null,
@@ -283,6 +297,7 @@ export function buildExternalLedgerRow(donation: LedgerExternalSource, lookups: 
     returned: false,
     voided: donation.voidedAt != null,
     subscriptionId: null,
+    subscription: null,
     fairMarketValueCents: donation.goodsOrServicesProvided ? donation.goodsOrServicesValueCents : null,
     goodsDescription: donation.goodsOrServicesProvided ? donation.goodsOrServicesDescription : null,
     payoutId: donation.finixSettlementId,

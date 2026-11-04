@@ -7,7 +7,7 @@ import PartnerLoginForm from "./PartnerLoginForm";
 export const metadata = { title: "Partner Login | WGC Payments", robots: { index: false, follow: false } };
 
 export default async function PartnerLoginPage() {
-  if (await getPartnerSession({ allowAgent: true })) redirect("/partner");
+  if (await getPartnerSession({ allowAgent: true, allowViewer: true })) redirect("/partner");
 
   return (
     <div className="flex flex-col min-h-screen">

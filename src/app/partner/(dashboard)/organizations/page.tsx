@@ -9,8 +9,8 @@ const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" 
 const dateFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
 
 export default async function PartnerOrganizationsPage() {
-  await requireSoftwarePartner();
-  const session = await getPartnerSession();
+  await requireSoftwarePartner({ allowViewer: true });
+  const session = await getPartnerSession({ allowViewer: true });
   if (!session) redirect("/partner/login");
 
   const orgs = await loadPartnerOrganizations(session.partnerId);

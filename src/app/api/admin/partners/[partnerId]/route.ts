@@ -18,8 +18,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ partne
   const { partnerId } = await params;
 
   const body = await req.json().catch(() => ({}));
-  const data: { partnerType?: PartnerType; suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null; embedSignInMode?: EmbedSignInMode } = {};
+  const data: { name?: string; partnerType?: PartnerType; suppressMerchantEmails?: boolean; pricePerMerchantCents?: number | null; embedSignInMode?: EmbedSignInMode } = {};
 
+  if ("name" in body) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 120) return NextResponse.json({ error: "Enter the partner's name (up to 120 characters)." }, { status: 400 });
+    data.name = name;
+  }
   if ("partnerType" in body) {
     if (!isPartnerType(body.partnerType)) return NextResponse.json({ error: "partnerType must be SOFTWARE or REFERRAL." }, { status: 400 });
     data.partnerType = body.partnerType;

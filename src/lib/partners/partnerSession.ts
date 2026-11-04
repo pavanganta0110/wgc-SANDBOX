@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ForbiddenError, UnauthorizedError } from "@/lib/auth/errors";
 import { getAdminSession } from "@/lib/auth/session";
 import { PARTNER_SESSION_COOKIE_NAME } from "./partnerSessionConstants";
-import { parsePartnerType, type PartnerType } from "./partnerType";
+import { parsePartnerType, parseStaffRole, type PartnerType, type StaffRole } from "./partnerType";
 
 /**
  * Session for partner staff (a PartnerUser). It is deliberately its own cookie,
@@ -122,10 +122,12 @@ export interface PartnerSession {
   readOnly?: boolean;
   /** Set for an agent's login: it sees only that agent's commission, nothing else of the partner. */
   agentId?: string;
+  /** FULL for ordinary partner staff; VIEWER for a view-only team member. */
+  staffRole: StaffRole;
 }
 
 /** The signed-in partner staff member, or null. Every check below is re-read from the database. */
-export async function getPartnerSession(options: { allowAgent?: boolean } = {}): Promise<PartnerSession | null> {
+export async function getPartnerSession(options: { allowAgent?: boolean; allowViewer?: boolean } = {}): Promise<PartnerSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(PARTNER_SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -139,7 +141,7 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
     if (!admin || admin.userId !== payload.viewAsAdminUserId || admin.role !== "wgc_super_admin") return null;
     const partner = await prisma.partner.findUnique({ where: { id: payload.partnerId }, select: { name: true, partnerType: true } });
     if (!partner) return null;
-    return { partnerUserId: payload.partnerUserId, partnerId: payload.partnerId, partnerName: partner.name, partnerType: parsePartnerType(partner.partnerType), email: admin.email, name: admin.name, readOnly: true };
+    return { partnerUserId: payload.partnerUserId, partnerId: payload.partnerId, partnerName: partner.name, partnerType: parsePartnerType(partner.partnerType), staffRole: "FULL", email: admin.email, name: admin.name, readOnly: true };
   }
 
   const user = await prisma.partnerUser.findUnique({
@@ -152,6 +154,7 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
       disabledAt: true,
       authVersion: true,
       agentId: true,
+      staffRole: true,
       partner: { select: { name: true, status: true, partnerType: true } },
     },
   });
@@ -162,6 +165,8 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
   // An agent's login is for the commission page only. Everything else treats it as signed out, so a page or
   // endpoint added later can't leak the partner's data to an agent by forgetting to check.
   if (user.agentId && !options.allowAgent) return null;
+  // Same rule for a view-only team member: only the reporting pages opt in, everything else treats them as signed out.
+  if (parseStaffRole(user.staffRole) === "VIEWER" && !options.allowViewer) return null;
 
   return {
     partnerUserId: user.id,
@@ -171,6 +176,7 @@ export async function getPartnerSession(options: { allowAgent?: boolean } = {}):
     email: user.email,
     name: user.name,
     ...(user.agentId ? { agentId: user.agentId } : {}),
+    staffRole: parseStaffRole(user.staffRole),
   };
 }
 

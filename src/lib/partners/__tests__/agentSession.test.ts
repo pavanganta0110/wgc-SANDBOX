@@ -12,8 +12,8 @@ beforeAll(() => {
   process.env.AUTH_SESSION_SECRET = "x".repeat(40);
 });
 
-const user = (agentId: string | null) => ({
-  id: "u1", partnerId: "p1", email: "a@x.test", name: "A", disabledAt: null, authVersion: 1, agentId,
+const user = (agentId: string | null, staffRole = "FULL") => ({
+  id: "u1", partnerId: "p1", email: "a@x.test", name: "A", disabledAt: null, authVersion: 1, agentId, staffRole,
   partner: { name: "Sparrow", status: "ACTIVE" },
 });
 
@@ -39,5 +39,25 @@ describe("an agent's partner login", () => {
     const s = await getPartnerSession();
     expect(s).toMatchObject({ partnerId: "p1", email: "a@x.test" });
     expect(s?.agentId).toBeUndefined();
+  });
+});
+
+describe("a view-only team member", () => {
+  it("is treated as signed out by default, so keys, webhook, billing, menu and team stay closed to them", async () => {
+    prismaMock.partnerUser.findUnique.mockResolvedValue(user(null, "VIEWER"));
+    expect(await getPartnerSession()).toBeNull();
+    await expect(requirePartnerSession()).rejects.toThrow();
+  });
+
+  it("is let in only where a reporting page asks for it", async () => {
+    prismaMock.partnerUser.findUnique.mockResolvedValue(user(null, "VIEWER"));
+    expect(await getPartnerSession({ allowViewer: true })).toMatchObject({ partnerId: "p1", staffRole: "VIEWER" });
+    // A page that allows agents does not thereby allow viewers.
+    expect(await getPartnerSession({ allowAgent: true })).toBeNull();
+  });
+
+  it("does not change what full-access staff get", async () => {
+    prismaMock.partnerUser.findUnique.mockResolvedValue(user(null, "FULL"));
+    expect(await getPartnerSession()).toMatchObject({ staffRole: "FULL" });
   });
 });

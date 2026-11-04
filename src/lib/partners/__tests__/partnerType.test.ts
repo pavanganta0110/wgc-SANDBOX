@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { navHrefsFor, parsePartnerType, isPartnerType } from "@/lib/partners/partnerType";
+import { navHrefsFor, parsePartnerType, isPartnerType, parseStaffRole } from "@/lib/partners/partnerType";
 
 describe("partner type", () => {
   it("defaults anything unknown to a software partner, so every existing partner is unchanged", () => {
@@ -24,5 +24,16 @@ describe("partner type", () => {
 
   it("an agent gets only the pages for their own clients, whatever the partner type", () => {
     for (const t of ["SOFTWARE", "REFERRAL"] as const) expect(navHrefsFor(t, true)).toEqual(["/partner/volume", "/partner/transactions", "/partner/commissions"]);
+  });
+
+  it("a view-only member sees reporting only, never keys, webhook, billing, menu, team or the commission split", () => {
+    expect(navHrefsFor("SOFTWARE", false, true)).toEqual(["/partner/organizations"]);
+    expect(navHrefsFor("REFERRAL", false, true)).toEqual(["/partner/volume", "/partner/transactions"]);
+  });
+
+  it("anything but VIEWER is full access", () => {
+    expect(parseStaffRole("VIEWER")).toBe("VIEWER");
+    expect(parseStaffRole(undefined)).toBe("FULL");
+    expect(parseStaffRole("admin")).toBe("FULL");
   });
 });

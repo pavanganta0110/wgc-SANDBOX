@@ -23,7 +23,19 @@ export const SOFTWARE_NAV_HREFS = ["/partner/organizations", "/partner/api-keys"
 export const REFERRAL_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/team"];
 export const AGENT_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions"];
 
-export function navHrefsFor(type: PartnerType, isAgent: boolean): string[] {
+export const STAFF_ROLES = ["FULL", "VIEWER"] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+export const parseStaffRole = (v: unknown): StaffRole => (v === "VIEWER" ? "VIEWER" : "FULL");
+export const isStaffRole = (v: unknown): v is StaffRole => STAFF_ROLES.includes(v as StaffRole);
+
+/** A view-only team member sees reporting only: no API key, webhook, billing, menu or team, and no commission split. */
+export const VIEWER_NAV_HREFS: Record<PartnerType, string[]> = {
+  SOFTWARE: ["/partner/organizations"],
+  REFERRAL: ["/partner/volume", "/partner/transactions"],
+};
+
+export function navHrefsFor(type: PartnerType, isAgent: boolean, isViewer = false): string[] {
   if (isAgent) return AGENT_NAV_HREFS;
+  if (isViewer) return VIEWER_NAV_HREFS[type];
   return type === "REFERRAL" ? REFERRAL_NAV_HREFS : SOFTWARE_NAV_HREFS;
 }

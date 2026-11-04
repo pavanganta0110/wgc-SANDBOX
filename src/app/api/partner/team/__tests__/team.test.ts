@@ -55,8 +55,16 @@ describe("POST /api/partner/team", () => {
   it("invites someone to the signed-in partner's own account", async () => {
     const res = await post({ email: " New@Example.test ", name: "New Person" });
     expect(res.status).toBe(201);
-    expect(accounts.createPartnerInvite).toHaveBeenCalledWith({ partnerId: "p1", email: "new@example.test", name: "New Person" });
+    expect(accounts.createPartnerInvite).toHaveBeenCalledWith({ partnerId: "p1", email: "new@example.test", name: "New Person", staffRole: "FULL" });
     expect(sendInvite).toHaveBeenCalledWith({ partnerName: "Clear Vision", email: "new@example.test", rawToken: "tok" });
+  });
+
+  it("can invite a view-only member, and rejects an unknown access level", async () => {
+    const ok = await post({ email: "v@example.test", name: "V", role: "VIEWER" });
+    expect(ok.status).toBe(201);
+    expect(accounts.createPartnerInvite).toHaveBeenCalledWith({ partnerId: "p1", email: "v@example.test", name: "V", staffRole: "VIEWER" });
+    const bad = await post({ email: "w@example.test", role: "OWNER" });
+    expect(bad.status).toBe(400);
   });
 
   it("rejects a bad email, and an email that already has an account", async () => {

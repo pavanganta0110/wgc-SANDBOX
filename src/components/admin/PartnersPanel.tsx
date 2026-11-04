@@ -200,12 +200,25 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
             type="button"
             onClick={async () => {
               const { ok, data } = await call(`/api/admin/partners/${partner.id}/view`, "POST");
-              if (ok) window.location.assign("/partner/organizations");
+              if (ok) window.location.assign("/partner");
               else report(false, data, "");
             }}
             className="rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
           >
             View partner dashboard
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const name = window.prompt("Partner name (shown to the partner's team and in their invitation emails):", partner.name);
+              if (name === null || !name.trim() || name.trim() === partner.name) return;
+              const { ok, data } = await call(`/api/admin/partners/${partner.id}`, "PATCH", { name });
+              report(ok, data, "Partner renamed.");
+              await onChanged();
+            }}
+            className="rounded-lg border border-slate-300 bg-white text-slate-800 text-xs font-semibold px-3 py-2 hover:bg-slate-50"
+          >
+            Rename
           </button>
           <a href={`/admin/partners/${partner.id}`} className="rounded-lg bg-[#010409] text-white text-xs font-semibold px-3 py-2">
             Volume and revenue

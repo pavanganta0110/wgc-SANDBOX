@@ -717,6 +717,8 @@ model PartnerUser {
   /// Set when this login belongs to one of the partner's agents: it then sees only that agent's
   /// organizations and commission. Null = partner staff (sees everything for the partner).
   agentId String?
+  /// FULL (everything the partner has) or VIEWER (reporting only: no keys, webhook, billing, menu or team).
+  staffRole String @default("FULL")
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
