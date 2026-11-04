@@ -16,6 +16,20 @@ const ENDPOINTS: [string, string][] = [
   ["GET /api/v1/partner/onboarding", "Where each application stands: submitted, under_review, information_required (with what is missing), approved, rejected."],
 ];
 
+const LEDGER_FIELDS: [string, string][] = [
+  ["id", "The gift's id: our payment id for a gift we processed, the external donation id for a cash or check gift. Use it to merge rows so a gift is never counted twice."],
+  ["source, kind, method", "WGC or EXTERNAL; one-time or recurring; card, ach or external."],
+  ["date, status", "ISO 8601 UTC, and the gift's status."],
+  ["designation", "{ fundId, fundName, person }: the fund, and the named person when the donor chose one. Every renewal of a recurring gift carries the fund saved when it was set up."],
+  ["donor", "The donor's name, email, phone and address, when known."],
+  ["giftCents, feeCoveredCents, chargedCents", "The gift before any fee cover, what the donor added to cover fees, and the total charged."],
+  ["processingFeeCents, netCents", "What the processor took (null until reported) and the net to the organization."],
+  ["refunded, refundedCents, disputed, disputeState, returned", "Refund, dispute and bank-return status."],
+  ["subscriptionId", "Ties every renewal to one recurring commitment."],
+  ["subscription", "{ state, billingInterval, nextBillingDate } for a recurring gift: the commitment's schedule right now (not when the gift was made). Null for a one-time or external gift, or before the commitment has synced."],
+  ["payoutId, receiptNumber", "The payout the gift landed in (null until it settles) and its receipt number."],
+];
+
 const EVENTS: [string, string][] = [
   ["donation.created", "A gift succeeded: online, a recurring charge, or a cash or check gift recorded by the organization. data.ledger is the full gift row (ledger.source is WGC or EXTERNAL)."],
   ["donation.updated", "A cash or check gift was edited. data.ledger is the new row."],
@@ -123,6 +137,18 @@ export default async function PartnerDocsPage() {
           <strong>Errors and limits.</strong> <code>401</code> missing, wrong or revoked key; <code>404</code> not one of your organizations; <code>400</code> a bad date or cursor; <code>429</code> too many requests (120 a minute per key). Errors look like{" "}
           <code>{`{ "error": { "type", "message", "requestId" } }`}</code>; quote the <code>requestId</code> if you contact us. The API Key page shows each key&apos;s requests and errors.
         </p>
+      </Section>
+
+      <Section title="The gift row">
+        <p>One flat row per gift. It is what the ledger returns and what <code>data.ledger</code> carries in the gift events below. Money is whole cents.</p>
+        <ul className="space-y-2">
+          {LEDGER_FIELDS.map(([name, text]) => (
+            <li key={name}>
+              <code className="font-semibold text-slate-900">{name}</code>
+              <div className="text-slate-600">{text}</div>
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <Section title="Webhook">

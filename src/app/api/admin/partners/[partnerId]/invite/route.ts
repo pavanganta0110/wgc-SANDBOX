@@ -4,11 +4,8 @@ import { createAuditLog } from "@/lib/audit";
 import { sendWgcEmail } from "@/lib/email";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { requirePartnerAdmin } from "@/lib/partners/requirePartnerAdmin";
-import { createPartnerInvite, PartnerAccountError, PARTNER_INVITE_TTL_DAYS } from "@/lib/partners/partnerAccounts";
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
+import { createPartnerInvite, PartnerAccountError } from "@/lib/partners/partnerAccounts";
+import { partnerInviteCopy } from "@/lib/partners/partnerInviteEmail";
 
 export async function POST(req: Request, { params }: { params: Promise<{ partnerId: string }> }) {
   const auth = await requirePartnerAdmin();
@@ -43,10 +40,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ partner
   }
 
   const link = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com"}/partner/accept-invite/${invite.rawToken}`;
-  const subject = `You've been invited to the ${partner.name} partner dashboard on WGC Payments`;
-  const bodyHtml = `<p>You've been invited to manage the <strong>${escapeHtml(partner.name)}</strong> partner account on WGC Payments.</p>
-               <p><a href="${link}">Accept the invitation and set your password</a></p>
-               <p>This link works once and expires in ${PARTNER_INVITE_TTL_DAYS} days.</p>`;
+  const { subject, bodyHtml } = partnerInviteCopy(partner.name, agentId ? "AGENT" : "FULL", link);
   const emailResult = await sendWgcEmail({ to: email, subject, title: "You're invited", badgeText: "Partner Invitation", badgeColor: "#0B5DBC", bodyHtml });
 
   // The link is a one-time credential, so it is not kept in the email log.

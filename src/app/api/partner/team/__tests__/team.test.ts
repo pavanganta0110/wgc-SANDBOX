@@ -56,7 +56,7 @@ describe("POST /api/partner/team", () => {
     const res = await post({ email: " New@Example.test ", name: "New Person" });
     expect(res.status).toBe(201);
     expect(accounts.createPartnerInvite).toHaveBeenCalledWith({ partnerId: "p1", email: "new@example.test", name: "New Person", staffRole: "FULL" });
-    expect(sendInvite).toHaveBeenCalledWith({ partnerName: "Clear Vision", email: "new@example.test", rawToken: "tok" });
+    expect(sendInvite).toHaveBeenCalledWith({ partnerName: "Clear Vision", email: "new@example.test", rawToken: "tok", role: "FULL" });
   });
 
   it("can invite a view-only member, and rejects an unknown access level", async () => {

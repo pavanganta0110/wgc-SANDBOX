@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       throw err;
     }
     const partner = await prisma.partner.findUnique({ where: { id: session.partnerId }, select: { name: true } });
-    const sent = await sendPartnerInviteEmail({ partnerName: partner?.name ?? "your", email, rawToken: invite.rawToken });
+    const sent = await sendPartnerInviteEmail({ partnerName: partner?.name ?? "your", email, rawToken: invite.rawToken, role: staffRole });
     await createAuditLog({ action: "PARTNER_TEAM_INVITED", actorEmail: session.email, metadata: { partnerId: session.partnerId, invitedEmail: email, staffRole, emailSent: sent } });
     if (!sent) return NextResponse.json({ error: "The invitation couldn't be emailed. Try again in a moment." }, { status: 502 });
     return NextResponse.json({ message: `Invitation sent to ${email}.` }, { status: 201 });
