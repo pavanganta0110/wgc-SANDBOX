@@ -27,7 +27,7 @@ export default function AcceptInviteForm({ token }: { token: string }) {
         setError(data.error || "Something went wrong. Please try again.");
         return;
       }
-      window.location.assign("/partner/organizations");
+      window.location.assign("/partner");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {

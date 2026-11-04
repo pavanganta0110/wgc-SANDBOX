@@ -36,6 +36,8 @@ export async function createPartnerInvite(params: {
   partnerId: string;
   email: string;
   name?: string | null;
+  /** Makes the login an agent's: it sees only that agent's commission. */
+  agentId?: string | null;
 }): Promise<{ rawToken: string; userId: string; expiresAt: Date }> {
   const email = params.email.trim().toLowerCase();
   const partner = await prisma.partner.findUnique({ where: { id: params.partnerId }, select: { id: true } });
@@ -54,6 +56,7 @@ export async function createPartnerInvite(params: {
     name: params.name?.trim() || null,
     setPasswordTokenHash: hashPartnerToken(rawToken),
     setPasswordTokenExpiresAt: expiresAt,
+    ...(params.agentId ? { agentId: params.agentId } : {}),
   };
   const user = existing
     ? await prisma.partnerUser.update({ where: { id: existing.id }, data })

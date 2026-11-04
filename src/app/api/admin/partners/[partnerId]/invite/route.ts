@@ -26,9 +26,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ partner
   if (!partner) return NextResponse.json({ error: "Partner not found." }, { status: 404 });
   if (partner.status !== "ACTIVE") return NextResponse.json({ error: "This partner is suspended." }, { status: 409 });
 
+  // An invite for one of the partner's agents gives a login that sees only that agent's commission.
+  const agentId = typeof body.agentId === "string" && body.agentId ? body.agentId : null;
+  if (agentId && !(await prisma.partnerAgent.findFirst({ where: { id: agentId, partnerId }, select: { id: true } }))) {
+    return NextResponse.json({ error: "That agent does not belong to this partner." }, { status: 400 });
+  }
+
   let invite;
   try {
-    invite = await createPartnerInvite({ partnerId, email, name });
+    invite = await createPartnerInvite({ partnerId, email, name, agentId });
   } catch (err) {
     if (err instanceof PartnerAccountError) {
       return NextResponse.json({ error: err.message }, { status: err.code === "email_in_use" ? 409 : 400 });

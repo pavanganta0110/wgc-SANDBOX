@@ -31,7 +31,7 @@ export default function PartnerLoginForm() {
         setStep("code");
         return;
       }
-      window.location.assign("/partner/organizations");
+      window.location.assign("/partner");
     } catch {
       setMessage({ text: "Login failed. Please try again.", error: true });
     } finally {
@@ -47,7 +47,7 @@ export default function PartnerLoginForm() {
     try {
       const { res, data } = await post("/api/partner/login/verify", { challengeId: challenge.id, code });
       if (!res.ok) return setMessage({ text: data.error || "That code isn't right.", error: true });
-      window.location.assign("/partner/organizations");
+      window.location.assign("/partner");
     } catch {
       setMessage({ text: "Something went wrong. Please try again.", error: true });
     } finally {

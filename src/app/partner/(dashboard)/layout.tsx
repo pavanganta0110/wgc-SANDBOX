@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Users, Webhook } from "lucide-react";
+import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Percent, Users, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -8,8 +8,12 @@ import PartnerViewBanner from "@/components/partner/PartnerViewBanner";
 
 export const dynamic = "force-dynamic";
 
+// An agent's login sees only the commission page.
+const AGENT_NAV_HREFS = ["/partner/commissions"];
+
 const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
+  { name: "Commission", href: "/partner/commissions", icon: Percent },
   { name: "API Key", href: "/partner/api-keys", icon: KeyRound },
   { name: "Webhook", href: "/partner/webhook", icon: Webhook },
   { name: "Menu", href: "/partner/menu", icon: ListChecks },
@@ -19,8 +23,9 @@ const NAV_ITEMS = [
 ];
 
 export default async function PartnerDashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await getPartnerSession();
+  const session = await getPartnerSession({ allowAgent: true });
   if (!session) redirect("/partner/login");
+  const navItems = session.agentId ? NAV_ITEMS.filter((i) => AGENT_NAV_HREFS.includes(i.href)) : NAV_ITEMS;
   const live = partnerKeyEnvironment() === "live";
 
   return (
@@ -44,7 +49,7 @@ export default async function PartnerDashboardLayout({ children }: { children: R
       </div>
       {/* The side menu below is hidden on narrow screens; this strip takes its place. */}
       <nav aria-label="Partner menu" className="md:hidden flex gap-1 overflow-x-auto px-3 py-2 bg-white border-b border-slate-100">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <Link key={item.href} href={item.href} className="flex shrink-0 items-center gap-2 py-2 px-3 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -57,7 +62,7 @@ export default async function PartnerDashboardLayout({ children }: { children: R
       <div className="flex-grow flex">
         <aside className="shrink-0 w-56 bg-white border-r border-slate-100 py-6 px-3 hidden md:block">
           <nav className="space-y-1">
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const Icon = item.icon;
               return (
                 <Link

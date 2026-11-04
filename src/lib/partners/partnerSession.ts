@@ -118,10 +118,12 @@ export interface PartnerSession {
   name: string | null;
   /** True for a WGC admin looking at the dashboard: reads work, every change is refused. */
   readOnly?: boolean;
+  /** Set for an agent's login: it sees only that agent's commission, nothing else of the partner. */
+  agentId?: string;
 }
 
 /** The signed-in partner staff member, or null. Every check below is re-read from the database. */
-export async function getPartnerSession(): Promise<PartnerSession | null> {
+export async function getPartnerSession(options: { allowAgent?: boolean } = {}): Promise<PartnerSession | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(PARTNER_SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
@@ -147,6 +149,7 @@ export async function getPartnerSession(): Promise<PartnerSession | null> {
       name: true,
       disabledAt: true,
       authVersion: true,
+      agentId: true,
       partner: { select: { name: true, status: true } },
     },
   });
@@ -154,8 +157,18 @@ export async function getPartnerSession(): Promise<PartnerSession | null> {
   if (user.partnerId !== payload.partnerId) return null;
   if (user.authVersion !== payload.authVersion) return null;
   if (user.partner.status !== "ACTIVE") return null;
+  // An agent's login is for the commission page only. Everything else treats it as signed out, so a page or
+  // endpoint added later can't leak the partner's data to an agent by forgetting to check.
+  if (user.agentId && !options.allowAgent) return null;
 
-  return { partnerUserId: user.id, partnerId: user.partnerId, partnerName: user.partner.name, email: user.email, name: user.name };
+  return {
+    partnerUserId: user.id,
+    partnerId: user.partnerId,
+    partnerName: user.partner.name,
+    email: user.email,
+    name: user.name,
+    ...(user.agentId ? { agentId: user.agentId } : {}),
+  };
 }
 
 export async function requirePartnerSession(): Promise<PartnerSession> {

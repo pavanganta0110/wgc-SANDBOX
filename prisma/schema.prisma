@@ -117,7 +117,7 @@ model OnboardingApplication {
   partnerReference                  String?
   /// The owner's frame passcode, chosen on the application when the partner signs people in with passcodes.
   /// Hashed; copied to the owner's account when it is created.
-  framePasscodeHash String?
+  framePasscodeHash                 String?
   associatedOwners                  AssociatedOwner[]
   documents                         MerchantDocument[]
   internalDocuments                 OnboardingInternalDocument[]
@@ -348,6 +348,8 @@ model Church {
   partnerId                     String?
   partnerReference              String?
   partner                       Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  /// The partner's agent who brought this organization in (commission). Null = not assigned to an agent.
+  partnerAgentId                String?
   // Auto-release cadence for this merchant's Settlement Queue (see
   // /admin/merchants/[churchId]/settlements — SettlementQueuePanel).
   // Weekday numbers matching JS Date.getDay() (0=Sunday..6=Saturday); e.g.
@@ -355,7 +357,7 @@ model Church {
   // (Monday and Thursday). Empty/default = no auto-release, manual only.
   // Only meaningful while the merchant's settlement_queue_mode is MANUAL —
   // see /api/cron/release-settlement-queue.
-  settlementAutoReleaseWeekdays  Int[]     @default([])
+  settlementAutoReleaseWeekdays Int[]     @default([])
   // WGC platform-billing gate, checked on every dashboard request (denormalized
   // here for a fast session-level check rather than joining WgcSubscription on
   // every request). Null = grandfathered/no gate (organizations that existed
@@ -535,30 +537,30 @@ model Church {
 /// the organizations linked to their partner. Each deployment (sandbox,
 /// production) has its own Partner rows. See src/lib/partners/.
 model Partner {
-  id           String   @id @default(cuid())
-  name         String
-  slug         String   @unique
-  contactEmail String?
+  id                         String    @id @default(cuid())
+  name                       String
+  slug                       String    @unique
+  contactEmail               String?
   // ACTIVE | SUSPENDED. A suspended partner's staff are signed out and can't
   // sign in; its organizations and their payments are not affected.
-  status       String   @default("ACTIVE")
+  status                     String    @default("ACTIVE")
   /// Goes in the partner's Get Started links so an application can be tagged to
   /// this partner. A label only; generated on first use (src/lib/partners/onboardingCode.ts).
-  onboardingCode String? @unique
+  onboardingCode             String?   @unique
   /// When true, WGC does not email the organization's own onboarding status or
   /// dashboard-access messages for applications of this partner: the partner
   /// shows the status inside its own screens. Off by default.
-  suppressMerchantEmails Boolean @default(false)
+  suppressMerchantEmails     Boolean   @default(false)
   /// How people are identified when WGC is shown in the partner's frame: CRM_IDENTITY (the partner's page
   /// says who is opening it) or PASSCODE (each person types their email and their own passcode).
-  embedSignInMode String @default("CRM_IDENTITY")
+  embedSignInMode            String    @default("CRM_IDENTITY")
   /// Which sidebar items the partner's organizations see inside the partner's own frame:
   /// { allowed: string[], known: string[] } (item links). Null = everything shows. Items WGC adds
   /// later are not in `known`, so they stay hidden until the partner ticks them (src/lib/partners/embeddedMenu.ts).
-  embeddedMenuJson Json?
+  embeddedMenuJson           Json?
   /// What the partner pays WGC per approved merchant per month, in cents. Null = the
   /// partner is not being billed yet. Set by a WGC admin.
-  pricePerMerchantCents Int?
+  pricePerMerchantCents      Int?
   /// The partner's saved card, charged monthly (see PartnerInvoice). Only Finix ids and
   /// the display details are stored; never the card number.
   billingIdentityId          String?
@@ -570,15 +572,116 @@ model Partner {
   billingContactEmail        String?
   billingAuthAcceptedAt      DateTime?
   billingAuthTermsVersion    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
-  invoices         PartnerInvoice[]
-  users            PartnerUser[]
-  churches         Church[]
-  apiKeys          PartnerApiKey[]
-  webhookEndpoints PartnerWebhookEndpoint[]
-  billableApprovals PartnerBillableApproval[]
+  invoices             PartnerInvoice[]
+  users                PartnerUser[]
+  churches             Church[]
+  apiKeys              PartnerApiKey[]
+  webhookEndpoints     PartnerWebhookEndpoint[]
+  billableApprovals    PartnerBillableApproval[]
+  agents               PartnerAgent[]
+  rateTerms            PartnerRateTerm[]
+  profitAdjustments    PartnerProfitAdjustment[]
+  commissionStatements PartnerCommissionStatement[]
+  commissionPayouts    PartnerCommissionPayout[]
+}
+
+/// An agent of a partner (for example an ISO's salesperson). The partner shares part of the profit it earns from
+/// WGC with its agents; an agent logs in with a PartnerUser whose agentId points here.
+model PartnerAgent {
+  id        String   @id @default(cuid())
+  partnerId String
+  name      String
+  email     String?
+  /// ACTIVE | INACTIVE
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+}
+
+/// A commission rate in basis points (3500 = 35%) with the month it starts, so a contract change never
+/// rewrites a past month. agentId null = the partner's own share of WGC's profit (for example 35%);
+/// agentId set = that agent's share of the partner's share (for example 80%).
+model PartnerRateTerm {
+  id             String   @id @default(cuid())
+  partnerId      String
+  agentId        String?
+  /// First day of the first month this rate applies to (UTC).
+  effectiveFrom  DateTime
+  rateBps        Int
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, agentId, effectiveFrom])
+}
+
+/// A manual change to one organization's profit for one month, entered by WGC: chargeback losses, refunds that
+/// the processor statement does not already net out, goodwill credits. Negative reduces the profit shared.
+model PartnerProfitAdjustment {
+  id             String   @id @default(cuid())
+  partnerId      String
+  churchId       String
+  /// First day of the month (UTC).
+  month          DateTime
+  amountCents    Int
+  reason         String
+  createdByEmail String?
+  createdAt      DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, month])
+}
+
+/// A month's commission, frozen when WGC finalizes it: the rates used and every line, so the figures can't
+/// shift after a payout. Months not yet finalized are calculated live and labelled as estimates.
+model PartnerCommissionStatement {
+  id                String   @id @default(cuid())
+  partnerId         String
+  /// First day of the month (UTC).
+  month             DateTime
+  /// FINAL
+  status            String   @default("FINAL")
+  profitCents       Int
+  wgcCents          Int
+  partnerCents      Int
+  agentsCents       Int
+  partnerKeepsCents Int
+  /// Per-agent lines and the rates used.
+  linesJson         Json
+  finalizedByEmail  String?
+  finalizedAt       DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, month])
+}
+
+/// Money paid out for commission. agentId null = WGC paid the partner; set = the partner paid that agent.
+model PartnerCommissionPayout {
+  id              String   @id @default(cuid())
+  partnerId       String
+  agentId         String?
+  /// First day of the month the payment is for (UTC).
+  month           DateTime
+  amountCents     Int
+  paidAt          DateTime
+  method          String?
+  note            String?
+  recordedByEmail String?
+  createdAt       DateTime @default(now())
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId, month])
 }
 
 model PartnerUser {
@@ -587,7 +690,7 @@ model PartnerUser {
   email     String  @unique
   name      String?
 
-  passwordHash String?
+  passwordHash              String?
   // Invite and password-setup link: only the SHA-256 hash is stored.
   setPasswordTokenHash      String?   @unique
   setPasswordTokenExpiresAt DateTime?
@@ -602,15 +705,20 @@ model PartnerUser {
 
   // Sign-in code sent by email after the password is right. Only hashes are stored: the
   // code, and the opaque challenge id the browser echoes back.
-  mfaCodeHash       String?
-  mfaCodeExpiresAt  DateTime?
-  mfaCodeAttempts   Int       @default(0)
-  mfaCodeSentAt     DateTime?
-  mfaChallengeHash  String?   @unique
+  mfaCodeHash      String?
+  mfaCodeExpiresAt DateTime?
+  mfaCodeAttempts  Int       @default(0)
+  mfaCodeSentAt    DateTime?
+  mfaChallengeHash String?   @unique
+
+  /// Set when this login belongs to one of the partner's agents: it then sees only that agent's
+  /// organizations and commission. Null = partner staff (sees everything for the partner).
+  agentId String?
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
   @@index([partnerId])
+  @@index([agentId])
 }
 
 /// A read-only API key for a partner: one key reads the data of every
@@ -677,7 +785,7 @@ model PartnerWebhookEndpoint {
 /// One attempt chain for one event to one partner endpoint. Mirrors
 /// WebhookDelivery; retried by the same cron.
 model PartnerWebhookDelivery {
-  id                String @id @default(cuid())
+  id                String  @id @default(cuid())
   /// Exactly one of these is set: the organization event (WebhookEvent), or a
   /// partner-level event such as onboarding.* (PartnerEvent).
   webhookEventId    String?
@@ -751,13 +859,13 @@ model PartnerInvoice {
 /// onboarding.information_required, onboarding.approved, ...). The durable
 /// source a PartnerWebhookDelivery reads.
 model PartnerEvent {
-  id        String   @id @default(cuid())
-  partnerId String
-  type      String
+  id                      String   @id @default(cuid())
+  partnerId               String
+  type                    String
   /// The onboarding application the event is about.
   onboardingApplicationId String?
-  dataJson  Json
-  createdAt DateTime @default(now())
+  dataJson                Json
+  createdAt               DateTime @default(now())
 
   @@index([partnerId, createdAt])
   @@index([onboardingApplicationId])
@@ -767,15 +875,15 @@ model PartnerEvent {
 /// This is what the partner is billed for (not the organization). The charge
 /// itself is separate; a row here only says it is owed.
 model PartnerBillableApproval {
-  id        String   @id @default(cuid())
-  partnerId String
-  churchId  String   @unique
+  id                      String    @id @default(cuid())
+  partnerId               String
+  churchId                String    @unique
   onboardingApplicationId String?
-  approvedAt DateTime
+  approvedAt              DateTime
   /// PENDING | BILLED | WAIVED
-  status    String   @default("PENDING")
-  billedAt  DateTime?
-  createdAt DateTime @default(now())
+  status                  String    @default("PENDING")
+  billedAt                DateTime?
+  createdAt               DateTime  @default(now())
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
@@ -1402,17 +1510,17 @@ model Payment {
 
   receipts DonationReceipt[]
 
+  // One record per Finix charge, enforced by the database (idempotency by
+  // DB constraint): two concurrent webhook deliveries for the same transfer
+  // can never both record it. Callers that may race treat P2002 as "already
+  // recorded". Null (no transfer yet / offline) is never constrained.
+  @@unique([finixTransferId])
   @@index([churchId, attributedUserId])
   @@index([donorId])
   @@index([finixTransferId])
   @@index([churchId, status])
   @@index([churchId, createdAt])
   @@index([churchId, pledgeId])
-  // One record per Finix charge, enforced by the database (idempotency by
-  // DB constraint): two concurrent webhook deliveries for the same transfer
-  // can never both record it. Callers that may race treat P2002 as "already
-  // recorded". Null (no transfer yet / offline) is never constrained.
-  @@unique([finixTransferId])
   @@index([churchId, studentId])
 }
 
@@ -2079,15 +2187,15 @@ model BillingTermsVersion {
 /// retroactively to already-computed gracePeriodEndsAt values on existing
 /// WgcSubscription rows.
 model WgcBillingSettings {
-  id                       String   @id @default("singleton")
-  gracePeriodDays          Int      @default(14)
-  pastDueReminderDays      Int[]    @default([1, 3, 7, 12])
-  trialEndingReminderDays  Int[]    @default([14, 3, 1])
-  restrictedFeatureKeys    String[] @default([])
-  supportContactEmail      String?
-  updatedByUserId          String?
-  updatedAt                DateTime @updatedAt
-  createdAt                DateTime @default(now())
+  id                      String   @id @default("singleton")
+  gracePeriodDays         Int      @default(14)
+  pastDueReminderDays     Int[]    @default([1, 3, 7, 12])
+  trialEndingReminderDays Int[]    @default([14, 3, 1])
+  restrictedFeatureKeys   String[] @default([])
+  supportContactEmail     String?
+  updatedByUserId         String?
+  updatedAt               DateTime @updatedAt
+  createdAt               DateTime @default(now())
 }
 
 // =========================================================================
@@ -2862,17 +2970,17 @@ model FinixPayoutProfileSnapshot {
 }
 
 model User {
-  id                        String    @id @default(cuid())
-  email                     String    @unique
+  id                          String        @id @default(cuid())
+  email                       String        @unique
   // Internal WGC admin display name (Settings -> Admins). Null for
   // merchant-side users, who don't have a separate display name field.
-  name                      String?
-  passwordHash              String?
+  name                        String?
+  passwordHash                String?
   /// A passcode for signing in from inside a partner's frame (set by the organization, hashed like a
   /// password). It works only there and never for a normal WGC sign-in. Five wrong tries lock it for a while.
   framePasscodeHash           String?
   framePasscodeSetAt          DateTime?
-  framePasscodeFailedAttempts Int       @default(0)
+  framePasscodeFailedAttempts Int           @default(0)
   framePasscodeLockedUntil    DateTime?
   // Team-access Checkpoint 1: organization-side roles are "owner" |
   // "admin" | "fundraiser" | "viewer" (exactly one "owner" per church,
@@ -2882,11 +2990,11 @@ model User {
   // kept as a completely separate value on purpose. Existing rows are all
   // "wgc_admin" or the legacy "church_admin" until the owner-backfill
   // migration (see ownerBackfillPreview) maps church_admin -> owner/admin.
-  role                      String // "wgc_admin" | "owner" | "admin" | "fundraiser" | "viewer" (legacy: "church_admin")
-  churchId                  String?
-  setPasswordTokenHash      String?
-  setPasswordTokenExpiresAt DateTime?
-  lastLoginAt               DateTime?
+  role                        String // "wgc_admin" | "owner" | "admin" | "fundraiser" | "viewer" (legacy: "church_admin")
+  churchId                    String?
+  setPasswordTokenHash        String?
+  setPasswordTokenExpiresAt   DateTime?
+  lastLoginAt                 DateTime?
   // Touched (throttled to at most once every 2 minutes per user — see
   // touchUserActivity() in src/lib/monitoring/activity.ts) on every
   // successful authenticated request through requireMerchantSession() /
@@ -2894,7 +3002,7 @@ model User {
   // sign-in. This is what "Active Now" on System Health is computed from —
   // nullable/no-default so it's a purely additive column with zero
   // migration risk on the existing table.
-  lastActiveAt              DateTime?
+  lastActiveAt                DateTime?
   // SMS-based MFA (Settings -> Security). phone/phoneVerifiedAt are the
   // confirmed, active number once enrollment completes; pendingPhone holds
   // the number being verified during enrollment (a code is sent there
@@ -2907,27 +3015,27 @@ model User {
   // mfaLoginChallengeId is the opaque token returned to the client during
   // login instead of the userId itself, so the mfa-verify step never has
   // the client echo back a real user id.
-  phone                     String?
-  phoneVerifiedAt           DateTime?
-  pendingPhone              String?
-  mfaEnabled                Boolean    @default(false)
-  mfaCodeHash               String?
-  mfaCodeExpiresAt          DateTime?
-  mfaCodeAttempts           Int        @default(0)
-  mfaLoginChallengeId       String?
+  phone                       String?
+  phoneVerifiedAt             DateTime?
+  pendingPhone                String?
+  mfaEnabled                  Boolean       @default(false)
+  mfaCodeHash                 String?
+  mfaCodeExpiresAt            DateTime?
+  mfaCodeAttempts             Int           @default(0)
+  mfaLoginChallengeId         String?
   // Team & Access (Settings -> Team). A User with passwordHash null and a
   // live setPasswordTokenHash is "invited, pending" — the exact same
   // pattern already used by forgot-password, reused here rather than
   // inventing a separate invitation concept.
-  invitedByUserId           String?
-  disabledAt                DateTime?
-  disabledByUserId          String?
+  invitedByUserId             String?
+  disabledAt                  DateTime?
+  disabledByUserId            String?
   // Team-access Checkpoint 1: roles + a small override on top, per the
   // approved plan (roles are the primary model; this is for narrow
   // exceptions like an ADMIN being granted canManageBankAccount without a
   // full OWNER promotion) — never trusted alone client-side, always
   // re-read server-side by requirePermission().
-  permissionsJson           Json?
+  permissionsJson             Json?
   // Team-access Checkpoint 1: incremented whenever this user's role,
   // permissions, active/disabled status, or bank-management permission
   // changes (see bumpAuthVersion in src/lib/auth/session.ts). The signed
@@ -2937,16 +3045,16 @@ model User {
   // permissions until it naturally expires (previously not possible at
   // all — session.ts had no DB lookup, this app's getSession() was purely
   // stateless HMAC signature + expiry).
-  authVersion               Int       @default(1)
+  authVersion                 Int           @default(1)
   // Bumped on every completed password reset. Internal WGC admin session
   // tokens carry the value that was current at sign-in; getAdminSession()
   // rejects the cookie on a mismatch — the admin-panel's own invalidation
   // mechanism, independent of authVersion (which requireMerchantSession()
   // uses for the merchant dashboard).
-  passwordChangedAt         DateTime?
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
-  authAccounts              AuthAccount[]
+  passwordChangedAt           DateTime?
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  authAccounts                AuthAccount[]
 
   @@index([churchId])
   @@index([mfaLoginChallengeId])
@@ -2994,84 +3102,84 @@ model FinixAuthorization {
 // FinixSubscription created through one is tagged with its id for
 // attribution (see givingLinkId fields above).
 model GivingLink {
-  id                        String    @id @default(cuid())
-  churchId                  String
-  publicSlug                String    @unique
-  internalName              String
-  publicTitle               String
-  description               String?
-  status                    String    @default("ACTIVE") // ACTIVE | INACTIVE | EXPIRED | ARCHIVED
-  amountType                String    @default("FIXED") // FIXED | VARIABLE | FIXED_QUANTITY
-  fixedAmountCents          Int?      // also the per-item price when amountType is FIXED_QUANTITY
-  minAmountCents            Int?
-  maxAmountCents            Int?
-  suggestedAmountsJson      Json?
-  allowCustomAmount         Boolean   @default(true)
+  id                          String    @id @default(cuid())
+  churchId                    String
+  publicSlug                  String    @unique
+  internalName                String
+  publicTitle                 String
+  description                 String?
+  status                      String    @default("ACTIVE") // ACTIVE | INACTIVE | EXPIRED | ARCHIVED
+  amountType                  String    @default("FIXED") // FIXED | VARIABLE | FIXED_QUANTITY
+  fixedAmountCents            Int? // also the per-item price when amountType is FIXED_QUANTITY
+  minAmountCents              Int?
+  maxAmountCents              Int?
+  suggestedAmountsJson        Json?
+  allowCustomAmount           Boolean   @default(true)
   // FIXED_QUANTITY only: optional noun shown next to the quantity stepper
   // on the public giving page (e.g. "Backpack") — purely cosmetic, never
   // parsed. A donor on a FIXED_QUANTITY link can always add an extra
   // dollar amount on top of quantity * fixedAmountCents; that's not a
   // separate toggle, just always-on for this mode.
-  quantityItemLabel         String?
-  linkType                  String    @default("MULTI_USE") // ONE_TIME | MULTI_USE
-  maxSuccessfulUses         Int?
-  maxCollectedAmountCents   Int?
-  expiresAt                 DateTime?
+  quantityItemLabel           String?
+  linkType                    String    @default("MULTI_USE") // ONE_TIME | MULTI_USE
+  maxSuccessfulUses           Int?
+  maxCollectedAmountCents     Int?
+  expiresAt                   DateTime?
   // Legacy single free-text fund label — kept for backward compatibility,
   // superseded by the Fund/GivingLinkFund catalog below for links with
   // fundSelectionEnabled = true.
-  fundName                  String?
-  fundId                    String?
+  fundName                    String?
+  fundId                      String?
   // Gift Designations: when true, the public giving page offers a fund
   // dropdown built from this link's GivingLinkFund assignments.
-  fundSelectionEnabled      Boolean   @default(false)
+  fundSelectionEnabled        Boolean   @default(false)
   // Student Giving: when true, the public page asks "who is this gift for?".
   // studentId/studentTermLabel set => a per-student link with the student
   // pre-selected (no picker). Both are ignored unless the church has
   // studentGivingEnabled.
-  studentSelectionEnabled   Boolean   @default(false)
+  studentSelectionEnabled     Boolean   @default(false)
   // Which designation the picker opens on: SPONSOR | SELF | GENERAL. Null = SPONSOR.
-  studentDefaultGivenFor    String?
-  studentId                 String?
-  studentTermLabel          String?
-  recurringEnabled          Boolean   @default(false)
-  allowedFrequenciesJson    Json?
+  studentDefaultGivenFor      String?
+  studentId                   String?
+  studentTermLabel            String?
+  recurringEnabled            Boolean   @default(false)
+  allowedFrequenciesJson      Json?
   // Which option the public form opens on: ONE_TIME (today's behavior, and
   // the default for every existing link) or RECURRING. RECURRING only takes
   // effect while recurringEnabled is true; the donor can always switch.
-  defaultDonationType       String    @default("ONE_TIME") // ONE_TIME | RECURRING
+  defaultDonationType         String    @default("ONE_TIME") // ONE_TIME | RECURRING
   // Amount pre-selected when the form opens as RECURRING. VARIABLE-amount
   // links only (a FIXED price can't be pre-empted); the donor can always
   // pick another amount or type a custom one. Null = no pre-selection.
   defaultRecurringAmountCents Int?
-  allowedPaymentMethodsJson Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
-  donorFieldSettingsJson    Json?
+  allowedPaymentMethodsJson   Json? // ["CARD","BANK","APPLE_PAY","GOOGLE_PAY"]
+  donorFieldSettingsJson      Json?
   // Shows the collapsed "Add mailing address (optional)" accordion on this
   // link's public giving page when true. Per-link, not organization-wide —
   // seeded from Church.defaultCollectMailingAddressOnNewLinks at creation
   // time, then independently editable per link. Never affects any other
   // giving link when changed.
-  collectMailingAddress     Boolean   @default(true)
-  feeCoverEnabled           Boolean   @default(true)
-  feeCoverDefaultOn         Boolean   @default(true)
-  receiptSettingsJson       Json?
-  statementDescriptor       String?
-  internalNote              String?
-  referenceNumber           String?
-  successReturnUrl          String?
-  failureReturnUrl          String?
-  cancelReturnUrl           String?
-  brandingSettingsJson      Json?
-  totalAttempts             Int       @default(0)
-  successfulDonations       Int       @default(0)
-  totalCollectedCents       Int       @default(0)
-  refundedCents             Int       @default(0)
-  returnedCents             Int       @default(0)
-  lastUsedAt                DateTime?
+  collectMailingAddress       Boolean   @default(true)
+  feeCoverEnabled             Boolean   @default(true)
+  feeCoverDefaultOn           Boolean   @default(true)
+  receiptSettingsJson         Json?
+  statementDescriptor         String?
+  internalNote                String?
+  referenceNumber             String?
+  successReturnUrl            String?
+  failureReturnUrl            String?
+  cancelReturnUrl             String?
+  brandingSettingsJson        Json?
+  totalAttempts               Int       @default(0)
+  successfulDonations         Int       @default(0)
+  totalCollectedCents         Int       @default(0)
+  refundedCents               Int       @default(0)
+  returnedCents               Int       @default(0)
+  lastUsedAt                  DateTime?
   // Who created this link — never overwritten on reassignment. Preserved
   // exactly as-is; see ownerUserId below for the field the Checkpoint 3
   // attribution/reassignment work actually operates on.
-  createdByUserId           String?
+  createdByUserId             String?
   // Team-access Checkpoint 3: whose fundraising activity/reporting this link
   // belongs to — distinct from createdByUserId (who made the link). An
   // owner/admin can create a link on behalf of a fundraiser, in which case
@@ -3084,9 +3192,9 @@ model GivingLink {
   // snapshotted once at creation and never rewritten when this changes. See
   // Payment.attributedUserId's comment for why this stays a plain string
   // field rather than a Prisma relation.
-  ownerUserId               String?
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  ownerUserId                 String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
   // Printful merchandise: purely additive, defaults to false/null so every
   // existing giving link is completely unaffected. When true, the public
@@ -3302,17 +3410,17 @@ model SavedReport {
   // | "YEAR_OVER_YEAR" — see ReportType in lib/reporting/types.ts, the
   // single source of truth for valid values (validated server-side on
   // every write, never trusted as an arbitrary string from the client).
-  reportType String
+  reportType      String
   // Full ReportDefinition (dateRange, filters, columns, groupBy, sortBy,
   // sources, amountCalculation) — validated against the same Zod schema
   // used by the query/export APIs before being persisted.
-  configuration Json
+  configuration   Json
   // PRIVATE = only createdByUserId can see/use it. ORGANIZATION = any team
   // member with canViewDonors can see/use it, but only the creator (or an
   // owner/admin, per canManageSavedReports) can rename/edit/delete it.
-  visibility String @default("PRIVATE")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  visibility      String   @default("PRIVATE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([churchId])
   @@index([createdByUserId])
@@ -3415,7 +3523,7 @@ model AuthAccount {
   id                String    @id @default(cuid())
   userId            String
   user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider          String    // "google" | "apple"
+  provider          String // "google" | "apple"
   providerAccountId String
   providerEmail     String
   createdAt         DateTime  @default(now())
@@ -3424,6 +3532,7 @@ model AuthAccount {
 
   @@unique([provider, providerAccountId])
 }
+
 /// "Record External Donation" — donations a merchant received outside WGC
 /// Payments entirely (cash, check, Cash App, Zelle, Venmo, PayPal, bank
 /// transfer, external card terminal, money order, other) and wants
@@ -3460,16 +3569,16 @@ model ExternalDonation {
   // EXTERNAL_CARD_PAYMENT | OTHER_OFFLINE_PAYMENT
   source String
 
-  fundId          String?
-  fundName        String?
+  fundId           String?
+  fundName         String?
   // Student Giving — same semantics as Payment.studentId / studentTermLabel
   // / studentGivenFor (offline gifts credited toward a student).
-  studentId       String?
+  studentId        String?
   studentTermLabel String?
-  studentGivenFor String?
-  campaign        String?
-  givingPageLabel String?
-  donationPurpose String?
+  studentGivenFor  String?
+  campaign         String?
+  givingPageLabel  String?
+  donationPurpose  String?
 
   // Never usernames, passwords, full card/bank numbers — see field-level
   // notes below and the form-layer validation that enforces this.
@@ -4309,14 +4418,14 @@ model InvoicePayment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([invoiceId])
-  @@index([churchId])
-  @@index([finixTransferId])
   // One record per Finix charge, enforced by the database (idempotency by
   // DB constraint): two concurrent webhook deliveries for the same transfer
   // can never both record it. Callers that may race treat P2002 as "already
   // recorded". Null (no transfer yet / offline) is never constrained.
   @@unique([finixTransferId])
+  @@index([invoiceId])
+  @@index([churchId])
+  @@index([finixTransferId])
 }
 
 /// One delivery attempt (email or SMS) of an invoice or a reminder.
@@ -4933,17 +5042,17 @@ model MerchandiseSettings {
 /// campaign optionally points at the Fund pledged money should ultimately
 /// be recorded against, but is never itself a place money is "in."
 model PledgeCampaign {
-  id          String  @id @default(cuid())
-  churchId    String
-  name        String
-  description String?
+  id           String  @id @default(cuid())
+  churchId     String
+  name         String
+  description  String?
   // GENERAL | BUILDING | MISSION | EVENT | OTHER — purely descriptive,
   // never branches behavior.
-  campaignType String @default("GENERAL")
+  campaignType String  @default("GENERAL")
   // ACTIVE | COMPLETED | ARCHIVED. COMPLETED/ARCHIVED are never auto-set —
   // always an explicit merchant action; a campaign reaching its goal does
   // not by itself stop new pledges or fulfillments.
-  status String @default("ACTIVE")
+  status       String  @default("ACTIVE")
 
   // Snapshotted convenience label, same rationale as
   // FinixSubscription.fundName — never re-read from Fund after pledge
@@ -4996,7 +5105,7 @@ model Pledge {
   churchId         String
   pledgeCampaignId String
 
-  donorId String?
+  donorId          String?
   // MATCHED | ANONYMOUS | UNMATCHED — same three states and same UI
   // treatment as ExternalDonation.donorMatchStatus (an "Unmatched
   // Pledges" queue), for a merchant recording a pledge on behalf of
@@ -5008,12 +5117,12 @@ model Pledge {
   currency          String @default("USD")
   // Set only when the campaign has unitLabel/unitAmountCents configured
   // (e.g. "pledged $10/mile x 26 miles"); null for a flat-amount pledge.
-  unitCount Int?
+  unitCount         Int?
 
-  pledgedAt DateTime @default(now())
+  pledgedAt DateTime  @default(now())
   // Merchant/donor-stated target date for fulfillment — informational
   // only, never enforced or auto-actioned when it passes.
-  dueDate DateTime?
+  dueDate   DateTime?
 
   // PROMISED | PARTIALLY_FULFILLED | FULFILLED | CANCELED. Never
   // DEPOSITED/CLEARED/RETURNED — those are money-movement states that
@@ -5022,11 +5131,11 @@ model Pledge {
   // pledgeAmountCents (see pledgeFulfillment.ts) but persisted here too,
   // written only by that same rollup routine, so list/summary queries
   // don't have to join and sum on every request.
-  status                String    @default("PROMISED")
-  fulfilledAmountCents  Int       @default(0)
-  fulfilledAt           DateTime?
-  canceledAt            DateTime?
-  cancelReason          String?
+  status               String    @default("PROMISED")
+  fulfilledAmountCents Int       @default(0)
+  fulfilledAt          DateTime?
+  canceledAt           DateTime?
+  cancelReason         String?
 
   // How the pledge was captured — mirrors
   // FinixSubscription.consentSource's ADMIN_CONFIRMED | DONOR_DIRECT
@@ -5034,8 +5143,8 @@ model Pledge {
   // creation flow; DONOR_SELF_SERVICE by the public campaign page.
   source String @default("MERCHANT_ENTERED") // MERCHANT_ENTERED | DONOR_SELF_SERVICE
 
-  notes           String?
-  createdByUserId String?
+  notes            String?
+  createdByUserId  String?
   // Team-access Checkpoint 3 pattern: snapshotted attribution, same
   // plain-string-FK rationale as Payment.attributedUserId /
   // FinixSubscription.attributedUserId.
@@ -5076,21 +5185,21 @@ model Pledge {
 // ---------------------------------------------------------------------------
 
 model FundraisingCampaign {
-  id          String  @id @default(cuid())
-  churchId    String
-  name        String
-  description String?
-  imageUrl    String?
+  id             String  @id @default(cuid())
+  churchId       String
+  name           String
+  description    String?
+  imageUrl       String?
   // Background choices for the public campaign page / live wall — see
   // src/lib/campaigns/backgrounds.ts for the allowed keys.
-  pageBackground String @default("light")
-  wallBackground String @default("navy")
+  pageBackground String  @default("light")
+  wallBackground String  @default("navy")
   // Size / font presets for the public page and live wall — see
   // src/lib/campaigns/display.ts for the allowed keys.
-  qrSize    String @default("md")
-  imageSize String @default("md")
-  textSize  String @default("md")
-  fontStyle String @default("modern")
+  qrSize         String  @default("md")
+  imageSize      String  @default("md")
+  textSize       String  @default("md")
+  fontStyle      String  @default("modern")
 
   // Public-facing vanity slug (e.g. "spring-gala-2026"), globally unique
   // across the platform — human-readable, distinct from
@@ -5110,11 +5219,11 @@ model FundraisingCampaign {
   // same rationale as PledgeCampaign.status above.
   status String @default("DRAFT")
 
-  leaderboardEnabled Boolean @default(true)
+  leaderboardEnabled        Boolean @default(true)
   // When false, the public campaign/team/fundraiser pages render a
   // noindex meta tag and are omitted from the sitemap — for a campaign an
   // organization wants reachable only by direct link, not search-indexed.
-  publiclyIndexable  Boolean @default(true)
+  publiclyIndexable         Boolean @default(true)
   // When true, a fundraiser on this campaign may log into /fundraiser and
   // edit their own story/goal/image — never anything financial, never the
   // merchant dashboard. Off by default so an organization opts in per
@@ -5177,11 +5286,11 @@ model CampaignFundraiser {
   fundraisingCampaignId String
   campaignTeamId        String?
 
-  displayName   String
-  slug          String  @unique
-  email         String?
-  personalStory String?
-  imageUrl      String?
+  displayName     String
+  slug            String  @unique
+  email           String?
+  personalStory   String?
+  imageUrl        String?
   goalAmountCents Int?
 
   donorId String?
@@ -5266,7 +5375,7 @@ model PlanningCenterConnection {
   // Planning Center's own organization id. Unique so one Planning Center
   // organization can never feed two WGC churches (later phases write gifts
   // into it). Cleared on disconnect so another church may then connect it.
-  pcoOrganizationId    String?  @unique
+  pcoOrganizationId    String? @unique
   pcoOrganizationName  String?
   pcoConnectedUserId   String?
   pcoConnectedUserName String?
@@ -5343,13 +5452,13 @@ model PlanningCenterSyncConfig {
   unmatchedDonorPolicy String    @default("HOLD_FOR_REVIEW")
   // When gifts are sent: ON_PAYMENT = as soon as the payment succeeds, into that day's batch (default) |
   // ON_SETTLEMENT = after the bank deposit settles, one batch per deposit.
-  sendTiming String @default("ON_PAYMENT")
+  sendTiming           String    @default("ON_PAYMENT")
   // What WGC sends to Planning Center: GIFTS = every gift as a Giving donation (the church pays Planning Center's
   // Giving subscription) | PROFILE_FIELDS = no donations; each matched person's profile gets a "WGC Giving" section.
-  syncTarget String @default("GIFTS")
+  syncTarget           String    @default("GIFTS")
   // The "WGC Giving" profile tab and its fields, created once in the church's Planning Center (key -> field definition id).
-  pcoProfileTabId    String?
-  pcoProfileFieldIds Json?
+  pcoProfileTabId      String?
+  pcoProfileFieldIds   Json?
   // Commit batches in Planning Center automatically. Off by default so the
   // church's finance admin can review a batch before donors see the gifts.
   autoCommitBatches    Boolean   @default(false)
@@ -5523,15 +5632,15 @@ model PlanningCenterDonationRecord {
   // What would be / was sent, ids only (no names, no card data).
   payloadJson Json?
 
-  pcoDonationId    String?
-  sendingStartedAt DateTime?
+  pcoDonationId       String?
+  sendingStartedAt    DateTime?
   // Sent without a person because the donor wasn't matched yet; the person is attached once they are.
   attachPersonPending Boolean   @default(false)
   // Set when the gift was later refunded/returned/failed and Planning Center was updated to match.
   reversedAt          DateTime?
-  attemptCount     Int       @default(0)
-  lastErrorCode    String?
-  lastErrorMessage String?
+  attemptCount        Int       @default(0)
+  lastErrorCode       String?
+  lastErrorMessage    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -5625,8 +5734,8 @@ model QuickBooksBackfillJob {
 // =============================================================================
 
 model GivingCampaign {
-  id           String  @id @default(cuid())
-  churchId     String
+  id                String  @id @default(cuid())
+  churchId          String
   // Always resolved server-side, never a free client choice once one of
   // the four tie-in fields below is set — see POST
   // /api/merchant/giving-campaigns. Online-gift attribution to a
@@ -5636,11 +5745,11 @@ model GivingCampaign {
   // that record's own dedicated givingLinkId, never an independently
   // chosen one, or every gift this campaign drives would silently never
   // count toward the right totals.
-  givingLinkId String
+  givingLinkId      String
   // Internal label only, never shown to a recipient — e.g. "Fall Giving Email Blast".
-  name         String
-  channel      String // EMAIL | TEXT
-  emailSubject String?
+  name              String
+  channel           String // EMAIL | TEXT
+  emailSubject      String?
   // Merge-field templates — {{firstName}}, {{churchName}}, {{link}} —
   // rendered per recipient at send time (renderCampaignTemplate in
   // campaignTemplate.ts) and for the live preview before sending.
@@ -5721,14 +5830,14 @@ model EmailOptOut {
 // per-recipient link, there would be no way to tell which of many
 // recipients on the same giving link actually paid.
 model GivingCampaignRecipient {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   campaignId String
   // Denormalized for scoping safety — every lookup by trackingToken (an
   // unauthenticated route, since a donor clicking their link isn't logged
   // in) re-verifies churchId rather than trusting the token/campaign join
   // alone, same defense-in-depth convention used elsewhere in this schema.
-  churchId String
-  donorId  String?
+  churchId   String
+  donorId    String?
 
   trackingToken  String  @unique
   recipientEmail String?
@@ -5764,10 +5873,10 @@ model GivingCampaignRecipient {
 // =============================================================================
 
 model SmsAddonSubscription {
-  id             String @id @default(cuid())
-  organizationId String @unique
-  planCode       String // SMS_STARTER | SMS_GROWTH — see smsAddonPlans.ts for the definitions this references
-  includedTexts  Int
+  id                 String @id @default(cuid())
+  organizationId     String @unique
+  planCode           String // SMS_STARTER | SMS_GROWTH — see smsAddonPlans.ts for the definitions this references
+  includedTexts      Int
   // Snapshotted from the plan at activation time, like WgcSubscription
   // snapshots WgcPricingVersion — a later change to smsAddonPlans.ts must
   // never retroactively change what an already-subscribed org is billed.
@@ -5807,12 +5916,12 @@ model SmsAddonOverageCharge {
   id             String @id @default(cuid())
   organizationId String
   // e.g. "2026-09" — the calendar month that was found over-allowance.
-  billingPeriod String
+  billingPeriod  String
 
-  textsIncluded    Int
-  textsSent        Int
-  overageTexts     Int
-  overageRateCents Int
+  textsIncluded     Int
+  textsSent         Int
+  overageTexts      Int
+  overageRateCents  Int
   // Snapshotted at detection time so a later plan-price edit can never
   // retroactively change what an admin's "Charge now" action actually charges.
   chargeAmountCents Int
@@ -5857,16 +5966,16 @@ model SmsConsentEvent {
   // (see User.phone, Donor.phone); never written to application logs (see
   // the enroll/disable routes' console.error calls, which log user/church
   // ids only, never the phone value itself).
-  phone String
+  phone    String
 
   // GRANTED | WITHDRAWN
   eventType String
 
-  consentTimestamp DateTime @default(now())
+  consentTimestamp   DateTime @default(now())
   // Where consent was captured — e.g. "settings_security_mfa_enroll" —
   // distinct from consentTextVersion so the disclosure copy can change
   // independently of where in the product it's shown.
-  consentSource     String
+  consentSource      String
   consentTextVersion String
 
   createdAt DateTime @default(now())
@@ -5890,12 +5999,12 @@ model SmsConsentEvent {
 // =============================================================================
 
 model AuthSmsSendLog {
-  id     String  @id @default(cuid())
-  userId String
+  id        String  @id @default(cuid())
+  userId    String
   // Denormalized (not just looked up via userId) so a rate-limit query can
   // filter by phone directly — catches abuse patterns where the same
   // number is targeted across what look like different accounts.
-  phone String
+  phone     String
   // ENROLL | LOGIN | RESEND | ADMIN_LOGIN | ADMIN_RESEND
   purpose   String
   ipAddress String?
@@ -5904,12 +6013,12 @@ model AuthSmsSendLog {
   // QUEUED | SENT | DELIVERED | UNDELIVERED | FAILED — null until Twilio's
   // status callback updates it, or forever null if delivery webhooks
   // aren't configured.
-  deliveryStatus   String?
-  deliveryStatusAt DateTime?
+  deliveryStatus    String?
+  deliveryStatusAt  DateTime?
   // Twilio's own error code (a number as a string, e.g. "30003") — safe to
   // store, never shown to the end user verbatim (see the status callback
   // route's own comment on why).
-  errorCode String?
+  errorCode         String?
 
   createdAt DateTime @default(now())
 
@@ -6008,12 +6117,12 @@ model WebhookDelivery {
 
   // PENDING (queued, not yet attempted or awaiting retry) | SUCCEEDED |
   // FAILED (will retry, see nextRetryAt) | ABANDONED (exhausted retries).
-  status       String    @default("PENDING")
-  attemptCount Int       @default(0)
-  nextRetryAt  DateTime?
+  status        String    @default("PENDING")
+  attemptCount  Int       @default(0)
+  nextRetryAt   DateTime?
   lastAttemptAt DateTime?
 
-  responseStatusCode Int?
+  responseStatusCode  Int?
   // Truncated to a few KB — never the full response body, this is for
   // debugging a misconfigured endpoint, not general storage.
   responseBodySnippet String?
@@ -6082,12 +6191,12 @@ model ApiRequestLog {
   apiKeyId String
   churchId String
 
-  method     String
-  path       String
-  statusCode Int
+  method         String
+  path           String
+  statusCode     Int
   // Unique per request — returned to the caller as the `X-Request-Id`
   // response header for support/debugging correlation.
-  requestId String @unique
+  requestId      String  @unique
   // Client-supplied Idempotency-Key header on a write request, if any —
   // stored so a retried request with the same key can be detected and
   // short-circuited to the original response rather than double-processed.
@@ -6097,7 +6206,7 @@ model ApiRequestLog {
   // card (src/lib/monitoring/overviewStats.ts). Nullable/additive: rows
   // written before this field existed simply have no duration, and are
   // excluded from the average rather than treated as zero.
-  durationMs Int?
+  durationMs     Int?
 
   createdAt DateTime @default(now())
 
@@ -6118,7 +6227,7 @@ model ApiIdempotencyRecord {
   method         String
   path           String
 
-  responseStatus Int
+  responseStatus   Int
   responseBodyJson Json
 
   createdAt DateTime @default(now())
@@ -6150,14 +6259,14 @@ model IntegrationConnection {
   // the client. credentialsEncrypted covers API-key-style auth;
   // oauthTokensEncrypted covers OAuth access/refresh tokens. A given
   // provider uses one or the other, never both.
-  credentialsEncrypted  String?
-  oauthTokensEncrypted  String?
-  oauthTokenExpiresAt   DateTime?
+  credentialsEncrypted String?
+  oauthTokensEncrypted String?
+  oauthTokenExpiresAt  DateTime?
 
-  connectedAt  DateTime?
-  lastSyncAt   DateTime?
+  connectedAt   DateTime?
+  lastSyncAt    DateTime?
   // IDLE | SYNCING | ERROR
-  syncStatus   String    @default("IDLE")
+  syncStatus    String    @default("IDLE")
   lastSyncError String?
 
   // Provider-specific settings (e.g. which objects to sync) and
@@ -6217,8 +6326,8 @@ model MigrationJob {
   createdByUserId String?
   startedAt       DateTime?
   completedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   mappings MigrationMapping[]
   records  MigrationRecord[]
@@ -6316,10 +6425,10 @@ model MigrationError {
 /// recovery here means "get the donor a payment-update link," never
 /// "retry the charge ourselves" (see recoveryAutomation.ts doc comment).
 model SubscriptionRecoveryAttempt {
-  id                   String  @id @default(cuid())
-  churchId             String
-  finixSubscriptionId  String
-  donorId              String?
+  id                  String  @id @default(cuid())
+  churchId            String
+  finixSubscriptionId String
+  donorId             String?
 
   // PAYMENT_FAILED — the only trigger today.
   trigger String
@@ -6417,7 +6526,6 @@ model TextToGiveInboundMessage {
 
   @@index([churchId, createdAt])
 }
-
 
 // ─── System Health / Incident Detection / Alerting ("WGC Command Center") ──
 //
@@ -6558,7 +6666,7 @@ model SystemErrorGroup {
 /// fingerprint (which would need a partial unique index this project's
 /// `prisma db push` deploy flow can't express safely).
 model SystemIncident {
-  id String @id @default(cuid())
+  id          String  @id @default(cuid())
   // @default(cuid()) exists ONLY so `prisma db push` can apply this new
   // NOT NULL + UNIQUE column non-interactively against a table that already
   // exists in production (Phase 2) — every row this app ever creates always
@@ -6603,9 +6711,9 @@ model SystemIncident {
 /// order by completedAt desc) to avoid a second write path that could drift
 /// from the run history itself.
 model JobRun {
-  id       String  @id @default(cuid())
-  jobName  String
-  jobType  String
+  id         String  @id @default(cuid())
+  jobName    String
+  jobType    String
   // Set only when a run is scoped to one merchant — most of these crons are
   // platform-wide batch jobs with no single merchant, so this is null for
   // the large majority of rows.
@@ -6621,8 +6729,8 @@ model JobRun {
   processedCount Int?
   successCount   Int?
   failedCount    Int?
-  retryCount     Int @default(0)
-  attempt        Int @default(1)
+  retryCount     Int  @default(0)
+  attempt        Int  @default(1)
 
   lastErrorCode    String?
   lastErrorMessage String?
@@ -6649,9 +6757,9 @@ model SystemAlert {
 
   // INFO | WARNING | ERROR | CRITICAL — the incident's severity AT THE TIME
   // this alert was sent, not necessarily its current severity.
-  severity String
+  severity         String
   // DASHBOARD | EMAIL | SMS
-  channel String
+  channel          String
   // INITIAL | ESCALATION | REMINDER | RECOVERY
   notificationType String
 
@@ -6752,7 +6860,7 @@ model Event {
 
   mailingAddressMode String @default("HIDDEN") // HIDDEN | OPTIONAL | REQUIRED
 
-  confirmationMessage String?
+  confirmationMessage  String?
   // Photo / video shown on the confirmation ("thank you") screen after
   // someone registers. A video is a pasted link (YouTube, Vimeo, ...) or an
   // uploaded mp4/webm; resolveThankYouVideoEmbed is the only thing that ever
@@ -6773,12 +6881,12 @@ model Event {
   // recurring part is set up on a second, ordinary (recurring-enabled)
   // giving link dedicated to this event; the registration itself is still a
   // single one-time charge.
-  allowRecurringDonation Boolean @default(false)
+  allowRecurringDonation Boolean   @default(false)
   donationGivingLinkId   String?
   // true = donationGivingLinkId is one of the organization's own existing
   // giving pages (picked in settings): the event never edits or deactivates
   // it. false = a page the event created for itself.
-  donationLinkIsExisting Boolean @default(false)
+  donationLinkIsExisting Boolean   @default(false)
   publishedAt            DateTime?
 
   // Merchant-defined registration questions. Array of
