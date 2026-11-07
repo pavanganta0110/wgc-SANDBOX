@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/format";
 import { checkNonprofitVerificationStatus } from "@/lib/onboarding/nonprofitVerificationGuard";
 import OpenMerchantDashboardButton from "@/components/admin/OpenMerchantDashboardButton";
 import ResyncFinixTerminationButton from "@/components/admin/ResyncFinixTerminationButton";
+import TerminateMerchantButton from "@/components/admin/TerminateMerchantButton";
 import StateBadge from "@/components/merchant/StateBadge";
 import StudentGivingToggle from "@/components/admin/StudentGivingToggle";
 import PaymentModeSettings from "@/components/admin/PaymentModeSettings";
@@ -152,9 +153,14 @@ export default async function MerchantOverviewPage({ params }: { params: Promise
             </p>
           )}
         </div>
-        {session.role === "wgc_super_admin" && church.status === "ACTIVE" && (
-          <OpenMerchantDashboardButton churchId={church.id} />
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {session.role === "wgc_super_admin" && church.status === "ACTIVE" && (
+            <OpenMerchantDashboardButton churchId={church.id} />
+          )}
+          {session.role === "wgc_super_admin" && church.status !== "TERMINATED" && church.finixMerchantId && (
+            <TerminateMerchantButton churchId={church.id} churchName={church.name} />
+          )}
+        </div>
       </div>
 
       <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
