@@ -31,7 +31,7 @@ describe("POST /api/admin/merchants/[churchId]/terminate", () => {
     mockRequireAdmin.mockResolvedValue(SUPER);
     mockPrisma.church.findUnique.mockResolvedValue(CHURCH);
     mockUpdateMerchant.mockResolvedValue({});
-    mockGetMerchant.mockResolvedValue({ is_terminated: true, termination_details: { reason: "FRAUD" } });
+    mockGetMerchant.mockResolvedValue({ is_terminated: true, termination_details: null });
     mockHandle.mockResolvedValue({ applied: true });
   });
 
@@ -72,8 +72,9 @@ describe("POST /api/admin/merchants/[churchId]/terminate", () => {
   it("terminates at Finix and applies local handling", async () => {
     const res = await call(GOOD);
     expect(res.status).toBe(200);
-    expect(mockUpdateMerchant).toHaveBeenCalledWith("MU1", { is_terminated: true, termination_details: { reason: "FRAUD", description: "Confirmed fraudulent activity" } });
+    expect(mockUpdateMerchant).toHaveBeenCalledWith("MU1", { is_terminated: true });
     expect(mockHandle).toHaveBeenCalledOnce();
+    expect(mockHandle.mock.calls[0][0].terminationDetails.description).toBe("FRAUD: Confirmed fraudulent activity");
   });
 
   it("changes nothing locally when Finix errors", async () => {

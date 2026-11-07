@@ -80,10 +80,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
   // External HTTP happens before any DB write and outside any transaction.
   let after: FinixMerchant;
   try {
-    await finixClient.updateMerchant(church.finixMerchantId, {
-      is_terminated: true,
-      termination_details: { reason, description },
-    });
+    // Finix only accepts the is_terminated flag on write (sending
+    // termination_details.reason is rejected as an invalid field), so our
+    // reason/description are recorded locally and in the audit log instead.
+    await finixClient.updateMerchant(church.finixMerchantId, { is_terminated: true });
     after = await finixClient.getMerchant(church.finixMerchantId);
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown error";
@@ -115,7 +115,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
         }
       : null,
     finixMerchantId: church.finixMerchantId,
-    terminationDetails: after.termination_details ?? { reason, description, terminated_at: null },
+    terminationDetails: {
+      reason: after.termination_details?.reason ?? reason,
+      description: after.termination_details?.description || `${reason}: ${description}`,
+      terminated_at: after.termination_details?.terminated_at ?? null,
+    },
   });
 
   await audit("admin.terminated_merchant", { reason, description, applied: result.applied });
