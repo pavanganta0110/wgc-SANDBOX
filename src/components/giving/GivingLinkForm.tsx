@@ -1690,7 +1690,7 @@ export default function GivingLinkForm({
         <label className="flex items-start gap-2 text-sm" style={{ color: light.bodyTextColor }}>
           <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
           <span>
-            I&apos;ll cover the {formatCents(feeCoveredCents)} transaction cost so my full{" "}
+            I&apos;ll cover the {formatCents(feeCoveredCents)} in processing and platform fees so my full{" "}
             {formatCents(effectiveAmountCents)} {eventMode ? "goes" : paymentMode ? "payment goes" : "gift goes"} to {churchName}.
           </span>
         </label>

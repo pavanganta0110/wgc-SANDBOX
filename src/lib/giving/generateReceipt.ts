@@ -246,7 +246,7 @@ export async function sendDonationReceipt(
   if (pdfProps.paymentNote) lines.push(`<p>Note: ${escapeHtml(pdfProps.paymentNote)}</p>`);
   const coveredFeeCents = coveredFeeForReceipt(settings.showDonorCoveredFee, payment.feeCoveredCents);
   if (coveredFeeCents > 0) {
-    lines.push(`<p>You ${church.paymentMode ? "covered" : "generously covered"} ${formatCents(coveredFeeCents)} in transaction costs.</p>`);
+    lines.push(`<p>You ${church.paymentMode ? "covered" : "generously covered"} ${formatCents(coveredFeeCents)} in processing and platform fees.</p>`);
   }
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
   lines.push(`<p>${settings.thankYouMessage}</p>`);

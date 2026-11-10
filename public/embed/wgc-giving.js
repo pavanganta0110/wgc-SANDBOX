@@ -483,7 +483,7 @@
       html +=
         '<label class="wgc-inline-checkbox-row"><input type="checkbox" data-role="cover-fees"' +
         (cfg.feeCover.defaultOn ? " checked" : "") +
-        " /> I'll cover the transaction cost so " + escapeHtml(cfg.organization.name) + " keeps 100% of my gift</label>";
+        " /> I'll cover the processing and platform fees so my full gift goes to " + escapeHtml(cfg.organization.name) + "</label>";
     }
 
     var hasCard = cfg.paymentMethods.indexOf("CARD") !== -1;

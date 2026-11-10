@@ -663,7 +663,7 @@ export default function MerchandiseGivingExperience({
           <label className="flex items-start gap-2 text-sm text-slate-600 mb-3">
             <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
             <span>
-              I&apos;ll cover the ${(feeCoveredCents / 100).toFixed(2)} transaction cost so my full ${(baseTotal / 100).toFixed(2)} goes to {churchName}.
+              I&apos;ll cover the ${(feeCoveredCents / 100).toFixed(2)} in processing and platform fees so my full ${(baseTotal / 100).toFixed(2)} goes to {churchName}.
             </span>
           </label>
         )}
