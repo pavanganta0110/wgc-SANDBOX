@@ -80,7 +80,7 @@ export default function RecurringGiftActions({ slug, subscriptionId, donationAmo
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-600">
             <input type="checkbox" checked={coverFees} onChange={(e) => setCoverFees(e.target.checked)} className="mt-0.5" />
-            I&apos;ll cover the processing and platform fees so my full gift amount goes to the organization.
+            I&apos;ll cover the processing and platform fees so more of my gift amount goes to the organization.
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-600">
             <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" />

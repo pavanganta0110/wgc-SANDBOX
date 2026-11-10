@@ -118,7 +118,7 @@ export function YearEndStatementPage(props: StatementPdfProps) {
         <View style={styles.row}><Text style={styles.label}>ACH Returned</Text><Text style={styles.value}>{formatCents(props.returnedAmountCents)}</Text></View>
         {props.showDonorCoveredFees && (
           <View style={styles.row}>
-            <Text style={styles.label}>Donor-Covered Transaction Costs</Text>
+            <Text style={styles.label}>Donor-Covered Processing & Platform Fees</Text>
             <Text style={styles.value}>{formatCents(props.lines.reduce((s, l) => s + l.donorCoveredFeeCents, 0))}</Text>
           </View>
         )}
