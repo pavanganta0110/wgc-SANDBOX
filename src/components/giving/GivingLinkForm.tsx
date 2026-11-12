@@ -10,7 +10,7 @@ import { calculateWgcFeeAmounts } from "@/lib/giving/feeCalculator";
 import { formatCents } from "@/lib/format";
 import type { FinixPaymentFormInstance } from "@/lib/finix/fraudSession";
 import type { DonorFieldSettings, FrequencyKey, PaymentMethodKey, BrandingModeSettings } from "@/lib/givingLinks/types";
-import { resolveThankYouVideoEmbed } from "@/lib/givingLinks/types";
+import { resolveThankYouVideoEmbed, CUSTOM_QUESTION_DEFAULT_LABEL, CUSTOM_ANSWER_MAX } from "@/lib/givingLinks/types";
 import { isApplePayAvailable, loadApplePayButtonScript, beginApplePaySession, type ApplePayResult } from "@/lib/finix/wallets/applePay";
 import { isGooglePayAvailable, createGooglePayButton, requestGooglePayment, type GooglePayResult } from "@/lib/finix/wallets/googlePay";
 import type { AssignedActiveFund } from "@/lib/giving/fundAssignment";
@@ -245,6 +245,7 @@ export default function GivingLinkForm({
   const [phone, setPhone] = useState(eventMode?.prefill?.phone ?? "");
   const [note, setNote] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [customAnswer, setCustomAnswer] = useState("");
   // Mailing address — collapsed by default, never required. Values persist
   // across close/reopen (plain component state, not reset on toggle) per
   // spec ("preserve entered address information if the donor closes and
@@ -542,6 +543,7 @@ export default function GivingLinkForm({
             phone: phone.trim() || undefined,
             note: note.trim() || undefined,
             companyName: companyName.trim() || undefined,
+            customAnswer: customAnswer.trim() || undefined,
             isAnonymous,
           },
           mailingAddress: mailingAddressPayload,
@@ -1059,6 +1061,7 @@ export default function GivingLinkForm({
                 phone: phone.trim() || undefined,
                 note: note.trim() || undefined,
                 companyName: companyName.trim() || undefined,
+                customAnswer: customAnswer.trim() || undefined,
                 isAnonymous,
               },
               mailingAddress: mailingAddressPayload,
@@ -1508,6 +1511,24 @@ export default function GivingLinkForm({
               placeholder="Company/Organization name (optional)"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
+              style={{ borderColor: light.borderColor }}
+            />
+          </div>
+        )}
+        {isFieldVisible("customQuestion") && (
+          <div className="mb-3">
+            <label htmlFor="donor-custom-answer" className="block text-xs font-medium mb-1" style={{ color: light.bodyTextColor }}>
+              {donorFieldSettings.customQuestionLabel?.trim() || CUSTOM_QUESTION_DEFAULT_LABEL}{" "}
+              {donorFieldSettings.customQuestion === "REQUIRED" ? <span aria-hidden="true">*</span> : <span className="font-normal opacity-70">(optional)</span>}
+            </label>
+            <input
+              id="donor-custom-answer"
+              required={donorFieldSettings.customQuestion === "REQUIRED"}
+              aria-required={donorFieldSettings.customQuestion === "REQUIRED"}
+              maxLength={CUSTOM_ANSWER_MAX}
+              value={customAnswer}
+              onChange={(e) => setCustomAnswer(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border text-sm outline-none"
               style={{ borderColor: light.borderColor }}
             />

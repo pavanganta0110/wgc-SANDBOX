@@ -13,11 +13,17 @@ export const DONOR_FIELDS = [
   "donorNote",
   "anonymousDonation",
   "companyName",
+  "customQuestion",
 ] as const;
 
 export type DonorFieldKey = (typeof DONOR_FIELDS)[number];
 export type DonorFieldVisibility = "REQUIRED" | "OPTIONAL" | "HIDDEN";
-export type DonorFieldSettings = Record<DonorFieldKey, DonorFieldVisibility>;
+// customQuestion is an org-written question on the giving page (e.g. "How did you hear about us?").
+// Its visibility lives in the same map as every other donor field; the question text is customQuestionLabel.
+export const CUSTOM_QUESTION_DEFAULT_LABEL = "How did you hear about us?";
+export const CUSTOM_QUESTION_MAX_LABEL = 120;
+export const CUSTOM_ANSWER_MAX = 500;
+export type DonorFieldSettings = Record<DonorFieldKey, DonorFieldVisibility> & { customQuestionLabel?: string };
 
 export const DEFAULT_DONOR_FIELD_SETTINGS: DonorFieldSettings = {
   // Mailing-list salutation ("Mr. and Mrs."). Hidden unless a link turns it on, so
@@ -36,6 +42,7 @@ export const DEFAULT_DONOR_FIELD_SETTINGS: DonorFieldSettings = {
   donorNote: "OPTIONAL",
   anonymousDonation: "OPTIONAL",
   companyName: "HIDDEN",
+  customQuestion: "HIDDEN",
 };
 
 export function parseDonorFieldSettings(json: unknown): DonorFieldSettings {
@@ -46,6 +53,8 @@ export function parseDonorFieldSettings(json: unknown): DonorFieldSettings {
     const v = parsed[key];
     if (v === "REQUIRED" || v === "OPTIONAL" || v === "HIDDEN") result[key] = v;
   }
+  const label = typeof parsed.customQuestionLabel === "string" ? parsed.customQuestionLabel.trim().slice(0, CUSTOM_QUESTION_MAX_LABEL) : "";
+  if (label) result.customQuestionLabel = label;
   return result;
 }
 

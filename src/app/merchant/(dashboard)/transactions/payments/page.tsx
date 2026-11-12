@@ -171,7 +171,7 @@ export default async function PaymentsListPage({
   const payments = transferIds.length
     ? await prisma.payment.findMany({
         where: { churchId, finixTransferId: { in: transferIds } },
-        select: { id: true, givingLinkId: true, finixTransferId: true, fundName: true, note: true, studentId: true, studentTermLabel: true },
+        select: { id: true, givingLinkId: true, finixTransferId: true, fundName: true, note: true, customQuestion: true, customAnswer: true, studentId: true, studentTermLabel: true },
       })
     : [];
   const studentIds = [...new Set(payments.map((p) => p.studentId).filter((sid): sid is string => Boolean(sid)))];
@@ -209,6 +209,8 @@ export default async function PaymentsListPage({
   const showStudentCols = Boolean(church?.studentGivingEnabled);
   const showTermCol = Boolean(church?.studentGivingEnabled || church?.termFieldEnabled);
   const showNoteCol = Boolean(church?.paymentMode);
+  // The answer to an org's own giving-page question ("How did you hear about us?"); only shown once someone has answered.
+  const showAnswerCol = payments.some((p) => Boolean(p.customAnswer));
 
   return (
     <div>
@@ -267,6 +269,7 @@ export default async function PaymentsListPage({
                 {showStudentCols && <th className="px-6 py-3">Student</th>}
                 {showTermCol && <th className="px-6 py-3">Term</th>}
                 {showNoteCol && <th className="px-6 py-3">Note</th>}
+                {showAnswerCol && <th className="px-6 py-3">Donor answer</th>}
                 <th className="px-6 py-3 text-right">Amount</th>
                 <th className="px-6 py-3">State</th>
                 <th className="px-6 py-3">Payment Instrument</th>
@@ -312,6 +315,16 @@ export default async function PaymentsListPage({
                     )}
                     {showTermCol && <td className="px-6 py-3 text-slate-600 whitespace-nowrap">{payment?.studentTermLabel || "—"}</td>}
                     {showNoteCol && <td className="px-6 py-3 text-slate-600 max-w-[220px] break-words">{payment?.note || "—"}</td>}
+                    {showAnswerCol && (
+                      <td className="px-6 py-3 text-slate-600 max-w-[240px] break-words">
+                        {payment?.customAnswer ? (
+                          <>
+                            <span className="block text-xs text-slate-400">{payment.customQuestion}</span>
+                            {payment.customAnswer}
+                          </>
+                        ) : "—"}
+                      </td>
+                    )}
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(t.amountCents ?? 0)}
                       {refund.refundStatus !== "NONE" && refund.refundStatus !== "PENDING" && (

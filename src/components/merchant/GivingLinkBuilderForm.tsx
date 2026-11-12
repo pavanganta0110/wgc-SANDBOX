@@ -11,6 +11,8 @@ import {
   DonorFieldKey,
   DonorFieldSettings,
   DEFAULT_DONOR_FIELD_SETTINGS,
+  CUSTOM_QUESTION_DEFAULT_LABEL,
+  CUSTOM_QUESTION_MAX_LABEL,
   PaymentMethodKey,
   FrequencyKey,
   FREQUENCIES,
@@ -36,6 +38,7 @@ const DONOR_FIELD_LABELS: Record<DonorFieldKey, string> = {
   donorNote: "Donor Note",
   anonymousDonation: "Anonymous Donation",
   companyName: "Company/Organization Name",
+  customQuestion: "Your Own Question",
 };
 
 // street/apartment/city/state/postalCode/country are 6 separate
@@ -478,6 +481,13 @@ export default function GivingLinkBuilderForm({
 
   const update = <K extends keyof BuilderState>(key: K, value: BuilderState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const setCustomQuestionLabel = (label: string) => {
+    setState((prev) => ({
+      ...prev,
+      donorFieldSettings: { ...prev.donorFieldSettings, customQuestionLabel: label },
+    }));
   };
 
   const toggleDonorField = (field: DonorFieldKey, visibility: "REQUIRED" | "OPTIONAL" | "HIDDEN") => {
@@ -1168,17 +1178,40 @@ export default function GivingLinkBuilderForm({
             </p>
             <div className="space-y-2">
               {NON_ADDRESS_DONOR_FIELDS.map((field) => (
-                <div key={field} className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-slate-700">{DONOR_FIELD_LABELS[field]}</span>
-                  <select
-                    value={state.donorFieldSettings[field]}
-                    onChange={(e) => toggleDonorField(field, e.target.value as "REQUIRED" | "OPTIONAL" | "HIDDEN")}
-                    className="px-2 py-1 rounded-lg border border-slate-200 text-xs outline-none"
-                  >
-                    <option value="REQUIRED">Required</option>
-                    <option value="OPTIONAL">Optional</option>
-                    <option value="HIDDEN">Hidden</option>
-                  </select>
+                <div key={field}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm text-slate-700">{DONOR_FIELD_LABELS[field]}</span>
+                    <select
+                      value={state.donorFieldSettings[field]}
+                      onChange={(e) => toggleDonorField(field, e.target.value as "REQUIRED" | "OPTIONAL" | "HIDDEN")}
+                      className="px-2 py-1 rounded-lg border border-slate-200 text-xs outline-none"
+                    >
+                      <option value="REQUIRED">Required</option>
+                      <option value="OPTIONAL">Optional</option>
+                      <option value="HIDDEN">Hidden</option>
+                    </select>
+                  </div>
+                  {field === "customQuestion" && (
+                    <div className="mt-2">
+                      {state.donorFieldSettings.customQuestion === "HIDDEN" ? (
+                        <p className="text-xs text-slate-400">
+                          Add a question of your own, such as &quot;How did you hear about us?&quot;. The answer is saved with each gift so you can see it in your transactions.
+                        </p>
+                      ) : (
+                        <label className="block text-xs text-slate-500">
+                          Question donors will see
+                          <input
+                            type="text"
+                            maxLength={CUSTOM_QUESTION_MAX_LABEL}
+                            value={state.donorFieldSettings.customQuestionLabel ?? ""}
+                            onChange={(e) => setCustomQuestionLabel(e.target.value)}
+                            placeholder={CUSTOM_QUESTION_DEFAULT_LABEL}
+                            className="mt-1 w-full px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none"
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

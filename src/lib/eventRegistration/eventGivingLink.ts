@@ -43,6 +43,7 @@ export function deriveEventLinkSettings(event: EventLinkSource) {
     donorNote: "HIDDEN",
     anonymousDonation: "HIDDEN",
     companyName: "HIDDEN",
+    customQuestion: "HIDDEN",
   };
   const linkStatus = event.status === "ACTIVE" ? "ACTIVE" : event.status === "ARCHIVED" ? "ARCHIVED" : "INACTIVE";
   return {

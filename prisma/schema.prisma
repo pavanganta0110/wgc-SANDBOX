@@ -1483,6 +1483,10 @@ model Payment {
   // untagged. See the Pledges section below for the full model.
   pledgeId                          String?
   note                              String?
+  // Org-written question on the giving page (GivingLink donor field "customQuestion") and the donor's
+  // answer. The question text is copied here so a later edit to the page never changes what was asked.
+  customQuestion                    String?
+  customAnswer                      String?
   isAnonymous                       Boolean   @default(false)
   createdByAdminUserId              String?
   // Team-access Checkpoint 3: snapshotted once at payment-creation time from

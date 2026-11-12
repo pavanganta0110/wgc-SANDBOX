@@ -14,7 +14,7 @@ import { syncPaymentToQuickBooks } from "@/lib/integrations/quickbooks/sync";
 import { triggerPlanningCenterSync } from "@/lib/integrations/planningcenter/syncTrigger";
 import { normalizeUSPhone, isValidEmail } from "@/lib/validation";
 import { isGivingLinkUsable } from "@/lib/givingLinks/status";
-import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies } from "@/lib/givingLinks/types";
+import { parseDonorFieldSettings, parseAllowedPaymentMethods, parseAllowedFrequencies, CUSTOM_QUESTION_DEFAULT_LABEL, CUSTOM_ANSWER_MAX } from "@/lib/givingLinks/types";
 import { toSafeErrorResponse, toSafePaymentErrorResponse } from "@/lib/utils/errorNormalizer";
 import { resolvePaymentAttributionFromGivingLink } from "@/lib/auth/attributionSnapshot";
 import { resolveDonorSelectedFund, FundAssignmentError } from "@/lib/giving/fundAssignment";
@@ -308,6 +308,19 @@ async function handleDonate(req: Request, slug: string) {
       collectMailingAddress: link.collectMailingAddress,
       donorFieldSettings: parseDonorFieldSettings(link.donorFieldSettingsJson),
     });
+    // The org's own question (e.g. "How did you hear about us?"). Enforced here as well as in the form,
+    // since this is a public endpoint a client-side check can't protect.
+    const customQuestionText =
+      fieldSettings.customQuestion !== "HIDDEN"
+        ? fieldSettings.customQuestionLabel?.trim() || CUSTOM_QUESTION_DEFAULT_LABEL
+        : null;
+    const customAnswerText =
+      customQuestionText && typeof donor?.customAnswer === "string"
+        ? donor.customAnswer.trim().slice(0, CUSTOM_ANSWER_MAX) || null
+        : null;
+    if (fieldSettings.customQuestion === "REQUIRED" && !customAnswerText) {
+      return NextResponse.json({ success: false, code: "VALIDATION_ERROR", message: "Please answer the question above", retryable: true }, { status: 400 });
+    }
     const fullName =
       [donor?.firstName, donor?.lastName].filter(Boolean).join(" ").trim() ||
       donor?.name?.trim() ||
@@ -1003,6 +1016,8 @@ async function handleDonate(req: Request, slug: string) {
           : {}),
         isAnonymous: fieldSettings.anonymousDonation !== "HIDDEN" ? Boolean(donor.isAnonymous) : false,
         note: fieldSettings.donorNote !== "HIDDEN" ? donor.note?.trim() || null : null,
+        customQuestion: customAnswerText ? customQuestionText : null,
+        customAnswer: customAnswerText,
       },
     });
 
