@@ -76,6 +76,9 @@ export interface TransactionExportRow {
   donorName: string;
   donorEmail: string;
   donorPhone: string;
+  // The org's own giving-page question ("How did you hear about us?") and what the donor answered; blank if none.
+  customQuestion?: string;
+  customAnswer?: string;
   paymentMethod: NormalizedPaymentMethod;
   instrumentType: string;
   cardBrandOrBankType: string;
@@ -227,6 +230,8 @@ export const TRANSACTION_EXPORT_COLUMNS: CsvColumn<TransactionExportRow>[] = [
   { header: "Donor Name", value: (r) => r.donorName },
   { header: "Donor Email", value: (r) => r.donorEmail },
   { header: "Donor Phone", value: (r) => r.donorPhone },
+  { header: "Giving Page Question", value: (r) => r.customQuestion ?? "" },
+  { header: "Donor Answer", value: (r) => r.customAnswer ?? "" },
   { header: "Payment Method", value: (r) => r.paymentMethod },
   { header: "Instrument Type", value: (r) => r.instrumentType },
   { header: "Card Brand or Bank Type", value: (r) => r.cardBrandOrBankType },
@@ -535,6 +540,8 @@ export async function resolveTransactionExportRows(filter: PaymentExportFilter, 
       donorName: formatPersonName(donor?.name, instrument?.accountHolderName),
       donorEmail: donor?.email || "",
       donorPhone: donor?.phone || "",
+      customQuestion: p.customQuestion || "",
+      customAnswer: p.customAnswer || "",
       paymentMethod: normalizePaymentMethod(p.paymentMethodType),
       instrumentType: instrument?.instrumentType || instrument?.paymentMethodType || "",
       cardBrandOrBankType: instrument?.cardBrand || instrument?.bankAccountType || "",

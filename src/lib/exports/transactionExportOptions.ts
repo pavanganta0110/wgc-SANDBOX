@@ -15,8 +15,8 @@ export const CSV_COLUMN_GROUPS = [
   {
     key: "donor",
     label: "Donor",
-    description: "Name, email and phone",
-    headers: ["Donor Name", "Donor Email", "Donor Phone"],
+    description: "Name, email, phone and the answer to your giving-page question",
+    headers: ["Donor Name", "Donor Email", "Donor Phone", "Giving Page Question", "Donor Answer"],
   },
   {
     key: "fees",
