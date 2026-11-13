@@ -190,6 +190,49 @@ describe("POST /api/onboarding/upload — field-update submissions", () => {
   });
 });
 
+describe("POST /api/onboarding/upload — business address and the verification result", () => {
+  const BIZ = { businessAddressLine1: "100 Main St", businessCity: "Kansas City", businessState: "MO", businessPostalCode: "64105" };
+
+  it("sends the business address to Finix as entity.business_address (not personal_address) and triggers one verification", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq({ ...BIZ, note: "This is the address of the church where we office." }));
+    expect(res.status).toBe(200);
+    expect(mockUpdateIdentity).toHaveBeenCalledTimes(1);
+    expect(mockUpdateIdentity).toHaveBeenCalledWith("ID123", {
+      entity: { business_address: { line1: "100 Main St", city: "Kansas City", region: "MO", postal_code: "64105", country: "USA" } },
+    });
+    expect(mockCreateVerification).toHaveBeenCalledWith("ID123");
+  });
+
+  it("rejects a partly filled business address and sends nothing to Finix", async () => {
+    const { POST } = await load();
+    const res = await POST(postReq({ businessAddressLine1: "100 Main St" }));
+    expect(res.status).toBe(400);
+    expect(mockUpdateIdentity).not.toHaveBeenCalled();
+    expect(mockCreateVerification).not.toHaveBeenCalled();
+  });
+
+  it("tells the admin the verification started when Finix accepted it", async () => {
+    const { POST } = await load();
+    await POST(postReq(BIZ));
+    const arg = mockSendWgcAdminEmail.mock.calls[0][0] as { whatHappened: string; actionNeeded: string };
+    expect(arg.whatHappened).toMatch(/Business address/);
+    expect(arg.whatHappened).toMatch(/new verification was started/);
+    expect(arg.actionNeeded).toMatch(/Wait for Finix/);
+  });
+
+  it("says plainly when the verification could not be started, and asks the admin to start it in Finix", async () => {
+    mockCreateVerification.mockRejectedValue(new Error("Finix 422: identity not ready"));
+    const { POST } = await load();
+    const res = await POST(postReq(BIZ));
+    expect(res.status).toBe(200); // the update itself reached Finix, so the merchant's submission still succeeds
+    const arg = mockSendWgcAdminEmail.mock.calls[0][0] as { whatHappened: string; actionNeeded: string };
+    expect(arg.whatHappened).toMatch(/could NOT be started/);
+    expect(arg.whatHappened).not.toMatch(/new verification was started/);
+    expect(arg.actionNeeded).toMatch(/start a new verification/);
+  });
+});
+
 describe("POST /api/onboarding/upload — multiple, distinctly-typed document uploads", () => {
   it("accepts two file__<type>-named uploads in one request, each tagged with its own real Finix type", async () => {
     const { POST } = await load();

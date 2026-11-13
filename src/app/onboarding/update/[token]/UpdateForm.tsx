@@ -80,6 +80,11 @@ export default function UpdateForm({ token, fileUploadRequests, dataRequests = [
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [bizLine1, setBizLine1] = useState("");
+  const [bizLine2, setBizLine2] = useState("");
+  const [bizCity, setBizCity] = useState("");
+  const [bizState, setBizState] = useState("");
+  const [bizPostalCode, setBizPostalCode] = useState("");
   const [removeOwnership, setRemoveOwnership] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -124,6 +129,11 @@ export default function UpdateForm({ token, fileUploadRequests, dataRequests = [
       city.trim() ||
       state.trim() ||
       postalCode.trim() ||
+      bizLine1.trim() ||
+      bizLine2.trim() ||
+      bizCity.trim() ||
+      bizState.trim() ||
+      bizPostalCode.trim() ||
       removeOwnership ||
       note.trim() ||
       bankHolderName.trim() ||
@@ -163,6 +173,11 @@ export default function UpdateForm({ token, fileUploadRequests, dataRequests = [
       if (city.trim()) formData.append("city", city.trim());
       if (state.trim()) formData.append("state", state.trim());
       if (postalCode.trim()) formData.append("postalCode", postalCode.trim());
+      if (bizLine1.trim()) formData.append("businessAddressLine1", bizLine1.trim());
+      if (bizLine2.trim()) formData.append("businessAddressLine2", bizLine2.trim());
+      if (bizCity.trim()) formData.append("businessCity", bizCity.trim());
+      if (bizState.trim()) formData.append("businessState", bizState.trim());
+      if (bizPostalCode.trim()) formData.append("businessPostalCode", bizPostalCode.trim());
       if (removeOwnership) formData.append("removeOwnership", "true");
       if (note.trim()) formData.append("note", note.trim());
       if (bankHolderName.trim()) formData.append("bankHolderName", bankHolderName.trim());
@@ -280,7 +295,7 @@ export default function UpdateForm({ token, fileUploadRequests, dataRequests = [
         </div>
         )}
 
-        {(showAll || requested.has('website') || requested.has('businessPhone') || requested.has('ssn') || requested.has('address') || requested.has('ownership')) && (
+        {(showAll || requested.has('website') || requested.has('businessPhone') || requested.has('ssn') || requested.has('address') || requested.has('businessAddress') || requested.has('ownership')) && (
         <div className="rounded-xl border border-gray-200 p-4 space-y-4">
           <div>
             <h4 className="text-sm font-bold text-gray-800">Corrections requested</h4>
@@ -320,6 +335,18 @@ export default function UpdateForm({ token, fileUploadRequests, dataRequests = [
           </div>
           )}
 
+          {show('businessAddress') && (
+          <fieldset className="space-y-3">
+            <legend className="block text-sm font-bold text-gray-700 mb-1">Business address (where the organization operates)<RequestedBadge show={requested.has('businessAddress')} /></legend>
+            <input aria-label="Street address" autoComplete="off" value={bizLine1} onChange={(e) => setBizLine1(e.target.value)} placeholder="Street address" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input aria-label="Apartment, suite or unit" autoComplete="off" value={bizLine2} onChange={(e) => setBizLine2(e.target.value)} placeholder="Apt, suite (optional)" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <div className="grid grid-cols-6 gap-3">
+              <input aria-label="City" autoComplete="address-level2" value={bizCity} onChange={(e) => setBizCity(e.target.value)} placeholder="City" className="col-span-3 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input aria-label="State (2 letters)" autoComplete="address-level1" maxLength={2} value={bizState} onChange={(e) => setBizState(e.target.value.toUpperCase())} placeholder="MO" className="col-span-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input aria-label="ZIP code" autoComplete="postal-code" inputMode="numeric" value={bizPostalCode} onChange={(e) => setBizPostalCode(e.target.value)} placeholder="ZIP" className="col-span-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </fieldset>
+          )}
           {show('address') && (
           <fieldset className="space-y-3">
             <legend className="block text-sm font-bold text-gray-700 mb-1">Principal&apos;s residential address<RequestedBadge show={requested.has('address')} /></legend>

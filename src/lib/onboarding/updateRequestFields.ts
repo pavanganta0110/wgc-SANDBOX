@@ -3,7 +3,8 @@
  * update page (website, business phone, principal SSN and residential address, nonprofit ownership).
  *
  * Field names are Finix's Identity entity fields (confirmed in docs.finix.com Update an Identity):
- * entity.url, entity.business_phone, entity.tax_id, entity.personal_address, entity.principal_percentage_ownership.
+ * entity.url, entity.business_phone, entity.tax_id, entity.personal_address, entity.business_address,
+ * entity.principal_percentage_ownership.
  * In WGC's own onboarding the principal's data lives on the seller Identity's entity (not an associated
  * identity), so these are all updated with one PUT /identities/{id}.
  *
@@ -20,6 +21,12 @@ export interface UpdateRequestFieldInput {
   city?: string | null;
   state?: string | null;
   postalCode?: string | null;
+  // The organization's own (business) address; Finix's entity.business_address.
+  businessAddressLine1?: string | null;
+  businessAddressLine2?: string | null;
+  businessCity?: string | null;
+  businessState?: string | null;
+  businessPostalCode?: string | null;
   removeOwnership?: boolean;
 }
 
@@ -66,6 +73,23 @@ export function normalizeSsn(raw: string): string | null {
   return d;
 }
 
+interface AddressInput { line1?: string | null; line2?: string | null; city?: string | null; state?: string | null; postalCode?: string | null }
+export interface FinixAddress { line1: string; line2?: string; city: string; region: string; postal_code: string; country: "USA" }
+
+/** Validates one US address block. Nothing entered is fine (null address); a partly filled block is an error. */
+function parseAddress(input: AddressInput, label: "residential" | "business"): { address: FinixAddress | null; error: string | null } {
+  const line1 = trim(input.line1);
+  const line2 = trim(input.line2);
+  const city = trim(input.city);
+  const state = trim(input.state).toUpperCase();
+  const zip = trim(input.postalCode);
+  if (!line1 && !city && !state && !zip) return { address: null, error: null };
+  if (!line1 || !city || !state || !zip) return { address: null, error: `Please complete the ${label} address (street, city, state and ZIP).` };
+  if (!/^[A-Z]{2}$/.test(state)) return { address: null, error: "Please enter the state as a 2-letter code, for example MO." };
+  if (!/^\d{5}(-\d{4})?$/.test(zip)) return { address: null, error: "Please enter a valid 5-digit ZIP code." };
+  return { address: { line1, ...(line2 ? { line2 } : {}), city, region: state, postal_code: zip, country: "USA" }, error: null };
+}
+
 export function parseUpdateRequestFields(input: UpdateRequestFieldInput): ParsedUpdateFields {
   const entity: Record<string, unknown> = {};
   const fieldNames: string[] = [];
@@ -95,17 +119,24 @@ export function parseUpdateRequestFields(input: UpdateRequestFieldInput): Parsed
     fieldNames.push("Principal SSN");
   }
 
-  const line1 = trim(input.addressLine1);
-  const line2 = trim(input.addressLine2);
-  const city = trim(input.city);
-  const state = trim(input.state).toUpperCase();
-  const zip = trim(input.postalCode);
-  if (line1 || city || state || zip) {
-    if (!line1 || !city || !state || !zip) return fail("Please complete the residential address (street, city, state and ZIP).");
-    if (!/^[A-Z]{2}$/.test(state)) return fail("Please enter the state as a 2-letter code, for example MO.");
-    if (!/^\d{5}(-\d{4})?$/.test(zip)) return fail("Please enter a valid 5-digit ZIP code.");
-    entity.personal_address = { line1, ...(line2 ? { line2 } : {}), city, region: state, postal_code: zip, country: "USA" };
+  const residential = parseAddress(
+    { line1: input.addressLine1, line2: input.addressLine2, city: input.city, state: input.state, postalCode: input.postalCode },
+    "residential",
+  );
+  if (residential.error) return fail(residential.error);
+  if (residential.address) {
+    entity.personal_address = residential.address;
     fieldNames.push("Principal residential address");
+  }
+
+  const business = parseAddress(
+    { line1: input.businessAddressLine1, line2: input.businessAddressLine2, city: input.businessCity, state: input.businessState, postalCode: input.businessPostalCode },
+    "business",
+  );
+  if (business.error) return fail(business.error);
+  if (business.address) {
+    entity.business_address = business.address;
+    fieldNames.push("Business address");
   }
 
   if (input.removeOwnership) {

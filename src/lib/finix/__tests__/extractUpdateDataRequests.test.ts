@@ -32,8 +32,10 @@ describe("formFieldForFinixField", () => {
     expect(formFieldForFinixField("personal_address")).toBe("address");
     expect(formFieldForFinixField("business_phone")).toBe("businessPhone");
   });
+  it("maps business_address to its own input", () => {
+    expect(formFieldForFinixField("business_address")).toBe("businessAddress");
+  });
   it("returns null for fields the form has no input for so they surface in the note prompt", () => {
-    expect(formFieldForFinixField("business_address")).toBeNull();
     expect(formFieldForFinixField("dob")).toBeNull();
   });
 });

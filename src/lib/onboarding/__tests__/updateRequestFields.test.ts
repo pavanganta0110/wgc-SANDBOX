@@ -109,3 +109,40 @@ describe("redactLongDigits", () => {
     expect(redactLongDigits("account 123456789012 failed with code 400")).toBe("account [REDACTED] failed with code 400");
   });
 });
+
+describe("business address (Finix entity.business_address)", () => {
+  const biz = { businessAddressLine1: "100 Main St", businessCity: "Kansas City", businessState: "mo", businessPostalCode: "64105" };
+
+  it("maps a complete business address to entity.business_address, separate from the residential one", () => {
+    const r = parseUpdateRequestFields(biz);
+    expect(r.error).toBeNull();
+    expect(r.entity).toEqual({ business_address: { line1: "100 Main St", city: "Kansas City", region: "MO", postal_code: "64105", country: "USA" } });
+    expect(r.entity).not.toHaveProperty("personal_address");
+    expect(r.fieldNames).toEqual(["Business address"]);
+  });
+
+  it("keeps both addresses apart when both are submitted", () => {
+    const r = parseUpdateRequestFields({ ...biz, businessAddressLine2: "Suite 2", addressLine1: "5 Oak Ave", city: "Lees Summit", state: "MO", postalCode: "64063" });
+    expect(r.error).toBeNull();
+    expect((r.entity.business_address as { line2?: string }).line2).toBe("Suite 2");
+    expect((r.entity.personal_address as { line1: string }).line1).toBe("5 Oak Ave");
+    expect(r.fieldNames).toEqual(["Principal residential address", "Business address"]);
+  });
+
+  it("rejects a partly filled business address, naming it as the business address", () => {
+    const r = parseUpdateRequestFields({ businessAddressLine1: "100 Main St" });
+    expect(r.error).toMatch(/business address/i);
+    expect(r.entity).toEqual({});
+  });
+
+  it("rejects a bad state or ZIP", () => {
+    expect(parseUpdateRequestFields({ ...biz, businessState: "Missouri" }).error).toMatch(/2-letter/);
+    expect(parseUpdateRequestFields({ ...biz, businessPostalCode: "6410" }).error).toMatch(/ZIP/);
+  });
+
+  it("is a no-op when nothing is entered", () => {
+    const r = parseUpdateRequestFields({ businessAddressLine1: " ", businessCity: "" });
+    expect(r.error).toBeNull();
+    expect(r.entity).toEqual({});
+  });
+});

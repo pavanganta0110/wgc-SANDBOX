@@ -137,7 +137,7 @@ export function extractUpdateDataRequests(verification: unknown): UpdateDataRequ
 }
 
 /** Which of this form's inputs a request maps to (null when the form has no input for it). */
-export type FormFieldKey = "dba" | "businessType" | "mcc" | "email" | "website" | "businessPhone" | "ssn" | "address" | "ownership" | "bank";
+export type FormFieldKey = "dba" | "businessType" | "mcc" | "email" | "website" | "businessPhone" | "ssn" | "address" | "businessAddress" | "ownership" | "bank";
 const FIELD_TO_FORM: Record<string, FormFieldKey> = {
   doing_business_as: "dba",
   business_type: "businessType",
@@ -148,6 +148,7 @@ const FIELD_TO_FORM: Record<string, FormFieldKey> = {
   phone: "businessPhone",
   tax_id: "ssn",
   personal_address: "address",
+  business_address: "businessAddress",
   principal_percentage_ownership: "ownership",
   ownership_type: "ownership",
   bank_code: "bank",
@@ -160,6 +161,10 @@ const FIELD_TO_FORM: Record<string, FormFieldKey> = {
 /** Keyword fallback for outcomes that carry only the underwriter's note. Order matters: most specific first. */
 const MESSAGE_RULES: [RegExp, FormFieldKey][] = [
   [/social security|\bssn\b/i, "ssn"],
+  // Before the residential rule: Finix's business-address message also says a residential address is acceptable.
+  // Deliberately needs an action verb: "current address is business address - please update to the principal's residential
+  // address" is a request about the RESIDENTIAL address and must keep mapping there.
+  [/(update|change|correct|provide)\s+(the\s+)?(merchant'?s?\s+)?business address|operating address|\bpo box\b|registered agent|virtual office/i, "businessAddress"],
   [/residential|home address|personal address/i, "address"],
   [/ownership|\bowners?\b/i, "ownership"],
   [/routing number|account number|bank account/i, "bank"],

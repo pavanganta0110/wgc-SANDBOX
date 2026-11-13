@@ -146,3 +146,22 @@ describe("extractFileUploadRequests", () => {
     expect(extractFileUploadRequests(undefined)).toEqual([]);
   });
 });
+
+describe("business address requests map to the business address input, not the residential one", async () => {
+  const { formFieldForRequest } = await import("../parseVerificationOutcomes");
+
+  it("maps Finix's entity.business_address field name", () => {
+    expect(formFieldForRequest({ fieldName: "entity.business_address", message: null })).toBe("businessAddress");
+  });
+
+  it("maps the real underwriter message even though it also mentions a residential address", () => {
+    const message = "Please update the business address to the merchant's physical operating address because we cannot accept a PO Box, Registered Agent, or virtual office address.  If services are remote, we can accept a residential address in lieu of a commercial address.";
+    expect(formFieldForRequest({ fieldName: "", message })).toBe("businessAddress");
+    expect(formFieldForRequest({ fieldName: "entity.business_address", message })).toBe("businessAddress");
+  });
+
+  it("still maps personal_address and plain residential requests to the residential input", () => {
+    expect(formFieldForRequest({ fieldName: "entity.personal_address", message: null })).toBe("address");
+    expect(formFieldForRequest({ fieldName: "", message: "Please provide the principal's residential address." })).toBe("address");
+  });
+});

@@ -67,6 +67,11 @@ export async function POST(req: Request) {
       city: field("city"),
       state: field("state"),
       postalCode: field("postalCode"),
+      businessAddressLine1: field("businessAddressLine1"),
+      businessAddressLine2: field("businessAddressLine2"),
+      businessCity: field("businessCity"),
+      businessState: field("businessState"),
+      businessPostalCode: field("businessPostalCode"),
       removeOwnership: formData.get("removeOwnership") === "true",
     });
     if (extra.error) {
@@ -203,11 +208,16 @@ export async function POST(req: Request) {
 
     // 3. Trigger a new Verification if Identity exists — once, regardless
     // of how many files and/or field updates this submission included.
+    // The result is reported honestly (admin email + log): a failed trigger no longer looks like a successful one.
+    let verificationStarted = false;
+    let verificationProblem = "";
     if (app.finixIdentityId) {
       try {
         await finixClient.createVerification(app.finixIdentityId);
+        verificationStarted = true;
       } catch (err) {
-        console.warn("Could not trigger verification directly. Finix might auto-trigger it.", err);
+        verificationProblem = err instanceof Error ? redactLongDigits(redactSsnLike(err.message)).slice(0, 200) : "unknown error";
+        console.warn("Could not trigger verification directly. Finix might auto-trigger it.", verificationProblem);
       }
     }
 
@@ -280,8 +290,13 @@ export async function POST(req: Request) {
       finixIdentityId: app.finixIdentityId || undefined,
       newStatus: "UNDER_REVIEW",
       documentsUploaded: uploadedDocuments.length > 0 ? uploadedDocuments.map((d) => d.file.name).join(", ") : undefined,
-      whatHappened: `The merchant submitted ${whatChanged} via the secure link. A new verification was triggered.`,
-      actionNeeded: "Wait for Finix to review the new verification.",
+      whatHappened: `The merchant submitted ${whatChanged} via the secure link. `
+        + (verificationStarted
+          ? "The update was accepted by Finix and a new verification was started."
+          : `The update was saved to Finix, but a new verification could NOT be started automatically${verificationProblem ? ` (${escapeHtml(verificationProblem)})` : ""}.`),
+      actionNeeded: verificationStarted
+        ? "Wait for Finix to review the new verification."
+        : "Open this merchant in the Finix dashboard and start a new verification, otherwise the update will not be reviewed.",
       adminDashboardLink: "https://www.wgcpayments.com/admin/merchant-applications",
       customSubject: `Merchant submitted requested information — ${safeOrgName}`
     });
