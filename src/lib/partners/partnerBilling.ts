@@ -18,11 +18,13 @@ export async function attachChurchToPartner(params: {
   churchId: string;
   partnerId: string;
   partnerReference: string | null;
+  /** The agent whose link the application came through; only fills an organization that has no agent yet. */
+  partnerAgentId?: string | null;
   onboardingApplicationId: string;
   approvedAt?: Date;
 }): Promise<void> {
   try {
-    const church = await prisma.church.findUnique({ where: { id: params.churchId }, select: { partnerId: true, partnerReference: true } });
+    const church = await prisma.church.findUnique({ where: { id: params.churchId }, select: { partnerId: true, partnerReference: true, partnerAgentId: true } });
     if (!church) return;
     if (church.partnerId && church.partnerId !== params.partnerId) {
       console.error(`attachChurchToPartner: church ${params.churchId} already belongs to another partner; not changed.`);
@@ -41,6 +43,11 @@ export async function attachChurchToPartner(params: {
           throw err;
         }
       }
+    }
+
+    if (params.partnerAgentId && !church.partnerAgentId) {
+      const agent = await prisma.partnerAgent.findFirst({ where: { id: params.partnerAgentId, partnerId: params.partnerId }, select: { id: true } });
+      if (agent) await prisma.church.update({ where: { id: params.churchId }, data: { partnerAgentId: agent.id } });
     }
 
     // The unique churchId makes this safe against two deliveries at once: the loser is a no-op.

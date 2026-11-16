@@ -1,17 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const prismaMock = vi.hoisted(() => ({ onboardingApplication: { findMany: vi.fn() } }));
+const prismaMock = vi.hoisted(() => ({ onboardingApplication: { findMany: vi.fn() }, partnerAgent: { findMany: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import { loadPartnerOnboarding } from "../loadPartnerOnboarding";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  prismaMock.partnerAgent.findMany.mockResolvedValue([]);
+});
 
 const row = (over: Record<string, unknown>) => ({
   id: "a1",
   organizationName: "Grace",
   legalBusinessName: null,
   partnerReference: "loc_1",
+  partnerAgentId: null,
   status: "UNDER_REVIEW",
   onboardingStatus: null,
   submittedAt: new Date("2026-01-02T00:00:00Z"),
@@ -49,5 +53,13 @@ describe("loadPartnerOnboarding", () => {
   it("prefers the legal business name", async () => {
     prismaMock.onboardingApplication.findMany.mockResolvedValue([row({ legalBusinessName: "Grace Community Church Inc" })]);
     expect((await loadPartnerOnboarding("p1"))[0].organizationName).toBe("Grace Community Church Inc");
+  });
+
+  it("names the agent whose link the application came through, and can filter by agent", async () => {
+    prismaMock.partnerAgent.findMany.mockResolvedValue([{ id: "ag1", name: "Sam" }]);
+    prismaMock.onboardingApplication.findMany.mockResolvedValue([row({ partnerAgentId: "ag1" })]);
+    const rows = await loadPartnerOnboarding("p1", 200, "ag1");
+    expect(rows[0].agent).toEqual({ id: "ag1", name: "Sam" });
+    expect(prismaMock.onboardingApplication.findMany.mock.calls[0][0].where).toEqual({ partnerId: "p1", partnerAgentId: "ag1" });
   });
 });

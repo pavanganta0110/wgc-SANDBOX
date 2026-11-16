@@ -16,10 +16,10 @@ describe("partner type", () => {
     for (const h of ["/partner/commissions", "/partner/volume", "/partner/transactions"]) expect(m).not.toContain(h);
   });
 
-  it("a referral partner gets volume, transactions, commission and team, and none of the CRM pages", () => {
+  it("a referral partner gets volume, transactions, commission, an API key and team, and none of the CRM pages", () => {
     const m = navHrefsFor("REFERRAL", false);
-    expect(m).toEqual(["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/team"]);
-    for (const h of ["/partner/api-keys", "/partner/webhook", "/partner/menu", "/partner/billing", "/partner/docs", "/partner/organizations"]) expect(m).not.toContain(h);
+    expect(m).toEqual(["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/api-keys", "/partner/team"]);
+    for (const h of ["/partner/webhook", "/partner/menu", "/partner/billing", "/partner/docs", "/partner/organizations"]) expect(m).not.toContain(h);
   });
 
   it("an agent gets only the pages for their own clients, whatever the partner type", () => {

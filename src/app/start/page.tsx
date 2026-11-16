@@ -33,6 +33,7 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
       embed={Boolean(partnerCode) && first(params.embed, 2) === "1"}
       partnerCode={partnerCode}
       partnerReference={first(params.ref, 120) ?? null}
+      partnerAgent={first(params.agent, 60) ?? null}
       prefill={prefill}
     />
   );

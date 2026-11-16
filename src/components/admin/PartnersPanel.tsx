@@ -296,7 +296,7 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
           {`${typeof window === "undefined" ? "" : window.location.origin}/start?partner=${partner.onboardingCode}&embed=1&ref=<partner's id for the organization>`}
         </code>
         <p className="text-xs text-slate-500 mt-1">
-          Optional extras: <code>org</code>, <code>name</code>, <code>email</code>, <code>phone</code>, <code>website</code> to prefill. The code only tags the application with this partner.
+          Optional extras: <code>org</code>, <code>name</code>, <code>email</code>, <code>phone</code>, <code>website</code> to prefill. The code only tags the application with this partner. For a referral partner, add <code>&agent=&lt;agent id&gt;</code> to credit an agent, or use each agent&apos;s own link on the Volume and revenue page.
         </p>
       </div>
 

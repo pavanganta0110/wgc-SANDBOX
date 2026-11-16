@@ -1,6 +1,6 @@
 import { apiError, apiSuccess } from "@/lib/api/response";
 import { EMBED_LINKS_PER_MINUTE, recordEmbedLinkRequest } from "@/lib/partners/embedLinkRequests";
-import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { createPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 import { isValidEmail } from "@/lib/donors/donorContact";
 
@@ -13,7 +13,7 @@ const text = (value: unknown, max: number): string | undefined => (typeof value 
  * approved the organization's dashboard. The partner comes from the key; the link
  * is signed and expires in 15 minutes, so ask for a new one each time the page opens.
  */
-export const POST = withPartnerApiAuth(async (req, auth, requestId) => {
+export const POST = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   let body: Record<string, unknown>;
   try {
     body = await req.json();

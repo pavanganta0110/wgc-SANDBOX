@@ -1,6 +1,6 @@
 import { apiError, apiSuccess } from "@/lib/api/response";
 import { decodePartnerLedgerCursor, loadPartnerLedgerPage } from "@/lib/ledger/loadLedger";
-import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { loadPartnerApiOrganizations, pickPartnerOrganization } from "@/lib/partners/loadPartnerApiOrganizations";
 
 const MAX_WINDOW_DAYS = 366;
@@ -24,7 +24,7 @@ function parseInstant(raw: string | null): Date | null {
  * organizations, by WGC id or by the partner's reference; anything else is
  * rejected. Which organizations are readable always comes from the key.
  */
-export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
+export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const { searchParams } = new URL(req.url);
   const from = parseInstant(searchParams.get("from"));
   const to = parseInstant(searchParams.get("to"));

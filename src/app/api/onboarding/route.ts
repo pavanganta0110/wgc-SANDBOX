@@ -90,15 +90,24 @@ export async function POST(req: Request) {
       legal,
       recaptchaToken,
       // A software partner's Get Started link (see src/lib/partners/onboardingCode.ts)
-      partnerCode, partnerReference,
+      partnerCode, partnerReference, partnerAgent,
       // The owner's passcode for signing in from inside the partner's frame (only for partners that use passcodes)
       framePasscode
     } = body;
 
     // Only a label. A missing or unknown code never blocks the application.
     const partner = await resolvePartnerByOnboardingCode(partnerCode);
+    // The agent in the link, only if it is an active agent of this same partner; anything else is ignored.
+    const agent =
+      partner && typeof partnerAgent === "string" && partnerAgent.length <= 60
+        ? await prisma.partnerAgent.findFirst({ where: { id: partnerAgent, partnerId: partner.id, status: "ACTIVE" }, select: { id: true } })
+        : null;
     const partnerTag = partner
-      ? { partnerId: partner.id, partnerReference: typeof partnerReference === "string" && partnerReference.trim() ? partnerReference.trim().slice(0, 120) : null }
+      ? {
+          partnerId: partner.id,
+          partnerReference: typeof partnerReference === "string" && partnerReference.trim() ? partnerReference.trim().slice(0, 120) : null,
+          partnerAgentId: agent?.id ?? null,
+        }
       : {};
 
     // A partner whose product has one shared login signs its people in with passcodes. The person filling in

@@ -83,7 +83,7 @@ export interface MerchantCommissionRow {
 }
 
 export interface CommissionView {
-  partner: { id: string; name: string };
+  partner: { id: string; name: string; onboardingCode: string | null };
   viewer: CommissionViewer["kind"];
   partnerRateBps: number;
   agents: { id: string; name: string; email: string | null; status: string; rateBps: number; organizations: number; hasLogin: boolean }[];
@@ -122,7 +122,7 @@ type Computed = { month: Date; status: MonthStatus; commission: MonthCommission 
 
 /** The raw month-by-month figures (every amount, including WGC's), before anything is hidden from a viewer. */
 export async function computeCommissionMonths(partnerId: string, now: Date = new Date()) {
-  const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true, name: true } });
+  const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true, name: true, onboardingCode: true } });
   if (!partner) return null;
 
   const [agentsAll, terms, churches, statementsStored, payoutRows, adjustmentRows, loginRows] = await Promise.all([

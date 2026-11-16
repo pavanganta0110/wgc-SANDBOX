@@ -18,7 +18,16 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
       select: { id: true, email: true, name: true, passwordHash: true, disabledAt: true, lastLoginAt: true, staffRole: true, agentId: true },
     });
+    // The partner's agents, and whether each already has a login: the Team page sends and re-sends their logins.
+    const agents =
+      session.partnerType === "REFERRAL" && !session.agentId
+        ? (await prisma.partnerAgent.findMany({ where: { partnerId: session.partnerId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, status: true } })).map((a) => {
+            const login = users.find((u) => u.agentId === a.id && !u.disabledAt);
+            return { id: a.id, name: a.name, email: a.email, status: a.status, login: login ? (login.passwordHash ? "active" : "invite_pending") : "none", loginEmail: login?.email ?? null };
+          })
+        : [];
     return NextResponse.json({
+      agents,
       users: users.map((u) => ({
         id: u.id,
         email: u.email,
@@ -46,6 +55,28 @@ export async function POST(req: Request) {
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
     if (!isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+
+    // An invitation for one of the partner's agents: a login that sees only that agent's clients and commission.
+    const agentId = typeof body.agentId === "string" && body.agentId ? body.agentId : null;
+    if (agentId) {
+      if (session.partnerType !== "REFERRAL") return NextResponse.json({ error: "Only a referral partner has agents." }, { status: 400 });
+      const agent = await prisma.partnerAgent.findFirst({ where: { id: agentId, partnerId: session.partnerId }, select: { id: true, status: true } });
+      if (!agent) return NextResponse.json({ error: "That agent does not belong to your account." }, { status: 400 });
+      if (agent.status !== "ACTIVE") return NextResponse.json({ error: "That agent is inactive." }, { status: 409 });
+      let agentInvite;
+      try {
+        agentInvite = await createPartnerInvite({ partnerId: session.partnerId, email, name, agentId });
+      } catch (err) {
+        if (err instanceof PartnerAccountError) return NextResponse.json({ error: err.message }, { status: err.code === "email_in_use" ? 409 : 400 });
+        throw err;
+      }
+      const partnerRow = await prisma.partner.findUnique({ where: { id: session.partnerId }, select: { name: true } });
+      const agentSent = await sendPartnerInviteEmail({ partnerName: partnerRow?.name ?? "your", email, rawToken: agentInvite.rawToken, role: "AGENT" });
+      await createAuditLog({ action: "PARTNER_AGENT_INVITED", actorEmail: session.email, metadata: { partnerId: session.partnerId, agentId, invitedEmail: email, emailSent: agentSent } });
+      if (!agentSent) return NextResponse.json({ error: "The invitation couldn't be emailed. Try again in a moment." }, { status: 502 });
+      return NextResponse.json({ message: `Login invitation sent to ${email}.` }, { status: 201 });
+    }
+
     if ("role" in body && !isStaffRole(body.role)) return NextResponse.json({ error: "Choose full access or view-only." }, { status: 400 });
     const staffRole = isStaffRole(body.role) ? body.role : "FULL";
 

@@ -1903,6 +1903,7 @@ export async function POST(req: Request) {
             finixApplicationId: app.finixApplicationId,
             partnerId: app.partnerId,
             partnerReference: app.partnerReference,
+            partnerAgentId: app.partnerAgentId,
           });
         } else if (onboardingState === "UPDATE_REQUESTED") {
           // Work out what Finix is actually asking for on EVERY delivery of

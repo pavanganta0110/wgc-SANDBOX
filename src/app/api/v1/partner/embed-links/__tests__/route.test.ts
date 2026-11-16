@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 
-vi.mock("@/lib/partners/partnerApiAuth", () => ({
-  withPartnerApiAuth: (handler: (req: Request, auth: { partnerKeyId: string; partnerId: string }, requestId: string) => Promise<Response>) => async (req: Request) =>
-    handler(req, { partnerKeyId: "k1", partnerId: "p1" }, "req_1"),
-}));
+vi.mock("@/lib/partners/partnerApiAuth", () => {
+  const wrap = (handler: (req: Request, auth: { partnerKeyId: string; partnerId: string; partnerType: string }, requestId: string) => Promise<Response>) => async (req: Request) =>
+    handler(req, { partnerKeyId: "k1", partnerId: "p1", partnerType: "SOFTWARE" }, "req_1");
+  return { withPartnerApiAuth: wrap, withSoftwarePartnerApiAuth: wrap };
+});
 
 const prismaMock = vi.hoisted(() => ({ partnerEmbedLinkRequest: { count: vi.fn(), create: vi.fn(), deleteMany: vi.fn() } }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));

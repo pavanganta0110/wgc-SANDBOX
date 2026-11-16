@@ -9,7 +9,8 @@ import { loadPartnerOnboarding } from "@/lib/partners/loadPartnerOnboarding";
  * not returned here; they arrive in the onboarding.information_required webhook
  * event, or can be reissued from the partner dashboard.
  */
-export const GET = withPartnerApiAuth(async (_req, auth, requestId) => {
-  const rows = await loadPartnerOnboarding(auth.partnerId);
+export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
+  const agent = new URL(req.url).searchParams.get("agent")?.trim() || null;
+  const rows = await loadPartnerOnboarding(auth.partnerId, 200, agent);
   return apiSuccess(rows, requestId, { count: rows.length });
 });

@@ -52,6 +52,8 @@ export interface StartPartnerContext {
   /** The partner's Get Started code and the partner's own id for this organization. */
   partnerCode?: string | null;
   partnerReference?: string | null;
+  /** The partner agent whose link this is (agent=...). Only a label that credits the agent. */
+  partnerAgent?: string | null;
   prefill?: StartPrefill;
   /** Where to go after submitting, instead of the success page (the partner's own status page). */
   afterSubmitPath?: string | null;
@@ -59,7 +61,7 @@ export interface StartPartnerContext {
   requirePasscode?: boolean;
 }
 
-export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, prefill = {}, afterSubmitPath = null, requirePasscode = false }: StartPartnerContext = {}) {
+export default function StartOnboardingPage({ embed = false, partnerCode = null, partnerReference = null, partnerAgent = null, prefill = {}, afterSubmitPath = null, requirePasscode = false }: StartPartnerContext = {}) {
   const router = useRouter();
   const successPath = (applicationId: string) => afterSubmitPath ?? `/onboarding/success?applicationId=${applicationId}${embed ? "&embed=1" : ""}`;
   const [step, setStep] = useState(1);
@@ -318,7 +320,7 @@ export default function StartOnboardingPage({ embed = false, partnerCode = null,
           ownershipPercentage: Number(o.ownershipPercentage),
         })) : [],
         legal,
-        ...(partnerCode ? { partnerCode, partnerReference } : {}),
+        ...(partnerCode ? { partnerCode, partnerReference, ...(partnerAgent ? { partnerAgent } : {}) } : {}),
         ...(requirePasscode ? { framePasscode } : {}),
       };
 

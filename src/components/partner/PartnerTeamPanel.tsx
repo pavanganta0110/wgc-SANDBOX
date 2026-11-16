@@ -12,12 +12,24 @@ interface Member {
   isYou: boolean;
 }
 
+interface AgentRow {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string;
+  login: "none" | "invite_pending" | "active";
+  loginEmail: string | null;
+}
+
+const loginText: Record<AgentRow["login"], string> = { none: "No login yet", invite_pending: "Invitation sent", active: "Has a login" };
 const statusText: Record<Member["status"], string> = { active: "Active", invite_pending: "Invitation sent", disabled: "Removed" };
 const inputClass = "rounded-lg border border-slate-200 px-3 py-2 text-sm";
 const buttonClass = "rounded-lg bg-[#010409] text-white text-sm font-semibold px-4 py-2 disabled:opacity-60";
 
 export default function PartnerTeamPanel() {
   const [members, setMembers] = useState<Member[]>([]);
+  const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [agentEmails, setAgentEmails] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"FULL" | "VIEWER">("FULL");
@@ -27,11 +39,14 @@ export default function PartnerTeamPanel() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/partner/team")
-      .then((r) => r.json() as Promise<{ users?: Member[]; error?: string }>)
+      .then((r) => r.json() as Promise<{ users?: Member[]; agents?: AgentRow[]; error?: string }>)
       .then((d) => {
         if (cancelled) return;
         if (d.error) setMessage({ text: d.error, error: true });
-        else setMembers(d.users ?? []);
+        else {
+          setMembers(d.users ?? []);
+          setAgents(d.agents ?? []);
+        }
       });
     return () => {
       cancelled = true;
@@ -49,6 +64,15 @@ export default function PartnerTeamPanel() {
       setName("");
       setReloadKey((k) => k + 1);
     }
+  }
+
+  async function inviteAgent(a: AgentRow) {
+    setMessage(null);
+    const to = (agentEmails[a.id] ?? a.loginEmail ?? a.email ?? "").trim();
+    const res = await fetch("/api/partner/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: to, name: a.name, agentId: a.id }) });
+    const body = await res.json().catch(() => ({}));
+    setMessage(res.ok ? { text: body.message, error: false } : { text: body.error || "Couldn't send the invitation.", error: true });
+    if (res.ok) setReloadKey((k) => k + 1);
   }
 
   async function remove(id: string) {
@@ -92,6 +116,30 @@ export default function PartnerTeamPanel() {
         </button>
       </form>
       <p className="text-xs text-slate-500">Full access sees everything on the account, including keys, webhook and billing. View-only sees reporting only. Each person signs in with their own password and an emailed code.</p>
+
+      {agents.length > 0 && (
+        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">Your agents</h3>
+            <p className="text-xs text-slate-500 mt-1">Send an agent their own login. An agent sees only the clients they brought in, those clients&apos; volume and transactions, and their own commission. No keys, webhook, billing or team. Use Preview to see exactly that.</p>
+          </div>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {agents.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 py-3">
+                <span className="font-semibold text-slate-900 w-40">{a.name}{a.status !== "ACTIVE" && <span className="ml-2 text-xs font-normal text-slate-500">inactive</span>}</span>
+                <span className="text-slate-500 w-32">{loginText[a.login]}</span>
+                {a.status === "ACTIVE" && a.login !== "active" && (
+                  <>
+                    <input type="email" aria-label={`Email for ${a.name}`} placeholder="Agent's email" value={agentEmails[a.id] ?? a.loginEmail ?? a.email ?? ""} onChange={(e) => setAgentEmails((m) => ({ ...m, [a.id]: e.target.value }))} className={`${inputClass} w-64`} />
+                    <button type="button" onClick={() => inviteAgent(a)} className={buttonClass}>{a.login === "invite_pending" ? "Send again" : "Send login"}</button>
+                  </>
+                )}
+                <a href={`/partner/volume?asAgent=${a.id}`} className="text-xs font-semibold text-blue-600 hover:underline ml-auto">Preview what {a.name} sees</a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
         <table className="w-full text-sm">

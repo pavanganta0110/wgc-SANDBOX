@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { loadPartnerVolume, parseVolumePeriod } from "@/lib/partners/loadPartnerVolume";
+import { resolveAgentView } from "@/lib/partners/partnerPageGuards";
 import PeriodPicker from "@/components/partner/PeriodPicker";
 import { formatCents } from "@/lib/format";
 
@@ -19,24 +20,30 @@ function Tile({ label, value, note }: { label: string; value: string; note?: str
   );
 }
 
-export default async function PartnerVolumePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+export default async function PartnerVolumePage({ searchParams }: { searchParams: Promise<{ period?: string; asAgent?: string }> }) {
   const session = await getPartnerSession({ allowAgent: true, allowViewer: true });
   if (!session) redirect("/partner/login");
   if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
-  const { period } = await searchParams;
+  const { period, asAgent } = await searchParams;
+  const view = await resolveAgentView(session, asAgent);
   const p = parseVolumePeriod(period);
   // Scope comes from the session only: an agent gets only the clients they brought in.
-  const v = await loadPartnerVolume({ partnerId: session.partnerId, agentId: session.agentId, from: p.from, to: p.to });
-  const agentView = Boolean(session.agentId);
+  const v = await loadPartnerVolume({ partnerId: session.partnerId, agentId: view.agentId ?? undefined, from: p.from, to: p.to });
+  const agentView = Boolean(view.agentId);
 
   return (
     <div className="space-y-6">
+      {view.previewName && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          Previewing what <strong>{view.previewName}</strong> sees when they sign in. <a className="font-semibold underline" href="/partner/team">Back to Team</a>
+        </div>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Volume</h2>
           <p className="text-sm text-slate-500 mt-1">{agentView ? "What the clients you brought in have processed." : "What your clients have processed, and which agent brought each one."}</p>
         </div>
-        <PeriodPicker action="/partner/volume" periodKey={p.key} />
+        <PeriodPicker action="/partner/volume" periodKey={p.key} hidden={view.previewName && asAgent ? { asAgent } : {}} />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -65,7 +72,7 @@ export default async function PartnerVolumePage({ searchParams }: { searchParams
             {v.clients.map((c) => (
               <tr key={c.churchId} className="border-b border-slate-50 last:border-0">
                 <td className="px-4 py-3 font-semibold text-slate-900">
-                  <a className="hover:underline" href={`/partner/transactions?client=${c.churchId}&period=${p.key}`}>{c.name}</a>
+                  <a className="hover:underline" href={`/partner/transactions?client=${c.churchId}&period=${p.key}${view.previewName && asAgent ? `&asAgent=${asAgent}` : ""}`}>{c.name}</a>
                   {c.status !== "ACTIVE" && <span className="ml-2 text-xs text-slate-400">terminated</span>}
                 </td>
                 {!agentView && (

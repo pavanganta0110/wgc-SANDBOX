@@ -115,6 +115,8 @@ model OnboardingApplication {
   // it never changes how Finix reviews the application. See model Partner.
   partnerId                         String?
   partnerReference                  String?
+  /// The partner's agent whose Get Started link (agent=...) this application came through. Copied to the organization on approval.
+  partnerAgentId                    String?
   /// The owner's frame passcode, chosen on the application when the partner signs people in with passcodes.
   /// Hashed; copied to the owner's account when it is created.
   framePasscodeHash                 String?

@@ -6,6 +6,8 @@ export interface PartnerOnboardingRow {
   organizationName: string;
   /** The partner's own id for the organization (a CRM location id). */
   reference: string | null;
+  /** The agent whose Get Started link the application came through (null when none). */
+  agent: { id: string; name: string | null } | null;
   stage: OnboardingStage;
   stageLabel: string;
   submittedAt: string | null;
@@ -22,9 +24,9 @@ export interface PartnerOnboardingRow {
  * from the signed-in partner or the authenticated partner key: it is the only thing that
  * scopes this. Never returns an upload link (those are one-time and shown only when created).
  */
-export async function loadPartnerOnboarding(partnerId: string, limit = 200): Promise<PartnerOnboardingRow[]> {
+export async function loadPartnerOnboarding(partnerId: string, limit = 200, agentId: string | null = null): Promise<PartnerOnboardingRow[]> {
   const apps = await prisma.onboardingApplication.findMany({
-    where: { partnerId },
+    where: { partnerId, ...(agentId ? { partnerAgentId: agentId === "none" ? null : agentId } : {}) },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {
@@ -32,6 +34,7 @@ export async function loadPartnerOnboarding(partnerId: string, limit = 200): Pro
       organizationName: true,
       legalBusinessName: true,
       partnerReference: true,
+      partnerAgentId: true,
       status: true,
       onboardingStatus: true,
       submittedAt: true,
@@ -43,12 +46,16 @@ export async function loadPartnerOnboarding(partnerId: string, limit = 200): Pro
     },
   });
 
+  const agents = await prisma.partnerAgent.findMany({ where: { partnerId }, select: { id: true, name: true } });
+  const agentName = new Map(agents.map((x) => [x.id, x.name]));
+
   return apps.map((a) => {
     const stage = onboardingStage(a);
     return {
       id: a.id,
       organizationName: a.legalBusinessName || a.organizationName,
       reference: a.partnerReference,
+      agent: a.partnerAgentId ? { id: a.partnerAgentId, name: agentName.get(a.partnerAgentId) ?? null } : null,
       stage,
       stageLabel: STAGE_LABELS[stage],
       submittedAt: a.submittedAt?.toISOString() ?? null,

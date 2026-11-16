@@ -20,7 +20,7 @@ export type PartnerNavItem = { name: string; href: string };
 
 /** Menu hrefs each kind of login may see. An agent is always limited to their own clients' pages. */
 export const SOFTWARE_NAV_HREFS = ["/partner/organizations", "/partner/api-keys", "/partner/webhook", "/partner/menu", "/partner/billing", "/partner/team", "/partner/docs"];
-export const REFERRAL_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/team"];
+export const REFERRAL_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/api-keys", "/partner/team"];
 export const AGENT_NAV_HREFS = ["/partner/volume", "/partner/transactions", "/partner/commissions"];
 
 export const STAFF_ROLES = ["FULL", "VIEWER"] as const;

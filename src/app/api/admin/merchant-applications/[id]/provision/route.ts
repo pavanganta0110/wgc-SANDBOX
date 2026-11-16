@@ -54,6 +54,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       finixApplicationId: app.finixApplicationId,
       partnerId: app.partnerId,
       partnerReference: app.partnerReference,
+      partnerAgentId: app.partnerAgentId,
     });
 
     await createAuditLog({

@@ -9,6 +9,8 @@ export interface PartnerApiAuthContext {
   partnerKeyId: string;
   /** From the authenticated key's own row — never from the request. */
   partnerId: string;
+  /** SOFTWARE or REFERRAL. A referral partner's key only reads its organizations, agents and onboarding. */
+  partnerType: string;
 }
 
 /**
@@ -25,7 +27,7 @@ export async function authenticatePartnerApiRequest(req: Request): Promise<Partn
 
   const key = await prisma.partnerApiKey.findUnique({
     where: { hashedKey: hashPartnerApiKey(match[1]) },
-    select: { id: true, partnerId: true, status: true, partner: { select: { status: true } } },
+    select: { id: true, partnerId: true, status: true, partner: { select: { status: true, partnerType: true } } },
   });
   if (!key || key.status !== "ACTIVE" || key.partner.status !== "ACTIVE") {
     throw new ApiAuthError("authentication_error", "Invalid or revoked API key.");
@@ -41,7 +43,7 @@ export async function authenticatePartnerApiRequest(req: Request): Promise<Partn
     .update({ where: { id: key.id }, data: { lastUsedAt: new Date(), requestCount: { increment: 1 } } })
     .catch(() => {});
 
-  return { partnerKeyId: key.id, partnerId: key.partnerId };
+  return { partnerKeyId: key.id, partnerId: key.partnerId, partnerType: key.partner.partnerType };
 }
 
 /** Counts an error response against the key, for the partner's health view. Never throws. */
@@ -70,4 +72,17 @@ export function withPartnerApiAuth(handler: (req: Request, auth: PartnerApiAuthC
       return apiError("internal_error", "An unexpected error occurred.", requestId);
     }
   };
+}
+
+/**
+ * For the routes that return donor, gift, ledger or settlement data: a referral partner's key is refused.
+ * A referral partner (an ISO or reseller) sees which organizations it brought in and who brought each, not their donors.
+ */
+export function withSoftwarePartnerApiAuth(handler: (req: Request, auth: PartnerApiAuthContext, requestId: string) => Promise<NextResponse>) {
+  return withPartnerApiAuth(async (req, auth, requestId) => {
+    if (auth.partnerType === "REFERRAL") {
+      return apiError("authorization_error", "This endpoint is not available to referral partner keys. Use /api/v1/partner/organizations, /agents or /onboarding.", requestId);
+    }
+    return handler(req, auth, requestId);
+  });
 }

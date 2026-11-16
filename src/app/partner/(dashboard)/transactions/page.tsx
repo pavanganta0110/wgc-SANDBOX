@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { TRANSACTION_LIMIT, loadPartnerVolume, parseVolumePeriod } from "@/lib/partners/loadPartnerVolume";
+import { resolveAgentView } from "@/lib/partners/partnerPageGuards";
 import PeriodPicker from "@/components/partner/PeriodPicker";
 import { formatCents } from "@/lib/format";
 
@@ -9,20 +10,26 @@ export const dynamic = "force-dynamic";
 
 const dateTimeFmt = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" });
 
-export default async function PartnerTransactionsPage({ searchParams }: { searchParams: Promise<{ period?: string; client?: string; method?: string }> }) {
+export default async function PartnerTransactionsPage({ searchParams }: { searchParams: Promise<{ period?: string; client?: string; method?: string; asAgent?: string }> }) {
   const session = await getPartnerSession({ allowAgent: true, allowViewer: true });
   if (!session) redirect("/partner/login");
   if (session.partnerType !== "REFERRAL") redirect("/partner/organizations");
   const sp = await searchParams;
+  const view = await resolveAgentView(session, sp.asAgent);
   const p = parseVolumePeriod(sp.period);
   const method = sp.method === "CARD" || sp.method === "ACH" ? sp.method : undefined;
   // `client` is only a filter: the loader ignores one outside this partner's (or agent's) own clients.
-  const v = await loadPartnerVolume({ partnerId: session.partnerId, agentId: session.agentId, from: p.from, to: p.to, churchId: sp.client, method });
-  const agentView = Boolean(session.agentId);
-  const hidden: Record<string, string> = { ...(sp.client ? { client: sp.client } : {}), ...(method ? { method } : {}) };
+  const v = await loadPartnerVolume({ partnerId: session.partnerId, agentId: view.agentId ?? undefined, from: p.from, to: p.to, churchId: sp.client, method });
+  const agentView = Boolean(view.agentId);
+  const hidden: Record<string, string> = { ...(sp.client ? { client: sp.client } : {}), ...(method ? { method } : {}), ...(view.previewName && sp.asAgent ? { asAgent: sp.asAgent } : {}) };
 
   return (
     <div className="space-y-6">
+      {view.previewName && (
+        <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          Previewing what <strong>{view.previewName}</strong> sees when they sign in. <a className="font-semibold underline" href="/partner/team">Back to Team</a>
+        </div>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Transactions</h2>
@@ -33,6 +40,7 @@ export default async function PartnerTransactionsPage({ searchParams }: { search
 
       <form action="/partner/transactions" method="get" className="flex flex-wrap gap-2">
         <input type="hidden" name="period" value={p.key} />
+        {view.previewName && sp.asAgent && <input type="hidden" name="asAgent" value={sp.asAgent} />}
         <select name="client" defaultValue={sp.client ?? ""} className="rounded-lg border border-slate-200 px-3 py-2 text-sm" aria-label="Client">
           <option value="">All clients</option>
           {v.clients.map((c) => <option key={c.churchId} value={c.churchId}>{c.name}</option>)}

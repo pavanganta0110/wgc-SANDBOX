@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 const rateLimit = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/api/apiRateLimit", () => ({ checkApiRateLimit: rateLimit, API_RATE_LIMIT_PER_MINUTE: 60 }));
 
-import { authenticatePartnerApiRequest, withPartnerApiAuth } from "../partnerApiAuth";
+import { authenticatePartnerApiRequest, withPartnerApiAuth, withSoftwarePartnerApiAuth } from "../partnerApiAuth";
 import { generatePartnerApiKey, hashPartnerApiKey } from "../partnerApiKeys";
 import { NextResponse } from "next/server";
 
@@ -112,5 +112,26 @@ describe("error counting for the partner's health view", () => {
   it("does not count a request that never got past authentication", async () => {
     await withPartnerApiAuth(async () => NextResponse.json({ ok: true }))(req());
     expect(prismaMock.partnerApiKey.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("a referral partner's key", () => {
+  const key = generatePartnerApiKey("test");
+  const keyRow = (partnerType: string) => ({ id: "k1", partnerId: "p1", status: "ACTIVE", partner: { status: "ACTIVE", partnerType } });
+
+  it("is refused on donor, gift and settlement routes but works on the open ones", async () => {
+    prismaMock.partnerApiKey.findUnique.mockResolvedValue(keyRow("REFERRAL"));
+    const handler = vi.fn(async () => NextResponse.json({ ok: true }));
+    const refused = await withSoftwarePartnerApiAuth(handler)(req(`Bearer ${key}`));
+    expect(refused.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+    const open = await withPartnerApiAuth(handler)(req(`Bearer ${key}`));
+    expect(open.status).toBe(200);
+  });
+
+  it("a software partner's key still reaches the gift routes", async () => {
+    prismaMock.partnerApiKey.findUnique.mockResolvedValue(keyRow("SOFTWARE"));
+    const res = await withSoftwarePartnerApiAuth(async () => NextResponse.json({ ok: true }))(req(`Bearer ${key}`));
+    expect(res.status).toBe(200);
   });
 });

@@ -134,6 +134,9 @@ export default function PartnerCommissionAdmin({ partnerId }: { partnerId: strin
               <span className="font-semibold text-slate-900">{a.name}</span>
               <span className="text-slate-500">{pct(a.rateBps)} · {a.organizations} organizations · {a.hasLogin ? "has a login" : "no login yet"}</span>
               <button className="text-indigo-600 hover:underline" disabled={busy} onClick={() => invite(a.id)}>{a.hasLogin ? "Re-send login invite" : "Invite to log in"}</button>
+              {data.partner.onboardingCode && (
+                <button className="text-indigo-600 hover:underline" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/start?partner=${data.partner.onboardingCode}&agent=${a.id}`); setNotice(`Get Started link for ${a.name} copied.`); }}>Copy Get Started link</button>
+              )}
               <button className="text-slate-500 hover:underline" disabled={busy} onClick={() => act({ action: "updateAgent", agentId: a.id, status: a.status === "ACTIVE" ? "INACTIVE" : "ACTIVE" })}>{a.status === "ACTIVE" ? "Mark inactive" : "Reactivate"}</button>
             </li>
           ))}

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { apiSuccess } from "@/lib/api/response";
 import { resolveSubscriptionDisplayStatus } from "@/lib/subscriptions/subscriptionStatus";
-import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { pageWithOrganization, resolvePartnerListScope } from "@/lib/partners/partnerApiScope";
 
 /**
@@ -9,7 +9,7 @@ import { pageWithOrganization, resolvePartnerListScope } from "@/lib/partners/pa
  * the status (ACTIVE, PAST_DUE, CANCELED, ...), the next charge date and why one was cancelled
  * or failed. Each with its `organization`. Optional `donorId` and `status`.
  */
-export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
+export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const resolved = await resolvePartnerListScope(req, auth, requestId);
   if ("response" in resolved) return resolved.response;
   const { scope } = resolved;

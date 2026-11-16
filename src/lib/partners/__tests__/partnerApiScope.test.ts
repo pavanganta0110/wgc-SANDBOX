@@ -9,7 +9,7 @@ const mine = [
   { id: "c1", name: "Grace", reference: "loc_1" },
   { id: "c2", name: "Hope", reference: null },
 ];
-const call = (query = "") => resolvePartnerListScope(new Request(`https://wgc.test/api/v1/partner/donors${query}`), { partnerKeyId: "k1", partnerId: "p1" }, "req_1");
+const call = (query = "") => resolvePartnerListScope(new Request(`https://wgc.test/api/v1/partner/donors${query}`), { partnerKeyId: "k1", partnerId: "p1", partnerType: "SOFTWARE" }, "req_1");
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { apiSuccess } from "@/lib/api/response";
-import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { pageWithOrganization, resolvePartnerListScope } from "@/lib/partners/partnerApiScope";
 
 /** Settlements (payouts) of the partner's organizations (the same fields as GET /api/v1/settlements), each with its `organization`. */
-export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
+export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const resolved = await resolvePartnerListScope(req, auth, requestId);
   if ("response" in resolved) return resolved.response;
   const { scope } = resolved;

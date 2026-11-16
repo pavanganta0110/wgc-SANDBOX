@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { apiSuccess } from "@/lib/api/response";
 import { getCampaignRaisedCents } from "@/lib/campaigns/campaignTotals";
-import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { pageWithOrganization, resolvePartnerListScope } from "@/lib/partners/partnerApiScope";
 
 /** Fundraising campaigns of the partner's organizations, with the amount raised, each with its `organization`. Optional `status`. */
-export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
+export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const resolved = await resolvePartnerListScope(req, auth, requestId);
   if ("response" in resolved) return resolved.response;
   const { scope } = resolved;

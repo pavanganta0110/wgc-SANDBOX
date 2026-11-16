@@ -12,10 +12,11 @@ vi.mock("@/lib/campaigns/campaignTotals", () => ({ getCampaignRaisedCents: vi.fn
 const orgs = vi.hoisted(() => ({ loadPartnerApiOrganizations: vi.fn() }));
 vi.mock("@/lib/partners/loadPartnerApiOrganizations", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/partners/loadPartnerApiOrganizations")>()), loadPartnerApiOrganizations: orgs.loadPartnerApiOrganizations }));
 // The key check is covered by partnerApiAuth.test.ts; here the handler runs as partner p1.
-vi.mock("@/lib/partners/partnerApiAuth", () => ({
-  withPartnerApiAuth: (handler: (req: Request, auth: { partnerKeyId: string; partnerId: string }, requestId: string) => Promise<Response>) => async (req: Request) =>
-    handler(req, { partnerKeyId: "k1", partnerId: "p1" }, "req_1"),
-}));
+vi.mock("@/lib/partners/partnerApiAuth", () => {
+  const wrap = (handler: (req: Request, auth: { partnerKeyId: string; partnerId: string; partnerType: string }, requestId: string) => Promise<Response>) => async (req: Request) =>
+    handler(req, { partnerKeyId: "k1", partnerId: "p1", partnerType: "SOFTWARE" }, "req_1");
+  return { withPartnerApiAuth: wrap, withSoftwarePartnerApiAuth: wrap };
+});
 
 import { GET as donors } from "../donors/route";
 import { GET as settlements } from "../settlements/route";
