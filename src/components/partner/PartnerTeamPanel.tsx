@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CopyLinkBox from "./CopyLinkBox";
 
 interface Member {
   id: string;
@@ -19,6 +20,7 @@ interface AgentRow {
   status: string;
   login: "none" | "invite_pending" | "active";
   loginEmail: string | null;
+  link: string;
 }
 
 const loginText: Record<AgentRow["login"], string> = { none: "No login yet", invite_pending: "Invitation sent", active: "Has a login" };
@@ -29,6 +31,9 @@ const buttonClass = "rounded-lg bg-[#010409] text-white text-sm font-semibold px
 export default function PartnerTeamPanel() {
   const [members, setMembers] = useState<Member[]>([]);
   const [agents, setAgents] = useState<AgentRow[]>([]);
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentEmail, setNewAgentEmail] = useState("");
+  const [isReferral, setIsReferral] = useState(false);
   const [agentEmails, setAgentEmails] = useState<Record<string, string>>({});
   const [reloadKey, setReloadKey] = useState(0);
   const [email, setEmail] = useState("");
@@ -39,13 +44,14 @@ export default function PartnerTeamPanel() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/partner/team")
-      .then((r) => r.json() as Promise<{ users?: Member[]; agents?: AgentRow[]; error?: string }>)
+      .then((r) => r.json() as Promise<{ users?: Member[]; agents?: AgentRow[]; referral?: boolean; error?: string }>)
       .then((d) => {
         if (cancelled) return;
         if (d.error) setMessage({ text: d.error, error: true });
         else {
           setMembers(d.users ?? []);
           setAgents(d.agents ?? []);
+          setIsReferral(Boolean(d.referral));
         }
       });
     return () => {
@@ -62,6 +68,19 @@ export default function PartnerTeamPanel() {
     if (res.ok) {
       setEmail("");
       setName("");
+      setReloadKey((k) => k + 1);
+    }
+  }
+
+  async function addAgent(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    const res = await fetch("/api/partner/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "addAgent", name: newAgentName, email: newAgentEmail }) });
+    const body = await res.json().catch(() => ({}));
+    setMessage(res.ok ? { text: `${body.message} Their Get Started link is below.`, error: false } : { text: body.error || "Couldn't add the agent.", error: true });
+    if (res.ok) {
+      setNewAgentName("");
+      setNewAgentEmail("");
       setReloadKey((k) => k + 1);
     }
   }
@@ -117,11 +136,25 @@ export default function PartnerTeamPanel() {
       </form>
       <p className="text-xs text-slate-500">Full access sees everything on the account, including keys, webhook and billing. View-only sees reporting only. Each person signs in with their own password and an emailed code.</p>
 
+      {isReferral && (
+        <form onSubmit={addAgent} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex flex-wrap gap-3 items-end">
+          <div>
+            <label htmlFor="agent-name" className="block text-xs font-semibold text-slate-600 mb-1">Agent name</label>
+            <input id="agent-name" required value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="agent-email" className="block text-xs font-semibold text-slate-600 mb-1">Agent email (optional)</label>
+            <input id="agent-email" type="email" value={newAgentEmail} onChange={(e) => setNewAgentEmail(e.target.value)} className={`${inputClass} w-64`} />
+          </div>
+          <button type="submit" className={buttonClass}>Add agent</button>
+        </form>
+      )}
+
       {agents.length > 0 && (
         <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
           <div>
             <h3 className="text-sm font-bold text-slate-900">Your agents</h3>
-            <p className="text-xs text-slate-500 mt-1">Send an agent their own login. An agent sees only the clients they brought in, those clients&apos; volume and transactions, and their own commission. No keys, webhook, billing or team. Use Preview to see exactly that.</p>
+            <p className="text-xs text-slate-500 mt-1">Send an agent their own login. An agent sees only the clients they brought in, those clients&apos; volume and transactions, and their own commission. No keys, webhook, billing or team. Each agent also gets their own Get Started link, shown on their dashboard. Use Preview to see exactly that.</p>
           </div>
           <ul className="divide-y divide-slate-100 text-sm">
             {agents.map((a) => (
@@ -135,6 +168,12 @@ export default function PartnerTeamPanel() {
                   </>
                 )}
                 <a href={`/partner/volume?asAgent=${a.id}`} className="text-xs font-semibold text-blue-600 hover:underline ml-auto">Preview what {a.name} sees</a>
+                {a.status === "ACTIVE" && (
+                  <div className="basis-full">
+                    <div className="text-xs text-slate-500 mb-1">{a.name}&apos;s Get Started link. Give it to {a.name} or to a client; applications through it are credited to {a.name}.</div>
+                    <CopyLinkBox url={a.link} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

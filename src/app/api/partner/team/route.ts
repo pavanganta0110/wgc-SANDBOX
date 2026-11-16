@@ -5,12 +5,13 @@ import { isAuthError } from "@/lib/auth/errors";
 import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
+import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
 import { createPartnerInvite, PartnerAccountError } from "@/lib/partners/partnerAccounts";
 import { sendPartnerInviteEmail } from "@/lib/partners/partnerInviteEmail";
 import { isStaffRole, parseStaffRole } from "@/lib/partners/partnerType";
 
 /** The people on the signed-in partner's own account. */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await requirePartnerSession();
     const users = await prisma.partnerUser.findMany({
@@ -19,14 +20,17 @@ export async function GET() {
       select: { id: true, email: true, name: true, passwordHash: true, disabledAt: true, lastLoginAt: true, staffRole: true, agentId: true },
     });
     // The partner's agents, and whether each already has a login: the Team page sends and re-sends their logins.
+    const code = session.partnerType === "REFERRAL" && !session.agentId ? await ensureOnboardingCode(session.partnerId) : null;
+    const origin = new URL(req.url).origin;
     const agents =
-      session.partnerType === "REFERRAL" && !session.agentId
+      code
         ? (await prisma.partnerAgent.findMany({ where: { partnerId: session.partnerId }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, status: true } })).map((a) => {
             const login = users.find((u) => u.agentId === a.id && !u.disabledAt);
-            return { id: a.id, name: a.name, email: a.email, status: a.status, login: login ? (login.passwordHash ? "active" : "invite_pending") : "none", loginEmail: login?.email ?? null };
+            return { id: a.id, name: a.name, email: a.email, status: a.status, login: login ? (login.passwordHash ? "active" : "invite_pending") : "none", loginEmail: login?.email ?? null, link: `${origin}/start?partner=${code}&agent=${a.id}` };
           })
         : [];
     return NextResponse.json({
+      referral: Boolean(code),
       agents,
       users: users.map((u) => ({
         id: u.id,
@@ -54,7 +58,20 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
-    if (!isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+    if (body.action !== "addAgent" && !isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+
+    // A referral partner adds its own agent (no WGC step); the rate is the default until WGC sets one.
+    if (body.action === "addAgent") {
+      if (session.partnerType !== "REFERRAL") return NextResponse.json({ error: "Only a referral partner has agents." }, { status: 400 });
+      const agentName = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
+      const agentEmail = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
+      if (!agentName) return NextResponse.json({ error: "Enter the agent's name." }, { status: 400 });
+      if (agentEmail && !isValidEmail(agentEmail)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+      if ((await prisma.partnerAgent.count({ where: { partnerId: session.partnerId } })) >= 200) return NextResponse.json({ error: "Too many agents." }, { status: 409 });
+      const agent = await prisma.partnerAgent.create({ data: { partnerId: session.partnerId, name: agentName, email: agentEmail || null } });
+      await createAuditLog({ action: "PARTNER_AGENT_ADDED", actorEmail: session.email, metadata: { partnerId: session.partnerId, agentId: agent.id, name: agentName, by: "partner" } });
+      return NextResponse.json({ message: `${agentName} added.`, id: agent.id }, { status: 201 });
+    }
 
     // An invitation for one of the partner's agents: a login that sees only that agent's clients and commission.
     const agentId = typeof body.agentId === "string" && body.agentId ? body.agentId : null;

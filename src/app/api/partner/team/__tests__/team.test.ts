@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   partner: { findUnique: vi.fn() },
+  partnerAgent: { create: vi.fn(), count: vi.fn(), findMany: vi.fn(), findFirst: vi.fn() },
   partnerUser: { findMany: vi.fn(), findFirst: vi.fn(), count: vi.fn(), update: vi.fn() },
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -39,7 +40,7 @@ describe("GET /api/partner/team", () => {
       { id: "u2", email: "new@example.test", name: null, passwordHash: null, disabledAt: null, lastLoginAt: null },
       { id: "u3", email: "gone@example.test", name: null, passwordHash: "x:y", disabledAt: new Date(), lastLoginAt: null },
     ]);
-    const body = await (await GET()).json();
+    const body = await (await GET(new Request("https://wgc.test/api/partner/team"))).json();
     expect(prismaMock.partnerUser.findMany.mock.calls[0][0].where).toEqual({ partnerId: "p1" });
     expect(body.users.map((u: { status: string; isYou: boolean }) => [u.status, u.isYou])).toEqual([["active", true], ["invite_pending", false], ["disabled", false]]);
     expect(JSON.stringify(body)).not.toContain("passwordHash");
@@ -47,7 +48,7 @@ describe("GET /api/partner/team", () => {
 
   it("needs a sign-in", async () => {
     requirePartnerSession.mockRejectedValue(new UnauthorizedError());
-    expect((await GET()).status).toBe(401);
+    expect((await GET(new Request("https://wgc.test/api/partner/team"))).status).toBe(401);
   });
 });
 
@@ -106,5 +107,24 @@ describe("DELETE /api/partner/team/[userId]", () => {
     expect(data.disabledAt).toBeInstanceOf(Date);
     expect(data.authVersion).toEqual({ increment: 1 });
     expect(data).toMatchObject({ setPasswordTokenHash: null, mfaCodeHash: null, mfaChallengeHash: null });
+  });
+});
+
+describe("a referral partner adds its own agent", () => {
+  it("creates the agent for the signed-in partner only", async () => {
+    requirePartnerSession.mockResolvedValue({ ...session, partnerType: "REFERRAL" });
+    prismaMock.partnerAgent.count.mockResolvedValue(0);
+    prismaMock.partnerAgent.create.mockResolvedValue({ id: "ag1" });
+    const res = await post({ action: "addAgent", name: " Sam ", email: "SAM@Example.test", partnerId: "other" });
+    expect(res.status).toBe(201);
+    expect(prismaMock.partnerAgent.create).toHaveBeenCalledWith({ data: { partnerId: "p1", name: "Sam", email: "sam@example.test" } });
+  });
+
+  it("needs a name, and a software partner has no agents", async () => {
+    requirePartnerSession.mockResolvedValue({ ...session, partnerType: "REFERRAL" });
+    expect((await post({ action: "addAgent", name: " " })).status).toBe(400);
+    requirePartnerSession.mockResolvedValue({ ...session, partnerType: "SOFTWARE" });
+    expect((await post({ action: "addAgent", name: "Sam" })).status).toBe(400);
+    expect(prismaMock.partnerAgent.create).not.toHaveBeenCalled();
   });
 });

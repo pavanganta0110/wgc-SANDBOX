@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { loadPartnerVolume, parseVolumePeriod } from "@/lib/partners/loadPartnerVolume";
 import { resolveAgentView } from "@/lib/partners/partnerPageGuards";
+import { headers } from "next/headers";
+import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
+import CopyLinkBox from "@/components/partner/CopyLinkBox";
 import PeriodPicker from "@/components/partner/PeriodPicker";
 import { formatCents } from "@/lib/format";
 
@@ -30,6 +33,12 @@ export default async function PartnerVolumePage({ searchParams }: { searchParams
   // Scope comes from the session only: an agent gets only the clients they brought in.
   const v = await loadPartnerVolume({ partnerId: session.partnerId, agentId: view.agentId ?? undefined, from: p.from, to: p.to });
   const agentView = Boolean(view.agentId);
+  let agentLink: string | null = null;
+  if (view.agentId) {
+    const h = await headers();
+    const code = await ensureOnboardingCode(session.partnerId);
+    agentLink = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host") ?? ""}/start?partner=${code}&agent=${view.agentId}`;
+  }
 
   return (
     <div className="space-y-6">
@@ -37,6 +46,13 @@ export default async function PartnerVolumePage({ searchParams }: { searchParams
         <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
           Previewing what <strong>{view.previewName}</strong> sees when they sign in. <a className="font-semibold underline" href="/partner/team">Back to Team</a>
         </div>
+      )}
+      {agentLink && (
+        <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
+          <h3 className="text-sm font-bold text-slate-900">Your Get Started link</h3>
+          <p className="text-xs text-slate-500">Give this to organizations. When they apply through it, they are credited to you.</p>
+          <CopyLinkBox url={agentLink} />
+        </section>
       )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
