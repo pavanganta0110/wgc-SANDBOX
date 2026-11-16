@@ -6,6 +6,7 @@ import { checkMerchantAuthRateLimit } from "@/lib/auth/merchantAuthRateLimit";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
+import { addPartnerAgent, AddAgentError } from "@/lib/partners/addPartnerAgent";
 import { createPartnerInvite, PartnerAccountError } from "@/lib/partners/partnerAccounts";
 import { sendPartnerInviteEmail } from "@/lib/partners/partnerInviteEmail";
 import { isStaffRole, parseStaffRole } from "@/lib/partners/partnerType";
@@ -60,17 +61,15 @@ export async function POST(req: Request) {
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
     if (body.action !== "addAgent" && !isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
 
-    // A referral partner adds its own agent (no WGC step); the rate is the default until WGC sets one.
+    // A referral partner adds its own agent; WGC is told so it can set the rate (default until then).
     if (body.action === "addAgent") {
-      if (session.partnerType !== "REFERRAL") return NextResponse.json({ error: "Only a referral partner has agents." }, { status: 400 });
-      const agentName = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
-      const agentEmail = typeof body.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
-      if (!agentName) return NextResponse.json({ error: "Enter the agent's name." }, { status: 400 });
-      if (agentEmail && !isValidEmail(agentEmail)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
-      if ((await prisma.partnerAgent.count({ where: { partnerId: session.partnerId } })) >= 200) return NextResponse.json({ error: "Too many agents." }, { status: 409 });
-      const agent = await prisma.partnerAgent.create({ data: { partnerId: session.partnerId, name: agentName, email: agentEmail || null } });
-      await createAuditLog({ action: "PARTNER_AGENT_ADDED", actorEmail: session.email, metadata: { partnerId: session.partnerId, agentId: agent.id, name: agentName, by: "partner" } });
-      return NextResponse.json({ message: `${agentName} added.`, id: agent.id }, { status: 201 });
+      try {
+        const agent = await addPartnerAgent({ partnerId: session.partnerId, name: body.name, email: body.email, actor: session.email, via: "dashboard" });
+        return NextResponse.json({ message: `${agent.name} added.`, id: agent.id }, { status: 201 });
+      } catch (err) {
+        if (err instanceof AddAgentError) return NextResponse.json({ error: err.message }, { status: err.status });
+        throw err;
+      }
     }
 
     // An invitation for one of the partner's agents: a login that sees only that agent's clients and commission.

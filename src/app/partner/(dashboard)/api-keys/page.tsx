@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 const REFERRAL_ENDPOINTS: [string, string][] = [
   ["GET /api/v1/partner/organizations", "Every organization you brought in, with the agent who brought it, its status and the date. Filter with ?agent=<agent id> (or agent=none)."],
   ["GET /api/v1/partner/onboarding", "Where each application stands (submitted, under_review, information_required, approved, rejected), with the agent. Filter with ?agent=."],
+  ["POST /api/v1/partner/agents", "Add an agent: body { \"name\": \"...\", \"email\": \"...\" (optional) }. Returns the agent and their Get Started link. WGC sets the agent's rate."],
   ["GET /api/v1/partner/agents", "Your agents, how many organizations each brought in, and each agent's Get Started link."],
 ];
 
@@ -35,7 +36,7 @@ export default async function PartnerApiKeysPage() {
         <h2 className="text-xl font-bold text-slate-900">API Key</h2>
         <p className="text-sm text-slate-500 mt-1">
           {referral
-            ? "One read-only key lets your own systems pull the organizations you brought in and which agent brought each."
+            ? "One key lets your own systems pull the organizations you brought in and which agent brought each, and add agents."
             : "One read-only key gives you the gifts and organizations of everyone linked to your account, for your own reporting."}
         </p>
       </div>
@@ -44,7 +45,7 @@ export default async function PartnerApiKeysPage() {
         <>
           <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 space-y-2">
             <h3 className="text-sm font-bold text-slate-900">What you can read</h3>
-            <p className="text-xs text-slate-500">Send the key as <code>Authorization: Bearer wgc_ptr_…</code> to {base || "this site"}. Amounts and donor data are not part of a referral key.</p>
+            <p className="text-xs text-slate-500">Send the key as <code>Authorization: Bearer wgc_ptr_…</code> to {base || "this site"}. Donor and gift data are not part of a referral key.</p>
             <ul className="divide-y divide-slate-100 text-sm">
               {REFERRAL_ENDPOINTS.map(([e, d]) => (
                 <li key={e} className="py-2"><code className="text-xs font-semibold">{e}</code><div className="text-slate-600">{d}</div></li>

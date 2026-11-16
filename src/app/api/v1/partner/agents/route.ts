@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { apiSuccess } from "@/lib/api/response";
 import { withPartnerApiAuth } from "@/lib/partners/partnerApiAuth";
+import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api/response";
+import { addPartnerAgent, AddAgentError } from "@/lib/partners/addPartnerAgent";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
 
 /**
@@ -26,4 +29,22 @@ export const GET = withPartnerApiAuth(async (req, auth, requestId) => {
     createdAt: a.createdAt.toISOString(),
   }));
   return apiSuccess(data, requestId, { count: data.length });
+});
+
+/**
+ * Adds an agent (referral partners only): body { "name": "...", "email": "..." (optional) }. Returns the agent with
+ * the Get Started link that credits applications to them. WGC is notified and sets the agent's rate.
+ */
+export const POST = withPartnerApiAuth(async (req, auth, requestId) => {
+  if (auth.partnerType !== "REFERRAL") return apiError("authorization_error", "Only referral partners have agents.", requestId);
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  try {
+    const agent = await addPartnerAgent({ partnerId: auth.partnerId, name: body.name, email: body.email, actor: `partner-api:${auth.partnerKeyId}`, via: "api" });
+    const code = await ensureOnboardingCode(auth.partnerId);
+    const data = { id: agent.id, name: agent.name, status: "active", organizations: 0, getStartedUrl: `${new URL(req.url).origin}/start?partner=${code}&agent=${agent.id}` };
+    return NextResponse.json({ data, requestId }, { status: 201, headers: { "X-Request-Id": requestId } });
+  } catch (err) {
+    if (err instanceof AddAgentError) return apiError("validation_error", err.message, requestId);
+    throw err;
+  }
 });
