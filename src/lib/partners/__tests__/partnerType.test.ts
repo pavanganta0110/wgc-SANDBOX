@@ -18,17 +18,17 @@ describe("partner type", () => {
 
   it("a referral partner gets volume, transactions, commission, an API key and team, and none of the CRM pages", () => {
     const m = navHrefsFor("REFERRAL", false);
-    expect(m).toEqual(["/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/api-keys", "/partner/team"]);
+    expect(m).toEqual(["/partner/applications", "/partner/volume", "/partner/transactions", "/partner/commissions", "/partner/api-keys", "/partner/team"]);
     for (const h of ["/partner/webhook", "/partner/menu", "/partner/billing", "/partner/docs", "/partner/organizations"]) expect(m).not.toContain(h);
   });
 
   it("an agent gets only the pages for their own clients, whatever the partner type", () => {
-    for (const t of ["SOFTWARE", "REFERRAL"] as const) expect(navHrefsFor(t, true)).toEqual(["/partner/volume", "/partner/transactions", "/partner/commissions"]);
+    for (const t of ["SOFTWARE", "REFERRAL"] as const) expect(navHrefsFor(t, true)).toEqual(["/partner/applications", "/partner/volume", "/partner/transactions", "/partner/commissions"]);
   });
 
   it("a view-only member sees reporting only, never keys, webhook, billing, menu, team or the commission split", () => {
     expect(navHrefsFor("SOFTWARE", false, true)).toEqual(["/partner/organizations"]);
-    expect(navHrefsFor("REFERRAL", false, true)).toEqual(["/partner/volume", "/partner/transactions"]);
+    expect(navHrefsFor("REFERRAL", false, true)).toEqual(["/partner/applications", "/partner/volume", "/partner/transactions"]);
   });
 
   it("anything but VIEWER is full access", () => {

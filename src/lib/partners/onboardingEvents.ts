@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { recordPartnerEvent } from "./partnerWebhooks";
+import { emailReferralTeamOfStage, type ReferralEmailStage } from "./referralStageEmails";
 import { eventTypeForStage, onboardingStage, requestedItemsList, type OnboardingStage } from "./onboardingStages";
 
 /**
@@ -57,6 +58,10 @@ export async function notifyPartnerOfOnboardingStage(params: {
           : {}),
       },
     });
+    // A referral partner has no webhook: its agent and staff are told by email instead.
+    if (["submitted", "under_review", "information_required", "approved", "rejected"].includes(stage)) {
+      await emailReferralTeamOfStage(app.id, stage as ReferralEmailStage);
+    }
   } catch (err) {
     console.error(`notifyPartnerOfOnboardingStage failed for application=${params.applicationId}:`, err);
   }
@@ -85,6 +90,7 @@ export async function notifyPartnerOfInformationSubmitted(applicationId: string)
         submittedAt: app.lastUpdateSubmittedAt?.toISOString() ?? new Date().toISOString(),
       },
     });
+    await emailReferralTeamOfStage(app.id, "information_submitted");
   } catch (err) {
     console.error(`notifyPartnerOfInformationSubmitted failed for application=${applicationId}:`, err);
   }

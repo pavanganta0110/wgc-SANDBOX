@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BookOpen, Building2, CreditCard, KeyRound, ListChecks, Percent, Receipt, TrendingUp, Users, Webhook } from "lucide-react";
+import { ClipboardCheck, BookOpen, Building2, CreditCard, KeyRound, ListChecks, Percent, Receipt, TrendingUp, Users, Webhook } from "lucide-react";
 import { getPartnerSession } from "@/lib/partners/partnerSession";
 import { partnerKeyEnvironment } from "@/lib/partners/partnerApiKeys";
 import PartnerSignOutButton from "@/components/partner/PartnerSignOutButton";
@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 const NAV_ITEMS = [
   { name: "Organizations", href: "/partner/organizations", icon: Building2 },
+  { name: "Applications", href: "/partner/applications", icon: ClipboardCheck },
   { name: "Volume", href: "/partner/volume", icon: TrendingUp },
   { name: "Transactions", href: "/partner/transactions", icon: Receipt },
   { name: "Commission", href: "/partner/commissions", icon: Percent },
