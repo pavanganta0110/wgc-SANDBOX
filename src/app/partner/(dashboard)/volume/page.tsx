@@ -61,6 +61,11 @@ export default async function PartnerVolumePage({ searchParams }: { searchParams
         </div>
         <PeriodPicker action="/partner/volume" periodKey={p.key} hidden={view.previewName && asAgent ? { asAgent } : {}} />
       </div>
+      <div className="flex flex-wrap items-center gap-3 text-sm">
+        <span className="font-semibold text-slate-700">Download CSV for {p.key === "all" ? "all time" : p.key}:</span>
+        <a className="text-blue-600 font-semibold hover:underline" href={`/api/partner/reports?type=clients&period=${p.key}`}>Clients{agentView ? "" : " by agent"}</a>
+        {!agentView && <a className="text-blue-600 font-semibold hover:underline" href={`/api/partner/reports?type=agents&period=${p.key}`}>Agent summary</a>}
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="Total volume" value={formatCents(v.total.amountCents)} note={`${v.total.count.toLocaleString("en-US")} transactions`} />

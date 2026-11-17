@@ -33,6 +33,11 @@ export default async function PartnerCommissionsPage({ searchParams }: { searchP
             : "Your share of the profit from your organizations, and how it divides between your agents and you."}
         </p>
       </div>
+      {!view.previewName && (
+        <a className="inline-block text-sm text-blue-600 font-semibold hover:underline" href="/api/partner/reports?type=commission">
+          Download commission CSV
+        </a>
+      )}
       <CommissionStatement data={data} />
       {!view.agentId && !session.readOnly && data.agents.length > 0 && (
         <AgentPayoutForm agents={data.agents.map((a) => ({ id: a.id, name: a.name }))} />
