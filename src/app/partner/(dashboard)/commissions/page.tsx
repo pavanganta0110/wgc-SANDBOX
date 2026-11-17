@@ -34,9 +34,10 @@ export default async function PartnerCommissionsPage({ searchParams }: { searchP
         </p>
       </div>
       {!view.previewName && (
-        <a className="inline-block text-sm text-blue-600 font-semibold hover:underline" href="/api/partner/reports?type=commission">
-          Download commission CSV
-        </a>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <a className="text-blue-600 font-semibold hover:underline" href="/api/partner/reports?type=commission">Download commission CSV (by month and agent)</a>
+          <a className="text-blue-600 font-semibold hover:underline" href="/api/partner/reports?type=commission-organizations">Download by organization (newest month)</a>
+        </div>
       )}
       <CommissionStatement data={data} />
       {!view.agentId && !session.readOnly && data.agents.length > 0 && (

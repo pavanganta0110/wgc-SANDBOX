@@ -16,6 +16,8 @@ export interface ClientReportRow extends ClientVolumeRow {
   returnsCents: number;
   refundsCount: number;
   returnsCount: number;
+  /** ISO time WGC approved the client (its billable approval); falls back to when it joined if none is recorded. */
+  boardedAt: string;
 }
 
 /** Each client with its agent, volume split by card and ACH, and its own refunds and ACH returns. Window is [from, to). */
@@ -24,7 +26,7 @@ export async function loadClientReport(params: { partnerId: string; agentId?: st
   const ids = volume.clients.map((c) => c.churchId);
   if (ids.length === 0) return [];
 
-  const [refunds, returns] = await Promise.all([
+  const [refunds, returns, approvals] = await Promise.all([
     prisma.finixRefundOrReversal.groupBy({
       by: ["churchId"],
       where: { churchId: { in: ids }, state: { equals: "SUCCEEDED", mode: "insensitive" }, createdAtFinix: { gte: params.from, lt: params.to } },
@@ -37,7 +39,9 @@ export async function loadClientReport(params: { partnerId: string; agentId?: st
       _sum: { amountCents: true },
       _count: { _all: true },
     }),
+    prisma.partnerBillableApproval.findMany({ where: { partnerId: params.partnerId, churchId: { in: ids } }, select: { churchId: true, approvedAt: true } }),
   ]);
+  const approvedBy = new Map(approvals.map((a) => [a.churchId, a.approvedAt]));
   const refundBy = new Map(refunds.map((r) => [r.churchId, r]));
   const returnBy = new Map(returns.map((r) => [r.churchId, r]));
 
@@ -47,6 +51,7 @@ export async function loadClientReport(params: { partnerId: string; agentId?: st
     refundsCount: refundBy.get(c.churchId)?._count._all ?? 0,
     returnsCents: returnBy.get(c.churchId)?._sum.amountCents ?? 0,
     returnsCount: returnBy.get(c.churchId)?._count._all ?? 0,
+    boardedAt: (approvedBy.get(c.churchId) ?? new Date(c.joinedAt)).toISOString(),
   }));
 }
 
@@ -61,7 +66,8 @@ export function clientsCsv(rows: ClientReportRow[], from: Date, to: Date): strin
     { header: "Client", value: (r) => r.name },
     { header: "Status", value: (r) => (r.status === "ACTIVE" ? "Active" : "Terminated") },
     { header: "Joined", value: (r) => day(r.joinedAt) },
-    { header: "Joined in period", value: (r) => (new Date(r.joinedAt) >= from && new Date(r.joinedAt) < to ? "Yes" : "No") },
+    { header: "Boarded (approved)", value: (r) => day(r.boardedAt) },
+    { header: "Boarded in period", value: (r) => (new Date(r.boardedAt) >= from && new Date(r.boardedAt) < to ? "Yes" : "No") },
     { header: "Card volume (USD)", value: (r) => dollars(r.card.amountCents) },
     { header: "Card payments", value: (r) => String(r.card.count) },
     { header: "ACH volume (USD)", value: (r) => dollars(r.ach.amountCents) },
@@ -80,7 +86,7 @@ export interface AgentReportRow {
   agentName: string;
   clients: number;
   activeClients: number;
-  joinedInPeriod: number;
+  boardedInPeriod: number;
   cardCents: number;
   cardCount: number;
   achCents: number;
@@ -95,11 +101,11 @@ export function summarizeAgents(rows: ClientReportRow[], from: Date, to: Date): 
   const byKey = new Map<string, AgentReportRow>();
   for (const r of rows) {
     const key = r.agentId ?? "";
-    const s = byKey.get(key) ?? { agentName: r.agentName ?? NO_AGENT, clients: 0, activeClients: 0, joinedInPeriod: 0, cardCents: 0, cardCount: 0, achCents: 0, achCount: 0, totalCents: 0, refundsCents: 0, returnsCents: 0 };
+    const s = byKey.get(key) ?? { agentName: r.agentName ?? NO_AGENT, clients: 0, activeClients: 0, boardedInPeriod: 0, cardCents: 0, cardCount: 0, achCents: 0, achCount: 0, totalCents: 0, refundsCents: 0, returnsCents: 0 };
     s.clients += 1;
     if (r.status === "ACTIVE") s.activeClients += 1;
-    const joined = new Date(r.joinedAt);
-    if (joined >= from && joined < to) s.joinedInPeriod += 1;
+    const boarded = new Date(r.boardedAt);
+    if (boarded >= from && boarded < to) s.boardedInPeriod += 1;
     s.cardCents += r.card.amountCents;
     s.cardCount += r.card.count;
     s.achCents += r.ach.amountCents;
@@ -117,7 +123,7 @@ export function agentsCsv(rows: AgentReportRow[]): string {
     { header: "Agent", value: (r) => r.agentName },
     { header: "Clients", value: (r) => String(r.clients) },
     { header: "Active clients", value: (r) => String(r.activeClients) },
-    { header: "Joined in period", value: (r) => String(r.joinedInPeriod) },
+    { header: "Boarded in period", value: (r) => String(r.boardedInPeriod) },
     { header: "Card volume (USD)", value: (r) => dollars(r.cardCents) },
     { header: "Card payments", value: (r) => String(r.cardCount) },
     { header: "ACH volume (USD)", value: (r) => dollars(r.achCents) },
@@ -161,4 +167,20 @@ export function commissionCsv(view: CommissionView): string {
         ] as CsvColumn<Line>[])),
   ];
   return buildCsvExport(lines, cols);
+}
+
+/**
+ * Commission by organization for the newest month that has figures (the same table the Commission page shows),
+ * with each organization's agent and what the viewer earns from it. Empty when no month has figures yet.
+ */
+export function commissionByOrganizationCsv(view: CommissionView): string {
+  const month = view.organizationsMonth ? new Date(view.organizationsMonth).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : "";
+  const forAgent = view.viewer === "agent";
+  const cols: CsvColumn<CommissionView["organizations"][number]>[] = [
+    { header: "Month", value: () => month },
+    { header: "Organization", value: (r) => r.name },
+    { header: "Agent", value: (r) => r.agentName ?? NO_AGENT },
+    { header: forAgent ? "Your commission (USD)" : "Partner share (USD)", value: (r) => dollars(r.yourCents ?? 0) },
+  ];
+  return buildCsvExport(view.organizations, cols);
 }
