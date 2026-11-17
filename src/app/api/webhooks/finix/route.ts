@@ -76,7 +76,13 @@ export async function sendWebhookEmail(
   title: string,
   badgeText: string,
   badgeColor: string,
-  bodyHtml: string
+  bodyHtml: string,
+  /**
+   * For an email that is legitimately sent again for the same application (each new "more information required"
+   * request issues a new upload link and invalidates the old one): only a log newer than this many ms counts as
+   * "already sent", so a redelivery or a race is still deduplicated but a later request is emailed.
+   */
+  repeatAfterMs?: number
 ) {
   // A partner that shows onboarding status inside its own screens can ask WGC not to
   // email the organization. Fails open: if the check itself fails, the email still goes.
@@ -105,7 +111,11 @@ export async function sendWebhookEmail(
     if (!locked) return null;
 
     const existingLog = await tx.emailLog.findFirst({
-      where: { onboardingApplicationId: applicationId, type: type },
+      where: {
+        onboardingApplicationId: applicationId,
+        type: type,
+        ...(repeatAfterMs ? { createdAt: { gt: new Date(Date.now() - repeatAfterMs) } } : {}),
+      },
     });
     if (existingLog) return null;
 
@@ -2005,7 +2015,9 @@ export async function POST(req: Request) {
               `<p>We need additional information to continue reviewing your WGC Payments account for <strong>${safeOrgName}</strong>.</p>
                <p><strong>Requested items:</strong><br/>${requestedItemsStr}</p>
                <p>Please use the secure link below to submit the requested information.</p>
-               <p><a href="${secureLink}">Submit Required Information</a></p>`
+               <p><a href="${secureLink}">Submit Required Information</a></p>`,
+              // Every new request makes a new link and voids the last one, so the merchant must be emailed each time.
+              10 * 60 * 1000
             );
 
             await sendWgcAdminEmail({
