@@ -5,7 +5,8 @@ import { generateNextInvoiceNumber } from "@/lib/invoices/invoiceNumber";
 import { ensureInvoicePublicToken, InvoicePublicTokenAlreadyExistsError, regenerateInvoicePublicToken } from "@/lib/invoices/invoicePublicToken";
 import { validateInvoiceForSend } from "@/lib/invoices/invoiceSendValidation";
 import { splitWinnings } from "./bidRules";
-import { sendNextBidderOfferEmail, sendWinnerEmail } from "./auctionEmails";
+import { sendNextBidderOfferEmail, sendOverviewEmail, sendWinnerEmail } from "./auctionEmails";
+import { buildAuctionOverview } from "./auctionOverview";
 
 /**
  * Closing an auction and collecting from the winners. Everything here can run any number of times, at any time,
@@ -36,6 +37,11 @@ export async function settleAuction(auctionId: string, now: Date = new Date()): 
   const auction = await prisma.auction.findUnique({ where: { id: auctionId } });
   if (!auction || auction.status === "DRAFT" || auction.status === "SETTLED") return { ...outcome, settled: auction?.status === "SETTLED" };
 
+  // A live auction's time is up: items that never made it onto the block are passed, so the auction can finish.
+  if (now >= auction.endsAt) {
+    await prisma.auctionItem.updateMany({ where: { auctionId, status: "UPCOMING" }, data: { status: "UNSOLD", closedAt: now } });
+  }
+
   const due = await prisma.auctionItem.findMany({ where: { auctionId, status: "OPEN", endsAt: { lte: now } } });
   for (const item of due) {
     const sold = item.bidCount > 0 && item.highBidderId != null && item.currentBidCents != null;
@@ -61,19 +67,39 @@ export async function settleAuction(auctionId: string, now: Date = new Date()): 
     }
   }
 
-  outcome.invoicesCreated = await invoiceUnclaimedWins(auctionId, now);
+  // Nothing is on the block any more.
+  if (auction.currentItemId) {
+    await prisma.auction.updateMany({ where: { id: auctionId, currentItemId: auction.currentItemId }, data: { currentItemId: null } });
+  }
 
-  const stillOpen = await prisma.auctionItem.count({ where: { auctionId, status: "OPEN" } });
-  if (stillOpen === 0) {
-    await prisma.auction.updateMany({ where: { id: auctionId, status: { not: "SETTLED" } }, data: { status: "SETTLED", settledAt: now } });
+  // Winners are invoiced once, at the very end, with everything they won together: not item by item through the night.
+  const stillRunning = await prisma.auctionItem.count({ where: { auctionId, status: { in: ["OPEN", "UPCOMING"] } } });
+  if (stillRunning === 0) {
+    outcome.invoicesCreated = await invoiceUnclaimedWins(auctionId, now);
+    const marked = await prisma.auction.updateMany({ where: { id: auctionId, status: { not: "SETTLED" } }, data: { status: "SETTLED", settledAt: now } });
     outcome.settled = true;
+    // Exactly one run flips it to settled, so exactly one run sends the organization its results.
+    if (marked.count === 1) await sendOrganizationOverview(auction).catch((err) => console.error("Auction overview email failed (non-fatal):", err));
   }
   return outcome;
+}
+
+/** Emails the person who set the auction up (or the organization's main contact) how it went. */
+async function sendOrganizationOverview(auction: { id: string; churchId: string; title: string; slug: string; createdByUserId: string | null }): Promise<void> {
+  const [creator, church] = await Promise.all([
+    auction.createdByUserId ? prisma.user.findUnique({ where: { id: auction.createdByUserId }, select: { email: true, churchId: true } }) : Promise.resolve(null),
+    prisma.church.findUnique({ where: { id: auction.churchId }, select: { primaryContactEmail: true } }),
+  ]);
+  const to = (creator && creator.churchId === auction.churchId ? creator.email : null) ?? church?.primaryContactEmail;
+  if (!to) return;
+  const overview = await buildAuctionOverview(auction.id, auction.churchId);
+  await sendOverviewEmail({ churchId: auction.churchId, auctionId: auction.id, auctionTitle: auction.title, to, overview, manageUrl: `${APP_URL}/merchant/auctions/${auction.id}` });
 }
 
 /** Ends an auction early on the organization's say-so: every open item closes now, then it settles normally. */
 export async function closeAuctionNow(auctionId: string, churchId: string, now: Date = new Date()): Promise<SettleOutcome> {
   await prisma.auctionItem.updateMany({ where: { auctionId, churchId, status: "OPEN", endsAt: { gt: now } }, data: { endsAt: now } });
+  // Items that never reached the block are passed by settlement once the auction's end time is now.
   await prisma.auction.updateMany({ where: { id: auctionId, churchId, endsAt: { gt: now } }, data: { endsAt: now } });
   return settleAuction(auctionId, now);
 }

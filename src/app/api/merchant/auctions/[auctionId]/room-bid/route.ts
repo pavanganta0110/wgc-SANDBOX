@@ -25,7 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ auction
 
   const result = await placeBid({ auctionId, itemId: body.itemId, bidderId: bidder.id, amountCents: Number(body.amountCents), source: "ROOM", enteredByUserId: auth.userId });
   if (!result.ok) {
-    const message = result.reason === "TOO_LOW" ? `The next bid must be at least ${formatCents(result.minimumCents ?? 0)}.` : result.reason === "ALREADY_HIGH_BIDDER" ? `Bidder ${bidderNumber} already has the highest bid.` : `Bid not accepted (${result.reason.toLowerCase().replace(/_/g, " ")}).`;
+    const message = result.reason === "TOO_LOW" ? `The next bid must be at least ${formatCents(result.minimumCents ?? 0)}.` : result.reason === "ITEM_NOT_STARTED" ? "That item isn't on the block yet. Start it first." : result.reason === "ALREADY_HIGH_BIDDER" ? `Bidder ${bidderNumber} already has the highest bid.` : `Bid not accepted (${result.reason.toLowerCase().replace(/_/g, " ")}).`;
     return validationError(message, 409);
   }
   return NextResponse.json({ success: true, currentBidCents: result.currentBidCents, bidderNumber });

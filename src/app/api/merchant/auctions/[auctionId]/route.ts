@@ -6,6 +6,7 @@ import { auctionNotFound, guardAuctionsRoute, loadOwnedAuction } from "@/lib/auc
 import { validateAuctionInput } from "@/lib/auctions/auctionConfig";
 import { liveWallUrl, publicAuctionUrl } from "@/lib/auctions/auctionEmails";
 import { syncPaidWins } from "@/lib/auctions/settleAuction";
+import { buildAuctionOverview } from "@/lib/auctions/auctionOverview";
 
 /** The whole auction for the organization's screen: items, bidders, and every win with its payment status. */
 export async function GET(_req: Request, { params }: { params: Promise<{ auctionId: string }> }) {
@@ -17,6 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ auction
   if (!auction) return auctionNotFound();
 
   await syncPaidWins(auction.id).catch(() => undefined);
+  const overview = await buildAuctionOverview(auction.id, auth.churchId);
   const [items, bidders, wins] = await Promise.all([
     prisma.auctionItem.findMany({ where: { auctionId, churchId: auth.churchId }, orderBy: [{ sortOrder: "asc" }, { itemNumber: "asc" }] }),
     prisma.auctionBidder.findMany({ where: { auctionId, churchId: auth.churchId }, orderBy: { createdAt: "asc" } }),
@@ -28,6 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ auction
   const itemById = new Map(items.map((i) => [i.id, i]));
 
   return NextResponse.json({
+    overview,
     auction: { ...auction, startsAt: auction.startsAt.toISOString(), endsAt: auction.endsAt.toISOString(), publicUrl: publicAuctionUrl(auction.slug), wallUrl: liveWallUrl(auction.slug) },
     items: items.map((i) => ({ ...i, endsAt: i.endsAt.toISOString(), closedAt: i.closedAt?.toISOString() ?? null, highBidderNumber: i.highBidderId ? bidderById.get(i.highBidderId)?.bidderNumber ?? null : null })),
     bidders: bidders.map((b) => ({ id: b.id, name: b.name, email: b.email, phone: b.phone, status: b.status, bidderNumber: b.bidderNumber, verified: Boolean(b.emailVerifiedAt), createdAt: b.createdAt.toISOString() })),
@@ -57,7 +60,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ auctio
 
   if (auction.status === "DRAFT") {
     await prisma.auction.update({ where: { id: auction.id }, data: parsed.value });
-    await prisma.auctionItem.updateMany({ where: { auctionId: auction.id, status: "OPEN", bidCount: 0 }, data: { endsAt: parsed.value.endsAt } });
+    // Switching between silent and live moves the items that have no bids between "open" and "waiting their turn".
+    await prisma.auctionItem.updateMany({ where: { auctionId: auction.id, status: { in: ["OPEN", "UPCOMING"] }, bidCount: 0 }, data: { endsAt: parsed.value.endsAt, status: parsed.value.format === "LIVE" ? "UPCOMING" : "OPEN" } });
   } else {
     if (parsed.value.endsAt < auction.endsAt) return validationError("Once an auction is public its closing time can only move later.", 409);
     const { description, goalCents, paymentWindowHours, offerNextBidder, registrationMode, endsAt } = parsed.value;

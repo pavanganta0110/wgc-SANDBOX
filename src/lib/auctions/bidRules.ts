@@ -25,7 +25,7 @@ export function minimumNextBidCents(item: Pick<BiddableItem, "startingBidCents" 
   return item.currentBidCents == null ? item.startingBidCents : item.currentBidCents + item.minIncrementCents;
 }
 
-export type BidRejection = "AUCTION_NOT_OPEN" | "ITEM_CLOSED" | "BAD_AMOUNT" | "TOO_LOW" | "ALREADY_HIGH_BIDDER";
+export type BidRejection = "AUCTION_NOT_OPEN" | "ITEM_NOT_STARTED" | "ITEM_CLOSED" | "BAD_AMOUNT" | "TOO_LOW" | "ALREADY_HIGH_BIDDER";
 
 export type BidCheck = { ok: true } | { ok: false; reason: BidRejection; minimumCents?: number };
 
@@ -33,6 +33,8 @@ export type BidCheck = { ok: true } | { ok: false; reason: BidRejection; minimum
 export function checkBid(params: { auction: BiddableAuction; item: BiddableItem; bidderId: string; amountCents: number; now: Date }): BidCheck {
   const { auction, item, bidderId, amountCents, now } = params;
   if (auction.status !== "OPEN" || now < auction.startsAt) return { ok: false, reason: "AUCTION_NOT_OPEN" };
+  // Live auctions run one item at a time: an item not yet on the block cannot be bid on.
+  if (item.status === "UPCOMING") return { ok: false, reason: "ITEM_NOT_STARTED" };
   if (item.status !== "OPEN" || now >= item.endsAt) return { ok: false, reason: "ITEM_CLOSED" };
   if (!Number.isInteger(amountCents) || amountCents <= 0 || amountCents > MAX_BID_CENTS) return { ok: false, reason: "BAD_AMOUNT" };
   const minimumCents = minimumNextBidCents(item);

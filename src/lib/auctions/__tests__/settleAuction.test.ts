@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Prisma } from "@prisma/client";
 
-vi.mock("../auctionEmails", () => ({ sendWinnerEmail: vi.fn().mockResolvedValue(true), sendNextBidderOfferEmail: vi.fn().mockResolvedValue(true) }));
+const sendOverviewEmail = vi.hoisted(() => vi.fn().mockResolvedValue(true));
+vi.mock("../auctionEmails", () => ({ sendWinnerEmail: vi.fn().mockResolvedValue(true), sendNextBidderOfferEmail: vi.fn().mockResolvedValue(true), sendOverviewEmail }));
+vi.mock("../auctionOverview", () => ({ buildAuctionOverview: vi.fn().mockResolvedValue({ raisedCents: 0 }) }));
 
 const prismaMock = vi.hoisted(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,6 +14,8 @@ const prismaMock = vi.hoisted(() => {
     auctionBid: { findMany: vi.fn() },
     auctionBidder: { findUnique: vi.fn() },
     invoice: { findUnique: vi.fn(), updateMany: vi.fn() },
+    user: { findUnique: vi.fn() },
+    church: { findUnique: vi.fn() },
   };
   m.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(m));
   return m;
@@ -21,7 +25,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 import { offerOverdueWins, releaseStaleClaims, settleAuction } from "../settleAuction";
 
 const now = new Date("2026-11-20T21:00:00Z");
-const auction = { id: "a1", churchId: "c1", status: "OPEN", offerNextBidder: true, paymentWindowHours: 72 };
+const auction = { id: "a1", churchId: "c1", title: "Gala", slug: "gala-1", createdByUserId: "u1", currentItemId: null as string | null, status: "OPEN", offerNextBidder: true, paymentWindowHours: 72, endsAt: new Date("2026-11-20T20:00:00Z") };
 const due = (over: Record<string, unknown> = {}) => ({ id: "i1", endsAt: new Date("2026-11-20T20:00:00Z"), bidCount: 3, highBidderId: "b1", currentBidCents: 9_000, ...over });
 
 beforeEach(() => {
@@ -33,6 +37,8 @@ beforeEach(() => {
   prismaMock.auctionItem.count.mockResolvedValue(0);
   prismaMock.auctionWin.findMany.mockResolvedValue([]);
   prismaMock.auctionWin.create.mockResolvedValue({});
+  prismaMock.user.findUnique.mockResolvedValue({ email: "owner@org.test", churchId: "c1" });
+  prismaMock.church.findUnique.mockResolvedValue({ primaryContactEmail: "contact@org.test" });
 });
 
 describe("settleAuction", () => {
@@ -70,6 +76,46 @@ describe("settleAuction", () => {
     prismaMock.auctionItem.count.mockResolvedValue(1);
     expect((await settleAuction("a1", now)).settled).toBe(false);
     expect(prismaMock.auction.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("invoices winners only when nothing is left on the block or waiting, so each person gets one invoice", async () => {
+    prismaMock.auctionItem.count.mockResolvedValue(1); // an item still waiting its turn
+    prismaMock.auctionWin.findMany.mockResolvedValue([{ id: "w1", bidderId: "b1" }]);
+    const outcome = await settleAuction("a1", now);
+    expect(outcome).toMatchObject({ settled: false, invoicesCreated: 0 });
+    expect(prismaMock.auctionWin.updateMany).not.toHaveBeenCalled(); // nothing was claimed for invoicing
+    expect(prismaMock.auctionItem.count).toHaveBeenCalledWith({ where: { auctionId: "a1", status: { in: ["OPEN", "UPCOMING"] } } });
+  });
+
+  it("when the auction's time is up, items that never reached the block are passed", async () => {
+    await settleAuction("a1", now);
+    expect(prismaMock.auctionItem.updateMany).toHaveBeenCalledWith({ where: { auctionId: "a1", status: "UPCOMING" }, data: { status: "UNSOLD", closedAt: now } });
+    const early = new Date("2026-11-20T10:00:00Z");
+    prismaMock.auctionItem.updateMany.mockClear();
+    await settleAuction("a1", early);
+    expect(prismaMock.auctionItem.updateMany).not.toHaveBeenCalledWith({ where: { auctionId: "a1", status: "UPCOMING" }, data: expect.anything() });
+  });
+
+  it("clears the item on the block once it has closed", async () => {
+    prismaMock.auction.findUnique.mockResolvedValue({ ...auction, currentItemId: "i1" });
+    await settleAuction("a1", now);
+    expect(prismaMock.auction.updateMany).toHaveBeenCalledWith({ where: { id: "a1", currentItemId: "i1" }, data: { currentItemId: null } });
+  });
+
+  it("emails the organization its results exactly once: only the run that marks it settled", async () => {
+    await settleAuction("a1", now);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(sendOverviewEmail).toHaveBeenCalledWith(expect.objectContaining({ to: "owner@org.test", auctionTitle: "Gala" }));
+    sendOverviewEmail.mockClear();
+    prismaMock.auction.updateMany.mockResolvedValue({ count: 0 }); // another run already settled it
+    await settleAuction("a1", now);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(sendOverviewEmail).not.toHaveBeenCalled();
+  });
+
+  it("a failed results email never stops the auction from settling", async () => {
+    sendOverviewEmail.mockRejectedValueOnce(new Error("resend down"));
+    await expect(settleAuction("a1", now)).resolves.toMatchObject({ settled: true });
   });
 
   it("does nothing for a draft or already settled auction", async () => {

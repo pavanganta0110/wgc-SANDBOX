@@ -7212,6 +7212,9 @@ model Auction {
   goalCents Int?
   settledAt DateTime?
 
+  // Live-room auctions run one item at a time: the item on the block now (null between items).
+  currentItemId String?
+
   // The organization's own wording for the automatic emails, and when it last sent a message to all bidders.
   // { approved|declined|outbid|winner|nextBidderOffer: { subject?, intro? }, lastAnnouncementAt?: ISO } (see src/lib/auctions/emailSettings.ts)
   emailSettingsJson Json?
@@ -7236,6 +7239,10 @@ model AuctionItem {
   imageUrl    String?
   sortOrder   Int     @default(0)
 
+  // Who gave the item, and a group for it ("Experiences", "Sports"). Shown with the item.
+  donatedBy String?
+  category  String?
+
   startingBidCents  Int
   minIncrementCents Int  @default(500)
   // Optional price at which a bidder can end the item at once.
@@ -7250,7 +7257,7 @@ model AuctionItem {
   // When this item stops taking bids. Starts as the auction's endsAt and moves later on auto-extend.
   endsAt          DateTime
 
-  // OPEN | SOLD | UNSOLD | WITHDRAWN. Set by settlement, never by a client.
+  // UPCOMING (live auction: not on the block yet) | OPEN | SOLD | UNSOLD | WITHDRAWN. Set by settlement and the live controls, never by a client.
   status         String    @default("OPEN")
   closedAt       DateTime?
   winnerBidderId String?

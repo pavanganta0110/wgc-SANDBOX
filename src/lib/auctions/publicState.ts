@@ -19,6 +19,7 @@ export interface PublicAuctionState {
     endsAt: string;
     registrationMode: string;
     goalCents: number | null;
+    currentItemId: string | null;
   };
   items: {
     id: string;
@@ -26,6 +27,8 @@ export interface PublicAuctionState {
     title: string;
     description: string | null;
     imageUrl: string | null;
+    donatedBy: string | null;
+    category: string | null;
     status: string;
     startingBidCents: number;
     minimumNextBidCents: number;
@@ -68,6 +71,7 @@ export async function loadPublicAuctionState(auction: { id: string; churchId: st
       endsAt: row.endsAt.toISOString(),
       registrationMode: row.registrationMode,
       goalCents: row.goalCents,
+      currentItemId: row.currentItemId,
     },
     items: items
       .filter((i) => i.status !== "WITHDRAWN")
@@ -77,6 +81,8 @@ export async function loadPublicAuctionState(auction: { id: string; churchId: st
         title: i.title,
         description: i.description,
         imageUrl: i.imageUrl,
+        donatedBy: i.donatedBy,
+        category: i.category,
         status: i.status,
         startingBidCents: i.startingBidCents,
         minimumNextBidCents: minimumNextBidCents(i),

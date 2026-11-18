@@ -31,6 +31,9 @@ describe("checkBid", () => {
     expect(checkBid({ auction, item: item({ endsAt: now }), bidderId: "b1", amountCents: 5_000, now })).toMatchObject({ reason: "ITEM_CLOSED" });
     expect(checkBid({ auction, item: item({ status: "SOLD" }), bidderId: "b1", amountCents: 5_000, now })).toMatchObject({ reason: "ITEM_CLOSED" });
   });
+  it("rejects a bid on a live-auction item that is not on the block yet", () => {
+    expect(checkBid({ auction, item: item({ status: "UPCOMING" }), bidderId: "b1", amountCents: 5_000, now })).toMatchObject({ reason: "ITEM_NOT_STARTED" });
+  });
   it("rejects non-integer, zero, negative and absurd amounts", () => {
     for (const amountCents of [0, -500, 50.5, NaN, MAX_BID_CENTS + 1]) {
       expect(checkBid({ auction, item: item(), bidderId: "b1", amountCents, now })).toMatchObject({ reason: "BAD_AMOUNT" });

@@ -22,7 +22,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ auction
     const top = await prisma.auctionItem.aggregate({ where: { auctionId }, _max: { itemNumber: true } });
     const itemNumber = (top._max.itemNumber ?? 0) + 1;
     try {
-      const item = await prisma.auctionItem.create({ data: { ...parsed.value, churchId: auth.churchId, auctionId, itemNumber, sortOrder: itemNumber, endsAt: auction.endsAt } });
+      // A live auction's items wait their turn on the block; a silent auction's items are all open for bidding.
+      const item = await prisma.auctionItem.create({ data: { ...parsed.value, churchId: auth.churchId, auctionId, itemNumber, sortOrder: itemNumber, endsAt: auction.endsAt, status: auction.format === "LIVE" ? "UPCOMING" : "OPEN" } });
       return NextResponse.json({ id: item.id, itemNumber }, { status: 201 });
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") continue;

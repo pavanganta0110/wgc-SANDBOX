@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ auction
   if (!auction) return auctionNotFound();
   if (auction.status !== "DRAFT") return validationError("This auction is already public.", 409);
   if (auction.endsAt <= new Date()) return validationError("Set a closing time in the future before publishing.");
-  const items = await prisma.auctionItem.count({ where: { auctionId, status: "OPEN" } });
+  const items = await prisma.auctionItem.count({ where: { auctionId, status: { in: ["OPEN", "UPCOMING"] } } });
   if (items === 0) return validationError("Add at least one item before publishing.");
 
   await prisma.auction.update({ where: { id: auction.id }, data: { status: "OPEN" } });

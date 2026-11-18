@@ -2,6 +2,7 @@ import { sendWgcEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { resolveInvoiceBranding } from "@/lib/invoices/invoiceBranding";
 import { formatCents } from "./bidRules";
+import type { AuctionOverview } from "./auctionOverview";
 import { escapeHtml, introHtmlFor, parseEmailSettings, subjectFor, type EmailKind, type EmailSettings } from "./emailSettings";
 
 /**
@@ -163,4 +164,25 @@ export function sendTestEmail(s: Sender & { auctionId: string; slug: string; kin
     case "winner": return sendWinnerEmail({ ...common, items: [{ title: "Item 1: Sample Item", amountCents: 15000 }], totalCents: 15000, payUrl: publicAuctionUrl(s.slug), dueAt: new Date(Date.now() + 72 * 3_600_000) });
     case "nextBidderOffer": return sendNextBidderOfferEmail({ ...common, itemTitle: "Sample Item", amountCents: 12000, payUrl: publicAuctionUrl(s.slug), dueAt: new Date(Date.now() + 72 * 3_600_000) });
   }
+}
+
+/** The after-auction summary for the organization itself: who took part, what sold, and what has been paid. */
+export function sendOverviewEmail(s: Sender & { auctionId: string; overview: AuctionOverview; manageUrl: string }) {
+  const o = s.overview;
+  const row = (label: string, value: string) => `<tr><td style="padding:6px 12px 6px 0;color:#6B7280;">${escapeHtml(label)}</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(value)}</td></tr>`;
+  const top = o.topItems.map((i) => `<li>Item ${i.itemNumber}: ${escapeHtml(i.title)} — ${formatCents(i.amountCents)} (${i.bidCount} bids)</li>`).join("");
+  return deliver(s, {
+    subject: `${s.auctionTitle}: results — ${formatCents(o.raisedCents)} raised`,
+    title: "Your auction results",
+    badgeText: "Results",
+    badgeColor: "#10B981",
+    relatedId: s.auctionId,
+    bodyHtml: `<p>${escapeHtml(s.auctionTitle)} has ended. Here is how it went.</p>
+<table style="border-collapse:collapse;">
+${row("People who registered", String(o.registered))}${row("Approved to bid", String(o.approved))}${row("People who placed a bid", String(o.participated))}${row("People who won something", String(o.winners))}${row("Bids placed", `${o.totalBids} (${o.onlineBids} online, ${o.roomBids} in the room)`)}
+${row("Items sold", `${o.itemsSold} of ${o.itemsTotal}`)}${row("Raised", formatCents(o.raisedCents) + (o.goalPercent != null ? ` (${o.goalPercent}% of your goal)` : ""))}${row("Paid so far", formatCents(o.paidCents))}${row("Waiting on payment", formatCents(o.outstandingCents))}${row("Average sale", o.averageSaleCents == null ? "—" : formatCents(o.averageSaleCents))}${row("Above the items' value", formatCents(o.aboveValueCents))}
+</table>
+${top ? `<p style="margin-top:16px;"><strong>Top items</strong></p><ul>${top}</ul>` : ""}
+<p>Winners were emailed their invoices and are reminded until they pay. Unpaid items move to the next bidder automatically.</p>${button(s.manageUrl, "See the full results")}`,
+  });
 }

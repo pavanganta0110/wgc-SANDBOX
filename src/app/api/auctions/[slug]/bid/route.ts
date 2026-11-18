@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/auctions/bidRules";
 
 const MESSAGES: Record<string, string> = {
   AUCTION_NOT_OPEN: "This auction isn't open for bidding right now.",
+  ITEM_NOT_STARTED: "Bidding on this item hasn't started yet. Watch for it to come up.",
   ITEM_CLOSED: "Bidding on this item has closed.",
   BAD_AMOUNT: "Enter a whole-dollar amount.",
   ALREADY_HIGH_BIDDER: "You already have the highest bid.",

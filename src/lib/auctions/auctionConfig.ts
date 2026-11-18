@@ -74,6 +74,8 @@ export interface ItemInput {
   startingBidCents: number;
   minIncrementCents: number;
   fairMarketValueCents: number;
+  donatedBy: string | null;
+  category: string | null;
 }
 
 export function validateItemInput(body: Record<string, unknown>): { ok: true; value: ItemInput } | { ok: false; error: string } {
@@ -86,7 +88,7 @@ export function validateItemInput(body: Record<string, unknown>): { ok: true; va
   // Required and explicit: it decides how much of the winner's payment is a charitable gift on their receipt.
   const fairMarketValueCents = cents(body.fairMarketValueCents);
   if (fairMarketValueCents === null) return { ok: false, error: "Enter the fair market value (what the item is worth). Enter 0 only if the winner receives nothing of value." };
-  return { ok: true, value: { title, description: text(body.description, 5000), imageUrl: text(body.imageUrl, 500), startingBidCents, minIncrementCents, fairMarketValueCents } };
+  return { ok: true, value: { title, description: text(body.description, 5000), imageUrl: text(body.imageUrl, 500), startingBidCents, minIncrementCents, fairMarketValueCents, donatedBy: text(body.donatedBy, 160), category: text(body.category, 80) } };
 }
 
 /** Public slugs are global: a short random suffix keeps two organizations' "Spring Gala" apart and the URL unguessable while it is a draft. */

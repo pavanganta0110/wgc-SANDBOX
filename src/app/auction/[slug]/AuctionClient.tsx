@@ -15,6 +15,8 @@ export default function AuctionClient({ slug, embedded = false, previewState = n
   const [state, setState] = useState<PublicAuctionState | null>(previewState);
   const [now, setNow] = useState(() => Date.now());
   const [offset, setOffset] = useState(0); // server clock minus ours, so countdowns agree with the server
+  // A live-room auction changes every few seconds, so its page checks more often.
+  const pollMs = state?.auction.format === "LIVE" ? 2500 : 4000;
 
   const load = useCallback(async () => {
     try {
@@ -31,10 +33,10 @@ export default function AuctionClient({ slug, embedded = false, previewState = n
   useEffect(() => {
     if (previewState) return; // a preview is a snapshot: no polling
     const first = setTimeout(() => void load(), 0);
-    const poll = setInterval(() => { if (!document.hidden) void load(); }, 4000);
+    const poll = setInterval(() => { if (!document.hidden) void load(); }, pollMs);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => { clearTimeout(first); clearInterval(poll); clearInterval(tick); };
-  }, [load, previewState]);
+  }, [load, previewState, pollMs]);
 
   const rootRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -59,6 +61,7 @@ export default function AuctionClient({ slug, embedded = false, previewState = n
   const { auction, items, me } = state;
   const serverNow = now + offset;
   const open = auction.status === "OPEN" && serverNow >= new Date(auction.startsAt).getTime();
+  const current = items.find((i) => i.id === auction.currentItemId && i.status === "OPEN") ?? null;
 
   return (
     <main ref={rootRef} className={`${embedded ? "" : "min-h-screen "}bg-slate-50`}>
@@ -75,8 +78,18 @@ export default function AuctionClient({ slug, embedded = false, previewState = n
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {auction.status !== "SETTLED" && <BidderPanel slug={slug} auction={auction} me={me} onChange={load} preview={Boolean(previewState)} />}
+        {auction.format === "LIVE" && auction.status === "OPEN" && (
+          current ? (
+            <ItemCard featured slug={slug} item={current} now={serverNow} canBid={open && me?.status === "APPROVED"} onBid={load} />
+          ) : (
+            <div className="rounded-xl bg-slate-900 p-6 text-center text-white">
+              <p className="text-lg font-semibold">{items.some((i) => i.status === "UPCOMING") ? "Waiting for the next item…" : "That was the last item."}</p>
+              <p className="mt-1 text-sm text-slate-300">{items.some((i) => i.status === "UPCOMING") ? "It will appear here the moment it is on the block." : "Thank you for bidding!"}</p>
+            </div>
+          )
+        )}
         <section className="grid gap-4 sm:grid-cols-2">
-          {items.map((item) => (
+          {items.filter((item) => !(auction.format === "LIVE" && item.id === current?.id)).map((item) => (
             <ItemCard key={item.id} slug={slug} item={item} now={serverNow} canBid={open && me?.status === "APPROVED"} onBid={load} />
           ))}
         </section>
@@ -145,7 +158,7 @@ function BidderPanel({ slug, auction, me, onChange, preview }: { slug: string; a
   );
 }
 
-function ItemCard({ slug, item, now, canBid, onBid }: { slug: string; item: Item; now: number; canBid: boolean; onBid: () => Promise<void> }) {
+function ItemCard({ slug, item, now, canBid, onBid, featured = false }: { slug: string; item: Item; now: number; canBid: boolean; onBid: () => Promise<void>; featured?: boolean }) {
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -165,15 +178,17 @@ function ItemCard({ slug, item, now, canBid, onBid }: { slug: string; item: Item
   }
 
   return (
-    <article className={`rounded-xl bg-white border p-4 ${item.youAreHighBidder ? "border-emerald-400 ring-1 ring-emerald-300" : "border-slate-200"}`}>
-      {item.imageUrl && <img src={item.imageUrl} alt="" className="w-full h-44 object-cover rounded-lg mb-3" />}
+    <article className={`rounded-xl bg-white border p-4 ${featured ? "border-2 border-emerald-500 shadow-md" : ""} ${item.youAreHighBidder ? "border-emerald-400 ring-1 ring-emerald-300" : featured ? "" : "border-slate-200"}`}>
+      {featured && <p className="mb-2 text-xs font-bold tracking-widest text-emerald-700">ON THE BLOCK NOW</p>}
+      {item.imageUrl && <img src={item.imageUrl} alt="" className={`w-full object-cover rounded-lg mb-3 ${featured ? "h-64" : "h-44"}`} />}
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-slate-500">Item {item.itemNumber}</p>
           <h3 className="font-semibold text-slate-900">{item.title}</h3>
         </div>
-        <span className="text-sm font-medium text-slate-600 whitespace-nowrap">{item.status === "SOLD" ? "Sold" : item.status === "UNSOLD" ? "No bids" : timeLeft(item.endsAt, now)}</span>
+        <span className={`font-semibold whitespace-nowrap ${featured ? "text-3xl tabular-nums text-slate-900" : "text-sm text-slate-600"}`}>{item.status === "SOLD" ? "Sold" : item.status === "UNSOLD" ? "Passed" : item.status === "UPCOMING" ? "Up next" : timeLeft(item.endsAt, now)}</span>
       </div>
+      {(item.category || item.donatedBy) && <p className="mt-1 text-xs text-slate-500">{[item.category, item.donatedBy && `Donated by ${item.donatedBy}`].filter(Boolean).join(" · ")}</p>}
       {item.description && <p className="mt-2 text-sm text-slate-600 whitespace-pre-line">{item.description}</p>}
       <div className="mt-3 flex items-end justify-between">
         <div>
@@ -185,13 +200,23 @@ function ItemCard({ slug, item, now, canBid, onBid }: { slug: string; item: Item
       {item.youAreHighBidder && !closed && <p className="mt-2 text-sm font-semibold text-emerald-700">You&apos;re the high bidder</p>}
       {item.youAreHighBidder && item.status === "SOLD" && <p className="mt-2 text-sm font-semibold text-emerald-700">You won this item. Watch your email for how to pay.</p>}
 
-      {!closed && canBid && !item.youAreHighBidder && (
+      {!closed && canBid && !item.youAreHighBidder && featured && (
+        <div className="mt-4 space-y-2">
+          <button disabled={busy} onClick={() => void submit(item.minimumNextBidCents)} className="w-full rounded-xl bg-emerald-600 py-4 text-xl font-bold text-white disabled:opacity-60">Bid now {formatMoney(item.minimumNextBidCents)}</button>
+          <div className="flex gap-2">
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="Or enter your own amount" className="flex-1 rounded-lg border border-slate-300 px-3 py-2" />
+            <button disabled={busy} onClick={() => void submit(dollarsToCents(amount))} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-60">Bid</button>
+          </div>
+        </div>
+      )}
+      {!closed && canBid && !item.youAreHighBidder && !featured && (
         <div className="mt-3 flex gap-2">
           <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder={`${formatMoney(item.minimumNextBidCents)} or more`} className="flex-1 rounded-lg border border-slate-300 px-3 py-2" />
           <button disabled={busy} onClick={() => void submit(dollarsToCents(amount))} className="rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white disabled:opacity-60">Bid</button>
           <button disabled={busy} onClick={() => void submit(item.minimumNextBidCents)} className="rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 disabled:opacity-60">Bid {formatMoney(item.minimumNextBidCents)}</button>
         </div>
       )}
+      {item.status === "UPCOMING" && <p className="mt-3 text-sm text-slate-500">Bidding opens when this item is on the block.</p>}
       {!closed && !canBid && <p className="mt-3 text-sm text-slate-500">Register above to bid.</p>}
       {message && <p className={`mt-2 text-sm ${message.ok ? "text-emerald-700" : "text-red-600"}`}>{message.text}</p>}
     </article>
