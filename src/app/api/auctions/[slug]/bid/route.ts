@@ -22,6 +22,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const bidder = await resolveBidderSession(req.headers.get("cookie"), auction);
   if (!bidder) return NextResponse.json({ error: "Sign in to bid.", code: "SIGN_IN" }, { status: 401 });
 
+  // The cookie also works inside a website frame (SameSite=None), so only a real JSON request may bid: a hostile
+  // page's form post cannot be application/json without the browser first asking this server's permission.
+  if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+    return NextResponse.json({ error: "Unsupported request." }, { status: 415 });
+  }
   const body = await req.json().catch(() => ({}));
   if (typeof body.itemId !== "string") return NextResponse.json({ error: MESSAGES.NOT_FOUND }, { status: 400 });
   const result = await placeBid({ auctionId: auction.id, itemId: body.itemId, bidderId: bidder.id, amountCents: Number(body.amountCents), source: "ONLINE" });

@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PublicAuctionState } from "@/lib/auctions/publicState";
 import { apiMessage, dollarsToCents, formatMoney, timeLeft } from "@/lib/auctions/clientFormat";
 
 type Item = PublicAuctionState["items"][number];
 
-export default function AuctionClient({ slug }: { slug: string }) {
-  const [state, setState] = useState<PublicAuctionState | null>(null);
+/**
+ * The public auction page. `embedded` is when it sits in a frame on an organization's own website (it reports its
+ * height so the frame fits, with no scrollbar). `previewState` is the organizer's read-only preview: it shows exactly
+ * what visitors see, from a snapshot, and never registers or bids.
+ */
+export default function AuctionClient({ slug, embedded = false, previewState = null }: { slug: string; embedded?: boolean; previewState?: PublicAuctionState | null }) {
+  const [state, setState] = useState<PublicAuctionState | null>(previewState);
   const [now, setNow] = useState(() => Date.now());
   const [offset, setOffset] = useState(0); // server clock minus ours, so countdowns agree with the server
 
@@ -24,11 +29,31 @@ export default function AuctionClient({ slug }: { slug: string }) {
   }, [slug]);
 
   useEffect(() => {
+    if (previewState) return; // a preview is a snapshot: no polling
     const first = setTimeout(() => void load(), 0);
     const poll = setInterval(() => { if (!document.hidden) void load(); }, 4000);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => { clearTimeout(first); clearInterval(poll); clearInterval(tick); };
-  }, [load]);
+  }, [load, previewState]);
+
+  const rootRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // In a website frame, tell the page the height we need so its frame fits with no scrollbar.
+    const el = rootRef.current;
+    if (!embedded || !el || window.parent === window) return;
+    let last = 0;
+    const report = () => {
+      const height = Math.ceil(el.getBoundingClientRect().height);
+      if (height > 0 && height !== last) {
+        last = height;
+        window.parent.postMessage({ source: "wgc-auction", type: "WGC_AUCTION_HEIGHT", slug, height }, "*");
+      }
+    };
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [embedded, slug, state]);
 
   if (!state) return <main className="min-h-screen flex items-center justify-center text-slate-500">Loading auction…</main>;
   const { auction, items, me } = state;
@@ -36,7 +61,7 @@ export default function AuctionClient({ slug }: { slug: string }) {
   const open = auction.status === "OPEN" && serverNow >= new Date(auction.startsAt).getTime();
 
   return (
-    <main className="min-h-screen bg-slate-50">
+    <main ref={rootRef} className={`${embedded ? "" : "min-h-screen "}bg-slate-50`}>
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 py-6">
           {auction.coverImageUrl && <img src={auction.coverImageUrl} alt="" className="w-full max-h-64 object-cover rounded-xl mb-4" />}
@@ -49,7 +74,7 @@ export default function AuctionClient({ slug }: { slug: string }) {
       </header>
 
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {auction.status !== "SETTLED" && <BidderPanel slug={slug} auction={auction} me={me} onChange={load} />}
+        {auction.status !== "SETTLED" && <BidderPanel slug={slug} auction={auction} me={me} onChange={load} preview={Boolean(previewState)} />}
         <section className="grid gap-4 sm:grid-cols-2">
           {items.map((item) => (
             <ItemCard key={item.id} slug={slug} item={item} now={serverNow} canBid={open && me?.status === "APPROVED"} onBid={load} />
@@ -61,7 +86,7 @@ export default function AuctionClient({ slug }: { slug: string }) {
   );
 }
 
-function BidderPanel({ slug, auction, me, onChange }: { slug: string; auction: PublicAuctionState["auction"]; me: PublicAuctionState["me"]; onChange: () => Promise<void> }) {
+function BidderPanel({ slug, auction, me, onChange, preview }: { slug: string; auction: PublicAuctionState["auction"]; me: PublicAuctionState["me"]; onChange: () => Promise<void>; preview: boolean }) {
   const [step, setStep] = useState<"form" | "code">("form");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -71,6 +96,7 @@ function BidderPanel({ slug, auction, me, onChange }: { slug: string; auction: P
   const [message, setMessage] = useState<string | null>(null);
 
   async function post(path: string, body: unknown) {
+    if (preview) { setMessage("This is a preview. Registration is turned off here."); return null; }
     setBusy(true);
     setMessage(null);
     try {

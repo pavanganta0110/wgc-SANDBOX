@@ -14,9 +14,9 @@ interface Detail {
   wins: { id: string; itemNumber: number | null; itemTitle: string; amountCents: number; status: string; bidderName: string; bidderNumber: number | null; bidderEmail: string; invoiceNumber: string | null; invoiceStatus: string | null; dueAt: string | null; wasOffered: boolean }[];
 }
 
-type Tab = "items" | "bidders" | "live" | "results" | "settings";
+type Tab = "items" | "bidders" | "live" | "results" | "website" | "settings";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "items", label: "Items" }, { id: "bidders", label: "Bidders" }, { id: "live", label: "Live room" }, { id: "results", label: "Results & payments" }, { id: "settings", label: "Settings" },
+  { id: "items", label: "Items" }, { id: "bidders", label: "Bidders" }, { id: "live", label: "Live room" }, { id: "results", label: "Results & payments" }, { id: "website", label: "Preview & website" }, { id: "settings", label: "Settings" },
 ];
 
 const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
@@ -108,6 +108,7 @@ export default function AuctionManager({ auctionId, canManage }: { auctionId: st
       {tab === "bidders" && <BiddersTab data={data} canManage={canManage} busy={busy} base={base} call={call} />}
       {tab === "live" && <LiveTab data={data} canManage={canManage} busy={busy} base={base} call={call} />}
       {tab === "results" && <ResultsTab data={data} />}
+      {tab === "website" && <WebsiteTab data={data} auctionId={auctionId} />}
       {tab === "settings" && <SettingsTab data={data} canManage={canManage} busy={busy} base={base} call={call} />}
     </div>
   );
@@ -169,8 +170,13 @@ function ItemsTab({ data, canManage, busy, base, call }: TabProps) {
 function BiddersTab({ data, canManage, busy, base, call }: TabProps) {
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const pending = data.bidders.filter((b) => b.status === "PENDING" && b.verified);
+  const approved = data.bidders.filter((b) => b.status === "APPROVED").length;
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-600"><strong>{data.bidders.length}</strong> registered · <strong>{approved}</strong> approved to bid</p>
+        {data.bidders.length > 0 && <a className={ghost} href={`${base}/bidders/export`}>Download the list (CSV)</a>}
+      </div>
       {pending.length > 0 && data.auction.registrationMode === "APPROVAL" && <p className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">{pending.length} {pending.length === 1 ? "person is" : "people are"} waiting for your approval.</p>}
       {canManage && (
         <form onSubmit={async (e) => { e.preventDefault(); if (await call(`${base}/bidders`, "POST", form, "Bidder added and approved.")) setForm({ name: "", email: "", phone: "" }); }} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 grid gap-3 sm:grid-cols-4">
@@ -320,5 +326,46 @@ function SettingsTab({ data, canManage, busy, base, call }: TabProps) {
       <p className="sm:col-span-2 text-xs text-slate-500">A bid in the last few minutes pushes that item&apos;s closing time out, so nobody wins by bidding in the last second. Set 0 to turn it off.</p>
       {canManage && a.status !== "SETTLED" && <div className="sm:col-span-2"><button disabled={busy} className={btn}>Save settings</button></div>}
     </form>
+  );
+}
+
+function WebsiteTab({ data, auctionId }: { data: Detail; auctionId: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const a = data.auction;
+  const slug = new URL(a.publicUrl).pathname.split("/").pop() ?? "";
+  const origin = new URL(a.publicUrl).origin;
+  const script = `<div data-wgc-auction data-wgc-slug="${slug}"></div>\n<script async src="${origin}/embed/wgc-auction.js"></script>`;
+  const iframe = `<iframe src="${origin}/embed/auction/${slug}" title="Auction" style="width:100%;height:900px;border:0" loading="lazy"></iframe>`;
+  const public_ = a.status !== "DRAFT";
+
+  function copy(label: string, text: string) {
+    void navigator.clipboard.writeText(text).then(() => { setCopied(label); setTimeout(() => setCopied(null), 2000); });
+  }
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <h3 className="font-semibold">Live preview</h3>
+        <p className="text-sm text-slate-500 mb-3">This is what visitors see, drawn from the auction as it is right now{a.status === "DRAFT" ? " (it is still a draft, so only you can see it)" : ""}. Change items or settings, then reopen this tab. Registering and bidding are turned off in the preview.</p>
+        <iframe key={a.status + data.items.length} src={`/merchant/auctions/${auctionId}/preview`} title="Auction preview" className="w-full rounded-xl border border-slate-200 bg-white" style={{ height: 720 }} />
+      </section>
+
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+        <h3 className="font-semibold">Put the auction on your own website</h3>
+        <p className="text-sm text-slate-500">People can register to bid, see every item and place bids right on your page. You see everyone who registered in the Bidders tab. Nobody pays on your site: winners get an invoice by email when the auction ends.</p>
+        {!public_ && <p className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Publish the auction first. The code below only works once it is public.</p>}
+        <div>
+          <p className="text-sm font-medium mb-1">Paste this where the auction should appear (works on most website builders)</p>
+          <pre className="rounded-lg bg-slate-900 text-slate-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap">{script}</pre>
+          <button className={`${ghost} mt-2`} onClick={() => copy("script", script)}>{copied === "script" ? "Copied" : "Copy code"}</button>
+        </div>
+        <div>
+          <p className="text-sm font-medium mb-1">Or, if your site only allows a frame</p>
+          <pre className="rounded-lg bg-slate-900 text-slate-100 p-3 text-xs overflow-x-auto whitespace-pre-wrap">{iframe}</pre>
+          <button className={`${ghost} mt-2`} onClick={() => copy("iframe", iframe)}>{copied === "iframe" ? "Copied" : "Copy code"}</button>
+        </div>
+        <p className="text-xs text-slate-500">To allow only your own website to show it, turn on approved websites in your giving page embed settings.</p>
+      </section>
+    </div>
   );
 }

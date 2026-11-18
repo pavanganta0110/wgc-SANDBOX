@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { buildBidderCookie, cleanName, cleanPhone, generateBidderCode, hashBidderCode, hashSessionToken, newSessionToken, normalizeEmail, readBidderCookie, safeEqualHex } from "../bidderIdentity";
 
 describe("bidder identity", () => {
@@ -36,9 +36,16 @@ describe("bidder identity", () => {
     expect(readBidderCookie(null, "auc1")).toBeNull();
     expect(readBidderCookie("wgc_bidder_auc1=nodot", "auc1")).toBeNull();
   });
-  it("the cookie is httpOnly and lax", () => {
+  it("the cookie is httpOnly, and Lax in development", () => {
     const c = buildBidderCookie("auc1", "bid1", "tok");
     expect(c).toContain("HttpOnly");
     expect(c).toContain("SameSite=Lax");
+  });
+  it("in production the cookie works inside a website frame: None, Secure, Partitioned", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const c = buildBidderCookie("auc1", "bid1", "tok");
+    vi.unstubAllEnvs();
+    expect(c).toContain("HttpOnly");
+    expect(c).toContain("SameSite=None; Secure; Partitioned");
   });
 });

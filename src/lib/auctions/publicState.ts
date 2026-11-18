@@ -40,8 +40,9 @@ export interface PublicAuctionState {
   me: { status: string; bidderNumber: number | null; name: string } | null;
 }
 
-export async function loadPublicAuctionState(auction: { id: string; churchId: string }, meBidderId: string | null): Promise<PublicAuctionState | null> {
-  const row = await prisma.auction.findFirst({ where: { id: auction.id, churchId: auction.churchId, status: { not: "DRAFT" } } });
+/** `allowDraft` is only for the organizer's own preview screen; the public routes never pass it. */
+export async function loadPublicAuctionState(auction: { id: string; churchId: string }, meBidderId: string | null, options: { allowDraft?: boolean } = {}): Promise<PublicAuctionState | null> {
+  const row = await prisma.auction.findFirst({ where: { id: auction.id, churchId: auction.churchId, ...(options.allowDraft ? {} : { status: { not: "DRAFT" } }) } });
   if (!row) return null;
   const [items, bidders, bids, me] = await Promise.all([
     prisma.auctionItem.findMany({ where: { auctionId: row.id }, orderBy: [{ sortOrder: "asc" }, { itemNumber: "asc" }] }),

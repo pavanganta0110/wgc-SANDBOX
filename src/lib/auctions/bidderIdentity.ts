@@ -62,9 +62,17 @@ export function bidderCookieName(auctionId: string): string {
   return `wgc_bidder_${auctionId}`;
 }
 
+/**
+ * In production the cookie must work inside an iframe on the organization's own website, which the browser treats as
+ * a third-party context: SameSite=None; Secure; Partitioned (kept separately per website, so it cannot follow
+ * anyone around the web). Without that, a bidder could register on a website but never be signed in there.
+ * Local development over plain http cannot set Secure, so it falls back to Lax.
+ * Because the cookie is then sent on cross-site requests, the bid route also refuses anything that is not a JSON
+ * request (a hostile page cannot send one without the browser asking this server's permission first).
+ */
 export function buildBidderCookie(auctionId: string, bidderId: string, token: string): string {
-  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${bidderCookieName(auctionId)}=${bidderId}.${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SECONDS}${secure}`;
+  const attributes = process.env.NODE_ENV === "production" ? "SameSite=None; Secure; Partitioned" : "SameSite=Lax";
+  return `${bidderCookieName(auctionId)}=${bidderId}.${token}; Path=/; HttpOnly; ${attributes}; Max-Age=${SESSION_MAX_AGE_SECONDS}`;
 }
 
 /** Reads this auction's bidder cookie out of a raw Cookie header. */
