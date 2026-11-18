@@ -7210,8 +7210,11 @@ model Auction {
   offerNextBidder    Boolean @default(true)
 
   goalCents Int?
-  // Shown on the invoice and receipt: the organization's own wording for the goods the winner receives.
   settledAt DateTime?
+
+  // The organization's own wording for the automatic emails, and when it last sent a message to all bidders.
+  // { approved|declined|outbid|winner|nextBidderOffer: { subject?, intro? }, lastAnnouncementAt?: ISO } (see src/lib/auctions/emailSettings.ts)
+  emailSettingsJson Json?
 
   createdByUserId String?
   createdAt       DateTime @default(now())

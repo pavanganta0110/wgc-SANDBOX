@@ -14,9 +14,9 @@ interface Detail {
   wins: { id: string; itemNumber: number | null; itemTitle: string; amountCents: number; status: string; bidderName: string; bidderNumber: number | null; bidderEmail: string; invoiceNumber: string | null; invoiceStatus: string | null; dueAt: string | null; wasOffered: boolean }[];
 }
 
-type Tab = "items" | "bidders" | "live" | "results" | "website" | "settings";
+type Tab = "items" | "bidders" | "live" | "results" | "website" | "emails" | "settings";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "items", label: "Items" }, { id: "bidders", label: "Bidders" }, { id: "live", label: "Live room" }, { id: "results", label: "Results & payments" }, { id: "website", label: "Preview & website" }, { id: "settings", label: "Settings" },
+  { id: "items", label: "Items" }, { id: "bidders", label: "Bidders" }, { id: "live", label: "Live room" }, { id: "results", label: "Results & payments" }, { id: "website", label: "Preview & website" }, { id: "emails", label: "Emails" }, { id: "settings", label: "Settings" },
 ];
 
 const field = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm";
@@ -109,6 +109,7 @@ export default function AuctionManager({ auctionId, canManage }: { auctionId: st
       {tab === "live" && <LiveTab data={data} canManage={canManage} busy={busy} base={base} call={call} />}
       {tab === "results" && <ResultsTab data={data} />}
       {tab === "website" && <WebsiteTab data={data} auctionId={auctionId} />}
+      {tab === "emails" && <EmailsTab data={data} canManage={canManage} base={base} />}
       {tab === "settings" && <SettingsTab data={data} canManage={canManage} busy={busy} base={base} call={call} />}
     </div>
   );
@@ -367,5 +368,121 @@ function WebsiteTab({ data, auctionId }: { data: Detail; auctionId: string }) {
         <p className="text-xs text-slate-500">To allow only your own website to show it, turn on approved websites in your giving page embed settings.</p>
       </section>
     </div>
+  );
+}
+
+interface KindInfo { kind: string; label: string; when: string; defaultSubject: string; fields: string[] }
+type Wording = Record<string, { subject?: string; intro?: string } | undefined>;
+
+function EmailsTab({ data, canManage, base }: { data: Detail; canManage: boolean; base: string }) {
+  const [kinds, setKinds] = useState<KindInfo[]>([]);
+  const [wording, setWording] = useState<Wording>({});
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch(`${base}/emails`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (alive) { setKinds(j.kinds ?? []); setWording(j.settings ?? {}); } });
+    return () => { alive = false; };
+  }, [base]);
+
+  function setField(kind: string, key: "subject" | "intro", value: string) {
+    setWording((w) => ({ ...w, [kind]: { ...(w[kind] ?? {}), [key]: value } }));
+  }
+
+  async function save() {
+    setBusy(true);
+    setNote(null);
+    const res = await fetch(`${base}/emails`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: wording }) });
+    const json = await res.json().catch(() => ({}));
+    setBusy(false);
+    setNote(res.ok ? { ok: true, text: "Saved. Your wording is used from now on." } : { ok: false, text: apiMessage(json, "Could not save.") });
+  }
+
+  async function sendTest(kind: string) {
+    setBusy(true);
+    setNote(null);
+    const res = await fetch(`${base}/emails/test`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind, settings: wording }) });
+    const json = await res.json().catch(() => ({}));
+    setBusy(false);
+    setNote(res.ok ? { ok: true, text: `A sample was sent to ${json.sentTo}.` } : { ok: false, text: apiMessage(json, "Could not send the sample.") });
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-4">
+        <div>
+          <h3 className="font-semibold">Automatic emails</h3>
+          <p className="text-sm text-slate-500">These go out on their own. You can change the subject and add your own message near the top. The details that matter (amounts, the pay button, the sign-in code) always stay as they are. Leave a box empty to use the standard wording.</p>
+        </div>
+        {kinds.map((k) => (
+          <div key={k.kind} className="rounded-xl border border-slate-200 p-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><p className="font-medium text-sm">{k.label}</p><p className="text-xs text-slate-500">{k.when}</p></div>
+              {canManage && <button disabled={busy} className={ghost} onClick={() => void sendTest(k.kind)}>Email me a sample</button>}
+            </div>
+            <label className="block text-xs font-medium text-slate-600">Subject
+              <input disabled={!canManage} className={`${field} mt-1`} value={wording[k.kind]?.subject ?? ""} onChange={(e) => setField(k.kind, "subject", e.target.value)} placeholder={k.defaultSubject} />
+            </label>
+            <label className="block text-xs font-medium text-slate-600">Your message (shown at the top)
+              <textarea disabled={!canManage} rows={3} className={`${field} mt-1`} value={wording[k.kind]?.intro ?? ""} onChange={(e) => setField(k.kind, "intro", e.target.value)} placeholder="Optional, for example: Thank you for supporting our students!" />
+            </label>
+            <p className="text-xs text-slate-500">You can use: {k.fields.map((f) => `{{${f}}}`).join("  ")}</p>
+          </div>
+        ))}
+        {canManage && <button disabled={busy} className={btn} onClick={() => void save()}>Save wording</button>}
+        {note && <p className={`text-sm ${note.ok ? "text-emerald-700" : "text-red-600"}`}>{note.text}</p>}
+      </section>
+
+      <Announcement data={data} canManage={canManage} base={base} />
+    </div>
+  );
+}
+
+function Announcement({ data, canManage, base }: { data: Detail; canManage: boolean; base: string }) {
+  const [audience, setAudience] = useState("ALL");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [count, setCount] = useState<number | null>(null);
+  const [wait, setWait] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const refresh = useCallback(async () => {
+    const res = await fetch(`${base}/announce?audience=${audience}`, { cache: "no-store" });
+    if (res.ok) { const j = await res.json(); setCount(j.count); setWait(j.waitSeconds); }
+  }, [base, audience]);
+  useEffect(() => { const t = setTimeout(() => void refresh(), 0); return () => clearTimeout(t); }, [refresh]);
+
+  async function send() {
+    if (!confirm(`Send this message to ${count} ${count === 1 ? "person" : "people"} now? This can't be undone.`)) return;
+    setBusy(true);
+    setNote(null);
+    const res = await fetch(`${base}/announce`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ audience, subject, message }) });
+    const json = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) { setNote({ ok: true, text: `Sent to ${json.sent} ${json.sent === 1 ? "person" : "people"}${json.failed ? `; ${json.failed} could not be reached` : ""}.` }); setSubject(""); setMessage(""); void refresh(); }
+    else setNote({ ok: false, text: apiMessage(json, "Could not send.") });
+  }
+
+  return (
+    <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+      <div>
+        <h3 className="font-semibold">Message your bidders</h3>
+        <p className="text-sm text-slate-500">Send one email to everyone who registered, for example &ldquo;bidding opens tonight&rdquo; or &ldquo;one hour left.&rdquo; Each email has a button to the auction, and replies go to your organization.</p>
+      </div>
+      {data.auction.status === "DRAFT" && <p className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">Publish the auction before messaging bidders.</p>}
+      <label className="block text-sm font-medium">Who gets it
+        <select className={`${field} mt-1`} value={audience} onChange={(e) => setAudience(e.target.value)}>
+          <option value="ALL">Everyone who registered</option><option value="APPROVED">Only approved bidders</option><option value="WAITING">Only people waiting for approval</option>
+        </select>
+      </label>
+      <p className="text-sm text-slate-600">{count === null ? "…" : `${count} ${count === 1 ? "person" : "people"} will get it.`}</p>
+      <label className="block text-sm font-medium">Subject<input className={`${field} mt-1`} value={subject} onChange={(e) => setSubject(e.target.value)} /></label>
+      <label className="block text-sm font-medium">Message<textarea rows={4} className={`${field} mt-1`} value={message} onChange={(e) => setMessage(e.target.value)} /></label>
+      {canManage && <button disabled={busy || !count || !subject.trim() || !message.trim() || wait > 0 || data.auction.status === "DRAFT"} className={btn} onClick={() => void send()}>{busy ? "Sending…" : "Send message"}</button>}
+      {wait > 0 && <p className="text-xs text-slate-500">A message was just sent. You can send another in about {Math.ceil(wait / 60)} minute(s).</p>}
+      {note && <p className={`text-sm ${note.ok ? "text-emerald-700" : "text-red-600"}`}>{note.text}</p>}
+    </section>
   );
 }
