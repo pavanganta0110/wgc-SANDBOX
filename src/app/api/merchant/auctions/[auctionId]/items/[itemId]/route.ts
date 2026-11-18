@@ -16,7 +16,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   if (!auction) return auctionNotFound();
   const item = await prisma.auctionItem.findFirst({ where: { id: itemId, auctionId, churchId: auth.churchId } });
   if (!item) return NextResponse.json({ error: "Item not found." }, { status: 404 });
-  if (item.status !== "OPEN") return validationError("This item is closed and can't be edited.", 409);
+  // An item still waiting its turn in a live auction (UPCOMING) can be edited like an open one.
+  if (item.status !== "OPEN" && item.status !== "UPCOMING") return validationError("This item is closed and can't be edited.", 409);
 
   const parsed = validateItemInput({ ...item, ...(await req.json().catch(() => ({}))) });
   if (!parsed.ok) return validationError(parsed.error);
@@ -39,11 +40,12 @@ export async function DELETE(_req: Request, { params }: Ctx) {
   const item = await prisma.auctionItem.findFirst({ where: { id: itemId, auctionId, churchId: auth.churchId } });
   if (!item) return NextResponse.json({ error: "Item not found." }, { status: 404 });
 
-  if (item.bidCount === 0 && item.status === "OPEN") {
+  const notRunYet = item.status === "OPEN" || item.status === "UPCOMING";
+  if (item.bidCount === 0 && notRunYet) {
     await prisma.auctionItem.delete({ where: { id: item.id } });
     return NextResponse.json({ success: true, removed: true });
   }
-  if (item.status !== "OPEN") return validationError("A closed item can't be withdrawn.", 409);
+  if (!notRunYet) return validationError("A closed item can't be withdrawn.", 409);
   await prisma.auctionItem.update({ where: { id: item.id }, data: { status: "WITHDRAWN", closedAt: new Date() } });
   return NextResponse.json({ success: true, removed: false });
 }
