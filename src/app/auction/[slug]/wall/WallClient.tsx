@@ -38,7 +38,7 @@ export default function WallClient({ slug }: { slug: string }) {
       <div className="flex items-end justify-between gap-6">
         <div>
           <p className="text-amber-400 font-semibold tracking-widest text-sm">LIVE AUCTION</p>
-          <h1 className="text-5xl font-bold">{auction.title}</h1>
+          <h1 className="text-5xl font-bold" style={{ color: "#ffffff" }}>{auction.title}</h1>
         </div>
         <div className="text-right">
           <p className="text-slate-400 text-sm">Raised so far</p>
@@ -53,7 +53,7 @@ export default function WallClient({ slug }: { slug: string }) {
           {live.slice(0, 6).map((item) => (
             <div key={item.id} className="rounded-2xl bg-slate-900 border border-slate-800 p-5">
               <div className="flex justify-between text-slate-400"><span>Item {item.itemNumber}</span><span className="text-amber-300 font-semibold">{timeLeft(item.endsAt, t)}</span></div>
-              <h2 className="mt-1 text-2xl font-semibold">{item.title}</h2>
+              <h2 className="mt-1 text-2xl font-semibold" style={{ color: "#ffffff" }}>{item.title}</h2>
               <p className="mt-3 text-5xl font-extrabold">{formatMoney(item.currentBidCents ?? item.startingBidCents)}</p>
               <p className="mt-1 text-slate-400">{item.highBidderNumber ? `Bidder ${item.highBidderNumber} · ` : ""}{item.bidCount} {item.bidCount === 1 ? "bid" : "bids"}</p>
             </div>
