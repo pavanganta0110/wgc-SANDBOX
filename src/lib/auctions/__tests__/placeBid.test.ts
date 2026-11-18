@@ -5,6 +5,7 @@ const sendOutbidEmail = vi.hoisted(() => vi.fn().mockResolvedValue(true));
 vi.mock("../auctionEmails", () => ({ sendOutbidEmail }));
 
 const prismaMock = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const m: any = {
     auction: { findUnique: vi.fn() },
     auctionBidder: { findFirst: vi.fn(), findUnique: vi.fn() },

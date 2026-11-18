@@ -33,6 +33,7 @@ import {
   UploadCloud,
   MessageSquare,
   CalendarDays,
+  Gavel,
   PlusCircle,
   Layers,
   GraduationCap,
@@ -174,6 +175,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { name: "Fundraising Campaigns", href: "/merchant/campaigns", icon: Megaphone, section: "Giving", access: "canViewFundraisingCampaigns" },
   { name: "Events", href: "/merchant/events", icon: CalendarDays, section: "Giving", access: "canViewEvents" },
+  { name: "Auctions", href: "/merchant/auctions", icon: Gavel, section: "Giving", access: "canViewEvents" },
   { name: "Text to Give", href: "/merchant/text-to-give", icon: MessageSquare, section: "Giving" },
   { name: "Migration Center", href: "/merchant/migrations", icon: UploadCloud, organizationOnly: true, section: "Giving" },
   {

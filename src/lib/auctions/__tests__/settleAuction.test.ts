@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 vi.mock("../auctionEmails", () => ({ sendWinnerEmail: vi.fn().mockResolvedValue(true), sendNextBidderOfferEmail: vi.fn().mockResolvedValue(true) }));
 
 const prismaMock = vi.hoisted(() => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const m: any = {
     auction: { findUnique: vi.fn(), updateMany: vi.fn() },
     auctionItem: { findMany: vi.fn(), updateMany: vi.fn(), count: vi.fn(), update: vi.fn() },
