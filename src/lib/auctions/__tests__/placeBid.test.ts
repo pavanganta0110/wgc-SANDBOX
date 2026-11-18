@@ -87,6 +87,19 @@ describe("placeBid", () => {
     expect(prismaMock.auctionItem.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ endsAt: new Date("2026-11-20T18:05:00Z") }) }));
   });
 
+  it("in a live-room auction, a bid with more than 30 seconds left does not stretch the item to minutes", async () => {
+    prismaMock.auction.findUnique.mockResolvedValue({ ...auction, format: "LIVE" });
+    prismaMock.auctionItem.findFirst.mockResolvedValue(item({ endsAt: new Date("2026-11-20T18:02:00Z") })); // 2 minutes left
+    const result = await bid(5_000);
+    expect(result).toMatchObject({ ok: true, extended: false, endsAt: new Date("2026-11-20T18:02:00Z") });
+  });
+
+  it("in a live-room auction, a bid in the last 30 seconds adds 30 seconds", async () => {
+    prismaMock.auction.findUnique.mockResolvedValue({ ...auction, format: "LIVE" });
+    prismaMock.auctionItem.findFirst.mockResolvedValue(item({ endsAt: new Date("2026-11-20T18:00:10Z") }));
+    expect(await bid(5_000)).toMatchObject({ ok: true, extended: true, endsAt: new Date("2026-11-20T18:00:30Z") });
+  });
+
   it("emails the bidder who was outbid, after the bid is in", async () => {
     prismaMock.auctionItem.findFirst.mockResolvedValue(item({ currentBidCents: 6_000, highBidderId: "b2" }));
     prismaMock.auctionBidder.findUnique.mockResolvedValue({ id: "b2", email: "prev@x.com", name: "Prev" });

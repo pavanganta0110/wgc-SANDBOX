@@ -53,6 +53,16 @@ describe("extendedEndsAt (anti-sniping)", () => {
   });
 });
 
+describe("extendedEndsAt for a live-room item (seconds)", () => {
+  const live = { now, windowMinutes: 5, extendMinutes: 5, windowSeconds: 30, extendSeconds: 30 };
+  it("a bid in the last 30 seconds adds 30 seconds, not 5 minutes", () => {
+    expect(extendedEndsAt({ ...live, itemEndsAt: new Date("2026-11-20T18:00:20Z") })).toEqual(new Date("2026-11-20T18:00:30Z"));
+  });
+  it("a bid with more than 30 seconds left changes nothing, so a 2-minute item stays 2 minutes", () => {
+    expect(extendedEndsAt({ ...live, itemEndsAt: new Date("2026-11-20T18:01:30Z") })).toBeNull();
+  });
+});
+
 describe("splitWinnings (what is a gift on the receipt)", () => {
   it("only the amount above fair market value is charitable", () => {
     expect(splitWinnings([{ amountCents: 30_000, fairMarketValueCents: 20_000 }])).toEqual({ totalCents: 30_000, goodsServicesValueCents: 20_000, charitablePortionCents: 10_000 });

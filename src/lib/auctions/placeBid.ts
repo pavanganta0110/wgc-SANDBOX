@@ -49,7 +49,11 @@ export async function placeBid(params: PlaceBidParams): Promise<PlaceBidResult> 
     const check = checkBid({ auction, item, bidderId, amountCents, now });
     if (!check.ok) return { ok: false, reason: check.reason, minimumCents: check.minimumCents };
 
-    const newEndsAt = extendedEndsAt({ itemEndsAt: item.endsAt, now, windowMinutes: auction.autoExtendWindowMinutes, extendMinutes: auction.autoExtendMinutes });
+    // A live-room item only runs a minute or two, so its extension is in seconds: a bid in the last 30 seconds adds 30.
+    const newEndsAt = extendedEndsAt({
+      itemEndsAt: item.endsAt, now, windowMinutes: auction.autoExtendWindowMinutes, extendMinutes: auction.autoExtendMinutes,
+      ...(auction.format === "LIVE" ? { windowSeconds: 30, extendSeconds: 30 } : {}),
+    });
 
     try {
       const accepted = await prisma.$transaction(async (tx) => {

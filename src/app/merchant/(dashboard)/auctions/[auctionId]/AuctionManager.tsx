@@ -545,7 +545,7 @@ function SettingsTab({ data, canManage, busy, base, call }: TabProps) {
       <label className="text-sm font-medium flex items-center gap-2 mt-6"><input type="checkbox" checked={f.offerNextBidder} onChange={(e) => setF({ ...f, offerNextBidder: e.target.checked })} />Offer the item to the next bidder if the winner doesn&apos;t pay</label>
       <label className="text-sm font-medium">Auto-extend: last (minutes)<input disabled={locked} className={`${field} mt-1`} inputMode="numeric" value={f.autoExtendWindowMinutes} onChange={(e) => setF({ ...f, autoExtendWindowMinutes: e.target.value })} /></label>
       <label className="text-sm font-medium">Auto-extend: add (minutes)<input disabled={locked} className={`${field} mt-1`} inputMode="numeric" value={f.autoExtendMinutes} onChange={(e) => setF({ ...f, autoExtendMinutes: e.target.value })} /></label>
-      <p className="sm:col-span-2 text-xs text-slate-500">A bid in the last few minutes pushes that item&apos;s closing time out, so nobody wins by bidding in the last second. Set 0 to turn it off.</p>
+      <p className="sm:col-span-2 text-xs text-slate-500">For a silent auction, a bid in the last few minutes pushes that item&apos;s closing time out, so nobody wins by bidding in the last second. Set 0 to turn it off. In a live-room auction a bid in the last 30 seconds adds 30 seconds.</p>
       {canManage && a.status !== "SETTLED" && <div className="sm:col-span-2"><button disabled={busy} className={btn}>Save settings</button></div>}
     </form>
   );

@@ -44,15 +44,24 @@ export function checkBid(params: { auction: BiddableAuction; item: BiddableItem;
 }
 
 /**
- * Auto-extend: a bid inside the last `windowMinutes` of an item pushes its close to `extendMinutes` after the bid,
- * so nobody wins by bidding in the last seconds. Returns the new closing time, or null when nothing changes.
+ * Auto-extend: a bid inside the last stretch of an item pushes its close out, so nobody wins by bidding in the last
+ * seconds. Silent auctions use minutes (the organization's setting); a live-room item, which runs for only a minute or
+ * two, uses seconds ("a bid in the last 30 seconds adds 30"). Returns the new closing time, or null when nothing changes.
  */
-export function extendedEndsAt(params: { itemEndsAt: Date; now: Date; windowMinutes: number; extendMinutes: number }): Date | null {
-  const { itemEndsAt, now, windowMinutes, extendMinutes } = params;
-  if (windowMinutes <= 0 || extendMinutes <= 0) return null;
-  const remainingMs = itemEndsAt.getTime() - now.getTime();
-  if (remainingMs > windowMinutes * 60_000) return null;
-  const candidate = new Date(now.getTime() + extendMinutes * 60_000);
+export function extendedEndsAt(params: {
+  itemEndsAt: Date;
+  now: Date;
+  windowMinutes: number;
+  extendMinutes: number;
+  windowSeconds?: number;
+  extendSeconds?: number;
+}): Date | null {
+  const { itemEndsAt, now } = params;
+  const windowMs = params.windowSeconds !== undefined ? params.windowSeconds * 1000 : params.windowMinutes * 60_000;
+  const extendMs = params.extendSeconds !== undefined ? params.extendSeconds * 1000 : params.extendMinutes * 60_000;
+  if (windowMs <= 0 || extendMs <= 0) return null;
+  if (itemEndsAt.getTime() - now.getTime() > windowMs) return null;
+  const candidate = new Date(now.getTime() + extendMs);
   return candidate > itemEndsAt ? candidate : null;
 }
 
