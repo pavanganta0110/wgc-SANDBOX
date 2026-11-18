@@ -5,6 +5,7 @@ import {
   buildPaymentLedgerRow,
   type LedgerDonorSource,
   type LedgerExternalSource,
+  type LedgerFundraiser,
   type LedgerLookups,
   type LedgerPaymentSource,
   type LedgerRow,
@@ -27,6 +28,7 @@ const PAYMENT_SELECT = {
   id: true,
   churchId: true,
   donorId: true,
+  attributedUserId: true,
   createdAt: true,
   status: true,
   paymentMethodType: true,
@@ -108,8 +110,9 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
   const studentIds = [...new Set([...payments.map((p) => p.studentId), ...externals.map((e) => e.studentId)].filter((id): id is string => !!id))];
 
   const subscriptionIds = [...new Set(payments.map((p) => p.finixSubscriptionId).filter((id): id is string => !!id))];
+  const fundraiserIds = [...new Set(payments.map((p) => p.attributedUserId).filter((id): id is string => !!id))];
 
-  const [donorRows, refundRows, disputeRows, transferRows, studentRows, subscriptionRows] = await Promise.all([
+  const [donorRows, refundRows, disputeRows, transferRows, studentRows, subscriptionRows, fundraiserRows] = await Promise.all([
     Promise.all(chunk(donorIds, IN_CLAUSE_CHUNK).map((ids) => prisma.donor.findMany({ where: { churchId, id: { in: ids } }, select: DONOR_SELECT }))).then((r) => r.flat()),
     Promise.all(
       chunk(paymentIds, IN_CLAUSE_CHUNK).map((ids) =>
@@ -134,9 +137,12 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
         prisma.finixSubscription.findMany({ where: { churchId, finixSubscriptionId: { in: ids } }, select: { finixSubscriptionId: true, state: true, billingInterval: true, nextBillingDate: true } })
       )
     ).then((r) => r.flat()),
+    // Scoped to the organization(s) being read, so a gift can never name a user of another organization.
+    Promise.all(chunk(fundraiserIds, IN_CLAUSE_CHUNK).map((ids) => prisma.user.findMany({ where: { churchId, id: { in: ids } }, select: { id: true, email: true, name: true } }))).then((r) => r.flat()),
   ]);
 
   const donors = new Map<string, LedgerDonorSource>(donorRows.map((d) => [d.id, d]));
+  const fundraisers = new Map<string, LedgerFundraiser>(fundraiserRows.map((u) => [u.id, { id: u.id, email: u.email, name: u.name }]));
   const students = new Map<string, LedgerStudentSource>(studentRows.map((st) => [st.id, st]));
 
   const refundedCentsByPaymentId = new Map<string, number>();
@@ -159,7 +165,7 @@ async function loadLookups(churchScope: string | string[], payments: LedgerPayme
     subscriptionRows.map((sub) => [sub.finixSubscriptionId, { state: sub.state, billingInterval: sub.billingInterval, nextBillingDate: sub.nextBillingDate }])
   );
 
-  return { donors, students, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId, subscriptionsByFinixId };
+  return { donors, fundraisers, students, refundedCentsByPaymentId, disputeStateByPaymentId, transfersByFinixTransferId, subscriptionsByFinixId };
 }
 
 export interface LoadLedgerParams {

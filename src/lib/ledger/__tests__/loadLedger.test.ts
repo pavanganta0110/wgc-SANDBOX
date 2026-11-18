@@ -4,6 +4,7 @@ const mockPrisma = {
   payment: { findMany: vi.fn(), findFirst: vi.fn() },
   externalDonation: { findMany: vi.fn() },
   donor: { findMany: vi.fn() },
+  user: { findMany: vi.fn() },
   finixTransfer: { findMany: vi.fn() },
   finixRefundOrReversal: { findMany: vi.fn() },
   finixDispute: { findMany: vi.fn() },
@@ -33,6 +34,7 @@ function paymentRow(id: string, createdAt: string, overrides: Record<string, unk
     goodsServicesFairMarketValueCents: null,
     givingLinkId: null,
     receiptNumber: null,
+    attributedUserId: null,
     ...overrides,
   };
 }
@@ -139,6 +141,17 @@ describe("withLedgerRow", () => {
 
     expect(data).toMatchObject({ paymentId: "p1", donorId: "donor1", ledger: { id: "p1", designation: { fundId: "fund1" } } });
     expect(mockPrisma.payment.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "p1", churchId: "church-a" } }));
+  });
+
+  it("names the fundraiser a gift is attributed to, looking the user up only inside this church", async () => {
+    mockPrisma.payment.findFirst.mockResolvedValue(paymentRow("p1", "2026-02-01T00:00:00Z", { attributedUserId: "u1" }));
+    mockPrisma.user.findMany.mockResolvedValue([{ id: "u1", email: "sam@campus.org", name: null }]);
+    const { withLedgerRow } = await import("../loadLedger");
+
+    const data = await withLedgerRow("church-a", "p1", { paymentId: "p1" });
+
+    expect(data).toMatchObject({ ledger: { fundraiser: { id: "u1", email: "sam@campus.org", name: null } } });
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { churchId: "church-a", id: { in: ["u1"] } } }));
   });
 
   it("returns the base payload untouched when the payment isn't this church's", async () => {

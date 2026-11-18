@@ -180,6 +180,7 @@ Every gift in a date window in one call, for report runs and annual statements. 
 | `kind`, `method`, `cardBrand`, `externalMethod` | `one-time`/`recurring`; `card`/`ach`/`external` |
 | `status` | `SUCCEEDED`, or `RETURNED` for an ACH the bank sent back |
 | `designation` | `{ fundId, fundName, person }`. Recurring renewals carry the subscription's fund. `person` is the named individual the donor chose, `{ id, number, name, term, givenFor }` (`givenFor` is SPONSOR, SELF or GENERAL; `id` is null for a gift to the general pool), or `null` when the gift is not for a person. Cash and check gifts carry it too |
+| `fundraiser` | `{ id, email, name }` of the team member the gift is attributed to (the fundraiser whose giving link it came through), or `null` when it is not attributed to anyone. Always `null` for external (cash, check) gifts. `name` is null unless the team member has a display name |
 | `donor` | `{ id, name, firstName, lastName, salutation, email, phone, addressLine1/2, city, state, postalCode, country }`; first and last are a best-effort split of the single stored name; `salutation` is set when the giving page collected one, otherwise `null` |
 | `giftCents`, `feeCoveredCents`, `feeCoveredElected`, `chargedCents` | The gift before fee cover, what the donor added, whether they elected to, and the total charged |
 | `processingFeeCents`, `netCents` | What the processor took (null until reported) and net to the organization; `netCents` falls back to the expected net until the fee is known |

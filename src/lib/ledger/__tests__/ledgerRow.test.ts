@@ -37,6 +37,7 @@ function payment(overrides: Partial<LedgerPaymentSource> = {}): LedgerPaymentSou
   return {
     id: "pay1",
     donorId: "donor1",
+    attributedUserId: null,
     createdAt: new Date("2026-03-04T15:00:00Z"),
     status: "SUCCEEDED",
     paymentMethodType: "PAYMENT_CARD",
@@ -249,3 +250,22 @@ describe("the named person on a gift", () => {
   });
 });
 
+
+describe("the fundraiser a gift is attributed to", () => {
+  const team = new Map([["u1", { id: "u1", email: "sam@campus.org", name: "Sam Staff" }]]);
+
+  it("a gift attributed to a team member carries their id, email and name", () => {
+    const row = buildPaymentLedgerRow(payment({ attributedUserId: "u1" }), lookups({ fundraisers: team }));
+    expect(row.fundraiser).toEqual({ id: "u1", email: "sam@campus.org", name: "Sam Staff" });
+  });
+
+  it("a gift attributed to nobody, or to someone no longer found, has fundraiser null", () => {
+    expect(buildPaymentLedgerRow(payment({ attributedUserId: null }), lookups({ fundraisers: team })).fundraiser).toBeNull();
+    expect(buildPaymentLedgerRow(payment({ attributedUserId: "gone" }), lookups({ fundraisers: team })).fundraiser).toBeNull();
+    expect(buildPaymentLedgerRow(payment({ attributedUserId: "u1" }), lookups()).fundraiser).toBeNull();
+  });
+
+  it("an external (cash, check) gift never names a fundraiser", () => {
+    expect(buildExternalLedgerRow(external(), lookups({ fundraisers: team })).fundraiser).toBeNull();
+  });
+});

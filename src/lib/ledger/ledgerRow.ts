@@ -41,6 +41,18 @@ export interface LedgerPerson {
   givenFor: string | null;
 }
 
+/**
+ * The team member a gift is attributed to (the fundraiser whose giving link it came through), so a partner can
+ * show the gift only to that person. Null when the gift is not attributed to anyone, and always null for external
+ * (cash, check) gifts, which carry no attribution.
+ */
+export interface LedgerFundraiser {
+  id: string;
+  email: string;
+  /** The team member's display name when they have one; most merchant-side users do not. */
+  name: string | null;
+}
+
 export interface LedgerRow {
   /** Stable id: the Payment id for WGC gifts, the ExternalDonation id for external ones. */
   id: string;
@@ -56,6 +68,8 @@ export interface LedgerRow {
   /** The fund, and the named person when the donor chose one (null when the gift is not for a person). */
   designation: { fundId: string | null; fundName: string | null; person: LedgerPerson | null };
   donor: LedgerDonor | null;
+  /** The fundraiser the gift is attributed to, or null. */
+  fundraiser: LedgerFundraiser | null;
   /** The gift before any fee cover. */
   giftCents: number;
   /** What the donor added to cover fees. */
@@ -108,6 +122,7 @@ export interface LedgerDonorSource {
 export interface LedgerPaymentSource {
   id: string;
   donorId: string | null;
+  attributedUserId: string | null;
   createdAt: Date;
   status: string;
   paymentMethodType: string;
@@ -167,6 +182,8 @@ export interface LedgerLookups {
   /** The named people gifts are credited to, by id. */
   students: Map<string, LedgerStudentSource>;
   donors: Map<string, LedgerDonorSource>;
+  /** The team members gifts are attributed to, by user id. */
+  fundraisers?: Map<string, LedgerFundraiser>;
   /** Successful refund cents per original Payment id (failed/canceled refunds already excluded). */
   refundedCentsByPaymentId: Map<string, number>;
   /** State of the first dispute per Payment id. */
@@ -249,6 +266,7 @@ export function buildPaymentLedgerRow(payment: LedgerPaymentSource, lookups: Led
     status: payment.status,
     designation: { fundId: payment.fundId, fundName: payment.fundName, person: toLedgerPerson(payment, lookups.students) },
     donor: toLedgerDonor(payment.donorId ? lookups.donors.get(payment.donorId) : null),
+    fundraiser: payment.attributedUserId ? lookups.fundraisers?.get(payment.attributedUserId) ?? null : null,
     giftCents: payment.donationAmountCents ?? payment.amountCents,
     feeCoveredCents,
     feeCoveredElected: payment.donorCoversFee ?? feeCoveredCents > 0,
@@ -284,6 +302,7 @@ export function buildExternalLedgerRow(donation: LedgerExternalSource, lookups: 
     status: donation.status,
     designation: { fundId: donation.fundId, fundName: donation.fundName, person: toLedgerPerson(donation, lookups.students) },
     donor: toLedgerDonor(donation.donorId ? lookups.donors.get(donation.donorId) : null),
+    fundraiser: null,
     giftCents: donation.donationAmountCents,
     feeCoveredCents: donation.supplementalFeeCents,
     feeCoveredElected: donation.supplementalFeeCents > 0,
