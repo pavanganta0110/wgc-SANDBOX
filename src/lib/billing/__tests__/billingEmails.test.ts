@@ -95,3 +95,22 @@ describe("sendIdempotentBillingEmail", () => {
     expect(mockSendWgcEmail).not.toHaveBeenCalled();
   });
 });
+
+describe("sendSubscriptionActivationEmail wording", () => {
+  const input = { organizationId: "church-1", recipientEmail: "merchant@example.com", activationUrl: "https://example.com/activate/x" };
+  const bodyOfLastSend = () => String((mockSendWgcEmail.mock.calls.at(-1)?.[0] as { html?: string; bodyHtml?: string })?.html ?? JSON.stringify(mockSendWgcEmail.mock.calls.at(-1)?.[0]));
+
+  it("never names the payment processor to the merchant", async () => {
+    const { sendSubscriptionActivationEmail } = await load();
+    await sendSubscriptionActivationEmail({ ...input, organizationName: "Grace Church" });
+    expect(bodyOfLastSend()).toContain("has been approved.");
+    expect(bodyOfLastSend().toLowerCase()).not.toContain("finix");
+  });
+
+  it("greets with 'there' when the organization has no name yet", async () => {
+    const { sendSubscriptionActivationEmail } = await load();
+    await sendSubscriptionActivationEmail({ ...input, organizationName: "  " });
+    expect(bodyOfLastSend()).toContain("Hi there,");
+    expect(bodyOfLastSend()).not.toContain("Hi ,");
+  });
+});

@@ -116,8 +116,8 @@ export async function sendSubscriptionActivationEmail(params: {
     badgeText: "Approved",
     badgeColor: "#10B981",
     bodyHtml: `
-      <p>Hi ${params.organizationName},</p>
-      <p>Great news — your WGC Payments merchant account has been approved by Finix.</p>
+      <p>Hi ${params.organizationName?.trim() || "there"},</p>
+      <p>Great news — your WGC Payments merchant account has been approved.</p>
       <p>Before you can start processing, complete the last step: set up your WGC Platform subscription billing method.</p>
       <p><a href="${params.activationUrl}" style="display:inline-block;padding:12px 24px;background:#0B5DBC;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;">Activate Subscription</a></p>
       ${SUPPORT_LINK}
