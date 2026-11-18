@@ -347,7 +347,7 @@ function WebsiteTab({ data, auctionId }: { data: Detail; auctionId: string }) {
       <section>
         <h3 className="font-semibold">Live preview</h3>
         <p className="text-sm text-slate-500 mb-3">This is what visitors see, drawn from the auction as it is right now{a.status === "DRAFT" ? " (it is still a draft, so only you can see it)" : ""}. Change items or settings, then reopen this tab. Registering and bidding are turned off in the preview.</p>
-        <iframe key={a.status + data.items.length} src={`/merchant/auctions/${auctionId}/preview`} title="Auction preview" className="w-full rounded-xl border border-slate-200 bg-white" style={{ height: 720 }} />
+        <iframe key={a.status + data.items.length} src={`/merchant/auction-preview/${auctionId}`} title="Auction preview" className="w-full rounded-xl border border-slate-200 bg-white" style={{ height: 720 }} />
       </section>
 
       <section className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
