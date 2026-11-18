@@ -7169,3 +7169,182 @@ model HelpSearchLog {
   @@index([churchId, createdAt])
   @@index([matched, createdAt])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auctions (silent online, and live-room auctions run by staff).
+// No Prisma relations between these models, matching the rest of this schema:
+// plain string ids, with every query scoped by churchId. Money is always cents.
+// Apply prisma/manual/add_auctions.sql to a database before deploying.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Auction {
+  id       String @id @default(cuid())
+  churchId String
+  // Public URL part, global like an event slug: /auction/<slug>.
+  slug     String @unique
+
+  title       String
+  description String?
+  coverImageUrl String?
+  // DRAFT (not public) | OPEN (public; bidding allowed between startsAt and endsAt) | CLOSED (bidding over, winners
+  // being settled) | SETTLED (winners decided and invoiced). Never set from client input except through the
+  // publish / close routes.
+  status String @default("DRAFT")
+  // SILENT: online bidding to a closing time. LIVE: staff run the room and enter each bid; online bidders can
+  // also bid. Same bid list either way, so the highest bid wins wherever it came from.
+  format String @default("SILENT")
+
+  startsAt DateTime
+  endsAt   DateTime
+  // A bid placed within `autoExtendWindowMinutes` of an item's closing time pushes that item's close to
+  // `autoExtendMinutes` after the bid, so nobody wins by sniping in the last seconds. 0 turns it off.
+  autoExtendWindowMinutes Int @default(5)
+  autoExtendMinutes       Int @default(5)
+
+  // OPEN: any verified bidder may bid. APPROVAL: a verified registration is an application the organization approves.
+  registrationMode String @default("OPEN")
+
+  // After winning, the invoice is due this many hours later. An unpaid win is then offered to the next-highest
+  // bidder (when offerNextBidder is true) or marked forfeited.
+  paymentWindowHours Int     @default(72)
+  offerNextBidder    Boolean @default(true)
+
+  goalCents Int?
+  // Shown on the invoice and receipt: the organization's own wording for the goods the winner receives.
+  settledAt DateTime?
+
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([churchId, status])
+  @@index([status, endsAt])
+}
+
+model AuctionItem {
+  id        String @id @default(cuid())
+  churchId  String
+  auctionId String
+
+  // The number shown in the room and on the live wall ("Item 12").
+  itemNumber  Int
+  title       String
+  description String?
+  imageUrl    String?
+  sortOrder   Int     @default(0)
+
+  startingBidCents  Int
+  minIncrementCents Int  @default(500)
+  // Optional price at which a bidder can end the item at once.
+  buyNowCents       Int?
+  // What the item is worth to the winner. Only the amount above it is a charitable gift on the receipt.
+  fairMarketValueCents Int @default(0)
+
+  // Denormalized from the bids, updated in the same transaction as every accepted bid.
+  currentBidCents Int?
+  highBidderId    String?
+  bidCount        Int    @default(0)
+  // When this item stops taking bids. Starts as the auction's endsAt and moves later on auto-extend.
+  endsAt          DateTime
+
+  // OPEN | SOLD | UNSOLD | WITHDRAWN. Set by settlement, never by a client.
+  status         String    @default("OPEN")
+  closedAt       DateTime?
+  winnerBidderId String?
+  winningBidCents Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([auctionId, itemNumber])
+  @@index([churchId, auctionId])
+  @@index([auctionId, status])
+}
+
+model AuctionBidder {
+  id        String @id @default(cuid())
+  churchId  String
+  auctionId String
+
+  name            String
+  email           String
+  // Lowercased, trimmed. One registration per email per auction.
+  normalizedEmail String
+  phone           String?
+
+  // PENDING (waiting for the organization to approve, or for nothing yet) | APPROVED | DECLINED | BLOCKED.
+  status String @default("PENDING")
+  // Assigned when approved, unique within the auction. The "paddle number" shown in the room and on the wall.
+  bidderNumber Int?
+  emailVerifiedAt DateTime?
+
+  // One-time email code to prove the address is theirs. Only the hash is kept.
+  verifyCodeHash     String?
+  verifyCodeExpiresAt DateTime?
+  verifyAttempts     Int @default(0)
+  // The bidder's login for this auction (httpOnly cookie holds the raw token; only the hash is stored).
+  sessionTokenHash   String?
+
+  // Cross-references created when the bidder is approved, so the organization's donor list and invoices line up.
+  donorId  String?
+  clientId String?
+  // Staff-added bidders (at the event, no email verification) carry the user who added them.
+  addedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([auctionId, normalizedEmail])
+  @@unique([auctionId, bidderNumber])
+  @@index([churchId, auctionId, status])
+}
+
+model AuctionBid {
+  id        String @id @default(cuid())
+  churchId  String
+  auctionId String
+  itemId    String
+  bidderId  String
+
+  amountCents Int
+  // ONLINE (placed by the bidder) | ROOM (entered by staff from the live-control screen)
+  source String @default("ONLINE")
+  enteredByUserId String?
+
+  createdAt DateTime @default(now())
+
+  // Two bids of the same amount on one item cannot both be accepted: the database decides the race, the
+  // loser is told they were outbid. This is the guarantee, not a check-then-insert in code.
+  @@unique([itemId, amountCents])
+  @@index([auctionId, createdAt])
+  @@index([bidderId])
+}
+
+// One row per won item. Settlement creates these exactly once (unique on itemId).
+model AuctionWin {
+  id        String @id @default(cuid())
+  churchId  String
+  auctionId String
+  itemId    String @unique
+  bidderId  String
+  amountCents Int
+
+  // PENDING_PAYMENT | PAID | FORFEITED (not paid in time, nobody next in line) | OFFERED_NEXT (moved to the
+  // next-highest bidder, see supersededByWinId)
+  status String @default("PENDING_PAYMENT")
+  // The invoice that collects this win. Settlement claims a bidder's unclaimed wins with one atomic update
+  // (invoiceClaimedAt), so two runs at once create one invoice, never two.
+  invoiceId String?
+  invoiceClaimedAt DateTime?
+  dueAt     DateTime?
+  // Set when the bidder who first won did not pay in time and the item was offered onward.
+  offeredFromBidderId String?
+  paidAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([churchId, auctionId, status])
+  @@index([bidderId])
+  @@index([status, dueAt])
+}

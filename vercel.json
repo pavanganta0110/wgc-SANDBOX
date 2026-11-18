@@ -10,6 +10,10 @@
       "schedule": "0 14 * * *"
     },
     {
+      "path": "/api/cron/auction-sweep",
+      "schedule": "15 14 * * *"
+    },
+    {
       "path": "/api/cron/event-emails",
       "schedule": "30 14 * * *"
     },
