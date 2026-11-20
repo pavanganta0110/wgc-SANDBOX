@@ -8,17 +8,13 @@ import { sendWgcEmail } from "@/lib/email";
  * WGC support in the processing dashboard. Never touches money: it only reads
  * the refund and sends an email.
  */
-export async function sendRefundReceipt(
-  finixReversalId: string,
-  churchId: string,
-  actorUserId: string | null = null,
-  additionalRecipients: string[] = []
-): Promise<{ sentTo: string }> {
+/** Everything a refund receipt shows. Shared by the emailed receipt and the page merchants can view and print. */
+export async function loadRefundReceiptData(finixReversalId: string, churchId: string) {
   const refund = await prisma.finixRefundOrReversal.findFirst({ where: { finixReversalId, churchId } });
   if (!refund) throw new Error("Refund not found");
 
   const state = (refund.state || "").toUpperCase();
-  if (state === "FAILED" || state === "CANCELED") throw new Error("This refund did not go through, so there is no receipt to send.");
+  if (state === "FAILED" || state === "CANCELED") throw new Error("This refund did not go through, so there is no receipt.");
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   if (!church) throw new Error("Organization not found");
@@ -35,23 +31,39 @@ export async function sendRefundReceipt(
   const donorId = payment?.donorId ?? instrument?.donorId ?? null;
   const donor = donorId ? await prisma.donor.findUnique({ where: { id: donorId } }) : null;
 
-  const extra = additionalRecipients.map((e) => e.trim()).filter(Boolean);
-  const donorEmail = donor?.email || null;
-  if (!donorEmail && extra.length === 0) throw new Error("This donor has no email address on file. Enter one to send the receipt.");
-  const toEmail = donorEmail ?? extra[0];
-  const ccEmails = donorEmail ? extra : extra.slice(1);
+  return {
+    state,
+    church,
+    donorId,
+    donorEmail: donor?.email || null,
+    donorName: donor?.name?.trim() || instrument?.accountHolderName?.trim() || "there",
+    orgName: church.statementSenderName || church.name,
+    refundCents: refund.amountCents ?? 0,
+    originalCents: transfer?.amountCents ?? null,
+    method: instrument?.cardBrand
+      ? `${instrument.cardBrand} ending in ${instrument.cardLast4 ?? "----"}`
+      : instrument?.bankLast4
+        ? `bank account ending in ${instrument.bankLast4}`
+        : "the original payment method",
+    refundDate: (refund.createdAtFinix ?? new Date()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" }),
+    reference: refund.finixReversalId.slice(-8).toUpperCase(),
+    reversalId: refund.finixReversalId,
+  };
+}
 
-  const orgName = church.statementSenderName || church.name;
-  const donorName = donor?.name?.trim() || instrument?.accountHolderName?.trim() || "there";
-  const refundCents = refund.amountCents ?? 0;
-  const originalCents = transfer?.amountCents ?? null;
-  const method = instrument?.cardBrand
-    ? `${instrument.cardBrand} ending in ${instrument.cardLast4 ?? "----"}`
-    : instrument?.bankLast4
-      ? `bank account ending in ${instrument.bankLast4}`
-      : "the original payment method";
-  const refundDate = (refund.createdAtFinix ?? new Date()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
-  const reference = refund.finixReversalId.slice(-8).toUpperCase();
+export async function sendRefundReceipt(
+  finixReversalId: string,
+  churchId: string,
+  actorUserId: string | null = null,
+  additionalRecipients: string[] = []
+): Promise<{ sentTo: string }> {
+  const d = await loadRefundReceiptData(finixReversalId, churchId);
+  const { state, church, donorId, donorName, orgName, refundCents, originalCents, method, refundDate, reference } = d;
+
+  const extra = additionalRecipients.map((e) => e.trim()).filter(Boolean);
+  if (!d.donorEmail && extra.length === 0) throw new Error("This donor has no email address on file. Enter one to send the receipt.");
+  const toEmail = d.donorEmail ?? extra[0];
+  const ccEmails = d.donorEmail ? extra : extra.slice(1);
 
   const lines: string[] = [];
   lines.push(`<p>Hi ${donorName},</p>`);
@@ -81,7 +93,7 @@ export async function sendRefundReceipt(
       recipientName: donorName,
       category: "OTHER",
       relatedEntityType: "Refund",
-      relatedEntityId: refund.finixReversalId,
+      relatedEntityId: d.reversalId,
       createdByUserId: actorUserId,
     },
   });

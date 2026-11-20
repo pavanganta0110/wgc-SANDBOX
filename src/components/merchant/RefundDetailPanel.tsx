@@ -125,11 +125,11 @@ export default async function RefundDetailPanel({
         </div>
       </div>
 
-      {canSendReceipt && state !== "FAILED" && (
+      {state !== "FAILED" && (
         <div className="px-5 py-4 border-b border-slate-100">
           <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Refund Receipt</h4>
-          <p className="text-xs text-slate-500 mb-2">{pw("Send the donor an email confirming this refund.")}</p>
-          <RefundReceiptActions refundId={refund.finixReversalId} defaultEmail={donor?.email || ""} />
+          <p className="text-xs text-slate-500 mb-2">{pw(`View or print the receipt${canSendReceipt ? ", or send the donor an email confirming this refund" : ""}.`)}</p>
+          <RefundReceiptActions refundId={refund.finixReversalId} defaultEmail={donor?.email || ""} canEmail={canSendReceipt} />
         </div>
       )}
 

@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Mail } from "lucide-react";
+import { Mail, FileText } from "lucide-react";
 import toast from "react-hot-toast";
 
 /** Email the donor a refund confirmation. The donor's email is filled in when we have it; staff can type another. */
-export default function RefundReceiptActions({ refundId, defaultEmail = "" }: { refundId: string; defaultEmail?: string }) {
+export default function RefundReceiptActions({ refundId, defaultEmail = "", canEmail = true }: { refundId: string; defaultEmail?: string; canEmail?: boolean }) {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState(defaultEmail);
   const [sending, setSending] = useState(false);
@@ -36,14 +36,26 @@ export default function RefundReceiptActions({ refundId, defaultEmail = "" }: { 
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-      >
-        <Mail className="w-4 h-4" /> Email refund receipt
-      </button>
-      {open && (
+      <div className="flex flex-wrap gap-2">
+        <a
+          href={`/api/merchant/transactions/refunds/${refundId}/receipt-view`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          <FileText className="w-4 h-4" /> View / print receipt
+        </a>
+        {canEmail && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Mail className="w-4 h-4" /> Email refund receipt
+          </button>
+        )}
+      </div>
+      {canEmail && open && (
         <div className="flex gap-2">
           <input
             type="email"
