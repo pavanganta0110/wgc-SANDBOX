@@ -25,11 +25,14 @@ export default async function DonationAttemptsTable({
   churchId,
   searchParams,
   givingLinkId,
+  attributedUserId,
   exportHrefBase = "/api/merchant/giving-links/attempts/export",
 }: {
   churchId: string;
   searchParams: Record<string, string | undefined>;
   givingLinkId?: string;
+  /** Limit to attempts attributed to this team member (fundraisers). */
+  attributedUserId?: string;
   exportHrefBase?: string;
 }) {
   const { pw } = await getPaymentWording();
@@ -37,7 +40,7 @@ export default async function DonationAttemptsTable({
   const { from: startDate, to: endDate } = resolveDateRange(range, from, to);
   const dateFilter = startDate ? { gte: startDate, ...(endDate ? { lte: endDate } : {}) } : undefined;
 
-  const allRows = await loadGivingLinkAttempts(churchId, { givingLinkId, dateFilter, take: 300 });
+  const allRows = await loadGivingLinkAttempts(churchId, { givingLinkId, dateFilter, take: 300, attributedUserId });
 
   const rows = allRows.filter(({ payment, transfer, instrument, donor, givingLink }) => {
     const displayState = (payment.status === "RETURNED" ? "RETURNED" : transfer?.state || payment.status || "").toUpperCase();

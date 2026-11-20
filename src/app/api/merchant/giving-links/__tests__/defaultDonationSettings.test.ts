@@ -5,9 +5,10 @@ vi.mock("@/lib/auth/requireMerchantSession", () => ({ requireMerchantSession: ()
 vi.mock("@/lib/auth/givingLinkOwnership", () => ({
   resolveGivingLinkOwnerForCreate: vi.fn().mockResolvedValue("user-1"),
   validateGivingLinkReassignment: vi.fn().mockResolvedValue(undefined),
+  assertCanEditGivingLink: vi.fn(),
 }));
 vi.mock("@/lib/auth/viewScope", () => ({ resolveViewScope: vi.fn().mockResolvedValue({}) }));
-vi.mock("@/lib/auth/scopes", () => ({ buildGivingLinkScope: vi.fn().mockReturnValue({}) }));
+vi.mock("@/lib/auth/scopes", () => ({ buildGivingLinkScope: vi.fn().mockReturnValue({}), buildGivingLinkListScope: vi.fn().mockReturnValue({}) }));
 vi.mock("@/lib/dashboardAudit", () => ({ logDashboardAction: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 

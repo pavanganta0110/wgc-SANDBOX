@@ -97,7 +97,10 @@ describe('Branding Settings for Giving Links', () => {
     vi.mocked(requireMerchantSession).mockResolvedValue({
       userId: 'user-123',
       churchId: 'church-123',
-      role: 'church_admin',
+      role: 'admin',
+      rawRole: 'church_admin',
+      isWgcAdmin: false,
+      permissionsJson: null,
       email: 'admin@example.com',
       sessionSource: 'cookie',
       activeScope: { type: 'ENTIRE_ORGANIZATION', scopeKey: 'ENTIRE_ORGANIZATION', churchId: 'church-123', label: 'Entire Organization' },

@@ -7,9 +7,8 @@ import GivingLinksTable from "@/components/merchant/GivingLinksTable";
 import DonationAttemptsTable from "@/components/merchant/DonationAttemptsTable";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildGivingLinkScope } from "@/lib/auth/scopes";
+import { buildGivingLinkListScope, resolveGivingLinkListUserId } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
-import { hasPermission } from "@/lib/auth/permissions";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingLinksPage({
@@ -33,16 +32,11 @@ export default async function GivingLinksPage({
   // buildGivingLinkScope regardless of the ?owner= param — the "All Links /
   // My Links / Team Member" filter below is only meaningful for OWNER/ADMIN.
   const viewScope = await resolveViewScope(auth);
-  // "View as <teammate>" is an explicit request to see that person's links, so it
-  // keeps the scoped view (and the owner filter is off, otherwise it would override it).
-  const viewingAsUser = viewScope.effective.kind === "user";
-  const canFilterByOwner = (auth.role === "owner" || auth.role === "admin") && !viewingAsUser;
-  // Otherwise OWNER/ADMIN see every link in the organization: a leftover
-  // "My Activity" cookie must not hide teammates' links.
-  const baseScope =
-    canFilterByOwner && hasPermission(auth, "canViewAllTransactions")
-      ? { churchId }
-      : buildGivingLinkScope(auth, viewScope);
+  // OWNER/ADMIN see every link in the organization (unless viewing as one teammate);
+  // everyone else is limited to links they own.
+  const listUserId = resolveGivingLinkListUserId(auth, viewScope);
+  const baseScope = buildGivingLinkListScope(auth, viewScope);
+  const canFilterByOwner = (auth.role === "owner" || auth.role === "admin") && listUserId === null;
   const ownerFilterOptions = canFilterByOwner
     ? await prisma.user.findMany({
         where: { churchId, role: { in: ["owner", "admin", "fundraiser", "viewer", "church_admin"] } },
@@ -76,7 +70,7 @@ export default async function GivingLinksPage({
           currentUserId={auth.userId}
         />
       ) : (
-        <DonationAttemptsTable churchId={churchId} searchParams={sp} />
+        <DonationAttemptsTable churchId={churchId} searchParams={sp} attributedUserId={listUserId ?? undefined} />
       )}
     </div>
   );

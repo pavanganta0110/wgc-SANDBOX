@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { hasPermission } from "@/lib/auth/permissions";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildFinixTransferScope } from "@/lib/auth/scopes";
 import { formatCents } from "@/lib/format";
@@ -121,6 +122,7 @@ export default async function PaymentFullDetailPage({
   const contactName = donor?.name || invoiceClient?.displayName || null;
   const contactEmail = donor?.email || invoiceClient?.email || null;
   const contactPhone = donor?.phone || invoiceClient?.phone || null;
+  const canSeeSettlementAmounts = hasPermission(auth, "canViewSettlements");
   const settlement = transfer.finixSettlementId
     ? await prisma.finixSettlement.findUnique({ where: { finixSettlementId: transfer.finixSettlementId } })
     : null;
@@ -147,7 +149,8 @@ export default async function PaymentFullDetailPage({
     // choice, not a real "added at" time.
     flowEvents.push({
       label: `Payment Added to ${settlementStateLabel(settlement.state)} Settlement`,
-      sublabel: `Part of ${formatCents(settlement.totalAmountCents ?? 0)} USD Settlement`,
+      // The batch total mixes everyone's payments; only people who can see settlements get it.
+      sublabel: canSeeSettlementAmounts ? `Part of ${formatCents(settlement.totalAmountCents ?? 0)} USD Settlement` : undefined,
       date: transfer.createdAtFinix,
     });
   }
@@ -351,7 +354,7 @@ export default async function PaymentFullDetailPage({
                     </p>
                   )}
 
-                  {settlement && settlement.netAmountCents != null && (
+                  {canSeeSettlementAmounts && settlement && settlement.netAmountCents != null && (
                     <p className="text-[11px] text-slate-500 pt-2 mt-1 border-t border-slate-100">
                       This net is an estimate based on this transaction&apos;s own processing fee. The settlement it
                       belongs to may include additional settlement-level fees (e.g. a funding/payout fee) not reflected

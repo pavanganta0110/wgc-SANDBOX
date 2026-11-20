@@ -785,3 +785,51 @@ export async function getExternalDonationsTotal(
   });
   return { totalCents: agg._sum.donationAmountCents ?? 0, count: agg._count._all };
 }
+
+/**
+ * Payout status of ONLY this team member's own payments. A deposit bundles
+ * payments from many people, so org-wide deposit totals would let a fundraiser
+ * work out what everyone else brings in; scoped users see their own payments'
+ * settlement status instead, tied to the giving links they own.
+ */
+export async function getScopedDepositsInsights(
+  churchId: string,
+  dateFilter: { gte: Date; lte?: Date } | undefined,
+  attributedUserId: string
+) {
+  const ids = (await resolveScopedTransferIds(churchId, attributedUserId)) ?? [];
+  const transfers = ids.length
+    ? await prisma.finixTransfer.findMany({
+        where: {
+          churchId,
+          finixTransferId: { in: ids },
+          state: { equals: "SUCCEEDED", mode: "insensitive" },
+          ...EXCLUDE_NON_DONATION_TRANSFERS,
+          ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+        },
+        select: { finixSettlementId: true, amountCents: true },
+      })
+    : [];
+  const settlementIds = [...new Set(transfers.map((t) => t.finixSettlementId).filter((x): x is string => !!x))];
+  const settlements = settlementIds.length
+    ? await prisma.finixSettlement.findMany({ where: { finixSettlementId: { in: settlementIds } }, select: { finixSettlementId: true, state: true } })
+    : [];
+  const stateById = new Map(settlements.map((st) => [st.finixSettlementId, (st.state || "").toUpperCase()]));
+
+  let paidOut = 0, pending = 0, awaiting = 0, paidOutCount = 0, pendingCount = 0, awaitingCount = 0;
+  for (const t of transfers) {
+    const amount = t.amountCents ?? 0;
+    const st = t.finixSettlementId ? stateById.get(t.finixSettlementId) : undefined;
+    if (st === "SETTLED") { paidOut += amount; paidOutCount++; }
+    else if (st === "PENDING") { pending += amount; pendingCount++; }
+    else { awaiting += amount; awaitingCount++; }
+  }
+  const total = paidOut + pending + awaiting;
+  const summary = [
+    { label: "Your Payments (Gross)", value: `${formatCents(total)} (${transfers.length})` },
+    { label: "Paid Out (Settled)", value: `${formatCents(paidOut)} (${paidOutCount})` },
+    { label: "Pending Payout", value: `${formatCents(pending)} (${pendingCount})` },
+    { label: "Awaiting Settlement", value: `${formatCents(awaiting)} (${awaitingCount})` },
+  ];
+  return { summary, hasData: transfers.length > 0 };
+}

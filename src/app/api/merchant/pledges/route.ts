@@ -27,6 +27,8 @@ export async function GET(req: Request) {
     pledgeCampaignId: searchParams.get("campaignId") || undefined,
     donorId: searchParams.get("donorId") || undefined,
     status: searchParams.get("status") || undefined,
+    // A fundraiser only sees pledges they recorded.
+    attributedUserId: auth.role === "fundraiser" ? auth.userId : undefined,
   });
   return NextResponse.json({ pledges });
 }

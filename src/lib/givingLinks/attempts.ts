@@ -8,12 +8,13 @@ import { prisma } from "@/lib/prisma";
  */
 export async function loadGivingLinkAttempts(
   churchId: string,
-  opts: { givingLinkId?: string; dateFilter?: { gte: Date; lte?: Date }; take?: number } = {}
+  opts: { givingLinkId?: string; dateFilter?: { gte: Date; lte?: Date }; take?: number; attributedUserId?: string } = {}
 ) {
   const payments = await prisma.payment.findMany({
     where: {
       churchId,
       givingLinkId: opts.givingLinkId ? opts.givingLinkId : { not: null },
+      ...(opts.attributedUserId ? { attributedUserId: opts.attributedUserId } : {}),
       ...(opts.dateFilter ? { createdAt: opts.dateFilter } : {}),
     },
     orderBy: { createdAt: "desc" },

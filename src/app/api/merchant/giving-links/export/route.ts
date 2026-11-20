@@ -4,8 +4,7 @@ import { formatCents } from "@/lib/format";
 import { resolveGivingLinkStatus } from "@/lib/givingLinks/status";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildGivingLinkScope } from "@/lib/auth/scopes";
-import { hasPermission } from "@/lib/auth/permissions";
+import { buildGivingLinkListScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 
 function csvEscape(value: string) {
@@ -32,11 +31,7 @@ export async function GET() {
     throw err;
   }
   const viewScope = await resolveViewScope(auth);
-  // Same rule as the Giving Links page: OWNER/ADMIN export the whole organization.
-  const scope =
-    (auth.role === "owner" || auth.role === "admin") && viewScope.effective.kind !== "user" && hasPermission(auth, "canViewAllTransactions")
-      ? { churchId: auth.churchId }
-      : buildGivingLinkScope(auth, viewScope);
+  const scope = buildGivingLinkListScope(auth, viewScope);
 
   const links = await prisma.givingLink.findMany({
     where: scope,

@@ -87,3 +87,15 @@ export async function validateGivingLinkReassignment(
 
   await assertActiveUserInChurch(newOwnerUserId, auth.churchId, "Cannot reassign giving link");
 }
+
+/**
+ * Who may change or share an existing giving link: OWNER always, ADMIN (and
+ * anyone granted canEditAllGivingLinks), or a user with canEditOwnGivingLinks
+ * on a link they own. Viewers and other people's links are refused, so the API
+ * can't be used to bypass what the UI hides.
+ */
+export function assertCanEditGivingLink(auth: MerchantAuthContext, link: { ownerUserId: string | null }): void {
+  if (auth.role === "owner" || hasPermission(auth, "canEditAllGivingLinks")) return;
+  if (hasPermission(auth, "canEditOwnGivingLinks") && link.ownerUserId === auth.userId) return;
+  throw new ForbiddenError("You don't have permission to change this giving link.");
+}

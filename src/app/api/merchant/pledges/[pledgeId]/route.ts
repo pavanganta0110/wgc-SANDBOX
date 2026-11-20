@@ -22,7 +22,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ pledgeI
   }
 
   const { pledgeId } = await params;
-  const pledge = await prisma.pledge.findFirst({ where: { id: pledgeId, churchId: auth.churchId } });
+  // A fundraiser can only open pledges they recorded themselves.
+  const pledge = await prisma.pledge.findFirst({ where: { id: pledgeId, churchId: auth.churchId, ...(auth.role === "fundraiser" ? { attributedUserId: auth.userId } : {}) } });
   if (!pledge) return toSafeErrorResponse("Pledge not found", 404);
 
   const [externalDonations, payments] = await Promise.all([
@@ -49,7 +50,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ pledge
   }
 
   const { pledgeId } = await params;
-  const existing = await prisma.pledge.findFirst({ where: { id: pledgeId, churchId: auth.churchId } });
+  const existing = await prisma.pledge.findFirst({ where: { id: pledgeId, churchId: auth.churchId, ...(auth.role === "fundraiser" ? { attributedUserId: auth.userId } : {}) } });
   if (!existing) return toSafeErrorResponse("Pledge not found", 404);
 
   const body = await req.json().catch(() => ({}));

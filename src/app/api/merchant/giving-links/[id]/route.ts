@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isValidReturnUrl } from "@/lib/givingLinks/validation";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
-import { validateGivingLinkReassignment } from "@/lib/auth/givingLinkOwnership";
+import { assertCanEditGivingLink, validateGivingLinkReassignment } from "@/lib/auth/givingLinkOwnership";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { buildGivingLinkScope } from "@/lib/auth/scopes";
+import { buildGivingLinkListScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   // another user's link ID must get the same 404 as a nonexistent one, not
   // a 200 with data the list would never have shown them (test 2/9).
   const viewScope = await resolveViewScope(auth);
-  const scope = buildGivingLinkScope(auth, viewScope);
+  const scope = buildGivingLinkListScope(auth, viewScope);
   const link = await prisma.givingLink.findFirst({ where: { id, ...scope } });
   if (!link) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
 
@@ -50,6 +50,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const existing = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!existing) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
   const addressRuleChurch = await prisma.church.findUnique({ where: { id: auth.churchId }, select: { requireDonorAddress: true } });
+  try {
+    assertCanEditGivingLink(auth, existing);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   const body = await req.json();
   const {

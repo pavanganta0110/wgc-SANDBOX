@@ -4,6 +4,8 @@ import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
 import { isAuthError } from "@/lib/auth/errors";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { resolveScopedDonorIds, resolveScopedUserId } from "@/lib/auth/scopes";
 import { formatDateCDT } from "@/lib/formatDateTimeCDT";
 import { prisma } from "@/lib/prisma";
 import { loadPledgesList } from "@/lib/pledges/loadPledgesList";
@@ -34,13 +36,17 @@ export default async function PledgesPage({ searchParams }: { searchParams: Prom
   const canRecordFulfillment = hasPermission(auth, "canRecordPledgeFulfillment");
 
   const { status } = await searchParams;
+  // A fundraiser sees only the pledges they recorded and only their own donors in the picker.
+  const viewScope = await resolveViewScope(auth);
+  const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
   const [pledges, campaigns, donors] = await Promise.all([
-    loadPledgesList(auth.churchId, { status }),
+    loadPledgesList(auth.churchId, { status, attributedUserId: scopedUserId }),
     canCreatePledge
       ? prisma.pledgeCampaign.findMany({ where: { churchId: auth.churchId, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { createdAt: "desc" } })
       : Promise.resolve([]),
     canCreatePledge
-      ? prisma.donor.findMany({ where: { churchId: auth.churchId, archivedAt: null }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 500 })
+      ? prisma.donor.findMany({ where: { churchId: auth.churchId, archivedAt: null, ...(scopedDonorIds ? { id: { in: scopedDonorIds } } : {}) }, select: { id: true, name: true, email: true }, orderBy: { name: "asc" }, take: 500 })
       : Promise.resolve([]),
   ]);
   const unmatched = pledges.filter((p) => p.donorMatchStatus === "UNMATCHED");

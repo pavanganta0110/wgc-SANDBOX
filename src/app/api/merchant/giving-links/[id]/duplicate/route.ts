@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { assertCanEditGivingLink } from "@/lib/auth/givingLinkOwnership";
 import { prisma } from "@/lib/prisma";
 import { generatePublicSlug } from "@/lib/givingLinks/validation";
 
@@ -16,6 +17,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const source = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!source) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
+  try {
+    assertCanEditGivingLink(auth, source);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   let publicSlug = generatePublicSlug();
   for (let attempt = 0; attempt < 5; attempt++) {

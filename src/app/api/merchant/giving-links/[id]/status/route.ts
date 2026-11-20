@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
+import { assertCanEditGivingLink } from "@/lib/auth/givingLinkOwnership";
 import { prisma } from "@/lib/prisma";
 
 const ALLOWED = new Set(["ACTIVE", "INACTIVE", "ARCHIVED"]);
@@ -22,6 +23,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const existing = await prisma.givingLink.findFirst({ where: { id, churchId: auth.churchId } });
   if (!existing) return NextResponse.json({ error: "Giving link not found" }, { status: 404 });
+  try {
+    assertCanEditGivingLink(auth, existing);
+  } catch (err) {
+    if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
+    throw err;
+  }
 
   const link = await prisma.givingLink.update({ where: { id }, data: { status } });
   return NextResponse.json({ link });

@@ -19,6 +19,7 @@ import {
   getDisputesInsights,
   getBankReturnsInsights,
   getDepositsInsights,
+  getScopedDepositsInsights,
   getExternalDonationsInsights,
   getExternalDonationsTotal,
   getPayerFeeBreakdown,
@@ -670,15 +671,21 @@ async function DepositsTab({
   trend: string;
   scopedUserId?: string;
 }) {
+  if (scopedUserId) {
+    const scoped = await getScopedDepositsInsights(churchId, dateFilter, scopedUserId);
+    return (
+      <>
+        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
+          Deposits combine payments from the whole organization, so they aren&apos;t shown here. These figures cover only the payments made through your own giving links.
+        </div>
+        <SummaryCards items={scoped.summary} />
+      </>
+    );
+  }
   const { summary, trendData, countTrendData, hasData } = await getDepositsInsights(churchId, dateFilter, trend);
 
   return (
     <>
-      {scopedUserId && (
-        <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-3 text-sm text-amber-800">
-          Deposits bundle transactions from the entire organization and can&apos;t be broken down by team member — showing organization-wide totals.
-        </div>
-      )}
       <SummaryCards items={summary} />
 
       <div className="flex items-center justify-between">

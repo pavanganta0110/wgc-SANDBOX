@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { getSession } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
+import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
+import { isAuthError } from "@/lib/auth/errors";
+import { resolveViewScope } from "@/lib/auth/viewScope";
+import { buildGivingLinkListScope } from "@/lib/auth/scopes";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { resolveGivingLinkStatus } from "@/lib/givingLinks/status";
@@ -30,13 +34,21 @@ export default async function GivingLinkDetailPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { pw } = await getPaymentWording();
-  const session = await getSession();
-  const churchId = session!.churchId!;
+  let auth;
+  try {
+    auth = await requireMerchantSession();
+  } catch (err) {
+    if (isAuthError(err)) redirect("/merchant/login");
+    throw err;
+  }
+  const churchId = auth.churchId;
   const { id } = await params;
   const sp = await searchParams;
   const tab = sp.tab === "attempts" || sp.tab === "sharing" || sp.tab === "merchandise" ? sp.tab : "overview";
 
-  const link = await prisma.givingLink.findFirst({ where: { id, churchId } });
+  // Same visibility as the list: a fundraiser can only open links they own.
+  const viewScope = await resolveViewScope(auth);
+  const link = await prisma.givingLink.findFirst({ where: { id, ...buildGivingLinkListScope(auth, viewScope) } });
   if (!link) notFound();
 
   const status = resolveGivingLinkStatus(link);

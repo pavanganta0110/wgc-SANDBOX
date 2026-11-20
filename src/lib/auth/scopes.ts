@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { MerchantAuthContext } from "./requireMerchantSession";
+import { hasPermission } from "./permissions";
 import type { ResolvedViewScope, ViewScope } from "./viewScope";
 
 /**
@@ -82,6 +83,28 @@ export function buildGivingLinkScope(
     return { churchId: auth.churchId, ownerUserId: userId };
   }
   return { churchId: auth.churchId };
+}
+
+/**
+ * Whose giving links a list/detail/export may show: null = every link in the
+ * organization. OWNER/ADMIN (with canViewAllTransactions) get the whole
+ * organization unless they explicitly "view as" one teammate; everyone else
+ * (fundraisers) is limited to links they own.
+ */
+export function resolveGivingLinkListUserId(auth: MerchantAuthContext, viewScope: ViewScope | ResolvedViewScope): string | null {
+  const scope = "effective" in viewScope ? viewScope.effective : viewScope;
+  if ((auth.role === "owner" || auth.role === "admin") && scope.kind !== "user" && hasPermission(auth, "canViewAllTransactions")) {
+    return null;
+  }
+  return resolveScopedUserId(auth, viewScope);
+}
+
+export function buildGivingLinkListScope(
+  auth: MerchantAuthContext,
+  viewScope: ViewScope | ResolvedViewScope
+): Prisma.GivingLinkWhereInput {
+  const userId = resolveGivingLinkListUserId(auth, viewScope);
+  return userId ? { churchId: auth.churchId, ownerUserId: userId } : { churchId: auth.churchId };
 }
 
 export function buildPaymentScope(
