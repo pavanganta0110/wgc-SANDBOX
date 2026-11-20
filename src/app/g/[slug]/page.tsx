@@ -1,3 +1,4 @@
+import { publicOrgName } from "@/lib/settings/orgDisplayName";
 import { notFound } from "next/navigation";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import MerchandiseGivingExperience from "@/components/giving/MerchandiseGivingExperience";
@@ -34,7 +35,7 @@ export default async function GivingLinkPublicPage({
             {data.message}
           </h1>
           <p className="text-sm" style={{ color: light.bodyTextColor }}>
-            Please contact {church.name} for another way to give.
+            Please contact {publicOrgName(church)} for another way to give.
           </p>
         </div>
       </div>
@@ -55,7 +56,7 @@ export default async function GivingLinkPublicPage({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branding.campaignImageUrl} alt="" className="w-full h-32 object-cover rounded-xl mb-6" />
         )}
-        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} nameColor={light.headingColor} kindColor={light.bodyTextColor} />
+        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={publicOrgName(church)} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} nameColor={light.headingColor} kindColor={light.bodyTextColor} />
         <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
           {link.publicTitle}
         </h1>
@@ -74,7 +75,7 @@ export default async function GivingLinkPublicPage({
           <MerchandiseGivingExperience
             slug={slug}
             finixMerchantId={church.finixMerchantId!}
-            churchName={church.name}
+            churchName={publicOrgName(church)}
             allowedPaymentMethods={allowedPaymentMethods}
             googlePayGatewayMerchantId={googlePayGatewayMerchantId}
             googlePayMerchantId={googlePayMerchantId}
@@ -87,7 +88,7 @@ export default async function GivingLinkPublicPage({
           <GivingLinkForm
             slug={slug}
             finixMerchantId={church.finixMerchantId!}
-            churchName={church.name}
+            churchName={publicOrgName(church)}
             light={light}
             amountType={link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY"}
             fixedAmountCents={link.fixedAmountCents}

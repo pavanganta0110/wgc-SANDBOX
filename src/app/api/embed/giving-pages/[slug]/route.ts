@@ -1,3 +1,4 @@
+import { publicOrgName } from "@/lib/settings/orgDisplayName";
 import { NextResponse } from "next/server";
 import { loadPublicGivingPageData } from "@/lib/givingLinks/loadPublicGivingPageData";
 import { resolveEmbedCorsOrigin, embedCorsHeaders, embedPreflightResponse } from "@/lib/giving/embedCors";
@@ -81,7 +82,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     {
       ok: true,
       slug,
-      organization: { name: church.name, logoUrl },
+      organization: { name: publicOrgName(church), logoUrl },
       givingPage: { title: link.publicTitle, description: link.description || "" },
       amount: {
         type: link.amountType,

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { sendWgcEmail } from "@/lib/email";
+import { publicOrgName } from "@/lib/settings/orgDisplayName";
 import { resolveReceiptSettings } from "@/lib/settings/receiptDefaults";
 
 /**
@@ -55,7 +56,7 @@ export async function loadRefundReceiptData(finixReversalId: string, churchId: s
     donorId,
     donorEmail: donor?.email || null,
     donorName: donor?.name?.trim() || instrument?.accountHolderName?.trim() || "there",
-    orgName: church.statementSenderName || church.name,
+    orgName: publicOrgName(church),
     refundCents: refund.amountCents ?? 0,
     originalCents: transfer?.amountCents ?? null,
     method: !settings.showPaymentMethodLastFour

@@ -1,3 +1,4 @@
+import { publicOrgName } from "@/lib/settings/orgDisplayName";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import EmbedBridge from "@/components/embed/EmbedBridge";
@@ -26,7 +27,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
             {data.message}
           </h1>
           <p className="text-sm" style={{ color: light.bodyTextColor }}>
-            Please contact {church.name} for another way to give.
+            Please contact {publicOrgName(church)} for another way to give.
           </p>
         </div>
       </div>
@@ -53,7 +54,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
               This giving page is not authorized to be embedded on this website.
             </h1>
             <p className="text-sm" style={{ color: light.bodyTextColor }}>
-              Please contact {church.name} if you believe this is an error.
+              Please contact {publicOrgName(church)} if you believe this is an error.
             </p>
           </div>
         </div>
@@ -71,7 +72,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           // eslint-disable-next-line @next/next/no-img-element
           <img src={branding.campaignImageUrl} alt="" className="w-full h-28 object-cover rounded-xl mb-5" />
         )}
-        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={church.name} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} compact nameColor={light.headingColor} kindColor={light.bodyTextColor} />
+        <OrganizationBrandHeader logoUrl={logoUrl} organizationName={publicOrgName(church)} kind={church.paymentMode ? "Secure Payment" : "Secure Giving"} compact nameColor={light.headingColor} kindColor={light.bodyTextColor} />
         <h1 className="text-lg font-bold text-center mb-1" style={{ color: light.headingColor }}>
           {link.publicTitle}
         </h1>
@@ -84,7 +85,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
         <EmbedBridge
           slug={slug}
           finixMerchantId={church.finixMerchantId!}
-          churchName={church.name}
+          churchName={publicOrgName(church)}
           light={light}
           amountType={link.amountType as "FIXED" | "VARIABLE" | "FIXED_QUANTITY"}
           fixedAmountCents={link.fixedAmountCents}

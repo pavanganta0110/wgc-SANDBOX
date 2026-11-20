@@ -6,6 +6,8 @@ import { sendWgcEmail } from "@/lib/email";
 import { donorPortalLinkParagraph } from "@/lib/donorPortal/portalLink";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
+import { publicOrgName } from "@/lib/settings/orgDisplayName";
+import { parseReceiptSettings } from "@/lib/givingLinks/types";
 import { resolveReceiptSettings } from "@/lib/settings/receiptDefaults";
 import { resolveAcknowledgmentText } from "@/lib/settings/acknowledgmentDefaults";
 import { generateReceiptNumber } from "@/lib/giving/receiptNumber";
@@ -228,11 +230,24 @@ export async function sendDonationReceipt(
   const ccEmails = donorEmail ? extraRecipients : extraRecipients.slice(1);
 
   const settings = resolveReceiptSettings(church);
-  const orgName = church.statementSenderName || church.name;
+  // Donors see the Public Display Name; the attached PDF (a tax document) keeps the legal name.
+  const orgName = publicOrgName(church);
+
+  // Settings made on the giving link itself (Giving Link -> Receipt) take priority over
+  // the organization-wide receipt settings for gifts made through that link.
+  const link = payment.givingLinkId
+    ? await prisma.givingLink.findFirst({ where: { id: payment.givingLinkId, churchId }, select: { receiptSettingsJson: true } })
+    : null;
+  const linkSettings = parseReceiptSettings(link?.receiptSettingsJson);
+  const linkCustomMessage = (linkSettings.customMessage || "").trim();
+  const linkSenderName = (linkSettings.senderName || "").trim();
+  const linkReplyTo = (linkSettings.replyTo || "").trim();
+  const replyTo = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(linkReplyTo) ? linkReplyTo : settings.replyToEmail;
+  const escapeHtml = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   const pdf = await renderToBuffer(DonationReceiptPdf(pdfProps));
 
-  const subject = settings.subjectTemplate.replace(/\[Organization Name\]/gi, orgName);
+  const subject = ((linkSettings.subject || "").trim() || settings.subjectTemplate).replace(/\[Organization Name\]/gi, orgName);
 
   const lines: string[] = [];
   lines.push(`<p>Hi ${donorName},</p>`);
@@ -249,14 +264,14 @@ export async function sendDonationReceipt(
     lines.push(`<p>You ${church.paymentMode ? "covered" : "generously covered"} ${formatCents(coveredFeeCents)} in processing and platform fees.</p>`);
   }
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
-  lines.push(`<p>${settings.thankYouMessage}</p>`);
-  lines.push(`<p>${acknowledgmentText}</p>`);
+  lines.push(`<p>${linkCustomMessage ? escapeHtml(linkCustomMessage).replace(/\n/g, "<br/>") : settings.thankYouMessage}</p>`);
+  if (linkSettings.includeTaxLanguage !== false) lines.push(`<p>${acknowledgmentText}</p>`);
   if (goodsServicesProvided) {
     lines.push(`<p>Payment Amount: ${formatCents(paymentAmountCents)}<br/>Fair Market Value: ${formatCents(goodsServicesFairMarketValueCents ?? 0)}<br/>${church.paymentMode ? "Recorded Amount" : "Recorded Contribution Amount"}: ${formatCents(recordedContributionAmountCents)}</p>`);
   }
   lines.push(donorPortalLinkParagraph(church.slug, Boolean(church.paymentMode)));
   if (settings.footer) lines.push(`<p style="font-size:12px;color:#64748b;">${settings.footer}</p>`);
-  lines.push(`<p style="font-size:11px;color:#94a3b8;">${settings.disclaimer}</p>`);
+  if (linkSettings.includeTaxLanguage !== false) lines.push(`<p style="font-size:11px;color:#94a3b8;">${settings.disclaimer}</p>`);
 
   // Version this receipt: supersede whatever was the current (non-superseded)
   // version for this payment before creating the new one.
@@ -276,7 +291,8 @@ export async function sendDonationReceipt(
     // Church-branded (Settings -> Branding / Receipts), matching the attached PDF.
     logoUrl: church.logoUrl || undefined,
     logoAlt: orgName,
-    senderName: orgName,
+    senderName: linkSenderName || settings.senderName || orgName,
+    ...(replyTo ? { replyTo } : {}),
     bodyHtml: lines.join("\n"),
     attachments: [{ filename: `receipt-${receiptNumber}${nextVersion > 1 ? `-v${nextVersion}` : ""}.pdf`, content: pdf as unknown as Buffer }],
     log: {
