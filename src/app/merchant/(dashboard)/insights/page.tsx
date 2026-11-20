@@ -1,3 +1,4 @@
+import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
 import { redirect } from "next/navigation";
 import InsightsTabs from "@/components/merchant/InsightsTabs";
 import DateRangePicker from "@/components/merchant/DateRangePicker";
@@ -100,6 +101,7 @@ export default async function InsightsPage({
   const churchId = auth.churchId;
   const viewScope = await resolveViewScope(auth);
   const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  const allowedFundsForUser = await allowedFundIdsFor(auth);
   const {
     tab: tabParam,
     range: rangeParam,
@@ -164,6 +166,7 @@ export default async function InsightsPage({
           churchId={churchId}
           dateFilter={dateFilter}
           scopedUserId={scopedUserId}
+          allowedFundIds={allowedFundsForUser ? [...allowedFundsForUser] : undefined}
           filters={{ paymentMethod: extMethod, receiptStatus: extReceiptStatus, fundId: extFund, source: extSource }}
         />
       )}
@@ -175,17 +178,20 @@ async function ExternalDonationsTab({
   churchId,
   dateFilter,
   scopedUserId,
+  allowedFundIds,
   filters,
 }: {
   churchId: string;
   dateFilter: { gte: Date; lte?: Date } | undefined;
   scopedUserId?: string;
+  /** A fundraiser's fund filter only lists funds on their own giving links. */
+  allowedFundIds?: string[];
   filters: { paymentMethod?: string; receiptStatus?: string; fundId?: string; source?: string };
 }) {
   const { pw } = await getPaymentWording();
   const [{ summary, bySourceTable, byFundTable, hasData }, funds] = await Promise.all([
     getExternalDonationsInsights(churchId, dateFilter, scopedUserId, filters),
-    prisma.fund.findMany({ where: { churchId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.fund.findMany({ where: { churchId, ...(allowedFundIds ? { id: { in: allowedFundIds } } : {}) }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
 
   return (

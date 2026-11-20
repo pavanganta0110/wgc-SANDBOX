@@ -1,3 +1,4 @@
+import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
@@ -61,9 +62,11 @@ export default async function PaymentsListPage({
   // historical Payment.fundName snapshots (covers renamed/archived funds
   // whose old name no longer appears in the live Fund catalog). Scoped to
   // the church only; the actual filter below is what enforces view scope.
+  // A fundraiser only gets fund names from their own giving links and their own payments.
+  const allowedFunds = await allowedFundIdsFor(auth);
   const [catalogFunds, historicalFundNames] = await Promise.all([
-    prisma.fund.findMany({ where: { churchId }, orderBy: { displayOrder: "asc" }, select: { name: true } }),
-    prisma.payment.findMany({ where: { churchId, fundName: { not: null } }, distinct: ["fundName"], select: { fundName: true }, take: 200 }),
+    prisma.fund.findMany({ where: { churchId, ...(allowedFunds ? { id: { in: [...allowedFunds] } } : {}) }, orderBy: { displayOrder: "asc" }, select: { name: true } }),
+    prisma.payment.findMany({ where: { churchId, fundName: { not: null }, ...(allowedFunds ? { attributedUserId: auth.userId } : {}) }, distinct: ["fundName"], select: { fundName: true }, take: 200 }),
   ]);
   const fundSuggestions = [...new Set([...catalogFunds.map((f) => f.name), ...historicalFundNames.map((p) => p.fundName as string)])].sort();
 
