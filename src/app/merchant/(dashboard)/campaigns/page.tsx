@@ -1,3 +1,4 @@
+import { campaignVisibilityWhere } from "@/lib/campaigns/campaignAccess";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { formatCents } from "@/lib/format";
@@ -20,7 +21,7 @@ export default async function FundraisingCampaignsPage() {
   if (!hasPermission(auth, "canViewFundraisingCampaigns")) redirect("/merchant/dashboard");
 
   const campaigns = await prisma.fundraisingCampaign.findMany({
-    where: { churchId: auth.churchId, archivedAt: null },
+    where: { churchId: auth.churchId, archivedAt: null, ...(await campaignVisibilityWhere(auth)) },
     orderBy: { createdAt: "desc" },
   });
 

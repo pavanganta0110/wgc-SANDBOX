@@ -1,3 +1,4 @@
+import { campaignVisibilityWhere } from "@/lib/campaigns/campaignAccess";
 import { NextResponse } from "next/server";
 import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
   const status = searchParams.get("status") || undefined;
 
   const campaigns = await prisma.fundraisingCampaign.findMany({
-    where: { churchId: auth.churchId, archivedAt: null, ...(status ? { status } : {}) },
+    where: { churchId: auth.churchId, archivedAt: null, ...(await campaignVisibilityWhere(auth)), ...(status ? { status } : {}) },
     orderBy: { createdAt: "desc" },
   });
 

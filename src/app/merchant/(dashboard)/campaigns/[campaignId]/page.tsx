@@ -1,3 +1,4 @@
+import { campaignVisibilityWhere } from "@/lib/campaigns/campaignAccess";
 import { notFound, redirect } from "next/navigation";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { hasPermission } from "@/lib/auth/permissions";
@@ -17,7 +18,7 @@ export default async function CampaignDetailPage({ params }: { params: Promise<{
   if (!hasPermission(auth, "canViewFundraisingCampaigns")) redirect("/merchant/dashboard");
 
   const [campaign, church] = await Promise.all([
-    prisma.fundraisingCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId } }),
+    prisma.fundraisingCampaign.findFirst({ where: { id: campaignId, churchId: auth.churchId, ...(await campaignVisibilityWhere(auth)) } }),
     prisma.church.findUnique({ where: { id: auth.churchId }, select: { name: true, logoUrl: true } }),
   ]);
   if (!campaign) notFound();

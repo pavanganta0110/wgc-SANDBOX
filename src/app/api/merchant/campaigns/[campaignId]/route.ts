@@ -1,3 +1,4 @@
+import { campaignVisibilityWhere } from "@/lib/campaigns/campaignAccess";
 import { NextResponse } from "next/server";
 import { goalAmountCentsError } from "@/lib/utils/amountLimits";
 import { prisma } from "@/lib/prisma";
@@ -24,7 +25,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ campaign
   }
 
   const campaign = await prisma.fundraisingCampaign.findFirst({
-    where: { id: campaignId, churchId: auth.churchId },
+    where: { id: campaignId, churchId: auth.churchId, ...(await campaignVisibilityWhere(auth)) },
   });
   if (!campaign) return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
 
