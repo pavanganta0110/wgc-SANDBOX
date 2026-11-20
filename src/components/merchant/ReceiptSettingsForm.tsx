@@ -24,6 +24,7 @@ interface FormValues {
   receiptShowDonationReference: boolean;
   receiptShowTaxId: boolean;
   receiptShowWebsite: boolean;
+  receiptUseDisplayName: boolean;
   receiptDisclaimer: string;
   receiptSendCopyToOrg: boolean;
   receiptSupportContact: string;
@@ -131,6 +132,8 @@ export default function ReceiptSettingsForm({ initial }: { initial: FormValues }
           <Toggle label={pw("Include Donation Reference")} checked={values.receiptShowDonationReference} onChange={(v) => set("receiptShowDonationReference", v)} />
           <Toggle label="Include EIN / Tax ID" checked={values.receiptShowTaxId} onChange={(v) => set("receiptShowTaxId", v)} />
           <Toggle label="Send Copy to Organization" checked={values.receiptSendCopyToOrg} onChange={(v) => set("receiptSendCopyToOrg", v)} />
+          <Toggle label="Use Public Display Name on PDF receipts and year-end statements" checked={values.receiptUseDisplayName} onChange={(v) => set("receiptUseDisplayName", v)} />
+          <p className="text-xs text-slate-400 -mt-1 mb-1">Your Public Display Name (Settings &gt; General) already appears on giving pages and donation emails. Turn this on to print it on the PDF receipt and statements too, instead of your legal name.</p>
         </div>
 
         <div className="mt-4 pt-4 border-t border-slate-100">

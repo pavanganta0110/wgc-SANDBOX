@@ -6,7 +6,7 @@ import { sendWgcEmail } from "@/lib/email";
 import { donorPortalLinkParagraph } from "@/lib/donorPortal/portalLink";
 import { formatCents } from "@/lib/format";
 import { formatPersonName } from "@/lib/formatPersonName";
-import { publicOrgName } from "@/lib/settings/orgDisplayName";
+import { publicOrgName, legalDocOrgName } from "@/lib/settings/orgDisplayName";
 import { parseReceiptSettings } from "@/lib/givingLinks/types";
 import { resolveReceiptSettings } from "@/lib/settings/receiptDefaults";
 import { resolveAcknowledgmentText } from "@/lib/settings/acknowledgmentDefaults";
@@ -79,7 +79,7 @@ export async function buildDonationReceiptPdfProps(
   if (!church) throw new Error("Organization not found");
 
   const settings = resolveReceiptSettings(church);
-  const orgName = church.statementSenderName || church.name;
+  const orgName = legalDocOrgName(church);
 
   // anonymousPreference / Payment.isAnonymous mean "don't show my name
   // publicly" (donor walls, staff-facing top-donor lists) — they must

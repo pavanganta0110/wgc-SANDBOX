@@ -24,6 +24,7 @@ const RECEIPT_FIELDS = [
   "receiptShowDonationReference",
   "receiptShowTaxId",
   "receiptShowWebsite",
+  "receiptUseDisplayName",
   "receiptDisclaimer",
   "receiptLanguage",
   "receiptSendCopyToOrg",
@@ -45,6 +46,7 @@ const BOOLEAN_FIELDS = new Set([
   "receiptShowDonationReference",
   "receiptShowTaxId",
   "receiptShowWebsite",
+  "receiptUseDisplayName",
   "receiptSendCopyToOrg",
 ]);
 

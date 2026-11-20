@@ -36,6 +36,7 @@ export default async function ReceiptSettingsPage() {
           receiptShowDonationReference: church.receiptShowDonationReference,
           receiptShowTaxId: church.receiptShowTaxId,
           receiptShowWebsite: church.receiptShowWebsite,
+          receiptUseDisplayName: church.receiptUseDisplayName,
           receiptDisclaimer: church.receiptDisclaimer || DEFAULT_RECEIPT_DISCLAIMER,
           receiptSendCopyToOrg: church.receiptSendCopyToOrg,
           receiptSupportContact: church.receiptSupportContact || "",

@@ -467,6 +467,8 @@ model Church {
   receiptShowDonationReference     Boolean @default(true)
   receiptShowTaxId                 Boolean @default(false)
   receiptShowWebsite               Boolean @default(false)
+  // When true, the PDF receipt and year-end statements carry the Public Display Name instead of the legal name.
+  receiptUseDisplayName            Boolean @default(false)
   receiptDisclaimer                String?
   receiptLanguage                  String? // default "en"
   receiptSendCopyToOrg             Boolean @default(false)

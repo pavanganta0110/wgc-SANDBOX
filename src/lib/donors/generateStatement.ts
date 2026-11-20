@@ -1,3 +1,4 @@
+import { legalDocOrgName } from "@/lib/settings/orgDisplayName";
 import { prisma } from "@/lib/prisma";
 import { loadPdfImage, type PdfImage } from "@/lib/pdf/pdfImage";
 import { renderToBuffer } from "@react-pdf/renderer";
@@ -252,7 +253,7 @@ export async function sendYearEndStatementEmail(statementId: string, churchId: s
   const church = await prisma.church.findUnique({ where: { id: churchId } });
   const pdf = await renderStatementPdf(statementId, churchId);
   const donorName = formatPersonName(donor.name);
-  const orgName = church?.statementSenderName || church?.name || statement.organizationNameSnapshot || "Organization";
+  const orgName = (church ? legalDocOrgName(church) : null) || statement.organizationNameSnapshot || "Organization";
 
   const subject = church?.statementSubjectTemplate
     ? church.statementSubjectTemplate.replace(/\[YEAR\]/g, String(statement.taxYear)).replace(/\[Organization Name\]/gi, orgName)
