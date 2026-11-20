@@ -46,6 +46,26 @@ describe("sendRefundReceipt", () => {
     expect(arg.log).toMatchObject({ churchId: "church-1", relatedEntityType: "Refund", createdByUserId: "user-1" });
   });
 
+  it("uses the organization's own receipt branding: logo, header, footer, contact lines and reply-to", async () => {
+    setup();
+    prisma.church.findUnique.mockResolvedValue({
+      name: "Care Package Inbound, inc",
+      statementSenderName: null,
+      logoUrl: "https://example.com/logo.png",
+      receiptHeader: "Thank you for trusting us.",
+      receiptFooter: "EIN on file with the IRS.",
+      receiptReplyToEmail: "help@carepackage.org",
+      supportEmail: "support@carepackage.org",
+    });
+    await sendRefundReceipt("TRrefund12345678", "church-1");
+    const arg = sendWgcEmail.mock.calls[0][0];
+    expect(arg.logoUrl).toBe("https://example.com/logo.png");
+    expect(arg.replyTo).toBe("help@carepackage.org");
+    expect(arg.bodyHtml).toContain("Thank you for trusting us.");
+    expect(arg.bodyHtml).toContain("EIN on file with the IRS.");
+    expect(arg.bodyHtml).toContain("support@carepackage.org");
+  });
+
   it("says the refund is being processed while it is still pending", async () => {
     setup({ state: "PENDING" });
     await sendRefundReceipt("TRrefund12345678", "church-1");

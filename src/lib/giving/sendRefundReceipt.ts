@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatCents } from "@/lib/format";
 import { sendWgcEmail } from "@/lib/email";
+import { resolveReceiptSettings } from "@/lib/settings/receiptDefaults";
 
 /**
  * Emails the donor a plain-language confirmation that a refund was issued.
@@ -31,20 +32,39 @@ export async function loadRefundReceiptData(finixReversalId: string, churchId: s
   const donorId = payment?.donorId ?? instrument?.donorId ?? null;
   const donor = donorId ? await prisma.donor.findUnique({ where: { id: donorId } }) : null;
 
+  // Same branding and contact details the organization chose for its donation receipts
+  // (Settings -> Receipts): logo, header/footer text, and which contact lines to show.
+  const settings = resolveReceiptSettings(church);
+  const address = church.addressLine1
+    ? [church.addressLine1, church.addressLine2, [church.city, church.state, church.postalCode].filter(Boolean).join(", ")].filter(Boolean).join(", ")
+    : null;
+  const contact = {
+    address: settings.showAddress ? address : null,
+    email: settings.showEmail ? church.supportEmail || church.primaryContactEmail || null : null,
+    phone: settings.showPhone ? church.phone || null : null,
+    website: settings.showWebsite ? church.website || null : null,
+    taxId: settings.showTaxId ? church.taxId || null : null,
+  };
+
   return {
     state,
     church,
+    settings,
+    contact,
+    logoUrl: church.logoUrl || null,
     donorId,
     donorEmail: donor?.email || null,
     donorName: donor?.name?.trim() || instrument?.accountHolderName?.trim() || "there",
     orgName: church.statementSenderName || church.name,
     refundCents: refund.amountCents ?? 0,
     originalCents: transfer?.amountCents ?? null,
-    method: instrument?.cardBrand
-      ? `${instrument.cardBrand} ending in ${instrument.cardLast4 ?? "----"}`
-      : instrument?.bankLast4
-        ? `bank account ending in ${instrument.bankLast4}`
-        : "the original payment method",
+    method: !settings.showPaymentMethodLastFour
+      ? "the original payment method"
+      : instrument?.cardBrand
+        ? `${instrument.cardBrand} ending in ${instrument.cardLast4 ?? "----"}`
+        : instrument?.bankLast4
+          ? `bank account ending in ${instrument.bankLast4}`
+          : "the original payment method",
     refundDate: (refund.createdAtFinix ?? new Date()).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" }),
     reference: refund.finixReversalId.slice(-8).toUpperCase(),
     reversalId: refund.finixReversalId,
@@ -67,6 +87,7 @@ export async function sendRefundReceipt(
 
   const lines: string[] = [];
   lines.push(`<p>Hi ${donorName},</p>`);
+  if (d.settings.header) lines.push(`<p>${d.settings.header}</p>`);
   lines.push(
     state === "SUCCEEDED"
       ? `<p>A refund of <strong>${formatCents(refundCents)}</strong> has been issued to ${method}${originalCents != null ? ` for your payment of <strong>${formatCents(originalCents)}</strong> to <strong>${orgName}</strong>` : ` by <strong>${orgName}</strong>`}.</p>`
@@ -75,6 +96,9 @@ export async function sendRefundReceipt(
   lines.push(`<p>Refund date: ${refundDate}<br/>Refund reference: ${reference}</p>`);
   lines.push(`<p>It can take 5 to 10 business days for the refund to appear on your card or bank statement, depending on your bank.</p>`);
   lines.push(`<p>If you have questions, please contact ${orgName} directly.</p>`);
+  const contactBits = [d.contact.address, d.contact.email, d.contact.phone, d.contact.website].filter(Boolean);
+  if (contactBits.length) lines.push(`<p style="font-size:12px;color:#64748b;">${orgName}<br/>${contactBits.join("<br/>")}</p>`);
+  if (d.settings.footer) lines.push(`<p style="font-size:12px;color:#64748b;">${d.settings.footer}</p>`);
 
   const result = await sendWgcEmail({
     to: toEmail,
@@ -86,6 +110,7 @@ export async function sendRefundReceipt(
     logoUrl: church.logoUrl || undefined,
     logoAlt: orgName,
     senderName: orgName,
+    ...(d.settings.replyToEmail ? { replyTo: d.settings.replyToEmail } : {}),
     bodyHtml: lines.join("\n"),
     log: {
       churchId,

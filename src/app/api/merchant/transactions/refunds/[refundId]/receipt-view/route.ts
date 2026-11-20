@@ -44,6 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ refundI
 <title>Refund receipt ${esc(d.reference)}</title>
 <style>
 body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;margin:0;background:#f8fafc}
+.logo{max-height:64px;max-width:220px;margin-bottom:12px;display:block}
 .card{max-width:560px;margin:32px auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:32px}
 h1{font-size:20px;margin:0 0 4px}.muted{color:#64748b;font-size:13px}
 .amount{font-size:34px;font-weight:700;margin:20px 0 4px}
@@ -52,7 +53,12 @@ table{width:100%;border-collapse:collapse;margin-top:20px;font-size:14px}td{padd
 .note{margin-top:20px;font-size:12px;color:#64748b}
 @media print{body{background:#fff}.card{border:0;margin:0}}
 </style></head><body><div class="card">
-<h1>${esc(d.orgName)}</h1><p class="muted">Refund receipt</p>
+${d.logoUrl ? `<img class="logo" src="${esc(d.logoUrl)}" alt="${esc(d.orgName)}">` : ""}
+<h1>${esc(d.orgName)}</h1>
+${[d.contact.address, d.contact.email, d.contact.phone, d.contact.website].filter(Boolean).map((c) => `<div class="muted">${esc(String(c))}</div>`).join("")}
+${d.contact.taxId ? `<div class="muted">Tax ID: ${esc(d.contact.taxId)}</div>` : ""}
+<p class="muted" style="margin-top:16px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">Refund receipt</p>
+${d.settings.header ? `<p style="font-size:14px">${esc(d.settings.header)}</p>` : ""}
 <div class="amount">${esc(formatCents(d.refundCents))}</div><span class="badge">${status}</span>
 <table>
 <tr><td>Refund date</td><td>${esc(d.refundDate)}</td></tr>
@@ -62,6 +68,7 @@ ${d.originalCents != null ? `<tr><td>Original payment</td><td>${esc(formatCents(
 <tr><td>Refund reference</td><td>${esc(d.reference)}</td></tr>
 </table>
 <p class="note">It can take 5 to 10 business days for a refund to appear on a card or bank statement. Questions? Contact ${esc(d.orgName)}.</p>
+${d.settings.footer ? `<p class="note">${esc(d.settings.footer)}</p>` : ""}
 </div></body></html>`;
 
   return new NextResponse(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
