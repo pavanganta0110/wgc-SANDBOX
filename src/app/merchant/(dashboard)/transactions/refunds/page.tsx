@@ -1,3 +1,4 @@
+import { hasPermission } from "@/lib/auth/permissions";
 import { aggregateRefunds } from "@/lib/reports/dashboardAggregates";
 import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
@@ -301,7 +302,7 @@ export default async function RefundsPage({
           )}
         </div>
 
-        {id && <RefundDetailPanel refundId={id} churchId={churchId} />}
+        {id && <RefundDetailPanel refundId={id} churchId={churchId} canSendReceipt={hasPermission(auth, "canViewAllTransactions")} />}
       </div>
     </div>
   );

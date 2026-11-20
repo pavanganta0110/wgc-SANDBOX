@@ -388,7 +388,7 @@ export async function getRefundsInsights(
     { label: "Gross Processing Volume", value: formatCents(grossVolumeCents) },
     { label: "Successful Refunds", value: formatCents(succeeded.reduce((s, r) => s + (r.amountCents ?? 0), 0)) },
     { label: "Failed Refunds", value: formatCents(failed.reduce((s, r) => s + (r.amountCents ?? 0), 0)) },
-    { label: "Total Transaction Volume", value: formatCents(grossVolumeCents) },
+    { label: "Pending Refunds", value: formatCents(refunds.filter((r) => ["PENDING", "UNKNOWN"].includes((r.state || "").toUpperCase())).reduce((s, r) => s + (r.amountCents ?? 0), 0)) },
   ];
 
   const byStatus = groupTrend(

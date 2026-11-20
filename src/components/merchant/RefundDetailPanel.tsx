@@ -10,13 +10,17 @@ import { loadRefundDetail } from "@/lib/finix/refundDetail";
 import { titleCase, Row, FlowStep } from "@/components/merchant/RefundDetailPrimitives";
 import DonorNameLink from "@/components/merchant/DonorNameLink";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
+import RefundReceiptActions from "@/components/merchant/RefundReceiptActions";
 
 export default async function RefundDetailPanel({
   refundId,
   churchId,
+  canSendReceipt = false,
 }: {
   refundId: string;
   churchId: string;
+  /** Owners/admins can email the donor a refund confirmation. */
+  canSendReceipt?: boolean;
 }) {
   const { pw } = await getPaymentWording();
   const detail = await loadRefundDetail(refundId, churchId);
@@ -120,6 +124,14 @@ export default async function RefundDetailPanel({
           <Row label="Updated" value={formatDateTimeCDT(refund.updatedAtFinix)} />
         </div>
       </div>
+
+      {canSendReceipt && state !== "FAILED" && (
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Refund Receipt</h4>
+          <p className="text-xs text-slate-500 mb-2">{pw("Send the donor an email confirming this refund.")}</p>
+          <RefundReceiptActions refundId={refund.finixReversalId} defaultEmail={donor?.email || ""} />
+        </div>
+      )}
 
       {/* Donor */}
       <div className="px-5 py-4 border-b border-slate-100">
