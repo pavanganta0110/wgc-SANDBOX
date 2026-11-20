@@ -1,3 +1,5 @@
+import { aggregateRefunds } from "@/lib/reports/dashboardAggregates";
+import SummaryStrip from "@/components/merchant/reporting/ui/SummaryStrip";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildRefundScope } from "@/lib/auth/scopes";
@@ -71,6 +73,16 @@ export default async function RefundsPage({
 
   const church = await prisma.church.findUnique({ where: { id: churchId } });
 
+  // Refund volume for the selected period (same scope and dates as the list, but not
+  // narrowed by the State filter so the totals always show the full picture).
+  // Counts every refund, including ones issued by WGC support in the processing dashboard.
+  const refundTotals = await aggregateRefunds({
+    ...refundScope,
+    ...(dateFilter ? { createdAtFinix: dateFilter } : {}),
+  });
+  const pendingCount = refundTotals.totalCount - refundTotals.succeededCount - refundTotals.failedCount;
+  const pendingVolumeCents = refundTotals.totalVolumeCents - refundTotals.succeededVolumeCents - refundTotals.failedVolumeCents;
+
   const originalTransferIds = refunds
     .map((r) => r.finixOriginalTransferId)
     .filter((tid): tid is string => Boolean(tid));
@@ -135,6 +147,17 @@ export default async function RefundsPage({
       <div className="flex items-center gap-2 mb-6">
         <h2 className="text-lg font-bold text-slate-900">Refunds</h2>
         <PinButton />
+      </div>
+
+      <div className="mb-6">
+        <SummaryStrip
+          items={[
+            { label: "Total refunded", value: formatCents(refundTotals.succeededVolumeCents), hint: `${refundTotals.succeededCount} completed` },
+            { label: "Refund pending", value: formatCents(pendingVolumeCents), hint: `${pendingCount} in progress` },
+            { label: "Refund failed", value: formatCents(refundTotals.failedVolumeCents), hint: `${refundTotals.failedCount} failed` },
+            { label: "All refund requests", value: String(refundTotals.totalCount), hint: "Includes refunds issued by WGC support" },
+          ]}
+        />
       </div>
 
       <RefundFilterBar exportHref="/api/merchant/transactions/refunds/export" />

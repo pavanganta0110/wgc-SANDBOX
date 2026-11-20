@@ -328,9 +328,17 @@ export default async function PaymentsListPage({
                     <td className="px-6 py-3 text-right font-semibold text-slate-900">
                       {formatCents(t.amountCents ?? 0)}
                       {refund.refundStatus !== "NONE" && refund.refundStatus !== "PENDING" && (
-                        <p className="text-xs font-normal text-slate-400">
-                          Net {formatCents(refund.netAmountCents)}
-                        </p>
+                        <>
+                          <p className="text-xs font-medium text-rose-600">
+                            Refunded {formatCents(refund.refundedCents)}
+                          </p>
+                          <p className="text-xs font-normal text-slate-400">
+                            Net {formatCents(refund.netAmountCents)}
+                          </p>
+                        </>
+                      )}
+                      {refund.refundStatus === "PENDING" && (
+                        <p className="text-xs font-medium text-amber-600">Refund pending</p>
                       )}
                     </td>
                     <td className="px-6 py-3">
