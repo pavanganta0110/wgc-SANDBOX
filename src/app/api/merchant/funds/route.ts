@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
-import { canManageFunds, canReadFundCatalog } from "@/lib/giving/fundPermissions";
+import { allowedFundIdsFor, canManageFunds, canReadFundCatalog } from "@/lib/giving/fundPermissions";
 
 /** The church's full Gift Designation catalog — active and archived. Read
  * access is shared by the "Manage Funds" admin UI and any external-donation
@@ -21,8 +21,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // A fundraiser only sees the funds on their own giving links.
+  const allowed = await allowedFundIdsFor(auth);
   const funds = await prisma.fund.findMany({
-    where: { churchId: auth.churchId },
+    where: { churchId: auth.churchId, ...(allowed ? { id: { in: [...allowed] } } : {}) },
     orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
   });
   return NextResponse.json({ funds });

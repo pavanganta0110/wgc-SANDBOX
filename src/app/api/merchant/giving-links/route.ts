@@ -8,6 +8,7 @@ import { resolveGivingLinkOwnerForCreate } from "@/lib/auth/givingLinkOwnership"
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
 import { validateFundAssignments, FundAssignmentError, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
 import { validateDefaultDonationSettings } from "@/lib/givingLinks/defaultDonationSettings";
 
@@ -177,6 +178,10 @@ export async function POST(req: Request) {
     }
     if (validatedFundAssignments.length === 0) {
       return NextResponse.json({ error: "Select at least one fund when fund selection is enabled" }, { status: 400 });
+    }
+    const allowedFunds = await allowedFundIdsFor(auth);
+    if (allowedFunds && validatedFundAssignments.some((a) => !allowedFunds.has(a.fundId))) {
+      return NextResponse.json({ error: "You can only use funds that are already assigned to your giving links." }, { status: 403 });
     }
   }
 

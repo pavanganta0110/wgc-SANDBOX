@@ -10,6 +10,7 @@ import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
 import { logDashboardAction } from "@/lib/dashboardAudit";
+import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
 import { validateFundAssignments, FundAssignmentError, loadAllAssignedFunds, type FundAssignmentInput } from "@/lib/giving/fundAssignment";
 import { validateDefaultDonationSettings } from "@/lib/givingLinks/defaultDonationSettings";
 
@@ -151,6 +152,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     } catch (err) {
       if (err instanceof FundAssignmentError) return NextResponse.json({ error: err.message }, { status: 400 });
       throw err;
+    }
+    const allowedFunds = await allowedFundIdsFor(auth);
+    if (allowedFunds && validatedFundAssignments.some((a) => !allowedFunds.has(a.fundId))) {
+      return NextResponse.json({ error: "You can only use funds that are already assigned to your giving links." }, { status: 403 });
     }
   }
   if (effectiveFundSelectionEnabled) {

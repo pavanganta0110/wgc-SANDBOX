@@ -1,3 +1,4 @@
+import { allowedFundIdsFor } from "@/lib/giving/fundPermissions";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
@@ -291,6 +292,14 @@ export async function POST(req: Request) {
     studentTag = { studentId: student.id, studentTermLabel: term, studentGivenFor: body.studentGivenFor === "SELF" ? "SELF" : "SPONSOR" };
   }
 
+  // A fundraiser can only record gifts against funds on their own giving links.
+  const allowedFunds = await allowedFundIdsFor(auth);
+  if (allowedFunds && fundId && !allowedFunds.has(fundId)) {
+    return NextResponse.json({ error: "You can only record gifts to funds assigned to your giving links." }, { status: 403 });
+  }
+  const resolvedFundId = fundId || null;
+  const resolvedFundName = allowedFunds && !fundId ? null : fundName || null;
+
   const created = await prisma.externalDonation.create({
     data: {
       churchId: auth.churchId,
@@ -302,8 +311,8 @@ export async function POST(req: Request) {
       paymentMethod,
       otherPaymentMethodName: paymentMethod === "OTHER" ? otherPaymentMethodName?.trim() || null : null,
       source,
-      fundId: fundId || null,
-      fundName: fundName || null,
+      fundId: resolvedFundId,
+      fundName: resolvedFundName,
       ...studentTag,
       campaign: campaign || null,
       givingPageLabel: givingPageLabel || null,

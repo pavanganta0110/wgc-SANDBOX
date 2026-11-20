@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { hasPermission } from "@/lib/auth/permissions";
 import type { MerchantAuthContext } from "@/lib/auth/requireMerchantSession";
 
@@ -28,4 +29,17 @@ export function canReadFundCatalog(auth: MerchantAuthContext): boolean {
     hasPermission(auth, "canEditExternalDonation") ||
     hasPermission(auth, "canImportExternalDonations")
   );
+}
+
+/**
+ * Funds this user may assign or record gifts against. null = unrestricted
+ * (owners and admins). A FUNDRAISER only gets the funds already on giving links
+ * they own, so they can never attach or record against another person's fund.
+ */
+export async function allowedFundIdsFor(auth: MerchantAuthContext): Promise<Set<string> | null> {
+  if (auth.role !== "fundraiser") return null;
+  const links = await prisma.givingLink.findMany({ where: { churchId: auth.churchId, ownerUserId: auth.userId }, select: { id: true } });
+  if (links.length === 0) return new Set();
+  const rows = await prisma.givingLinkFund.findMany({ where: { givingLinkId: { in: links.map((l) => l.id) } }, select: { fundId: true } });
+  return new Set(rows.map((r) => r.fundId));
 }
