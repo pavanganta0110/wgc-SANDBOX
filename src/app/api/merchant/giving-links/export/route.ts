@@ -34,7 +34,7 @@ export async function GET() {
   const viewScope = await resolveViewScope(auth);
   // Same rule as the Giving Links page: OWNER/ADMIN export the whole organization.
   const scope =
-    (auth.role === "owner" || auth.role === "admin") && hasPermission(auth, "canViewAllTransactions")
+    (auth.role === "owner" || auth.role === "admin") && viewScope.effective.kind !== "user" && hasPermission(auth, "canViewAllTransactions")
       ? { churchId: auth.churchId }
       : buildGivingLinkScope(auth, viewScope);
 

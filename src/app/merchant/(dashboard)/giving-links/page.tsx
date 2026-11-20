@@ -33,11 +33,12 @@ export default async function GivingLinksPage({
   // buildGivingLinkScope regardless of the ?owner= param — the "All Links /
   // My Links / Team Member" filter below is only meaningful for OWNER/ADMIN.
   const viewScope = await resolveViewScope(auth);
-  const canFilterByOwner = auth.role === "owner" || auth.role === "admin";
-  // OWNER/ADMIN see every link in the organization here: this page has its own
-  // Owner filter and Owner column, so a leftover dashboard "view as" cookie must
-  // not hide teammates' links (it used to leave "All Links" empty until a
-  // specific person was picked). Everyone else keeps the scoped view.
+  // "View as <teammate>" is an explicit request to see that person's links, so it
+  // keeps the scoped view (and the owner filter is off, otherwise it would override it).
+  const viewingAsUser = viewScope.effective.kind === "user";
+  const canFilterByOwner = (auth.role === "owner" || auth.role === "admin") && !viewingAsUser;
+  // Otherwise OWNER/ADMIN see every link in the organization: a leftover
+  // "My Activity" cookie must not hide teammates' links.
   const baseScope =
     canFilterByOwner && hasPermission(auth, "canViewAllTransactions")
       ? { churchId }
