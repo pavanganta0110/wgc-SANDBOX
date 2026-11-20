@@ -5,7 +5,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { hasPermission } from "@/lib/auth/permissions";
 import { resolveViewScope } from "@/lib/auth/viewScope";
-import { resolveScopedDonorIds } from "@/lib/auth/scopes";
+import { resolveScopedUserId } from "@/lib/auth/scopes";
 import { canManageFunds } from "@/lib/giving/fundPermissions";
 import { loadFundTotals } from "@/lib/giving/fundTotals";
 import { formatCents } from "@/lib/format";
@@ -38,15 +38,15 @@ export default async function FundsPage({ searchParams }: { searchParams: Promis
   if (!hasPermission(auth, "canViewDonors")) redirect("/merchant/dashboard");
 
   // Tenant from the session only; a scoped viewer (e.g. a fundraiser) sees
-  // only their own donors' gifts, same as Reporting.
+  // only the funds on their own giving links and the gifts attributed to them.
   const viewScope = await resolveViewScope(auth);
-  const scopedDonorIds = await resolveScopedDonorIds(auth, viewScope);
+  const scopedUserId = resolveScopedUserId(auth, viewScope);
   const { range: rangeParam } = await searchParams;
   const rangeKey: RangeKey = rangeParam && rangeParam in RANGES ? (rangeParam as RangeKey) : "ytd";
   const rows = await loadFundTotals({
     churchId: auth.churchId,
     range: resolveRange(rangeKey, new Date()),
-    donorIds: scopedDonorIds ?? undefined,
+    scopedUserId: scopedUserId ?? undefined,
   });
   const canManage = canManageFunds(auth);
 

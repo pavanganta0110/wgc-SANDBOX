@@ -139,9 +139,15 @@ export async function getAttentionCounts(p: {
 }): Promise<Record<AttentionKey, number>> {
   const { churchId, dateFilter, transferScope, failedRefundCount, scopedTransferIds } = p;
   const [disputes, failedPayments, achReturns] = await Promise.all([
-    // Disputes stay organization-wide, matching the existing dashboard tiles
-    // (no reliable per-user attribution — CP4C policy). "Open" = pending.
-    prisma.finixDispute.count({ where: { churchId, state: { equals: "pending", mode: "insensitive" } } }),
+    // "Open" = pending. Organization scope counts every dispute; a user-scoped
+    // view (fundraiser) counts only disputes on that user's own payments.
+    prisma.finixDispute.count({
+      where: {
+        churchId,
+        state: { equals: "pending", mode: "insensitive" },
+        ...(scopedTransferIds ? { finixTransferId: { in: scopedTransferIds } } : {}),
+      },
+    }),
     prisma.finixTransfer.count({
       where: {
         ...transferScope,

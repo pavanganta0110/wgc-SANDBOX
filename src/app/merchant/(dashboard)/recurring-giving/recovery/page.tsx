@@ -36,7 +36,10 @@ export default async function RecurringGivingRecoveryPage() {
     throw err;
   }
   const permissions = getSubscriptionPermissions(auth.impersonation ? "owner" : auth.rawRole);
-  if (!permissions.canView) redirect("/merchant/dashboard");
+  // Recovery analytics cover every recurring donor in the organization.
+  if (!permissions.canView || (!auth.impersonation && (auth.rawRole === "fundraiser" || auth.rawRole === "viewer"))) {
+    redirect("/merchant/dashboard");
+  }
 
   const [donorAnalytics, recovery] = await Promise.all([loadRecurringDonorsAnalytics(auth.churchId), loadRecoveryAnalytics(auth.churchId)]);
 

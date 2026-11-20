@@ -274,7 +274,7 @@ export default async function MerchantDashboardPage({
     metrics: metricsParam,
   } = await searchParams;
   const trend = trendParam && TREND_CONFIG[trendParam] ? trendParam : "weekly";
-  const selectedMetrics = (
+  const requestedMetrics = (
     metricsParam ? metricsParam.split(",").filter((key) => METRIC_LABELS[key]) : DEFAULT_METRICS
   ).slice(0, 8);
   const { from: startDate, to: endDate } = resolveDateRange(rangeParam, fromParam, toParam);
@@ -288,6 +288,13 @@ export default async function MerchantDashboardPage({
   // established CP4C policy) and stay organization-wide regardless of scope.
   const viewScope = await resolveViewScope(auth);
   const scopedUserId = resolveScopedUserId(auth, viewScope) ?? undefined;
+  // A user-scoped view (a fundraiser, or an owner/admin viewing one person) must
+  // not show organization-wide figures that have no per-user attribution:
+  // settlements, merchant deposits, authorization rate, dispute/authorization KPIs.
+  const orgWideOnly = scopedUserId !== undefined;
+  const selectedMetrics = orgWideOnly
+    ? requestedMetrics.filter((key) => !/dispute|authorization|deposit/i.test(key))
+    : requestedMetrics;
   const [transferScope, refundScope] = await Promise.all([
     buildFinixTransferScope(auth, viewScope),
     buildRefundScope(auth, viewScope),
@@ -479,6 +486,7 @@ export default async function MerchantDashboardPage({
         <VolumeAreaChart data={volumeTrend} title={pw("Donation volume")} />
       </Card>
 
+      {!orgWideOnly && (
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <h2 className="text-sm font-semibold text-slate-900">Settlement volume</h2>
@@ -491,12 +499,15 @@ export default async function MerchantDashboardPage({
           <MiniBarChart data={depositTrend} title="Merchant deposits" emptyText="No deposits in this period" />
         </Card>
       </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <h2 className="mb-5 text-sm font-semibold text-slate-900">Authorization rate</h2>
-          <AuthRateMeter meter={authMeter} />
-        </Card>
+        {!orgWideOnly && (
+          <Card>
+            <h2 className="mb-5 text-sm font-semibold text-slate-900">Authorization rate</h2>
+            <AuthRateMeter meter={authMeter} />
+          </Card>
+        )}
         <Suspense fallback={<CardSkeleton height={220} />}>
           <SourcesSection
             churchId={churchId}

@@ -30,11 +30,28 @@ export async function loadFundTotals(params: {
   range?: DateRangeFilter;
   /** Scoped viewer (e.g. a fundraiser): only these donors' gifts count. */
   donorIds?: string[];
+  /**
+   * Team member scope (a fundraiser, or an owner/admin viewing one person):
+   * only gifts attributed to this user count, and only funds on giving links
+   * this user owns are listed, so nobody sees other people's funds or totals.
+   * Takes the place of donorIds (donor-based scoping leaked gifts a donor made
+   * to other funds through other people's links).
+   */
+  scopedUserId?: string;
 }): Promise<FundTotalsRow[]> {
-  const { churchId, range, donorIds } = params;
+  const { churchId, range, scopedUserId } = params;
+  const donorIds = scopedUserId ? undefined : params.donorIds;
+  let ownFundIds: string[] | undefined;
+  if (scopedUserId) {
+    const links = await prisma.givingLink.findMany({ where: { churchId, ownerUserId: scopedUserId }, select: { id: true } });
+    const linkFunds = links.length
+      ? await prisma.givingLinkFund.findMany({ where: { givingLinkId: { in: links.map((l) => l.id) } }, select: { fundId: true } })
+      : [];
+    ownFundIds = [...new Set(linkFunds.map((f) => f.fundId))];
+  }
   const [catalog, online, offline] = await Promise.all([
     prisma.fund.findMany({
-      where: { churchId },
+      where: { churchId, ...(ownFundIds ? { id: { in: ownFundIds } } : {}) },
       orderBy: [{ displayOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true, name: true, description: true, isActive: true },
     }),
@@ -45,6 +62,7 @@ export async function loadFundTotals(params: {
         status: "SUCCEEDED",
         ...(range ? { createdAt: range } : {}),
         ...(donorIds ? { donorId: { in: donorIds } } : {}),
+        ...(scopedUserId ? { attributedUserId: scopedUserId } : {}),
       },
       _sum: { amountCents: true },
       _count: true,
@@ -52,7 +70,7 @@ export async function loadFundTotals(params: {
     }),
     prisma.externalDonation.groupBy({
       by: ["fundId", "fundName", "depositStatus"],
-      where: externalDonationEligibilityWhere(churchId, { donorIds, dateFilter: range }),
+      where: externalDonationEligibilityWhere(churchId, { donorIds, dateFilter: range, attributedUserId: scopedUserId }),
       _sum: { donationAmountCents: true },
       _count: true,
       _max: { donationDate: true },

@@ -161,7 +161,7 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { name: "Funds", href: "/merchant/funds", icon: Layers, section: "Giving", access: "canViewFunds" },
-  { name: "Giving Campaigns", href: "/merchant/giving-campaigns", icon: Send, section: "Giving" },
+  { name: "Giving Campaigns", href: "/merchant/giving-campaigns", icon: Send, organizationOnly: true, section: "Giving" },
   { name: "External Donations", href: "/merchant/donations/external", icon: HandCoins, section: "Giving" },
   {
     name: "Pledges",
