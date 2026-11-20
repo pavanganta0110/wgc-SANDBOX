@@ -405,10 +405,13 @@ export async function getRefundsInsights(
     refunds.reduce((map, r) => {
       const key = dimensionOf(r);
       const entry = map.get(key) ?? { volume: 0, count: 0, failedVolume: 0, failedCount: 0 };
-      entry.volume += (r.state || "").toUpperCase() === "SUCCEEDED" ? r.amountCents ?? 0 : 0;
-      entry.count += (r.state || "").toUpperCase() === "SUCCEEDED" ? 1 : 0;
-      entry.failedVolume += (r.state || "").toUpperCase() === "FAILED" ? r.amountCents ?? 0 : 0;
-      entry.failedCount += (r.state || "").toUpperCase() === "FAILED" ? 1 : 0;
+      // Refunds that were issued and haven't failed (completed or still pending) count as refunded,
+      // so a refund issued in the processing dashboard shows up here right away.
+      const failed = (r.state || "").toUpperCase() === "FAILED";
+      entry.volume += failed ? 0 : r.amountCents ?? 0;
+      entry.count += failed ? 0 : 1;
+      entry.failedVolume += failed ? r.amountCents ?? 0 : 0;
+      entry.failedCount += failed ? 1 : 0;
       map.set(key, entry);
       return map;
     }, new Map<string, { volume: number; count: number; failedVolume: number; failedCount: number }>())
