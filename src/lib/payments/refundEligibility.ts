@@ -22,7 +22,12 @@ export function checkRefundEligibility(
   }
 
   // 2. Resource is a real completed payment/transfer
-  if (transfer.type !== "TRANSFER") {
+  // Finix stores a card/ACH sale as type DEBIT (older records and tests use
+  // TRANSFER). Refunds themselves (REVERSAL), settlement and fee movements
+  // (CREDIT, or any SETTLEMENT_* subtype) are never refundable.
+  const type = (transfer.type || "").toUpperCase();
+  const isSale = type === "TRANSFER" || type === "DEBIT";
+  if (!isSale || (transfer.subtype || "").toUpperCase().includes("SETTLEMENT")) {
     return { eligible: false, reason: "This transaction is not eligible for a refund." };
   }
 

@@ -51,6 +51,8 @@ describe("buildFinixTransferScope", () => {
     expect(scope).toEqual({
       churchId: "church-a",
       OR: [{ subtype: null }, { NOT: { subtype: { contains: "SETTLEMENT" } } }],
+      // refunds (REVERSAL) live on the Refunds page, not in the payments list
+      NOT: { type: "REVERSAL" },
     });
   });
 });

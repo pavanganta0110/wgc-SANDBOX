@@ -161,6 +161,9 @@ export function buildSubscriptionScope(
 // history, insights) rather than patched per call site.
 export const EXCLUDE_NON_DONATION_TRANSFERS: Prisma.FinixTransferWhereInput = {
   OR: [{ subtype: null }, { NOT: { subtype: { contains: "SETTLEMENT" } } }],
+  // A refund (REVERSAL) is its own row in the transfer mirror. It belongs on the
+  // Refunds page, not in the payments list or volume totals as a pending "payment".
+  NOT: { type: "REVERSAL" },
 };
 
 export async function buildFinixTransferScope(

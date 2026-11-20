@@ -53,3 +53,24 @@ describe("checkRefundEligibility remaining balance", () => {
     expect(result.remainingCents).toBe(2000);
   });
 });
+
+describe("checkRefundEligibility transfer types (real Finix data)", () => {
+  it("allows a normal card/ACH sale, which Finix stores as DEBIT / API", () => {
+    const result = checkRefundEligibility(makeTransfer({ type: "DEBIT", subtype: "API" }), [], [], CHURCH_ID);
+    expect(result.eligible).toBe(true);
+    expect(result.remainingCents).toBe(10000);
+  });
+
+  it("allows a DEBIT with no subtype (a sale entered in the processing dashboard)", () => {
+    expect(checkRefundEligibility(makeTransfer({ type: "DEBIT", subtype: null }), [], [], CHURCH_ID).eligible).toBe(true);
+  });
+
+  it("never allows refunding a refund (REVERSAL)", () => {
+    expect(checkRefundEligibility(makeTransfer({ type: "REVERSAL", subtype: "API" }), [], [], CHURCH_ID).eligible).toBe(false);
+  });
+
+  it("never allows refunding settlement or payout movements", () => {
+    expect(checkRefundEligibility(makeTransfer({ type: "DEBIT", subtype: "SETTLEMENT_MERCHANT" }), [], [], CHURCH_ID).eligible).toBe(false);
+    expect(checkRefundEligibility(makeTransfer({ type: "CREDIT", subtype: "SETTLEMENT_PLATFORM" }), [], [], CHURCH_ID).eligible).toBe(false);
+  });
+});
