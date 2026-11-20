@@ -9,6 +9,7 @@ import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import { buildGivingLinkScope } from "@/lib/auth/scopes";
 import { isAuthError } from "@/lib/auth/errors";
+import { hasPermission } from "@/lib/auth/permissions";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
 
 export default async function GivingLinksPage({
@@ -32,8 +33,15 @@ export default async function GivingLinksPage({
   // buildGivingLinkScope regardless of the ?owner= param — the "All Links /
   // My Links / Team Member" filter below is only meaningful for OWNER/ADMIN.
   const viewScope = await resolveViewScope(auth);
-  const baseScope = buildGivingLinkScope(auth, viewScope);
   const canFilterByOwner = auth.role === "owner" || auth.role === "admin";
+  // OWNER/ADMIN see every link in the organization here: this page has its own
+  // Owner filter and Owner column, so a leftover dashboard "view as" cookie must
+  // not hide teammates' links (it used to leave "All Links" empty until a
+  // specific person was picked). Everyone else keeps the scoped view.
+  const baseScope =
+    canFilterByOwner && hasPermission(auth, "canViewAllTransactions")
+      ? { churchId }
+      : buildGivingLinkScope(auth, viewScope);
   const ownerFilterOptions = canFilterByOwner
     ? await prisma.user.findMany({
         where: { churchId, role: { in: ["owner", "admin", "fundraiser", "viewer", "church_admin"] } },
