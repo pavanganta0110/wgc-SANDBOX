@@ -7,6 +7,7 @@ import { listMigrationJobs } from "@/lib/migrations/migrationEngine";
 import { MIGRATION_ENTITY_LABELS, MIGRATION_SOURCE_LABELS, type MigrationEntityType, type MigrationSourceSystem } from "@/lib/migrations/types";
 import NewMigrationJobButton from "@/components/merchant/NewMigrationJobButton";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
+import { RECURRING_SOURCE_SYSTEM } from "@/lib/migrations/recurringImport";
 
 const STATUS_STYLES: Record<string, string> = {
   DRAFT: "bg-slate-100 text-slate-700",
@@ -64,13 +65,13 @@ export default async function MigrationCenterPage() {
               {jobs.map((j) => (
                 <tr key={j.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 text-sm">
-                    <Link href={`/merchant/migrations/${j.id}`} className="font-semibold text-indigo-600 hover:underline">
-                      {MIGRATION_SOURCE_LABELS[j.sourceSystem as MigrationSourceSystem] ?? j.sourceSystem}
+                    <Link href={j.sourceSystem === RECURRING_SOURCE_SYSTEM ? `/merchant/migrations/recurring/${j.id}` : `/merchant/migrations/${j.id}`} className="font-semibold text-indigo-600 hover:underline">
+                      {j.sourceSystem === RECURRING_SOURCE_SYSTEM ? "Continue to Give" : MIGRATION_SOURCE_LABELS[j.sourceSystem as MigrationSourceSystem] ?? j.sourceSystem}
                     </Link>
                     {j.fileName && <div className="text-xs text-slate-400">{j.fileName}</div>}
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-500">
-                    {j.entityTypes.map((t: MigrationEntityType) => MIGRATION_ENTITY_LABELS[t]).join(", ") || "—"}
+                    {j.sourceSystem === RECURRING_SOURCE_SYSTEM ? "Recurring gifts" : j.entityTypes.map((t: MigrationEntityType) => MIGRATION_ENTITY_LABELS[t]).join(", ") || "—"}
                   </td>
                   <td className="px-4 py-3 text-sm">
                     <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[j.status] ?? "bg-slate-100 text-slate-700"}`}>

@@ -18,6 +18,7 @@ import { loadSubscriptionsAnalytics } from "@/lib/subscriptions/subscriptionsAna
 import { frequencyLabel } from "@/lib/subscriptions/subscriptionStatus";
 import { reconcileStaleActiveSubscriptions } from "@/lib/subscriptions/subscriptionReconciliation";
 import { getPaymentWording } from "@/lib/settings/paymentWording";
+import { getMigratedSubscriptionIds } from "@/lib/migrations/recurringImportRun";
 
 const PAGE_SIZE = 25;
 
@@ -95,6 +96,7 @@ export default async function SubscriptionsPage({
   ]);
 
   const { rows, totalCount } = list;
+  const migratedIds = await getMigratedSubscriptionIds(churchId, rows.map((r) => r.id));
   const pageCount = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const { summary, frequencyMix, attentionList } = analytics;
 
@@ -211,7 +213,10 @@ export default async function SubscriptionsPage({
                         <span className="text-xs font-mono text-slate-500">{s.finixSubscriptionId.slice(0, 18)}…</span>
                       </td>
                       <td className="px-6 py-3">
-                        <p className="font-semibold text-slate-800">{s.donorName}</p>
+                        <p className="font-semibold text-slate-800">
+                          {s.donorName}
+                          {migratedIds.has(s.id) && <span className="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">Migrated</span>}
+                        </p>
                         <p className="text-xs text-slate-400">{s.donorEmail || "—"}</p>
                       </td>
                       <td className="px-6 py-3 text-right font-semibold text-slate-900">{formatCents(s.amountCents)}</td>
