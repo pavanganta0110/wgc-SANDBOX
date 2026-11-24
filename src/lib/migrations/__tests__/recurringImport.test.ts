@@ -32,10 +32,33 @@ describe("parsing", () => {
     expect(daysBetween("2026-11-24", "2026-11-25")).toBe(1);
   });
 
-  it("finds the mapping columns under different names and skips blank rows from Finix", () => {
+  it("finds the mapping columns under different names, and keeps a blank Finix row as a failed one", () => {
     const { rows, errors } = parseMappingCsv("Customer ID,Token ID,Identity_ID,Payment Instrument ID\nC1,t1,IDx,PIx\nC2,t2,,\n");
     expect(errors).toEqual([]);
-    expect(rows).toEqual([{ externalCustomerId: "C1", originalTokenId: "t1", finixIdentityId: "IDx", finixInstrumentId: "PIx" }]);
+    expect(rows[0]).toMatchObject({ externalCustomerId: "C1", originalTokenId: "t1", finixIdentityId: "IDx", finixInstrumentId: "PIx" });
+    expect(rows[0].failedReason).toBeUndefined();
+    expect(rows[1]).toMatchObject({ externalCustomerId: "C2", failedReason: "Finix did not import this card." });
+  });
+
+  it("reads Finix's own output file: its header names, failed rows with their reason, and expired cards", () => {
+    const finixFile = [
+      "import_reference_number,finix_instrument_id,finix_identity_id,finix_application_id,successful,external_customer_id,external_token_id,customer_email,instrument_last_four,card_brand,expiration_month,expiration_year,error_msg,is_expired",
+      "REF1,PIgood,IDgood,APPx,true,C1,tokA,a@x.org,4444,VISA,12,2030,,false",
+      "REF1,,,APPx,false,C2,tokB,b@x.org,,,,,Card number failed validation,false",
+      "REF1,PIold,IDold,APPx,true,C3,tokC,c@x.org,1111,VISA,1,2020,,true",
+    ].join("\n");
+    const { rows, errors } = parseMappingCsv(finixFile);
+    expect(errors).toEqual([]);
+    expect(rows[0]).toMatchObject({ externalCustomerId: "C1", originalTokenId: "tokA", finixIdentityId: "IDgood", finixInstrumentId: "PIgood" });
+    expect(rows[1]).toMatchObject({ externalCustomerId: "C2", failedReason: "Card number failed validation" });
+    expect(rows[2]).toMatchObject({ expired: true });
+
+    const schedule = ["external_customer_id,external_token_id,amount,frequency,next_charge_date", "C1,tokA,10,monthly,2026-12-05", "C2,tokB,10,monthly,2026-12-05", "C3,tokC,10,monthly,2026-12-05"].join("\n");
+    const result = buildRecurringPreview({ churchId: "ch1", scheduleCsv: schedule, mappingCsv: finixFile, fundMap: {}, alreadyImported: new Set(), today: TODAY });
+    expect(result.rows[0].status).toBe("WARNING"); // no fund is only a warning
+    expect(result.rows[1]).toMatchObject({ status: "INVALID" });
+    expect(result.rows[1].messages.join(" ")).toContain("Card number failed validation");
+    expect(result.rows[2].messages.join(" ")).toContain("expired");
   });
 
   it("reports missing columns instead of guessing", () => {

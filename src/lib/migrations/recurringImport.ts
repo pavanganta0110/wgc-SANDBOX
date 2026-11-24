@@ -28,6 +28,10 @@ export interface MappingRow {
   originalTokenId: string | null;
   finixIdentityId: string;
   finixInstrumentId: string;
+  /** Finix's `is_expired`: the card cannot be charged until it is updated. */
+  expired?: boolean;
+  /** Finix's `successful` was false or the IDs are blank: the card was not imported, and why. */
+  failedReason?: string;
 }
 
 export interface ScheduleRow {
@@ -84,16 +88,16 @@ export interface RecurringPreview {
 
 const norm = (h: string) => h.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 
-const MAPPING_ALIASES: Record<keyof MappingRow, string[]> = {
+const MAPPING_ALIASES: Record<"externalCustomerId" | "originalTokenId" | "finixIdentityId" | "finixInstrumentId", string[]> = {
   externalCustomerId: ["external_customer_id", "customer_id", "external_id", "donor_id"],
-  originalTokenId: ["original_token_id", "token_id", "original_token", "payment_method_id", "original_payment_method_id"],
+  originalTokenId: ["external_token_id", "original_token_id", "token_id", "original_token", "payment_method_id", "original_payment_method_id"],
   finixIdentityId: ["identity_id", "finix_identity_id"],
   finixInstrumentId: ["instrument_id", "finix_instrument_id", "payment_instrument_id"],
 };
 
 const SCHEDULE_ALIASES = {
   externalCustomerId: ["external_customer_id", "customer_id", "external_id", "donor_id"],
-  originalTokenId: ["original_token_id", "token_id", "original_token", "payment_method_id"],
+  originalTokenId: ["external_token_id", "original_token_id", "token_id", "original_token", "payment_method_id"],
   donorName: ["donor_name", "name", "customer_name", "full_name"],
   donorEmail: ["donor_email", "email", "customer_email"],
   amount: ["amount", "gift_amount", "recurring_amount", "amount_dollars"],
@@ -127,20 +131,34 @@ export function parseMappingCsv(text: string): { rows: MappingRow[]; errors: str
     originalTokenId: headerIndex(headers, MAPPING_ALIASES.originalTokenId),
     finixIdentityId: headerIndex(headers, MAPPING_ALIASES.finixIdentityId),
     finixInstrumentId: headerIndex(headers, MAPPING_ALIASES.finixInstrumentId),
+    successful: headerIndex(headers, ["successful", "success"]),
+    isExpired: headerIndex(headers, ["is_expired", "expired"]),
+    errorMsg: headerIndex(headers, ["error_msg", "error_message", "error"]),
   };
   if (idx.externalCustomerId === -1) errors.push("The mapping file needs a customer ID column (external_customer_id).");
-  if (idx.finixIdentityId === -1) errors.push("The mapping file needs an identity_id column.");
-  if (idx.finixInstrumentId === -1) errors.push("The mapping file needs an instrument_id column.");
+  if (idx.finixIdentityId === -1) errors.push("The mapping file needs an identity ID column (finix_identity_id or identity_id).");
+  if (idx.finixInstrumentId === -1) errors.push("The mapping file needs an instrument ID column (finix_instrument_id or instrument_id).");
   if (errors.length > 0) return { rows: [], errors };
 
+  const truthy = (v: string) => /^(true|t|yes|y|1)$/i.test(v.trim());
   const rows: MappingRow[] = [];
   for (let r = 1; r < table.length; r++) {
     const row = table[r];
     const externalCustomerId = cell(row, idx.externalCustomerId);
+    if (!externalCustomerId) continue;
     const finixIdentityId = cell(row, idx.finixIdentityId);
     const finixInstrumentId = cell(row, idx.finixInstrumentId);
-    if (!externalCustomerId || !finixIdentityId || !finixInstrumentId) continue; // a failed import row from Finix has blanks
-    rows.push({ externalCustomerId, originalTokenId: cell(row, idx.originalTokenId) || null, finixIdentityId, finixInstrumentId });
+    const successfulRaw = cell(row, idx.successful);
+    const notSuccessful = idx.successful !== -1 && successfulRaw !== "" && !truthy(successfulRaw);
+    const failedReason = notSuccessful || !finixIdentityId || !finixInstrumentId ? cell(row, idx.errorMsg) || "Finix did not import this card." : undefined;
+    rows.push({
+      externalCustomerId,
+      originalTokenId: cell(row, idx.originalTokenId) || null,
+      finixIdentityId,
+      finixInstrumentId,
+      expired: idx.isExpired !== -1 && truthy(cell(row, idx.isExpired)) ? true : undefined,
+      failedReason,
+    });
   }
   return { rows, errors };
 }
@@ -324,6 +342,9 @@ export function validateRecurringImport(input: ValidateInput): RecurringPreview 
         bad("This customer has more than one saved card or bank account, and the row does not say which. Add the token ID column.");
       }
     }
+
+    if (mapped?.failedReason) bad(`Finix could not import this card: ${mapped.failedReason}`);
+    else if (mapped?.expired) bad("Finix reports this card is expired. It cannot be charged until the card is updated.");
 
     if (s.amountCents == null) bad(`Amount "${s.amountRaw}" is not a valid dollar amount.`);
     else if (s.amountCents < MIN_AMOUNT_CENTS) bad("Amount is below the $1.00 minimum.");

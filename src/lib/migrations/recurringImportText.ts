@@ -12,7 +12,8 @@ export const SCHEDULE_TEMPLATE_CSV = [
   "CTG-1003,tok_ccc333,Sam Rivera,sam@example.com,50.00,weekly,2027-01-07,General Fund,2025-01-02,2025-01-02",
 ].join("\n");
 
+/** The shape of the file Finix sends back after it imports the cards (per Finix's migration guide). */
 export const MAPPING_TEMPLATE_CSV = [
-  "external_customer_id,original_token_id,identity_id,instrument_id",
-  "CTG-1001,tok_aaa111,IDxxxxxxxxxxxxxxxxxxxxxx,PIxxxxxxxxxxxxxxxxxxxxxx",
+  "import_reference_number,finix_instrument_id,finix_identity_id,finix_application_id,successful,external_customer_id,external_token_id,customer_email,instrument_last_four,card_brand,expiration_month,expiration_year,error_msg,is_expired",
+  "REF001,PIxxxxxxxxxxxxxxxxxxxxxx,IDxxxxxxxxxxxxxxxxxxxxxx,APxxxxxxxxxxxxxxxxxxxxxx,true,CTG-1001,tok_aaa111,jordan@example.com,4444,VISA,12,2030,,false",
 ].join("\n");
