@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import type { WgcEventType } from "@/lib/events/types";
 import { attemptWebhookDelivery } from "@/lib/webhooks/deliverWebhook";
 import { queuePartnerWebhookDelivery } from "@/lib/partners/partnerWebhooks";
+import { runAfterResponse } from "@/lib/runAfterResponse";
 
 /**
  * The single entry point for "something happened" anywhere in the app.
@@ -55,13 +56,11 @@ export async function emitEvent(params: { type: WgcEventType; churchId: string; 
       )
     );
 
-    for (const delivery of deliveries) {
-      void attemptWebhookDelivery(delivery.id).catch(() => {
-        // attemptWebhookDelivery already records failures on the row itself;
-        // this catch exists only so an unexpected throw can never become an
-        // unhandled promise rejection.
-      });
-    }
+    // After the response (see runAfterResponse): a bare un-awaited promise can be frozen with the function,
+    // leaving the delivery Pending. attemptWebhookDelivery records failures on the row itself.
+    runAfterResponse(async () => {
+      for (const delivery of deliveries) await attemptWebhookDelivery(delivery.id);
+    });
   } catch (err) {
     console.error(`emitEvent failed for type=${params.type} churchId=${params.churchId}:`, err);
   }

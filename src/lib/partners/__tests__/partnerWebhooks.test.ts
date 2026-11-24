@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const prismaMock = vi.hoisted(() => ({
   church: { findUnique: vi.fn() },
   partnerWebhookEndpoint: { findUnique: vi.fn(), update: vi.fn() },
-  partnerWebhookDelivery: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  partnerWebhookDelivery: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
   webhookEvent: { findUnique: vi.fn() },
   partnerEvent: { create: vi.fn(), findUnique: vi.fn() },
   $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
@@ -14,12 +14,17 @@ vi.mock("@/lib/webhooks/encryption", () => ({ decryptSecret: () => "whsec_test",
 const post = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/webhooks/postSignedWebhook", () => ({ postSignedWebhook: post }));
 
-import { attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, recordPartnerEvent, sendPartnerTestEvent } from "../partnerWebhooks";
+const afterMock = vi.hoisted(() => ({ after: vi.fn() }));
+vi.mock("next/server", () => afterMock);
+
+import { STALE_PENDING_DELIVERY_SECONDS, attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, recordPartnerEvent, retryStalePartnerDeliveries, sendPartnerTestEvent } from "../partnerWebhooks";
 
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.partnerWebhookDelivery.create.mockResolvedValue({ id: "d1" });
   prismaMock.partnerWebhookDelivery.findUnique.mockResolvedValue(null); // the background attempt exits early
+  prismaMock.partnerWebhookDelivery.findMany.mockResolvedValue([]);
+  afterMock.after.mockImplementation(() => undefined); // by default the background work is only scheduled
 });
 
 describe("queuePartnerWebhookDelivery", () => {
@@ -215,5 +220,46 @@ describe("delivering an onboarding event", () => {
     await attemptPartnerWebhookDelivery("d9");
     expect(post).not.toHaveBeenCalled();
     expect(prismaMock.partnerWebhookDelivery.update.mock.calls[0][0].data.status).toBe("ABANDONED");
+  });
+});
+
+describe("a delivery is not lost when its request ends", () => {
+  const params = { eventId: "evt1", type: "donation.created", churchId: "c1" };
+
+  it("hands the first attempt to Next's after() instead of leaving a bare promise", async () => {
+    prismaMock.church.findUnique.mockResolvedValue({ partnerId: "p1" });
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "w1", status: "ACTIVE", subscribedEventsJson: ["donation.created"] });
+    await queuePartnerWebhookDelivery(params);
+    expect(afterMock.after).toHaveBeenCalledTimes(1);
+    // Nothing is attempted until the platform runs the scheduled work.
+    expect(prismaMock.partnerWebhookDelivery.findUnique).not.toHaveBeenCalled();
+    await afterMock.after.mock.calls[0][0]();
+    expect(prismaMock.partnerWebhookDelivery.findUnique).toHaveBeenCalledWith({ where: { id: "d1" } });
+  });
+
+  it("still attempts the delivery outside a request, where after() throws", async () => {
+    afterMock.after.mockImplementation(() => {
+      throw new Error("after() was called outside a request scope");
+    });
+    prismaMock.church.findUnique.mockResolvedValue({ partnerId: "p1" });
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "w1", status: "ACTIVE", subscribedEventsJson: ["donation.created"] });
+    await expect(queuePartnerWebhookDelivery(params)).resolves.toBeUndefined();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(prismaMock.partnerWebhookDelivery.findUnique).toHaveBeenCalledWith({ where: { id: "d1" } });
+  });
+
+  it("after a new delivery, picks up the partner's own deliveries that were never attempted", async () => {
+    prismaMock.partnerWebhookDelivery.findMany.mockResolvedValue([{ id: "old1" }, { id: "old2" }]);
+    await retryStalePartnerDeliveries("p1", "d1");
+    const query = prismaMock.partnerWebhookDelivery.findMany.mock.calls[0][0];
+    expect(query.where).toMatchObject({ partnerId: "p1", status: "PENDING", attemptCount: 0, id: { not: "d1" } });
+    const cutoff = query.where.createdAt.lt as Date;
+    expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(STALE_PENDING_DELIVERY_SECONDS * 1000 - 50);
+    expect(prismaMock.partnerWebhookDelivery.findUnique.mock.calls.map((c) => c[0].where.id)).toEqual(["old1", "old2"]);
+  });
+
+  it("never throws when the sweep fails", async () => {
+    prismaMock.partnerWebhookDelivery.findMany.mockRejectedValue(new Error("db down"));
+    await expect(retryStalePartnerDeliveries("p1")).resolves.toBeUndefined();
   });
 });

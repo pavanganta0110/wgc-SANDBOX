@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { attemptWebhookDelivery } from "@/lib/webhooks/deliverWebhook";
-import { attemptPartnerWebhookDelivery } from "@/lib/partners/partnerWebhooks";
+import { attemptPartnerWebhookDelivery, STALE_PENDING_DELIVERY_SECONDS } from "@/lib/partners/partnerWebhooks";
 import { alertCronMisconfiguration } from "@/lib/cron/alertCronMisconfiguration";
 import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
 
@@ -19,6 +19,17 @@ import { withJobRunTracking } from "@/lib/monitoring/jobRunTracking";
  * recycled). Upgrading the Vercel plan would let this run far more often.
  * Same CRON_SECRET bearer-auth pattern as every other cron in this app.
  */
+/**
+ * What is due: a failed delivery whose backoff has passed, and a delivery that was queued but never attempted
+ * (its request ended first) and has been waiting longer than STALE_PENDING_DELIVERY_SECONDS.
+ */
+const DUE_WHERE = () => ({
+  OR: [
+    { status: "FAILED", nextRetryAt: { lte: new Date() } },
+    { status: "PENDING", attemptCount: 0, createdAt: { lt: new Date(Date.now() - STALE_PENDING_DELIVERY_SECONDS * 1000) } },
+  ],
+});
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (process.env.NODE_ENV === "production") {
@@ -36,7 +47,7 @@ export async function GET(req: Request) {
 
   const result = await withJobRunTracking({ jobName: "webhook-retry", jobType: "webhook" }, async () => {
     const due = await prisma.webhookDelivery.findMany({
-      where: { status: "FAILED", nextRetryAt: { lte: new Date() } },
+      where: DUE_WHERE(),
       select: { id: true },
       take: 200,
     });
@@ -53,7 +64,7 @@ export async function GET(req: Request) {
 
     // Partner webhook deliveries wait on the same backoff schedule.
     const duePartner = await prisma.partnerWebhookDelivery.findMany({
-      where: { status: "FAILED", nextRetryAt: { lte: new Date() } },
+      where: DUE_WHERE(),
       select: { id: true },
       take: 200,
     });

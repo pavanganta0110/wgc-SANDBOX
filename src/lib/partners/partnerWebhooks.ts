@@ -5,6 +5,7 @@ import { decryptSecret, deserializeEnvelope } from "@/lib/webhooks/encryption";
 import { postSignedWebhook } from "@/lib/webhooks/postSignedWebhook";
 import { computeNextRetryAt, MAX_DELIVERY_ATTEMPTS, AUTO_DISABLE_FAILURE_THRESHOLD } from "@/lib/webhooks/retryPolicy";
 import { createAuditLog } from "@/lib/audit";
+import { runAfterResponse } from "@/lib/runAfterResponse";
 
 /**
  * Delivery of organization events to a partner's one webhook endpoint. Same
@@ -53,9 +54,7 @@ export async function queuePartnerWebhookDelivery(params: { eventId: string; typ
     const delivery = await prisma.partnerWebhookDelivery.create({
       data: { webhookEventId: params.eventId, partnerId: church.partnerId, partnerEndpointId: endpoint.id, churchId: params.churchId },
     });
-    void attemptPartnerWebhookDelivery(delivery.id).catch(() => {
-      // Failures are recorded on the row; this only prevents an unhandled rejection.
-    });
+    runAfterResponse(() => attemptThenRetryStale(delivery.id, church.partnerId!));
   } catch (err) {
     console.error(`queuePartnerWebhookDelivery failed for event=${params.eventId}:`, err);
   }
@@ -142,10 +141,44 @@ export async function recordPartnerEvent(params: {
     const delivery = await prisma.partnerWebhookDelivery.create({
       data: { partnerEventId: event.id, partnerId: params.partnerId, partnerEndpointId: endpoint.id },
     });
-    void attemptPartnerWebhookDelivery(delivery.id).catch(() => {});
+    runAfterResponse(() => attemptThenRetryStale(delivery.id, params.partnerId));
   } catch (err) {
     console.error(`recordPartnerEvent failed for type=${params.type} partner=${params.partnerId}:`, err);
   }
+}
+
+/** A delivery still Pending (never attempted) after this long was lost with its request, and is picked up again. */
+export const STALE_PENDING_DELIVERY_SECONDS = 120;
+const STALE_SWEEP_LIMIT = 20;
+
+/**
+ * Attempts the partner's deliveries that were queued but never tried (the request ended first) and are past
+ * STALE_PENDING_DELIVERY_SECONDS. The daily retry job does the same; this also runs after every new delivery, so a
+ * lost one is picked up by the partner's next event instead of waiting up to a day. Never throws.
+ */
+export async function retryStalePartnerDeliveries(partnerId: string, exceptDeliveryId?: string): Promise<void> {
+  try {
+    const stale = await prisma.partnerWebhookDelivery.findMany({
+      where: {
+        partnerId,
+        status: "PENDING",
+        attemptCount: 0,
+        createdAt: { lt: new Date(Date.now() - STALE_PENDING_DELIVERY_SECONDS * 1000) },
+        ...(exceptDeliveryId ? { id: { not: exceptDeliveryId } } : {}),
+      },
+      orderBy: { createdAt: "asc" },
+      take: STALE_SWEEP_LIMIT,
+      select: { id: true },
+    });
+    for (const row of stale) await attemptPartnerWebhookDelivery(row.id);
+  } catch (err) {
+    console.error(`retryStalePartnerDeliveries failed for partner=${partnerId}:`, err);
+  }
+}
+
+async function attemptThenRetryStale(deliveryId: string, partnerId: string): Promise<void> {
+  await attemptPartnerWebhookDelivery(deliveryId);
+  await retryStalePartnerDeliveries(partnerId, deliveryId);
 }
 
 /** One attempt, recorded on the delivery row and the endpoint. Never throws. */
