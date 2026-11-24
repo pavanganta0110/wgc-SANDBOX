@@ -12,9 +12,10 @@ export const EMBED_ROLES = ["owner", "admin", "fundraiser", "viewer"];
 /**
  * How people are identified when WGC is shown inside a partner's product:
  *  - CRM_IDENTITY: the partner's page says who is opening it (the partner has a login per person);
- *  - PASSCODE: the partner's product has one shared login, so each person types their email and their own passcode.
+ *  - PASSCODE: the partner's product has one shared login, so each person types their email and their own passcode;
+ *  - EMAIL_CODE: also one shared login, but WGC emails a one-time code to the address the person types, if that address is on the organization's team.
  */
-export const EMBED_SIGN_IN_MODES = ["CRM_IDENTITY", "PASSCODE"] as const;
+export const EMBED_SIGN_IN_MODES = ["CRM_IDENTITY", "PASSCODE", "EMAIL_CODE"] as const;
 export type EmbedSignInMode = (typeof EMBED_SIGN_IN_MODES)[number];
 
 export const isEmbedSignInMode = (value: unknown): value is EmbedSignInMode => typeof value === "string" && (EMBED_SIGN_IN_MODES as readonly string[]).includes(value);
@@ -65,7 +66,7 @@ export function buildEmbedSessionCookieFor(user: EmbedUser): string {
   return buildEmbedSessionCookie(SESSION_COOKIE_NAME, sessionToken, PARTNER_EMBED_SESSION_SECONDS);
 }
 
-export async function auditEmbedSessionStart(user: EmbedUser, partnerId: string, via: "partner_embed_link" | "partner_embed_passcode", req: Request) {
+export async function auditEmbedSessionStart(user: EmbedUser, partnerId: string, via: "partner_embed_link" | "partner_embed_passcode" | "partner_embed_email_code", req: Request) {
   try {
     await logDashboardAction({
       churchId: user.churchId,

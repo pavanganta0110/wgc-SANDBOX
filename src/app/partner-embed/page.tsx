@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import StartOnboardingForm from "@/app/start/StartOnboardingForm";
 import AutoRefresh from "./AutoRefresh";
 import EmbedPasscodeSignIn from "./EmbedPasscodeSignIn";
+import EmbedEmailCodeSignIn from "./EmbedEmailCodeSignIn";
 import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
 import { verifyPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
@@ -53,7 +54,8 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
   }
 
   const state = await loadPartnerEmbedState(payload.partnerId, payload.reference);
-  const passcodeMode = (await getEmbedSignInMode(payload.partnerId)) === "PASSCODE";
+  const signInMode = await getEmbedSignInMode(payload.partnerId);
+  const passcodeMode = signInMode === "PASSCODE";
   const here = `/partner-embed?link=${encodeURIComponent(link)}`;
 
   switch (state.kind) {
@@ -124,6 +126,8 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
     case "ready":
       // A partner whose product has one shared login: each person signs in with their own email and passcode.
       if (passcodeMode) return <EmbedPasscodeSignIn link={link} />;
+      // Also one shared login, but the person gets a one-time code by email.
+      if (signInMode === "EMAIL_CODE") return <EmbedEmailCodeSignIn link={link} />;
       // Opening the dashboard starts the session, which a page can't do, so a route does and comes back here if it can't.
       if (!params.problem) redirect(`/partner-embed/enter?link=${encodeURIComponent(link)}`);
       if (params.problem === "used") {

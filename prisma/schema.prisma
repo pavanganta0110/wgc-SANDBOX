@@ -7360,3 +7360,19 @@ model AuctionWin {
   @@index([bidderId])
   @@index([status, dueAt])
 }
+
+/// One-time email code for a person signing in inside a partner's frame (embedSignInMode EMAIL_CODE).
+/// Only the hash is stored; a code works once, expires, and dies after too many wrong guesses.
+model PartnerEmbedEmailCode {
+  id        String    @id @default(cuid())
+  userId    String
+  churchId  String
+  codeHash  String
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}

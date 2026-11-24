@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ partne
     data.suppressMerchantEmails = body.suppressMerchantEmails;
   }
   if ("embedSignInMode" in body) {
-    if (!isEmbedSignInMode(body.embedSignInMode)) return NextResponse.json({ error: "embedSignInMode must be CRM_IDENTITY or PASSCODE." }, { status: 400 });
+    if (!isEmbedSignInMode(body.embedSignInMode)) return NextResponse.json({ error: "embedSignInMode must be CRM_IDENTITY, PASSCODE or EMAIL_CODE." }, { status: 400 });
     data.embedSignInMode = body.embedSignInMode;
   }
   if ("pricePerMerchantCents" in body) {

@@ -395,6 +395,7 @@ function PartnerCard({ partner, onChanged, report }: { partner: PartnerRow; onCh
         >
           <option value="CRM_IDENTITY">The partner&apos;s page says who is opening it (a login per person)</option>
           <option value="PASSCODE">Each person types their email and their own passcode (one shared partner login)</option>
+          <option value="EMAIL_CODE">Each person types their email and WGC emails them a one-time code (one shared partner login)</option>
         </select>
         <p className="text-xs text-slate-500 mt-1">With passcodes, the person filling in the application chooses the owner&apos;s passcode, and the owner sets the team&apos;s under Team.</p>
       </div>
