@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildRecurringPreview } from "@/lib/migrations/recurringImport";
 import { ATTESTATION_TEXT, alreadyImportedFingerprints, createRecurringImportJob } from "@/lib/migrations/recurringImportRun";
+import { markScheduleSubmissionUsed } from "@/lib/migrations/recurringSubmission";
 import { buildFundMap, requireRecurringImportAdmin } from "@/lib/migrations/recurringImportAuth";
 
 /** Creates the import job from files that were previewed. Re-checks everything server side; creates no charges. */
@@ -32,6 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ churchI
       attestation: { text: ATTESTATION_TEXT, confirmedAt: new Date().toISOString() },
       fundMap,
     });
+    if (typeof body.submissionId === "string" && body.submissionId) await markScheduleSubmissionUsed(body.submissionId, churchId, jobId);
     return NextResponse.json({ jobId, importable, counts: preview.counts });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Could not create the import." }, { status: 400 });

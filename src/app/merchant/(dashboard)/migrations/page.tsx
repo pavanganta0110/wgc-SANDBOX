@@ -45,6 +45,11 @@ export default async function MigrationCenterPage() {
         <NewMigrationJobButton />
       </div>
 
+      <Link href="/merchant/migrations/recurring" className="mb-6 block rounded-2xl border border-indigo-100 bg-indigo-50 p-4 hover:bg-indigo-100">
+        <p className="text-sm font-semibold text-indigo-900">Moving recurring donors from Continue to Give?</p>
+        <p className="mt-1 text-sm text-indigo-800">Send WGC your recurring schedule, with no card numbers, and we will move your recurring gifts. Send your schedule &rarr;</p>
+      </Link>
+
       {jobs.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-8 text-center text-sm text-slate-500">
           No migrations started yet. Click &ldquo;New Migration&rdquo; to bring in data from a CSV export.
@@ -65,7 +70,7 @@ export default async function MigrationCenterPage() {
               {jobs.map((j) => (
                 <tr key={j.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 text-sm">
-                    <Link href={j.sourceSystem === RECURRING_SOURCE_SYSTEM ? `/merchant/migrations/recurring/${j.id}` : `/merchant/migrations/${j.id}`} className="font-semibold text-indigo-600 hover:underline">
+                    <Link href={j.sourceSystem === RECURRING_SOURCE_SYSTEM ? (j.status === "SUBMITTED" || j.status === "SUBMISSION_USED" ? "/merchant/migrations/recurring" : `/merchant/migrations/recurring/${j.id}`) : `/merchant/migrations/${j.id}`} className="font-semibold text-indigo-600 hover:underline">
                       {j.sourceSystem === RECURRING_SOURCE_SYSTEM ? "Continue to Give" : MIGRATION_SOURCE_LABELS[j.sourceSystem as MigrationSourceSystem] ?? j.sourceSystem}
                     </Link>
                     {j.fileName && <div className="text-xs text-slate-400">{j.fileName}</div>}

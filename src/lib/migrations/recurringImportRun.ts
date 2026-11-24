@@ -8,6 +8,7 @@ import { assertNonprofitApproved } from "@/lib/onboarding/nonprofitVerificationG
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { formatPersonName } from "@/lib/formatPersonName";
+const SUBMISSION_JOB_STATUSES = ["SUBMITTED", "SUBMISSION_USED"];
 import { RECURRING_ENTITY_TYPE, RECURRING_SOURCE_SYSTEM, daysBetween, todayUtc, type RecurringPreview, type RecurringPreviewRow } from "@/lib/migrations/recurringImport";
 
 /**
@@ -106,7 +107,7 @@ export async function createRecurringImportJob(params: {
 // Progress
 
 export async function getRecurringJobProgress(jobId: string, churchId: string): Promise<RecurringJobProgress | null> {
-  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM }, select: { id: true, status: true, totalRecords: true } });
+  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM, status: { notIn: SUBMISSION_JOB_STATUSES } }, select: { id: true, status: true, totalRecords: true } });
   if (!job) return null;
   const grouped = await prisma.migrationRecord.groupBy({ by: ["status"], where: { migrationJobId: jobId }, _count: { _all: true } });
   const counts: Record<string, number> = {};
@@ -138,7 +139,7 @@ async function failRecord(recordId: string, jobId: string, churchId: string, row
 }
 
 export async function processRecurringImportChunk(jobId: string, churchId: string, actor: ImportActor, opts: { limit?: number; now?: Date } = {}): Promise<RecurringJobProgress> {
-  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM } });
+  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM, status: { notIn: SUBMISSION_JOB_STATUSES } } });
   if (!job) throw new Error("Import job not found.");
   if (["COMPLETED", "COMPLETED_WITH_ERRORS", "CANCELLED", "FAILED"].includes(job.status)) return (await getRecurringJobProgress(jobId, churchId))!;
 
@@ -364,7 +365,7 @@ async function importOneRow(ctx: {
 // Undo: cancel what a job created
 
 export async function cancelImportedSubscriptions(jobId: string, churchId: string, actor: ImportActor, reason: string, opts: { limit?: number } = {}): Promise<{ canceled: number; failed: number; remaining: number }> {
-  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM }, select: { id: true } });
+  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM, status: { notIn: SUBMISSION_JOB_STATUSES } }, select: { id: true } });
   if (!job) throw new Error("Import job not found.");
   const records = await prisma.migrationRecord.findMany({ where: { migrationJobId: jobId, churchId, status: "IMPORTED", resultEntityId: { not: null } }, orderBy: { rowNumber: "asc" }, take: opts.limit ?? 20 });
   let canceled = 0;
@@ -400,7 +401,7 @@ export async function cancelImportedSubscriptions(jobId: string, churchId: strin
 // Report
 
 export async function getRecurringImportReport(jobId: string, churchId: string) {
-  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM } });
+  const job = await prisma.migrationJob.findFirst({ where: { id: jobId, churchId, sourceSystem: RECURRING_SOURCE_SYSTEM, status: { notIn: SUBMISSION_JOB_STATUSES } } });
   if (!job) return null;
   const [records, errors] = await Promise.all([
     prisma.migrationRecord.findMany({ where: { migrationJobId: jobId }, orderBy: { rowNumber: "asc" } }),

@@ -224,6 +224,14 @@ describe("importing a row", () => {
     await expect(run()).rejects.toThrow("not found");
     expect(prismaMock.migrationJob.findFirst.mock.calls[0][0].where).toMatchObject({ id: "job1", churchId: "ch1" });
   });
+
+  it("never treats a file the merchant sent as an import job", async () => {
+    prismaMock.migrationJob.findFirst.mockResolvedValue(null);
+    await expect(run()).rejects.toThrow("not found");
+    expect(prismaMock.migrationJob.findFirst.mock.calls[0][0].where.status).toEqual({ notIn: ["SUBMITTED", "SUBMISSION_USED"] });
+    await expect(cancelImportedSubscriptions("job1", "ch1", actor, "x")).rejects.toThrow("not found");
+    expect(prismaMock.migrationJob.findFirst.mock.calls[1][0].where.status).toEqual({ notIn: ["SUBMITTED", "SUBMISSION_USED"] });
+  });
 });
 
 describe("cancelling an import", () => {

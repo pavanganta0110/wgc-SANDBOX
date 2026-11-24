@@ -4,6 +4,7 @@ import { getAdminSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { RECURRING_SOURCE_SYSTEM } from "@/lib/migrations/recurringImport";
 import RecurringImportWizard from "@/components/admin/RecurringImportWizard";
+import { listScheduleSubmissions } from "@/lib/migrations/recurringSubmission";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,10 @@ export default async function MerchantMigrationPage({ params }: { params: Promis
   if (!session) redirect("/admin/login");
   const { churchId } = await params;
 
-  const [church, jobs] = await Promise.all([
+  const [church, jobs, submissions] = await Promise.all([
     prisma.church.findUnique({ where: { id: churchId }, select: { name: true, finixMerchantId: true, status: true } }),
-    prisma.migrationJob.findMany({ where: { churchId, sourceSystem: RECURRING_SOURCE_SYSTEM }, orderBy: { createdAt: "desc" }, take: 20 }),
+    prisma.migrationJob.findMany({ where: { churchId, sourceSystem: RECURRING_SOURCE_SYSTEM, status: { notIn: ["SUBMITTED", "SUBMISSION_USED"] } }, orderBy: { createdAt: "desc" }, take: 20 }),
+    listScheduleSubmissions(churchId),
   ]);
   const canRun = session.role === "wgc_super_admin";
 
@@ -75,10 +77,38 @@ export default async function MerchantMigrationPage({ params }: { params: Promis
         )}
       </div>
 
+      {submissions.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 px-5 py-3 text-sm font-bold text-slate-900">Files from the merchant</div>
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-xs text-slate-500">
+              <tr>
+                <th className="px-5 py-2 font-semibold">Sent</th>
+                <th className="px-5 py-2 font-semibold">File</th>
+                <th className="px-5 py-2 font-semibold">Gifts</th>
+                <th className="px-5 py-2 font-semibold">Sent by</th>
+                <th className="px-5 py-2 font-semibold">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {submissions.map((s) => (
+                <tr key={s.id} className="border-t border-slate-100">
+                  <td className="px-5 py-3 text-slate-600">{s.createdAt.toISOString().slice(0, 16).replace("T", " ")} UTC</td>
+                  <td className="px-5 py-3">{s.fileName || "—"}</td>
+                  <td className="px-5 py-3 tabular-nums">{s.rowCount}</td>
+                  <td className="px-5 py-3 text-slate-600">{s.submittedByEmail || "—"}</td>
+                  <td className="px-5 py-3">{s.usedByJobId ? <Link href={`/admin/merchants/${churchId}/migration/${s.usedByJobId}`} className="font-semibold text-blue-600 hover:underline">Used in an import</Link> : <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">New</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {canRun && church?.finixMerchantId && (
         <div>
           <h3 className="mb-3 text-base font-semibold">New recurring import</h3>
-          <RecurringImportWizard churchId={churchId} />
+          <RecurringImportWizard churchId={churchId} submissions={submissions.filter((x) => !x.usedByJobId).map((x) => ({ id: x.id, fileName: x.fileName, rowCount: x.rowCount }))} />
         </div>
       )}
     </div>

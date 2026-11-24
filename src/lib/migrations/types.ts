@@ -40,7 +40,7 @@ export const MIGRATION_ENTITY_LABELS: Record<MigrationEntityType, string> = {
   FUND: "Funds & Designations",
 };
 
-export type MigrationJobStatus = "DRAFT" | "MAPPING" | "VALIDATING" | "READY" | "IMPORTING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED" | "CANCELLED";
+export type MigrationJobStatus = "DRAFT" | "MAPPING" | "VALIDATING" | "READY" | "IMPORTING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED" | "CANCELLED" | "SUBMITTED" | "SUBMISSION_USED";
 
 export type MigrationRecordStatus = "PENDING" | "VALID" | "WARNING" | "INVALID" | "DUPLICATE" | "IMPORTED" | "SKIPPED" | "FAILED";
 

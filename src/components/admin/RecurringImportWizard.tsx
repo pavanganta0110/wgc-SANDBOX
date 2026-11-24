@@ -45,7 +45,7 @@ function download(name: string, text: string) {
 }
 
 /** Staff-only: upload the schedule file and Finix's mapping file, check them with a dry run, then create the import. */
-export default function RecurringImportWizard({ churchId }: { churchId: string }) {
+export default function RecurringImportWizard({ churchId, submissions = [] }: { churchId: string; submissions?: { id: string; fileName: string | null; rowCount: number }[] }) {
   const router = useRouter();
   const [scheduleCsv, setScheduleCsv] = useState("");
   const [mappingCsv, setMappingCsv] = useState("");
@@ -57,12 +57,30 @@ export default function RecurringImportWizard({ churchId }: { churchId: string }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("ALL");
+  const [submissionId, setSubmissionId] = useState<string>("");
 
   async function readFile(file: File | undefined, set: (t: string) => void, remember = false) {
     if (!file) return;
     set(await file.text());
     if (remember) setFileName(file.name);
     setPreview(null);
+  }
+
+  async function useSubmission(id: string) {
+    setSubmissionId(id);
+    setPreview(null);
+    if (!id) return;
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/merchants/${churchId}/migration/recurring/submission/${id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not load the file.");
+      setScheduleCsv(data.csv);
+      setFileName(data.fileName || "merchant-schedule.csv");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not load the file.");
+      setSubmissionId("");
+    }
   }
 
   async function runPreview(map: Record<string, string> = fundMap) {
@@ -85,7 +103,7 @@ export default function RecurringImportWizard({ churchId }: { churchId: string }
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/merchants/${churchId}/migration/recurring/commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduleCsv, mappingCsv, fundMap, fileName, attestation: attest }) });
+      const res = await fetch(`/api/admin/merchants/${churchId}/migration/recurring/commit`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scheduleCsv, mappingCsv, fundMap, fileName, attestation: attest, submissionId: submissionId || undefined }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not create the import.");
       router.push(`/admin/merchants/${churchId}/migration/${data.jobId}?autostart=1`);
@@ -105,6 +123,20 @@ export default function RecurringImportWizard({ churchId }: { churchId: string }
         <p className="mt-1 text-sm text-slate-500">
           The <strong>schedule file</strong> has one row per recurring gift and no card numbers. The <strong>mapping file</strong> is the CSV Finix sends back after it imports the saved cards and bank accounts.
         </p>
+        {submissions.length > 0 && (
+          <label className="mt-4 block text-sm">
+            <span className="font-semibold text-slate-700">Use a file the merchant sent</span>
+            <select value={submissionId} onChange={(e) => useSubmission(e.target.value)} className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm sm:w-96">
+              <option value="">Choose a file&hellip;</option>
+              {submissions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.fileName || "schedule.csv"} &middot; {s.rowCount} gifts
+                </option>
+              ))}
+            </select>
+            {submissionId && scheduleCsv && <span className="mt-1 block text-xs text-green-700">Loaded {fileName}. Now add Finix&rsquo;s mapping file.</span>}
+          </label>
+        )}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">
             <span className="font-semibold text-slate-700">Schedule file (CSV)</span>
