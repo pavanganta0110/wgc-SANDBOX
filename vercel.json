@@ -63,7 +63,7 @@
     },
     {
       "path": "/api/cron/inbox-sync",
-      "schedule": "*/10 * * * *"
+      "schedule": "15 15 * * *"
     },
     {
       "path": "/api/cron/planning-center-token-refresh",

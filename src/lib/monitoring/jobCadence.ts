@@ -144,8 +144,8 @@ export const JOB_CONFIGS: Record<string, JobConfig> = {
     jobName: "inbox-sync",
     jobType: "inbox",
     label: "Admin Inbox Sync (Zoho)",
-    expectedIntervalMs: 10 * 60 * 1000,
-    staleAfterMs: 2 * HOUR,
+    expectedIntervalMs: DAY,
+    staleAfterMs: DAY + 6 * HOUR,
     critical: false,
     retrySafe: true, // idempotent: unique (mailboxId, providerMessageId) stops duplicate rows and tickets
   },
