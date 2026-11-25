@@ -169,8 +169,8 @@ export const DEFAULT_BRANDING_SETTINGS: BrandingSettings = {
   showPoweredByWgc: true,
 };
 
-// Accepts youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, and
-// youtube.com/embed/ URLs; returns the bare 11-char video ID, or null for
+// Accepts youtube.com/watch?v=, youtu.be/, youtube.com/shorts/,
+// youtube.com/live/, and youtube.com/embed/ URLs; returns the bare 11-char video ID, or null for
 // anything else (including a non-YouTube URL).
 export function parseYouTubeVideoId(url: string): string | null {
   if (!url) return null;
@@ -186,7 +186,7 @@ export function parseYouTubeVideoId(url: string): string | null {
         const id = u.searchParams.get("v");
         return id && /^[\w-]{11}$/.test(id) ? id : null;
       }
-      const shortsMatch = u.pathname.match(/^\/(?:shorts|embed)\/([\w-]{11})/);
+      const shortsMatch = u.pathname.match(/^\/(?:shorts|embed|live)\/([\w-]{11})/);
       if (shortsMatch) return shortsMatch[1];
     }
     return null;

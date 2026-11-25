@@ -151,6 +151,12 @@ describe('parseYouTubeVideoId — thank-you video on the donation success screen
     expect(parseYouTubeVideoId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
 
+  it('extracts the video ID from a YouTube live URL', () => {
+    expect(parseYouTubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(parseYouTubeVideoId('https://www.youtube.com/live/dQw4w9WgXcQ?si=abc123')).toBe('dQw4w9WgXcQ');
+    expect(resolveThankYouVideoEmbed('https://www.youtube.com/live/dQw4w9WgXcQ')).toMatchObject({ kind: 'iframe' });
+  });
+
   it('extracts the video ID from an already-embed URL', () => {
     expect(parseYouTubeVideoId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
   });
