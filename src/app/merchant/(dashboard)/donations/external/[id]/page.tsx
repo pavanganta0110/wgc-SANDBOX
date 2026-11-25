@@ -102,6 +102,7 @@ export default async function ExternalDonationDetailPage({ params }: { params: P
           providerFeeCents: donation.providerFeeCents,
           netAmountReceivedCents: donation.netAmountReceivedCents,
           internalNote: donation.internalNote,
+          donorThankYouNote: donation.donorThankYouNote,
           includeInAnnualStatement: donation.includeInAnnualStatement,
           proofOfPaymentFileName: donation.proofOfPaymentFileName,
           possibleDuplicate: donation.possibleDuplicate,

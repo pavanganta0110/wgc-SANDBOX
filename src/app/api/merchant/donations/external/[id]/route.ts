@@ -44,6 +44,7 @@ const EDITABLE_FIELDS = [
   "providerFeeCents",
   "netAmountReceivedCents",
   "internalNote",
+  "donorThankYouNote",
   "checkNumber",
   "checkDate",
   "bankName",

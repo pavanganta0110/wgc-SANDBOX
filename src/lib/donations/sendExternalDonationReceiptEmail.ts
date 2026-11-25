@@ -131,7 +131,14 @@ export async function sendExternalDonationReceiptEmail(
   lines.push(`<p>Thank you for your gift of <strong>${formatCents(donation.donationAmountCents)}</strong> to <strong>${orgName}</strong>, recorded as an external/offline donation (${methodLabel}).</p>`);
   if (settings.showFund && donation.fundName) lines.push(`<p>Fund/Campaign: ${donation.fundName}</p>`);
   if (settings.showDonationReference) lines.push(`<p>Receipt Number: ${receiptNumber}</p>`);
-  lines.push(`<p>${settings.thankYouMessage}</p>`);
+  const personalNote = donation.donorThankYouNote?.trim();
+  if (personalNote) {
+    // Staff-typed free text: escape it, keep line breaks.
+    const safeNote = personalNote.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br/>");
+    lines.push(`<p>${safeNote}</p>`);
+  } else {
+    lines.push(`<p>${settings.thankYouMessage}</p>`);
+  }
   lines.push(`<p>${acknowledgmentText}</p>`);
   if (goodsServicesProvided) {
     lines.push(

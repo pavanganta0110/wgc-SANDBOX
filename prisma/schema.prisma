@@ -3602,6 +3602,8 @@ model ExternalDonation {
   netAmountReceivedCents    Int?
   // Staff-only — never included on the donor receipt or annual statement.
   internalNote              String?
+  // Optional personal note written to the donor; replaces the generic thank-you line on the receipt email.
+  donorThankYouNote         String?
   // Supabase private-storage key (see uploadPrivateFile) — never a public
   // URL, never surfaced to the donor, gated by canViewExternalDonationProof.
   proofOfPaymentStorageKey  String?

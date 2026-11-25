@@ -21,6 +21,7 @@ interface Donation {
   providerFeeCents: number | null;
   netAmountReceivedCents: number | null;
   internalNote: string | null;
+  donorThankYouNote: string | null;
   includeInAnnualStatement: boolean;
   proofOfPaymentFileName: string | null;
   possibleDuplicate: boolean;
@@ -50,6 +51,7 @@ export default function ExternalDonationDetailPanel({
   const [campaign, setCampaign] = useState(donation.campaign || "");
   const [donationPurpose, setDonationPurpose] = useState(donation.donationPurpose || "");
   const [internalNote, setInternalNote] = useState(donation.internalNote || "");
+  const [donorThankYouNote, setDonorThankYouNote] = useState(donation.donorThankYouNote || "");
   const [providerFee, setProviderFee] = useState(donation.providerFeeCents ? (donation.providerFeeCents / 100).toFixed(2) : "");
   const [includeInAnnualStatement, setIncludeInAnnualStatement] = useState(donation.includeInAnnualStatement);
   const [isTaxDeductible, setIsTaxDeductible] = useState(donation.isTaxDeductible);
@@ -88,6 +90,7 @@ export default function ExternalDonationDetailPanel({
           campaign: campaign || null,
           donationPurpose: donationPurpose || null,
           internalNote: internalNote || null,
+          donorThankYouNote: donorThankYouNote || null,
           providerFeeCents: providerFee ? Math.round(parseFloat(providerFee) * 100) : null,
           includeInAnnualStatement,
           isTaxDeductible,
@@ -238,6 +241,10 @@ export default function ExternalDonationDetailPanel({
               <dd className="text-slate-900">{donation.confirmationNumber || "—"}</dd>
             </div>
             <div className="col-span-2">
+              <dt className="text-xs text-slate-400">Personal note to donor (on receipt)</dt>
+              <dd className="text-slate-900 whitespace-pre-wrap">{donation.donorThankYouNote || "—"}</dd>
+            </div>
+            <div className="col-span-2">
               <dt className="text-xs text-slate-400">Internal note</dt>
               <dd className="text-slate-900 whitespace-pre-wrap">{donation.internalNote || "—"}</dd>
             </div>
@@ -272,6 +279,7 @@ export default function ExternalDonationDetailPanel({
             </div>
             <input placeholder={pw("Donation purpose")} value={donationPurpose} onChange={(e) => setDonationPurpose(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
             <input placeholder="Provider fee" type="number" step="0.01" value={providerFee} onChange={(e) => setProviderFee(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            <textarea placeholder="Personal note to the donor (shown on the receipt email; resend the receipt after changing it)" value={donorThankYouNote} onChange={(e) => setDonorThankYouNote(e.target.value)} maxLength={2000} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={3} />
             <textarea placeholder="Internal note" value={internalNote} onChange={(e) => setInternalNote(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" rows={2} />
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={includeInAnnualStatement} onChange={(e) => setIncludeInAnnualStatement(e.target.checked)} />
