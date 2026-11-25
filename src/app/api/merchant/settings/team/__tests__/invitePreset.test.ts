@@ -184,7 +184,9 @@ describe("POST /api/merchant/settings/team — says whether the email actually w
   });
 
   it("reports emailSent true when the invitation was delivered", async () => {
-    const { POST } = await arrange();
+    const { POST, prisma } = await arrange();
+    // earlier tests in this file leave a partner organization mocked; this one is an ordinary organization
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE", name: "Grace Church", partnerId: null } as never);
     const { sendWgcEmail } = await import("@/lib/email");
     vi.mocked(sendWgcEmail).mockResolvedValueOnce({ success: true } as never);
     const body = await (await POST(invite({ email: "staff@b.com", role: "fundraiser" }))).json();
@@ -193,7 +195,9 @@ describe("POST /api/merchant/settings/team — says whether the email actually w
   });
 
   it("reports emailSent false, not a silent success, when sending failed", async () => {
-    const { POST } = await arrange();
+    const { POST, prisma } = await arrange();
+    // earlier tests in this file leave a partner organization mocked; this one is an ordinary organization
+    vi.mocked(prisma.church.findUnique).mockResolvedValue({ billingSetupStatus: null, status: "ACTIVE", name: "Grace Church", partnerId: null } as never);
     const { sendWgcEmail } = await import("@/lib/email");
     vi.mocked(sendWgcEmail).mockResolvedValueOnce({ success: false, error: "boom" } as never);
     const res = await POST(invite({ email: "staff@b.com", role: "fundraiser" }));
