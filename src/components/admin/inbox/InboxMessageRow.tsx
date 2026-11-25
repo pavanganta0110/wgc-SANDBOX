@@ -19,6 +19,7 @@ export interface InboxRowData {
   ticketNumber: string | null;
   churchId: string | null;
   churchName: string | null;
+  mailboxLabel: string;
 }
 
 export default function InboxMessageRow({ m, orgs }: { m: InboxRowData; orgs: Array<{ id: string; name: string }> }) {
@@ -46,7 +47,7 @@ export default function InboxMessageRow({ m, orgs }: { m: InboxRowData; orgs: Ar
       <button onClick={() => setOpen(!open)} className="flex w-full items-start justify-between gap-3 p-4 text-left">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-900">{m.direction === "OUT" ? "↗ You → " : ""}{m.subject}</p>
-          <p className="truncate text-xs text-slate-500">{m.fromName ? `${m.fromName} · ` : ""}{m.fromEmail}{m.churchName ? ` · ${m.churchName}` : ""}</p>
+          <p className="truncate text-xs text-slate-500">{m.fromName ? `${m.fromName} · ` : ""}{m.fromEmail}{m.churchName ? ` · ${m.churchName}` : ""}<span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{m.mailboxLabel}</span></p>
           <p className="mt-1 text-xs text-slate-400">{m.reason}</p>
         </div>
         <div className="shrink-0 text-right text-xs text-slate-500">

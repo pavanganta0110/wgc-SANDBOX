@@ -12,7 +12,7 @@ export default function SyncButton() {
     const res = await fetch("/api/admin/inbox/sync", { method: "POST" });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
-    setNote(res.ok ? `${json.imported} new, ${json.ticketed} ticketed` : json.error || "Sync failed");
+    setNote(res.ok ? `${json.imported} new, ${json.ticketed} ticketed${json.warnings?.length ? ` — problem: ${json.warnings.join(" | ")}` : ""}` : json.error || "Sync failed");
     if (res.ok) router.refresh();
   }
   return (

@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { decryptSecret, deserializeEnvelope } from "@/lib/integrations/aplos/encryption";
+import { accessTokenForMailbox } from "@/lib/inbox/mailboxAuth";
 import { classifyEmail, normalizeEmail, type SenderRule } from "@/lib/inbox/classify";
 import { appendInboxMessageToTicket, createTicketFromInboxMessage } from "@/lib/inbox/tickets";
-import { getAccessToken, getMessageText, isZohoDataCenter, listInboxMessages, type ZohoDataCenter } from "@/lib/inbox/zoho";
+import { getMessageText, isZohoDataCenter, listInboxMessages, type ZohoDataCenter } from "@/lib/inbox/zoho";
 
 const MAX_NEW_PER_RUN = 25;
 
@@ -18,7 +18,7 @@ export async function syncMailbox(mailboxId: string) {
   let imported = 0;
   let ticketed = 0;
   try {
-    const token = await getAccessToken(decryptSecret(deserializeEnvelope(mailbox.encryptedRefreshToken)), dc);
+    const token = await accessTokenForMailbox(mailbox);
     const listed = await listInboxMessages(token, dc, mailbox.providerAccountId, 50);
     const known = new Set(
       (await prisma.inboxMessage.findMany({ where: { mailboxId, providerMessageId: { in: listed.map((m) => m.messageId) } }, select: { providerMessageId: true } })).map((m) => m.providerMessageId)

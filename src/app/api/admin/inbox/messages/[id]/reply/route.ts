@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
 import { isAuthError } from "@/lib/auth/errors";
-import { decryptSecret, deserializeEnvelope } from "@/lib/integrations/aplos/encryption";
-import { getAccessToken, isZohoDataCenter, sendMail } from "@/lib/inbox/zoho";
+import { accessTokenForMailbox, mailboxDataCenter } from "@/lib/inbox/mailboxAuth";
+import { sendMail } from "@/lib/inbox/zoho";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,8 +23,8 @@ export async function POST(req: Request, { params }: Params) {
 
     const base = msg.subject.replace(/^(re:\s*)+/i, "");
     const subject = `Re: ${base}${ticket && !base.includes(ticket.ticketNumber) ? ` [${ticket.ticketNumber}]` : ""}`;
-    const dc = isZohoDataCenter(msg.mailbox.dataCenter) ? msg.mailbox.dataCenter : "com";
-    const token = await getAccessToken(decryptSecret(deserializeEnvelope(msg.mailbox.encryptedRefreshToken)), dc);
+    const dc = mailboxDataCenter(msg.mailbox);
+    const token = await accessTokenForMailbox(msg.mailbox);
     const sentId = await sendMail(token, dc, msg.mailbox.providerAccountId, { from: msg.mailbox.emailAddress, to: msg.fromEmail, subject, text });
 
     await prisma.inboxMessage.create({

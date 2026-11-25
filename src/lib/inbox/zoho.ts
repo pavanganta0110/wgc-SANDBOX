@@ -19,7 +19,13 @@ export function isZohoDataCenter(v: string): v is ZohoDataCenter {
   return (ZOHO_DATA_CENTERS as readonly string[]).includes(v);
 }
 
-function credentials() {
+export interface ZohoClientCreds {
+  clientId: string;
+  clientSecret: string;
+}
+
+function credentials(override?: ZohoClientCreds | null): ZohoClientCreds {
+  if (override?.clientId && override.clientSecret) return override;
   const clientId = process.env.ZOHO_CLIENT_ID;
   const clientSecret = process.env.ZOHO_CLIENT_SECRET;
   if (!clientId || !clientSecret) throw new ZohoNotConfiguredError();
@@ -42,16 +48,16 @@ async function zohoFetch(url: string, init: RequestInit = {}): Promise<unknown> 
   return json;
 }
 
-export async function exchangeGrantCode(grantCode: string, dc: ZohoDataCenter): Promise<string> {
-  const { clientId, clientSecret } = credentials();
+export async function exchangeGrantCode(grantCode: string, dc: ZohoDataCenter, creds?: ZohoClientCreds | null): Promise<string> {
+  const { clientId, clientSecret } = credentials(creds);
   const body = new URLSearchParams({ grant_type: "authorization_code", client_id: clientId, client_secret: clientSecret, code: grantCode.trim() });
   const json = (await zohoFetch(`https://accounts.zoho.${dc}/oauth/v2/token`, { method: "POST", body })) as { refresh_token?: string; error?: string } | null;
   if (!json?.refresh_token) throw new Error(`Zoho did not return a refresh token${json?.error ? ` (${json.error})` : ""}. The grant code may be expired or already used.`);
   return json.refresh_token;
 }
 
-export async function getAccessToken(refreshToken: string, dc: ZohoDataCenter): Promise<string> {
-  const { clientId, clientSecret } = credentials();
+export async function getAccessToken(refreshToken: string, dc: ZohoDataCenter, creds?: ZohoClientCreds | null): Promise<string> {
+  const { clientId, clientSecret } = credentials(creds);
   const body = new URLSearchParams({ grant_type: "refresh_token", client_id: clientId, client_secret: clientSecret, refresh_token: refreshToken });
   const json = (await zohoFetch(`https://accounts.zoho.${dc}/oauth/v2/token`, { method: "POST", body })) as { access_token?: string } | null;
   if (!json?.access_token) throw new Error("Zoho did not return an access token");
