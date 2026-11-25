@@ -6,7 +6,11 @@ vi.mock("@/lib/partners/partnerApiAuth", () => {
   return { withPartnerApiAuth: wrap, withSoftwarePartnerApiAuth: wrap };
 });
 
-const prismaMock = vi.hoisted(() => ({ partnerEmbedLinkRequest: { count: vi.fn(), create: vi.fn(), deleteMany: vi.fn() } }));
+const prismaMock = vi.hoisted(() => ({
+  partnerEmbedLinkRequest: { count: vi.fn(), create: vi.fn(), deleteMany: vi.fn() },
+  church: { findFirst: vi.fn() },
+  onboardingApplication: { findFirst: vi.fn() },
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import { POST } from "../route";
@@ -24,6 +28,8 @@ beforeEach(() => {
   prismaMock.partnerEmbedLinkRequest.count.mockResolvedValue(0);
   prismaMock.partnerEmbedLinkRequest.create.mockResolvedValue({});
   prismaMock.partnerEmbedLinkRequest.deleteMany.mockResolvedValue({ count: 0 });
+  prismaMock.church.findFirst.mockResolvedValue(null);
+  prismaMock.onboardingApplication.findFirst.mockResolvedValue(null);
 });
 
 describe("POST /api/v1/partner/embed-links", () => {
@@ -57,5 +63,21 @@ describe("POST /api/v1/partner/embed-links", () => {
     expect((await post({})).status).toBe(400);
     expect((await post({ reference: "x", email: "nope" })).status).toBe(400);
     expect((await post({ reference: "x", contactEmail: "nope" })).status).toBe(400);
+  });
+
+  it("refuses with the existing reference when the same organization is sent under a new one", async () => {
+    // the reference "loc_2" matches nothing, but the contact email is registered under "loc_1"
+    prismaMock.church.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce({ partnerReference: "loc_1" });
+    prismaMock.onboardingApplication.findFirst.mockResolvedValueOnce(null);
+    const res = await post({ reference: "loc_2", email: "owner@church.test" });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatchObject({ type: "conflict_error", code: "reference_mismatch", existingReference: "loc_1" });
+    expect(body.data).toBeUndefined();
+  });
+
+  it("still makes a link for a genuinely new organization", async () => {
+    const res = await post({ reference: "loc_9", email: "new@church.test" });
+    expect(res.status).toBe(200);
   });
 });

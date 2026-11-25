@@ -10,6 +10,7 @@ export type ApiErrorType =
   | "authorization_error"
   | "not_found_error"
   | "validation_error"
+  | "conflict_error"
   | "rate_limit_error"
   | "internal_error";
 
@@ -18,6 +19,7 @@ const STATUS_BY_TYPE: Record<ApiErrorType, number> = {
   authorization_error: 403,
   not_found_error: 404,
   validation_error: 400,
+  conflict_error: 409,
   rate_limit_error: 429,
   internal_error: 500,
 };

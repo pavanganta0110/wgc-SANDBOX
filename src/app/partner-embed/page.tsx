@@ -9,6 +9,7 @@ import EmbedEmailCodeSignIn from "./EmbedEmailCodeSignIn";
 import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
 import { verifyPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
 import { ensureOnboardingCode } from "@/lib/partners/onboardingCode";
+import { findReferenceMismatch } from "@/lib/partners/referenceMismatch";
 import { loadPartnerEmbedState } from "@/lib/partners/loadEmbedState";
 
 export const dynamic = "force-dynamic";
@@ -59,7 +60,19 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
   const here = `/partner-embed?link=${encodeURIComponent(link)}`;
 
   switch (state.kind) {
-    case "form":
+    case "form": {
+      // An old link, or a partner that changed its id for this organization: don't start a second application.
+      const mismatch = await findReferenceMismatch(payload.partnerId, payload.reference, {
+        emails: [payload.prefill.contactEmail, payload.email],
+        organizationName: payload.prefill.organizationName,
+      });
+      if (mismatch) {
+        return (
+          <Panel icon={<FileWarning className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="This organization is already set up">
+            <p>It was registered under a different reference, so this page can&apos;t open it. Please contact the team that gave you this page so they can fix the link.</p>
+          </Panel>
+        );
+      }
       return (
         <StartOnboardingForm
           embed
@@ -70,6 +83,7 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
           requirePasscode={passcodeMode}
         />
       );
+    }
 
     case "pending":
       return (

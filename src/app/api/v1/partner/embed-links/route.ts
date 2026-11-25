@@ -2,6 +2,7 @@ import { apiError, apiSuccess } from "@/lib/api/response";
 import { EMBED_LINKS_PER_MINUTE, recordEmbedLinkRequest } from "@/lib/partners/embedLinkRequests";
 import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { createPartnerEmbedLinkToken } from "@/lib/partners/embedLink";
+import { findReferenceMismatch } from "@/lib/partners/referenceMismatch";
 import { isValidEmail } from "@/lib/donors/donorContact";
 
 const text = (value: unknown, max: number): string | undefined => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined);
@@ -33,6 +34,21 @@ export const POST = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const recorded = await recordEmbedLinkRequest({ partnerId: auth.partnerId, partnerKeyId: auth.partnerKeyId, reference });
   if (recorded === "too_many") {
     return apiError("rate_limit_error", `Too many link requests (${EMBED_LINKS_PER_MINUTE} per minute per key). Wait a moment and try again.`, requestId);
+  }
+
+  // The same organization under a different reference would show the application form again, even
+  // after it was approved. Say so instead of handing out a link that opens the wrong page.
+  const mismatch = await findReferenceMismatch(auth.partnerId, reference, {
+    emails: [email, contactEmail],
+    organizationName: text(body.organizationName, 200),
+  });
+  if (mismatch) {
+    return apiError(
+      "conflict_error",
+      `An organization with this contact is already registered under reference "${mismatch.existingReference}", not "${reference}". Use that reference, or ask WGC to link it to the new one.`,
+      requestId,
+      { code: "reference_mismatch", existingReference: mismatch.existingReference }
+    );
   }
 
   const { token, expiresAt } = createPartnerEmbedLinkToken({
