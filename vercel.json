@@ -62,6 +62,10 @@
       "schedule": "40 19 * * *"
     },
     {
+      "path": "/api/cron/inbox-sync",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/planning-center-token-refresh",
       "schedule": "30 8 * * *"
     }

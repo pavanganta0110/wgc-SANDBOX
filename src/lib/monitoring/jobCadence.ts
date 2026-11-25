@@ -140,6 +140,15 @@ export const JOB_CONFIGS: Record<string, JobConfig> = {
     // ready-to-settle filtering is.
     retrySafe: false,
   },
+  "inbox-sync": {
+    jobName: "inbox-sync",
+    jobType: "inbox",
+    label: "Admin Inbox Sync (Zoho)",
+    expectedIntervalMs: 10 * 60 * 1000,
+    staleAfterMs: 2 * HOUR,
+    critical: false,
+    retrySafe: true, // idempotent: unique (mailboxId, providerMessageId) stops duplicate rows and tickets
+  },
   "webhook-retry": {
     jobName: "webhook-retry",
     jobType: "webhook",

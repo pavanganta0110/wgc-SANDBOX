@@ -7378,3 +7378,66 @@ model PartnerEmbedEmailCode {
   @@index([userId, createdAt])
   @@index([expiresAt])
 }
+
+// ── Admin Inbox (Zoho Mail) ─────────────────────────────────────────────
+// WGC's own support mailbox, read by the admin dashboard. Internal only:
+// never exposed to merchant APIs, never read by the AI agents.
+model InboxMailbox {
+  id                    String    @id @default(cuid())
+  provider              String    @default("zoho")
+  emailAddress          String    @unique
+  providerAccountId     String
+  dataCenter            String    @default("com") // com | eu | in | com.au | jp
+  // AES-256-GCM envelope (serializeEnvelope) — never returned by any API.
+  encryptedRefreshToken String
+  connectedByAdminEmail String
+  lastSyncAt            DateTime?
+  lastError             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  messages InboxMessage[]
+}
+
+model InboxMessage {
+  id                 String   @id @default(cuid())
+  mailboxId          String
+  // Zoho's message id for inbound mail; unique per mailbox so a re-sync can
+  // never create a second row or a second ticket for the same email.
+  providerMessageId  String
+  direction          String   @default("IN") // IN | OUT
+  fromEmail          String
+  fromName           String?
+  toEmail            String?
+  subject            String
+  bodyText           String
+  receivedAt         DateTime
+  // SUPPORT | NEEDS_REVIEW | SPAM | BULK
+  classification     String
+  classificationReason String
+  // NEW | TICKETED | IGNORED | HANDLED
+  status             String   @default("NEW")
+  churchId           String?
+  ticketId           String?
+  assignedToAdminEmail String?
+  handledByAdminEmail  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  mailbox InboxMailbox @relation(fields: [mailboxId], references: [id])
+
+  @@unique([mailboxId, providerMessageId])
+  @@index([classification, status, receivedAt])
+  @@index([ticketId])
+  @@index([fromEmail])
+}
+
+// Sender rules the Inbox learns from "Spam" / "Not spam" clicks.
+model InboxSenderRule {
+  id             String   @id @default(cuid())
+  kind           String // BLOCK | ALLOW
+  // Full address ("a@b.com") or whole domain ("@b.com"), lowercased.
+  pattern        String   @unique
+  createdByEmail String
+  createdAt      DateTime @default(now())
+}
