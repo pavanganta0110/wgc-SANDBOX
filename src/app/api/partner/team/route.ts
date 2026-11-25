@@ -59,7 +59,37 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim().slice(0, 120) : "";
-    if (body.action !== "addAgent" && !isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+    if (body.action !== "addAgent" && body.action !== "resendInvite" && !isValidEmail(email)) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+
+    // Send a pending invitation again. The address and role come from the stored person, never from
+    // the request, so the email always goes to that person's own address and nobody else's.
+    if (body.action === "resendInvite") {
+      const target = typeof body.userId === "string" ? await prisma.partnerUser.findFirst({
+        where: { id: body.userId, partnerId: session.partnerId },
+        select: { email: true, name: true, passwordHash: true, disabledAt: true, agentId: true, staffRole: true },
+      }) : null;
+      if (!target) return NextResponse.json({ error: "That person is not on your team." }, { status: 404 });
+      if (target.disabledAt) return NextResponse.json({ error: "That person's access was removed." }, { status: 409 });
+      if (target.passwordHash) return NextResponse.json({ error: "That person has already set up their login." }, { status: 409 });
+      const role = target.agentId ? "AGENT" : parseStaffRole(target.staffRole);
+      let again;
+      try {
+        again = await createPartnerInvite({
+          partnerId: session.partnerId,
+          email: target.email,
+          name: target.name,
+          ...(target.agentId ? { agentId: target.agentId } : { staffRole: role === "VIEWER" ? "VIEWER" : "FULL" }),
+        });
+      } catch (err) {
+        if (err instanceof PartnerAccountError) return NextResponse.json({ error: err.message }, { status: err.code === "email_in_use" ? 409 : 400 });
+        throw err;
+      }
+      const partnerRow = await prisma.partner.findUnique({ where: { id: session.partnerId }, select: { name: true } });
+      const resent = await sendPartnerInviteEmail({ partnerName: partnerRow?.name ?? "your", email: target.email, rawToken: again.rawToken, role });
+      await createAuditLog({ action: "PARTNER_TEAM_INVITE_RESENT", actorEmail: session.email, metadata: { partnerId: session.partnerId, invitedEmail: target.email, emailSent: resent } });
+      if (!resent) return NextResponse.json({ error: "The invitation couldn't be emailed. Try again in a moment." }, { status: 502 });
+      return NextResponse.json({ message: `Invitation sent again to ${target.email}.` });
+    }
 
     // A referral partner adds its own agent; WGC is told so it can set the rate (default until then).
     if (body.action === "addAgent") {

@@ -140,3 +140,33 @@ describe("a referral partner adds its own agent", () => {
     expect(prismaMock.partnerAgent.create).not.toHaveBeenCalled();
   });
 });
+
+describe("POST /api/partner/team resendInvite", () => {
+  const pending = { email: "sub@example.test", name: "Sub User", passwordHash: null, disabledAt: null, agentId: null, staffRole: "VIEWER" };
+
+  it("sends a fresh invitation to the stored person's own address, with their own role, ignoring any email in the request", async () => {
+    prismaMock.partnerUser.findFirst.mockResolvedValue(pending);
+    const res = await post({ action: "resendInvite", userId: "u2", email: "attacker@example.test" });
+    expect(res.status).toBe(200);
+    expect(prismaMock.partnerUser.findFirst.mock.calls[0][0].where).toEqual({ id: "u2", partnerId: "p1" });
+    expect(accounts.createPartnerInvite).toHaveBeenCalledWith({ partnerId: "p1", email: "sub@example.test", name: "Sub User", staffRole: "VIEWER" });
+    expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ email: "sub@example.test", role: "VIEWER", rawToken: "tok" }));
+  });
+
+  it("keeps an agent's login an agent's", async () => {
+    prismaMock.partnerUser.findFirst.mockResolvedValue({ ...pending, agentId: "a1", staffRole: "FULL" });
+    await post({ action: "resendInvite", userId: "u2" });
+    expect(accounts.createPartnerInvite).toHaveBeenCalledWith(expect.objectContaining({ agentId: "a1" }));
+    expect(sendInvite).toHaveBeenCalledWith(expect.objectContaining({ role: "AGENT" }));
+  });
+
+  it("refuses someone not on this partner's team, who already set up, or who was removed", async () => {
+    prismaMock.partnerUser.findFirst.mockResolvedValue(null);
+    expect((await post({ action: "resendInvite", userId: "x" })).status).toBe(404);
+    prismaMock.partnerUser.findFirst.mockResolvedValue({ ...pending, passwordHash: "h" });
+    expect((await post({ action: "resendInvite", userId: "u2" })).status).toBe(409);
+    prismaMock.partnerUser.findFirst.mockResolvedValue({ ...pending, disabledAt: new Date() });
+    expect((await post({ action: "resendInvite", userId: "u2" })).status).toBe(409);
+    expect(sendInvite).not.toHaveBeenCalled();
+  });
+});

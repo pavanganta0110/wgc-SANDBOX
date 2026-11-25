@@ -94,6 +94,13 @@ export default function PartnerTeamPanel() {
     if (res.ok) setReloadKey((k) => k + 1);
   }
 
+  async function resendInvite(id: string) {
+    setMessage(null);
+    const res = await fetch("/api/partner/team", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resendInvite", userId: id }) });
+    const body = await res.json().catch(() => ({}));
+    setMessage(res.ok ? { text: body.message, error: false } : { text: body.error || "Couldn't send the invitation.", error: true });
+  }
+
   async function remove(id: string) {
     const res = await fetch(`/api/partner/team/${id}`, { method: "DELETE" });
     const body = await res.json().catch(() => ({}));
@@ -201,6 +208,11 @@ export default function PartnerTeamPanel() {
                 <td className="px-4 py-3 text-slate-600">{statusText[m.status]}</td>
                 <td className="px-4 py-3 text-slate-600">{m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleString() : "—"}</td>
                 <td className="px-4 py-3 text-right">
+                  {m.status === "invite_pending" && (
+                    <button type="button" onClick={() => resendInvite(m.id)} className="mr-4 text-xs font-semibold text-blue-700">
+                      Resend invite
+                    </button>
+                  )}
                   {!m.isYou && m.status !== "disabled" && (
                     <button type="button" onClick={() => remove(m.id)} className="text-xs font-semibold text-red-600">
                       Remove
