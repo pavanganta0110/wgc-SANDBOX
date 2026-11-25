@@ -177,3 +177,27 @@ describe("POST /api/merchant/settings/team: organizations whose partner uses pas
   });
 });
 
+describe("POST /api/merchant/settings/team — says whether the email actually went out", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.AUTH_SESSION_SECRET = "test-secret-at-least-32-characters-long";
+  });
+
+  it("reports emailSent true when the invitation was delivered", async () => {
+    const { POST } = await arrange();
+    const { sendWgcEmail } = await import("@/lib/email");
+    vi.mocked(sendWgcEmail).mockResolvedValueOnce({ success: true } as never);
+    const body = await (await POST(invite({ email: "staff@b.com", role: "fundraiser" }))).json();
+    expect(body.emailSent).toBe(true);
+    expect(vi.mocked(sendWgcEmail).mock.calls[0][0].to).toBe("staff@b.com");
+  });
+
+  it("reports emailSent false, not a silent success, when sending failed", async () => {
+    const { POST } = await arrange();
+    const { sendWgcEmail } = await import("@/lib/email");
+    vi.mocked(sendWgcEmail).mockResolvedValueOnce({ success: false, error: "boom" } as never);
+    const res = await POST(invite({ email: "staff@b.com", role: "fundraiser" }));
+    expect(res.status).toBe(201);
+    expect((await res.json()).emailSent).toBe(false);
+  });
+});

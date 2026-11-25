@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   }
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
-  if (!target || target.churchId !== auth.churchId || target.role !== "church_admin") {
+  if (!target || target.churchId !== auth.churchId || !["church_admin", "owner", "admin", "fundraiser", "viewer"].includes(target.role)) {
     return NextResponse.json({ error: "Team member not found" }, { status: 404 });
   }
   if (target.passwordHash) {
@@ -43,16 +43,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
 
   const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const inviteLink = `${origin}/merchant/set-password/${rawToken}`;
-  await sendWgcEmail({
+  const sent = await sendWgcEmail({
     to: target.email,
     subject: `Reminder: you've been invited to join ${church?.name || "an organization"} on WGC Payments`,
     title: "You're invited",
     badgeText: "Team Invitation",
     badgeColor: "#0B5DBC",
-    bodyHtml: `<p>You've been invited to join <strong>${church?.name || "an organization"}</strong> as an Organization Admin on WGC Payments.</p>
+    bodyHtml: `<p>You've been invited to join <strong>${church?.name || "an organization"}</strong> as ${target.role === "church_admin" ? "Organization Admin" : target.role.charAt(0).toUpperCase() + target.role.slice(1)} on WGC Payments.</p>
                <p><a href="${inviteLink}">Accept invitation and set your password</a></p>
                <p>This invitation link expires in 7 days.</p>`,
   });
+  if (!sent?.success) {
+    return NextResponse.json({ error: "The invitation couldn't be emailed. Try again in a moment, or check the address." }, { status: 502 });
+  }
 
   await logDashboardAction({
     churchId: auth.churchId,

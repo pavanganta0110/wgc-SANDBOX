@@ -157,8 +157,9 @@ export async function POST(req: Request) {
   const roleLabel = preset === "checkin" ? "door check-in" : requestedRole.charAt(0).toUpperCase() + requestedRole.slice(1);
   const origin = req.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || "https://www.wgcpayments.com";
   const inviteLink = `${origin}/merchant/set-password/${rawToken}`;
+  let emailSent = false;
   if (!holdInviteEmail) {
-    await sendWgcEmail({
+    const sent = await sendWgcEmail({
       to: email,
       subject: `You've been invited to join ${church?.name || "an organization"} on WGC Payments`,
       title: "You're invited",
@@ -168,6 +169,7 @@ export async function POST(req: Request) {
                <p><a href="${inviteLink}">Accept invitation and set your password</a></p>
                <p>This invitation link expires in 7 days.</p>`,
     });
+    emailSent = Boolean(sent?.success);
   }
 
   await logDashboardAction({
@@ -178,9 +180,11 @@ export async function POST(req: Request) {
     action: "settings.team_member_invited",
     entityType: "user",
     entityId: user.id,
-    metadata: { email, role: requestedRole, ...(preset ? { preset } : {}) },
+    metadata: { email, role: requestedRole, emailSent, emailHeld: holdInviteEmail, ...(preset ? { preset } : {}) },
     req,
   });
 
-  return NextResponse.json({ member: teamMemberView(user) }, { status: 201 });
+  // emailSent=false is reported, not hidden: either WGC holds invitation emails for this organization
+  // (its partner's screen is how people open it) or the email failed. Either way the person can be sent one with Resend.
+  return NextResponse.json({ member: teamMemberView(user), emailSent, emailHeld: holdInviteEmail }, { status: 201 });
 }

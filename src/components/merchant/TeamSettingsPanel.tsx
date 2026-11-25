@@ -104,7 +104,11 @@ export default function TeamSettingsPanel({
       setMembers((prev) => [...prev, { ...data.member, isSelf: false, isPrimaryOwner: false, permissionOverrides: data.member.permissionOverrides ?? {} }]);
       setInviteEmail("");
       setInvitePasscode("");
-      toast.success(passcodeMode ? `Added ${email} as ${inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole]}` : `Invitation sent to ${email} as ${inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole]}`);
+      const roleName = inviteRole === "checkin" ? "Door check-in" : ROLE_LABELS[inviteRole];
+      if (passcodeMode) toast.success(`Added ${email} as ${roleName}`);
+      else if (data.emailSent) toast.success(`Invitation sent to ${email} as ${roleName}`);
+      else if (data.emailHeld) toast(`Added ${email} as ${roleName}. No email was sent for this organization. Use Resend if they need an invitation link.`);
+      else toast.error(`Added ${email}, but the invitation email could not be sent. Use Resend to try again.`);
     } catch (err: any) {
       toast.error(err.message || "Failed to send invitation");
     } finally {
