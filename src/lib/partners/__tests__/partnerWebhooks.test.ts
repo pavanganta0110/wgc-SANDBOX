@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
-  church: { findUnique: vi.fn() },
+  church: { findUnique: vi.fn(), findMany: vi.fn() },
   partnerWebhookEndpoint: { findUnique: vi.fn(), update: vi.fn() },
   partnerWebhookDelivery: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), findMany: vi.fn() },
-  webhookEvent: { findUnique: vi.fn() },
-  partnerEvent: { create: vi.fn(), findUnique: vi.fn() },
+  webhookEvent: { findUnique: vi.fn(), findMany: vi.fn() },
+  partnerEvent: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
   $transaction: vi.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -17,7 +17,7 @@ vi.mock("@/lib/webhooks/postSignedWebhook", () => ({ postSignedWebhook: post }))
 const afterMock = vi.hoisted(() => ({ after: vi.fn() }));
 vi.mock("next/server", () => afterMock);
 
-import { STALE_PENDING_DELIVERY_SECONDS, attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, recordPartnerEvent, retryStalePartnerDeliveries, sendPartnerTestEvent } from "../partnerWebhooks";
+import { STALE_PENDING_DELIVERY_SECONDS, attemptPartnerWebhookDelivery, queuePartnerWebhookDelivery, recordPartnerEvent, replayMissedPartnerEvents, retryStalePartnerDeliveries, sendPartnerTestEvent } from "../partnerWebhooks";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -261,5 +261,53 @@ describe("a delivery is not lost when its request ends", () => {
   it("never throws when the sweep fails", async () => {
     prismaMock.partnerWebhookDelivery.findMany.mockRejectedValue(new Error("db down"));
     await expect(retryStalePartnerDeliveries("p1")).resolves.toBeUndefined();
+  });
+});
+
+describe("replayMissedPartnerEvents", () => {
+  const since = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  beforeEach(() => {
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "ep1", status: "ACTIVE", subscribedEventsJson: ["onboarding.approved", "donation.created"] });
+    prismaMock.church.findMany.mockResolvedValue([{ id: "c1" }]);
+    prismaMock.partnerEvent.findMany.mockResolvedValue([]);
+    prismaMock.webhookEvent.findMany.mockResolvedValue([]);
+    prismaMock.partnerWebhookDelivery.findMany.mockResolvedValue([]);
+  });
+
+  it("queues the subscribed events missed while the endpoint was off, oldest first, and skips ones already delivered", async () => {
+    prismaMock.partnerEvent.findMany.mockResolvedValue([
+      { id: "pe1", createdAt: new Date(since.getTime() + 2000) },
+      { id: "pe2", createdAt: new Date(since.getTime() + 4000) },
+    ]);
+    prismaMock.webhookEvent.findMany.mockResolvedValue([{ id: "we1", churchId: "c1", createdAt: new Date(since.getTime() + 1000) }]);
+    prismaMock.partnerWebhookDelivery.findMany.mockResolvedValue([{ partnerEventId: "pe2", webhookEventId: null }]);
+
+    expect(await replayMissedPartnerEvents("p1", since)).toBe(2);
+    const created = prismaMock.partnerWebhookDelivery.create.mock.calls.map((c) => c[0].data);
+    expect(created).toEqual([
+      { webhookEventId: "we1", churchId: "c1", partnerId: "p1", partnerEndpointId: "ep1" },
+      { partnerEventId: "pe1", partnerId: "p1", partnerEndpointId: "ep1" },
+    ]);
+  });
+
+  it("only looks at the partner's own organizations and subscribed event types", async () => {
+    await replayMissedPartnerEvents("p1", since);
+    expect(prismaMock.church.findMany.mock.calls[0][0].where).toEqual({ partnerId: "p1" });
+    expect(prismaMock.partnerEvent.findMany.mock.calls[0][0].where.type).toEqual({ in: ["onboarding.approved", "donation.created"] });
+    expect(prismaMock.webhookEvent.findMany.mock.calls[0][0].where.churchId).toEqual({ in: ["c1"] });
+  });
+
+  it("does nothing while the endpoint is not active", async () => {
+    prismaMock.partnerWebhookEndpoint.findUnique.mockResolvedValue({ id: "ep1", status: "DISABLED_AUTO", subscribedEventsJson: ["onboarding.approved"] });
+    expect(await replayMissedPartnerEvents("p1", since)).toBe(0);
+    expect(prismaMock.partnerWebhookDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it("never looks further back than 30 days and never throws", async () => {
+    await replayMissedPartnerEvents("p1", new Date("2020-01-01"));
+    const from: Date = prismaMock.partnerEvent.findMany.mock.calls[0][0].where.createdAt.gte;
+    expect(Date.now() - from.getTime()).toBeLessThanOrEqual(30 * 24 * 60 * 60 * 1000 + 1000);
+    prismaMock.partnerEvent.findMany.mockRejectedValue(new Error("db down"));
+    await expect(replayMissedPartnerEvents("p1", since)).resolves.toBe(0);
   });
 });

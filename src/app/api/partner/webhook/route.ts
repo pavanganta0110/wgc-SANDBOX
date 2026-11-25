@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { createAuditLog } from "@/lib/audit";
 import { isAuthError } from "@/lib/auth/errors";
 import { requirePartnerSession, requirePartnerWriteSession } from "@/lib/partners/partnerSession";
-import { PARTNER_DEFAULT_EVENTS, PARTNER_ONBOARDING_EVENTS } from "@/lib/partners/partnerWebhooks";
+import { PARTNER_DEFAULT_EVENTS, PARTNER_ONBOARDING_EVENTS, replayMissedPartnerEvents } from "@/lib/partners/partnerWebhooks";
 import { WGC_EVENT_TYPES, isWgcEventType } from "@/lib/events/types";
 
 const ALL_PARTNER_EVENT_TYPES: string[] = [...PARTNER_ONBOARDING_EVENTS, ...WGC_EVENT_TYPES];
@@ -83,7 +83,7 @@ export async function PUT(req: Request) {
     const session = await requirePartnerWriteSession();
     const body = await req.json().catch(() => ({}));
 
-    const existing = await prisma.partnerWebhookEndpoint.findUnique({ where: { partnerId: session.partnerId }, select: { id: true } });
+    const existing = await prisma.partnerWebhookEndpoint.findUnique({ where: { partnerId: session.partnerId }, select: { id: true, status: true, disabledAt: true } });
 
     const url = body.url;
     if (!isAllowedPartnerWebhookUrl(url)) {
@@ -122,8 +122,13 @@ export async function PUT(req: Request) {
       },
       select: { id: true, url: true, status: true },
     });
-    await createAuditLog({ action: "PARTNER_WEBHOOK_UPDATED", actorEmail: session.email, metadata: { partnerId: session.partnerId, url, events, enabled } });
-    return NextResponse.json({ endpoint });
+    // Turned back on after WGC switched it off for failing: send what it missed while it was off.
+    let replayed = 0;
+    if (enabled && existing.status === "DISABLED_AUTO" && existing.disabledAt) {
+      replayed = await replayMissedPartnerEvents(session.partnerId, existing.disabledAt);
+    }
+    await createAuditLog({ action: "PARTNER_WEBHOOK_UPDATED", actorEmail: session.email, metadata: { partnerId: session.partnerId, url, events, enabled, replayed } });
+    return NextResponse.json({ endpoint, replayed });
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
     throw err;

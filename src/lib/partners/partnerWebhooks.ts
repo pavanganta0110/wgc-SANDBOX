@@ -147,6 +147,81 @@ export async function recordPartnerEvent(params: {
   }
 }
 
+/** The most events one replay queues, and how far back it looks. */
+const REPLAY_LIMIT = 100;
+const REPLAY_MAX_DAYS = 30;
+
+/**
+ * An endpoint that was switched off automatically (too many failed deliveries) never queued the events
+ * that happened while it was off. When the partner turns it back on, this queues those it is subscribed
+ * to, once each, oldest first: its onboarding events and its organizations' events since `since`.
+ * Safe to run twice (an event that already has a delivery is skipped). Returns how many were queued.
+ * Never throws.
+ */
+export async function replayMissedPartnerEvents(partnerId: string, since: Date): Promise<number> {
+  try {
+    const endpoint = await prisma.partnerWebhookEndpoint.findUnique({
+      where: { partnerId },
+      select: { id: true, status: true, subscribedEventsJson: true },
+    });
+    if (!endpoint || endpoint.status !== "ACTIVE") return 0;
+    const events = Array.isArray(endpoint.subscribedEventsJson) ? (endpoint.subscribedEventsJson as string[]) : [];
+    if (events.length === 0) return 0;
+
+    const floor = new Date(Date.now() - REPLAY_MAX_DAYS * 24 * 60 * 60 * 1000);
+    const from = since > floor ? since : floor;
+
+    const churches = await prisma.church.findMany({ where: { partnerId }, select: { id: true } });
+    const [partnerCandidates, orgCandidates] = await Promise.all([
+      prisma.partnerEvent.findMany({
+        where: { partnerId, type: { in: events }, createdAt: { gte: from } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, createdAt: true },
+      }),
+      churches.length === 0
+        ? Promise.resolve([] as Array<{ id: string; churchId: string; createdAt: Date }>)
+        : prisma.webhookEvent.findMany({
+            where: { churchId: { in: churches.map((c) => c.id) }, type: { in: events }, createdAt: { gte: from } },
+            orderBy: { createdAt: "asc" },
+            select: { id: true, churchId: true, createdAt: true },
+          }),
+    ]);
+    // Skip anything that already has a delivery, so running this twice never sends an event twice.
+    const delivered = await prisma.partnerWebhookDelivery.findMany({
+      where: { partnerId, createdAt: { gte: from } },
+      select: { partnerEventId: true, webhookEventId: true },
+    });
+    const sentPartner = new Set(delivered.map((d) => d.partnerEventId).filter(Boolean));
+    const sentOrg = new Set(delivered.map((d) => d.webhookEventId).filter(Boolean));
+    const partnerEvents = partnerCandidates.filter((e) => !sentPartner.has(e.id));
+    const orgEvents = orgCandidates.filter((e) => !sentOrg.has(e.id));
+
+    const queue = [
+      ...partnerEvents.map((e) => ({ at: e.createdAt, data: { partnerEventId: e.id } })),
+      ...orgEvents.map((e) => ({ at: e.createdAt, data: { webhookEventId: e.id, churchId: e.churchId } })),
+    ]
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .slice(0, REPLAY_LIMIT);
+
+    const ids: string[] = [];
+    for (const item of queue) {
+      const delivery = await prisma.partnerWebhookDelivery.create({
+        data: { ...item.data, partnerId, partnerEndpointId: endpoint.id },
+        select: { id: true },
+      });
+      ids.push(delivery.id);
+    }
+    // In order, one after another; anything not reached is picked up by the stale-delivery sweep.
+    runAfterResponse(async () => {
+      for (const id of ids) await attemptPartnerWebhookDelivery(id);
+    });
+    return ids.length;
+  } catch (err) {
+    console.error(`replayMissedPartnerEvents failed for partner=${partnerId}:`, err);
+    return 0;
+  }
+}
+
 /** A delivery still Pending (never attempted) after this long was lost with its request, and is picked up again. */
 export const STALE_PENDING_DELIVERY_SECONDS = 120;
 const STALE_SWEEP_LIMIT = 20;
