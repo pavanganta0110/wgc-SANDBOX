@@ -1,4 +1,4 @@
-import { decryptSecret, deserializeEnvelope } from "@/lib/integrations/aplos/encryption";
+import { decryptInboxSecret } from "@/lib/inbox/secrets";
 import { getAccessToken, isZohoDataCenter, type ZohoClientCreds, type ZohoDataCenter } from "@/lib/inbox/zoho";
 
 interface MailboxAuthFields {
@@ -11,7 +11,7 @@ interface MailboxAuthFields {
 /** A mailbox's own Zoho keys when it has them, otherwise null (the shared env keys apply). */
 export function mailboxCreds(m: Pick<MailboxAuthFields, "clientId" | "encryptedClientSecret">): ZohoClientCreds | null {
   if (!m.clientId || !m.encryptedClientSecret) return null;
-  return { clientId: m.clientId, clientSecret: decryptSecret(deserializeEnvelope(m.encryptedClientSecret)) };
+  return { clientId: m.clientId, clientSecret: decryptInboxSecret(m.encryptedClientSecret) };
 }
 
 export function mailboxDataCenter(m: Pick<MailboxAuthFields, "dataCenter">): ZohoDataCenter {
@@ -20,5 +20,5 @@ export function mailboxDataCenter(m: Pick<MailboxAuthFields, "dataCenter">): Zoh
 
 /** Short-lived Zoho access token for a stored mailbox. */
 export async function accessTokenForMailbox(m: MailboxAuthFields): Promise<string> {
-  return getAccessToken(decryptSecret(deserializeEnvelope(m.encryptedRefreshToken)), mailboxDataCenter(m), mailboxCreds(m));
+  return getAccessToken(decryptInboxSecret(m.encryptedRefreshToken), mailboxDataCenter(m), mailboxCreds(m));
 }

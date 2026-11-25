@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
 import { isAuthError } from "@/lib/auth/errors";
-import { encryptSecret, serializeEnvelope } from "@/lib/integrations/aplos/encryption";
+import { encryptInboxSecret, InboxEncryptionConfigError } from "@/lib/inbox/secrets";
 import { exchangeGrantCode, fetchPrimaryAccount, getAccessToken, isZohoDataCenter, ZohoNotConfiguredError, type ZohoClientCreds } from "@/lib/inbox/zoho";
 
 /** Connects (or reconnects) the support mailbox with a one-time Zoho "Self Client" grant code. */
@@ -31,8 +31,8 @@ export async function POST(req: Request) {
     if (existing && existing.ownerAdminUserId !== ownerAdminUserId) {
       return NextResponse.json({ error: "That mailbox is already connected as " + (existing.ownerAdminUserId ? "another admin's personal mailbox." : "a shared mailbox.") }, { status: 409 });
     }
-    const encryptedRefreshToken = serializeEnvelope(encryptSecret(refreshToken));
-    const encryptedClientSecret = creds ? serializeEnvelope(encryptSecret(clientSecret)) : null;
+    const encryptedRefreshToken = encryptInboxSecret(refreshToken);
+    const encryptedClientSecret = creds ? encryptInboxSecret(clientSecret) : null;
     const mailbox = await prisma.inboxMailbox.upsert({
       where: { emailAddress: account.emailAddress },
       create: { emailAddress: account.emailAddress, providerAccountId: account.accountId, dataCenter: dc, encryptedRefreshToken, connectedByAdminEmail: session.email, ownerAdminUserId, label, clientId: creds ? clientId : null, encryptedClientSecret },
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ success: true, emailAddress: mailbox.emailAddress });
   } catch (err) {
     if (isAuthError(err)) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof ZohoNotConfiguredError) return NextResponse.json({ error: err.message }, { status: 503 });
+    if (err instanceof ZohoNotConfiguredError || err instanceof InboxEncryptionConfigError) return NextResponse.json({ error: err.message }, { status: 503 });
     console.error("inbox connect failed:", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Could not connect Zoho" }, { status: 400 });
   }
