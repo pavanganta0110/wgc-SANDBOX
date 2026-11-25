@@ -95,6 +95,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       data[field] = field === "checkDate" || field === "donationDate" ? (value ? new Date(value) : null) : value;
     }
   }
+  if ("donorThankYouNote" in data) {
+    const v = data.donorThankYouNote;
+    data.donorThankYouNote = typeof v === "string" && v.trim() ? v.trim().slice(0, 2000) : null;
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No fields to update" }, { status: 400 });
   }
