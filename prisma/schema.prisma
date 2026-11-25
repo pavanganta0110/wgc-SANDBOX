@@ -7393,6 +7393,8 @@ model InboxMailbox {
   connectedByAdminEmail String
   // Display name ("Support", "Company") and optional per-mailbox Zoho keys. Mailboxes under different Zoho
   // logins each need their own Self Client; when null the shared ZOHO_CLIENT_ID / ZOHO_CLIENT_SECRET env keys are used.
+  // null = shared WGC mailbox, visible to every admin. Set = that admin's private mailbox, visible only to them.
+  ownerAdminUserId      String?
   label                 String?
   clientId              String?
   encryptedClientSecret String?
@@ -7402,6 +7404,8 @@ model InboxMailbox {
   updatedAt             DateTime  @updatedAt
 
   messages InboxMessage[]
+
+  @@index([ownerAdminUserId])
 }
 
 model InboxMessage {

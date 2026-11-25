@@ -20,6 +20,7 @@ export interface InboxRowData {
   churchId: string | null;
   churchName: string | null;
   mailboxLabel: string;
+  personal?: boolean;
 }
 
 export default function InboxMessageRow({ m, orgs }: { m: InboxRowData; orgs: Array<{ id: string; name: string }> }) {
@@ -70,9 +71,9 @@ export default function InboxMessageRow({ m, orgs }: { m: InboxRowData; orgs: Ar
               </>
             )}
             {m.ticketId && <Link href={`/admin/support/tickets/${m.ticketId}`} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800">Open ticket {m.ticketNumber}</Link>}
-            {m.direction === "IN" && m.classification !== "SPAM" && <button disabled={busy} onClick={() => act("spam")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Spam</button>}
-            {m.classification === "SPAM" && <button disabled={busy} onClick={() => act("not_spam")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Not spam</button>}
-            {m.direction === "IN" && <button disabled={busy} onClick={() => act("assign_me")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Assign to me</button>}
+            {m.direction === "IN" && !m.personal && m.classification !== "SPAM" && <button disabled={busy} onClick={() => act("spam")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Spam</button>}
+            {m.classification === "SPAM" && !m.personal && <button disabled={busy} onClick={() => act("not_spam")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Not spam</button>}
+            {m.direction === "IN" && !m.personal && <button disabled={busy} onClick={() => act("assign_me")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Assign to me</button>}
             {m.direction === "IN" && m.status !== "IGNORED" && <button disabled={busy} onClick={() => act("ignore")} className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700">Ignore</button>}
           </div>
           {m.direction === "IN" && (

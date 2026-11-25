@@ -20,7 +20,12 @@ export async function GET(req: Request) {
 
   try {
     const result = await withJobRunTracking({ jobName: "inbox-sync", jobType: "inbox" }, async () => {
-      const mailboxes = await prisma.inboxMailbox.findMany({ select: { id: true } });
+      const all = await prisma.inboxMailbox.findMany({ select: { id: true, ownerAdminUserId: true } });
+      const ownerIds = [...new Set(all.map((m) => m.ownerAdminUserId).filter((v): v is string => Boolean(v)))];
+      const disabled = new Set(
+        ownerIds.length ? (await prisma.user.findMany({ where: { id: { in: ownerIds }, disabledAt: { not: null } }, select: { id: true } })).map((u) => u.id) : []
+      );
+      const mailboxes = all.filter((m) => !m.ownerAdminUserId || !disabled.has(m.ownerAdminUserId));
       let imported = 0;
       let ticketed = 0;
       let failed = 0;

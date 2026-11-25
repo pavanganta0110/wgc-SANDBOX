@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { createTicketFromInboxMessage } from "@/lib/inbox/tickets";
+import { canAccessMailbox } from "@/lib/inbox/access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,8 +17,12 @@ export async function POST(req: Request, { params }: Params) {
     const session = await requireMfaVerifiedAdminSession();
     const { id } = await params;
     const body = (await req.json().catch(() => ({}))) as { action?: unknown; churchId?: unknown };
-    const msg = await prisma.inboxMessage.findUnique({ where: { id } });
-    if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    const msg = await prisma.inboxMessage.findUnique({ where: { id }, include: { mailbox: { select: { ownerAdminUserId: true } } } });
+    // Someone else's personal mail looks exactly like a message that doesn't exist.
+    if (!msg || !canAccessMailbox(msg.mailbox, session.userId)) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    if (msg.mailbox.ownerAdminUserId && ["spam", "not_spam", "assign_me"].includes(String(body.action))) {
+      return NextResponse.json({ error: "Not available for a personal mailbox." }, { status: 400 });
+    }
 
     switch (body.action) {
       case "make_ticket": {

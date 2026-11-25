@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function ConnectZohoForm({ configured, additional = false }: { configured: boolean; additional?: boolean }) {
+export default function ConnectZohoForm({ configured, additional = false, personal = false }: { configured: boolean; additional?: boolean; personal?: boolean }) {
   const router = useRouter();
   const [grantCode, setGrantCode] = useState("");
   const [dataCenter, setDataCenter] = useState("com");
@@ -16,7 +16,7 @@ export default function ConnectZohoForm({ configured, additional = false }: { co
   async function connect() {
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/admin/inbox/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ grantCode, dataCenter, label, ...(ownKeys ? { clientId, clientSecret } : {}) }) });
+    const res = await fetch("/api/admin/inbox/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ grantCode, dataCenter, label, personal, ...(ownKeys ? { clientId, clientSecret } : {}) }) });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok) return setError(json.error || "Could not connect");
@@ -27,7 +27,7 @@ export default function ConnectZohoForm({ configured, additional = false }: { co
 
   return (
     <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
-      <h3 className="text-lg font-bold text-slate-900">{additional ? "Connect another mailbox" : "Connect your Zoho mailbox"}</h3>
+      <h3 className="text-lg font-bold text-slate-900">{personal ? "Connect my own Zoho mailbox (private to me)" : additional ? "Connect another shared mailbox" : "Connect your Zoho mailbox"}</h3>
       {!configured && !ownKeys && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
           First add <code>ZOHO_CLIENT_ID</code> and <code>ZOHO_CLIENT_SECRET</code> to the app environment (steps below), then redeploy.

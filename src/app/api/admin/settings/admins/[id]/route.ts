@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { disconnectPersonalMailboxesFor } from "@/lib/inbox/access";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
@@ -52,6 +53,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         where: { id },
         data: { disabledAt: new Date(), disabledByUserId: session.userId },
       });
+      await disconnectPersonalMailboxesFor(id).catch((err) => console.error("inbox: could not disconnect personal mailboxes", err));
       await prisma.auditLog.create({
         data: { action: "ADMIN_DISABLED", actorEmail: session.email, metadata: { targetUserId: id } },
       });

@@ -4,6 +4,7 @@ import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { accessTokenForMailbox, mailboxDataCenter } from "@/lib/inbox/mailboxAuth";
 import { sendMail } from "@/lib/inbox/zoho";
+import { canAccessMailbox } from "@/lib/inbox/access";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: Params) {
     if (text.length > 10000) return NextResponse.json({ error: "Reply is too long." }, { status: 400 });
 
     const msg = await prisma.inboxMessage.findUnique({ where: { id }, include: { mailbox: true } });
-    if (!msg) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+    if (!msg || !canAccessMailbox(msg.mailbox, session.userId)) return NextResponse.json({ error: "Message not found" }, { status: 404 });
     const ticket = msg.ticketId ? await prisma.supportTicket.findUnique({ where: { id: msg.ticketId }, select: { id: true, ticketNumber: true } }) : null;
 
     const base = msg.subject.replace(/^(re:\s*)+/i, "");

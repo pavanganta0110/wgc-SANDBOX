@@ -26,6 +26,8 @@ export async function syncMailbox(mailboxId: string) {
     const fresh = listed.filter((m) => !known.has(m.messageId) && normalizeEmail(m.fromAddress) !== mailbox.emailAddress.toLowerCase()).slice(0, MAX_NEW_PER_RUN);
     const rules: SenderRule[] = (await prisma.inboxSenderRule.findMany()).map((r) => ({ kind: r.kind as "BLOCK" | "ALLOW", pattern: r.pattern }));
 
+    const personal = mailbox.ownerAdminUserId !== null;
+
     for (const m of fresh) {
       const fromEmail = normalizeEmail(m.fromAddress);
       let body = "";
@@ -34,8 +36,11 @@ export async function syncMailbox(mailboxId: string) {
       } catch (err) {
         console.error("inbox-sync: could not read message body", err instanceof Error ? err.message : err);
       }
-      const user = await prisma.user.findFirst({ where: { email: { equals: fromEmail, mode: "insensitive" } }, select: { churchId: true } });
-      const result = classifyEmail({ fromEmail, subject: m.subject, body, rules, senderIsKnownUser: Boolean(user) });
+      // A personal mailbox is a plain private inbox: no triage, no spam rules, no automatic tickets.
+      const user = personal ? null : await prisma.user.findFirst({ where: { email: { equals: fromEmail, mode: "insensitive" } }, select: { churchId: true } });
+      const result = personal
+        ? { classification: "PERSONAL" as const, reason: "Personal mailbox", ticketNumber: null, category: "OTHER" }
+        : classifyEmail({ fromEmail, subject: m.subject, body, rules, senderIsKnownUser: Boolean(user) });
       // A "support" message with no org to attach a ticket to needs a person to pick the org.
       const needsOrg = result.classification === "SUPPORT" && !user?.churchId && !result.ticketNumber;
       let row;

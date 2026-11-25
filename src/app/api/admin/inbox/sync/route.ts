@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireMfaVerifiedAdminSession } from "@/lib/auth/requireAdminSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { syncMailbox } from "@/lib/inbox/sync";
+import { visibleMailboxWhere } from "@/lib/inbox/access";
 
 /** "Check mail now" button. */
 export async function POST() {
   try {
-    await requireMfaVerifiedAdminSession();
-    const mailboxes = await prisma.inboxMailbox.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, emailAddress: true } });
+    const session = await requireMfaVerifiedAdminSession();
+    const mailboxes = await prisma.inboxMailbox.findMany({ where: visibleMailboxWhere(session.userId), orderBy: { createdAt: "asc" }, select: { id: true, emailAddress: true } });
     if (mailboxes.length === 0) return NextResponse.json({ error: "Connect a Zoho mailbox first." }, { status: 400 });
     let imported = 0;
     let ticketed = 0;
