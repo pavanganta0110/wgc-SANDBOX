@@ -5,6 +5,7 @@ import TeamSettingsPanel from "@/components/merchant/TeamSettingsPanel";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
+import { teamInvitationStatus } from "@/lib/auth/teamInvitationStatus";
 
 const MANAGEABLE_ORG_ROLES = ["church_admin", "owner", "admin", "fundraiser", "viewer"] as const;
 
@@ -34,9 +35,7 @@ export default async function TeamSettingsPage() {
   const passcodeMode = church?.partnerId ? (await getEmbedSignInMode(church.partnerId)) === "PASSCODE" : false;
 
   const members = users.map((user) => {
-    const invitePending = !user.passwordHash;
-    const inviteExpired = invitePending && (!user.setPasswordTokenExpiresAt || user.setPasswordTokenExpiresAt < new Date());
-    const invitationStatus: "PENDING" | "EXPIRED" | "ACCEPTED" = !invitePending ? "ACCEPTED" : inviteExpired ? "EXPIRED" : "PENDING";
+    const invitationStatus = teamInvitationStatus(user);
     const overrides =
       user.permissionsJson && typeof user.permissionsJson === "object" && !Array.isArray(user.permissionsJson)
         ? (user.permissionsJson as Record<string, boolean>)

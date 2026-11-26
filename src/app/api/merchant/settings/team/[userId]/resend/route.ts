@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getSettingsPermissions } from "@/lib/settings/settingsPermissions";
 import { sendWgcEmail } from "@/lib/email";
+import { teamInvitationStatus } from "@/lib/auth/teamInvitationStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
@@ -25,7 +26,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ userId:
   if (!target || target.churchId !== auth.churchId || !["church_admin", "owner", "admin", "fundraiser", "viewer"].includes(target.role)) {
     return NextResponse.json({ error: "Team member not found" }, { status: 404 });
   }
-  if (target.passwordHash) {
+  // Someone who has signed in (even without a password, as people opened inside a partner's frame do) has accepted.
+  if (teamInvitationStatus(target) === "ACCEPTED") {
     return NextResponse.json({ error: "This member has already accepted their invitation" }, { status: 400 });
   }
 
