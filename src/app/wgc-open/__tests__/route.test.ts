@@ -76,9 +76,14 @@ describe("GET /wgc-open", () => {
     expect(wgcCalls[0].body.role).toBe("admin");
   });
 
-  it("lets nobody in when GHL cannot confirm the person", async () => {
-    ghlStatus = 500;
-    expect((await open()).status).toBe(502);
+  it("lets nobody in when GHL cannot confirm the person, and says what GHL answered (never the token)", async () => {
+    ghlStatus = 401;
+    const res = await open();
+    expect(res.status).toBe(502);
+    const html = await res.text();
+    expect(html).toContain("GHL answered 401");
+    expect(html).not.toContain(KEY);
+    expect(html).not.toContain("wgc_ptr_x");
     expect(wgcCalls).toHaveLength(0);
   });
 

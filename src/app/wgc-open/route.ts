@@ -56,7 +56,7 @@ interface GhlUser {
   roles?: { type?: string; role?: string; locationIds?: string[] };
 }
 
-type Lookup = { ok: true; role: "admin" | "member" | null } | { ok: false };
+type Lookup = { ok: true; role: "admin" | "member" | null } | { ok: false; reason: string };
 
 /**
  * This person's role in this location, from GHL:
@@ -68,7 +68,7 @@ type Lookup = { ok: true; role: "admin" | "member" | null } | { ok: false };
 async function roleInGhl(location: string, email: string): Promise<Lookup> {
   const token = process.env.GHL_TOKEN;
   const companyId = process.env.GHL_COMPANY_ID;
-  if (!token || !companyId) return { ok: false };
+  if (!token || !companyId) return { ok: false, reason: "GHL_TOKEN or GHL_COMPANY_ID is not set" };
 
   const url = new URL("https://services.leadconnectorhq.com/users/search");
   url.searchParams.set("companyId", companyId);
@@ -80,12 +80,15 @@ async function roleInGhl(location: string, email: string): Promise<Lookup> {
   try {
     res = await fetch(url, { headers: { authorization: `Bearer ${token}`, version: "2023-02-21" }, signal: AbortSignal.timeout(8000) });
   } catch {
-    return { ok: false };
+    return { ok: false, reason: "GHL did not answer in time" };
   }
-  if (!res.ok) return { ok: false };
-
-  const json = (await res.json().catch(() => null)) as { users?: GhlUser[] } | null;
-  if (!json || !Array.isArray(json.users)) return { ok: false };
+  const json = (await res.json().catch(() => null)) as { users?: GhlUser[]; message?: unknown } | null;
+  if (!res.ok) {
+    // GHL's own status and message (never our token) so a wrong token, company id or scope is easy to tell apart.
+    const said = typeof json?.message === "string" ? json.message : Array.isArray(json?.message) ? json.message.join(", ") : "";
+    return { ok: false, reason: `GHL answered ${res.status}${said ? `: ${said.slice(0, 200)}` : ""}` };
+  }
+  if (!json || !Array.isArray(json.users)) return { ok: false, reason: "GHL sent an unexpected answer" };
 
   const user = json.users.find((u) => !u.deleted && (u.email ?? "").trim().toLowerCase() === email);
   if (!user) return { ok: true, role: null };
@@ -125,7 +128,11 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const found = await roleInGhl(location, email);
-  if (!found.ok) return page(502, "Couldn't check your access", "We couldn't confirm your access just now. Please try again in a moment.");
+  if (!found.ok) {
+    console.error("GHL role lookup failed:", found.reason);
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+    return page(502, "Couldn't check your access", `We couldn't confirm your access just now. Please try again in a moment.<br><br><small>${esc(found.reason)}</small>`);
+  }
   if (!found.role) return page(403, "No access", "Your login doesn't have access to this account.");
 
   const body = {
