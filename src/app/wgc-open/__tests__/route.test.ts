@@ -93,4 +93,15 @@ describe("GET /wgc-open", () => {
     expect((await open({ location: "" })).status).toBe(400);
     expect((await open({ email: "nope" })).status).toBe(400);
   });
+
+  it("shows what arrived, but never the key, when details are missing", async () => {
+    const res = await open({ email: "{{user.email}}" });
+    const html = await res.text();
+    expect(res.status).toBe(400);
+    expect(html).toContain("{{user.email}}");
+    expect(html).toContain("location: L1");
+    expect(html).not.toContain(KEY);
+    const empty = await (await open({ location: "" })).text();
+    expect(empty).toContain("location: (empty)");
+  });
 });

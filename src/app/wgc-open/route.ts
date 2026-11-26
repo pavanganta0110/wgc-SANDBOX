@@ -114,7 +114,14 @@ export async function GET(req: Request): Promise<Response> {
   const location = (q.get("location") ?? "").trim().slice(0, 120);
   const email = (q.get("email") ?? "").trim().toLowerCase().slice(0, 254);
   if (!location || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return page(400, "Missing details", "We couldn't tell which account or person is opening this. Close it and try again.");
+    // Shows what arrived (never the key) so a link where GHL did not fill in a merge field is easy to spot.
+    const esc = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
+    const show = (v: string) => (v ? esc(v) : "(empty)");
+    return page(
+      400,
+      "Missing details",
+      `We couldn't tell which account or person is opening this. Close it and try again.<br><br><small>location: ${show(location)}<br>email: ${show(email)}</small>`
+    );
   }
 
   const found = await roleInGhl(location, email);
