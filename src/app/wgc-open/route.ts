@@ -70,24 +70,43 @@ async function roleInGhl(location: string, email: string): Promise<Lookup> {
   const companyId = process.env.GHL_COMPANY_ID;
   if (!token || !companyId) return { ok: false, reason: "GHL_TOKEN or GHL_COMPANY_ID is not set" };
 
-  const url = new URL("https://services.leadconnectorhq.com/users/search");
-  url.searchParams.set("companyId", companyId);
-  url.searchParams.set("locationId", location);
-  url.searchParams.set("query", email); // matches name, email or phone; we re-check the email exactly below
-  url.searchParams.set("limit", "25");
+  const call = async (url: URL): Promise<{ status: number; ok: boolean; json: { users?: GhlUser[]; message?: unknown } | null } | null> => {
+    try {
+      const res = await fetch(url, { headers: { authorization: `Bearer ${token}`, version: "2023-02-21" }, signal: AbortSignal.timeout(8000) });
+      const json = (await res.json().catch(() => null)) as { users?: GhlUser[]; message?: unknown } | null;
+      return { status: res.status, ok: res.ok, json };
+    } catch {
+      return null;
+    }
+  };
+  const said = (json: { message?: unknown } | null) =>
+    typeof json?.message === "string" ? json.message : Array.isArray(json?.message) ? json.message.join(", ") : "";
 
-  let res: Response;
-  try {
-    res = await fetch(url, { headers: { authorization: `Bearer ${token}`, version: "2023-02-21" }, signal: AbortSignal.timeout(8000) });
-  } catch {
-    return { ok: false, reason: "GHL did not answer in time" };
+  const search = new URL("https://services.leadconnectorhq.com/users/search");
+  search.searchParams.set("companyId", companyId);
+  search.searchParams.set("locationId", location);
+  search.searchParams.set("query", email); // matches name, email or phone; we re-check the email exactly below
+  search.searchParams.set("limit", "25");
+
+  let result = await call(search);
+  if (!result) return { ok: false, reason: "GHL did not answer in time" };
+
+  // A token made inside one sub-account cannot search by company. GHL's older "users of this location" call
+  // works for such a token, so try it when the company search is refused for company access.
+  if (!result.ok && /company/i.test(said(result.json))) {
+    const legacy = new URL("https://services.leadconnectorhq.com/users/");
+    legacy.searchParams.set("locationId", location);
+    const second = await call(legacy);
+    if (second?.ok) result = second;
+    else if (second) return { ok: false, reason: `GHL answered ${result.status}: ${said(result.json).slice(0, 160)} (and ${second.status} on the location lookup: ${said(second.json).slice(0, 120)})` };
   }
-  const json = (await res.json().catch(() => null)) as { users?: GhlUser[]; message?: unknown } | null;
-  if (!res.ok) {
+
+  if (!result.ok) {
     // GHL's own status and message (never our token) so a wrong token, company id or scope is easy to tell apart.
-    const said = typeof json?.message === "string" ? json.message : Array.isArray(json?.message) ? json.message.join(", ") : "";
-    return { ok: false, reason: `GHL answered ${res.status}${said ? `: ${said.slice(0, 200)}` : ""}` };
+    const m = said(result.json);
+    return { ok: false, reason: `GHL answered ${result.status}${m ? `: ${m.slice(0, 200)}` : ""}` };
   }
+  const json = result.json;
   if (!json || !Array.isArray(json.users)) return { ok: false, reason: "GHL sent an unexpected answer" };
 
   const user = json.users.find((u) => !u.deleted && (u.email ?? "").trim().toLowerCase() === email);
