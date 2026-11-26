@@ -39,6 +39,21 @@ export async function attachChurchToPartner(params: {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
           console.error(`attachChurchToPartner: reference "${params.partnerReference}" already used by partner ${params.partnerId}; linked without it.`);
           await prisma.church.update({ where: { id: params.churchId }, data: { partnerId: params.partnerId, partnerReference: null } });
+          // Never silent: this organization cannot be opened from the partner's frame until WGC fixes the link.
+          try {
+            const { sendWgcAdminEmail } = await import("@/lib/email");
+            await sendWgcAdminEmail({
+              merchantName: params.churchId,
+              contactEmail: "unknown",
+              newStatus: "PROVISIONING_FAILED",
+              customSubject: `[WGC Admin] Partner reference already used - organization not reachable from the partner (church ${params.churchId})`,
+              whatHappened: `Application ${params.onboardingApplicationId} was approved, but the partner reference "${params.partnerReference}" already belongs to another organization of the same partner. The new organization was linked to the partner without it.`,
+              actionNeeded: "Give each organization its own reference, or move the reference to the right organization under Partners > organizations. Until then this organization will not open from the partner's frame.",
+              adminDashboardLink: "https://www.wgcpayments.com/admin/partners",
+            });
+          } catch (alertErr) {
+            console.error("attachChurchToPartner: could not send the reference-collision alert:", alertErr);
+          }
         } else {
           throw err;
         }

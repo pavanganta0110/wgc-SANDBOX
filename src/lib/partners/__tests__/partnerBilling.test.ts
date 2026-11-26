@@ -7,6 +7,9 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
+const adminEmail = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock("@/lib/email", () => ({ sendWgcAdminEmail: adminEmail }));
+
 import { attachChurchToPartner } from "../partnerBilling";
 
 const params = { churchId: "c1", partnerId: "p1", partnerReference: "loc_1", onboardingApplicationId: "app1" };
@@ -51,6 +54,9 @@ describe("attachChurchToPartner", () => {
     await attachChurchToPartner(params);
     expect(prismaMock.church.update).toHaveBeenLastCalledWith({ where: { id: "c1" }, data: { partnerId: "p1", partnerReference: null } });
     expect(prismaMock.partnerBillableApproval.upsert).toHaveBeenCalled();
+    // and WGC is told, so it is never a silent dead end
+    expect(adminEmail).toHaveBeenCalledTimes(1);
+    expect(adminEmail.mock.calls[0][0].customSubject).toContain("Partner reference already used");
   });
 
   it("never throws", async () => {

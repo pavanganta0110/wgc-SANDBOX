@@ -6,6 +6,7 @@ import { finixClient } from "@/lib/finix/client";
 import { sendWgcEmail, sendWgcAdminOnboardingNotification } from "@/lib/email";
 import { consumePromotionLeadForSignup } from "@/lib/billing/promotionAttribution";
 import { resolvePartnerByOnboardingCode } from "@/lib/partners/onboardingCode";
+import { loadPartnerEmbedState } from "@/lib/partners/loadEmbedState";
 import { notifyPartnerOfOnboardingStage } from "@/lib/partners/onboardingEvents";
 import { hashFramePasscode, validateFramePasscode } from "@/lib/auth/framePasscode";
 
@@ -109,6 +110,17 @@ export async function POST(req: Request) {
           partnerAgentId: agent?.id ?? null,
         }
       : {};
+
+    // One organization per partner reference (for example, one per GHL sub-account). If this reference already has
+    // an organization or an application, a second one must not be started: it would be approved, then could not take
+    // the reference (it is unique) and would be left unreachable from the partner's frame. Show the existing one instead.
+    if (partner && partnerTag.partnerReference) {
+      const existing = await loadPartnerEmbedState(partner.id, partnerTag.partnerReference);
+      if (existing.kind !== "form") {
+        const message = "This account already has an application or organization with WGC Payments, so a new one can't be started. Open it again from the software you started it in.";
+        return NextResponse.json({ success: false, error: message, message, code: "reference_in_use" }, { status: 409 });
+      }
+    }
 
     // A partner whose product has one shared login signs its people in with passcodes. The person filling in
     // the application chooses the owner's; only its hash is kept, and it is copied to the owner's account.
