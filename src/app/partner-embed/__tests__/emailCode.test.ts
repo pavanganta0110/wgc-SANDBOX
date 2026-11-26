@@ -40,6 +40,33 @@ beforeEach(() => {
   sendWgcEmail.mockResolvedValue({ success: true });
 });
 
+describe("the code email names the partner", () => {
+  it("puts the partner's name in the subject and the body, so the organization's people recognize it", async () => {
+    prismaMock.partner.findUnique.mockImplementation(async (args: { select: Record<string, boolean> }) => (args.select.name ? { name: "CV Campus OS" } : { embedSignInMode: "EMAIL_CODE" }));
+    await post(send, { link: link(), email: "maya@c.test" });
+    const mail = sendWgcEmail.mock.calls[0][0];
+    expect(mail.subject).toBe("Your CV Campus OS sign-in code (WGC Payments)");
+    expect(mail.bodyHtml).toContain("<strong>CV Campus OS</strong>");
+    expect(mail.bodyHtml).toContain("the payments service inside CV Campus OS");
+    expect(/strong[^>]*>(\d{6})</.test(mail.bodyHtml)).toBe(true);
+  });
+
+  it("escapes the name, and falls back to the plain wording when it can't be read", async () => {
+    prismaMock.partner.findUnique.mockImplementation(async (args: { select: Record<string, boolean> }) => (args.select.name ? { name: "A<b>&Co" } : { embedSignInMode: "EMAIL_CODE" }));
+    await post(send, { link: link(), email: "maya@c.test" });
+    expect(sendWgcEmail.mock.calls[0][0].bodyHtml).toContain("A&lt;b&gt;&amp;Co");
+    expect(sendWgcEmail.mock.calls[0][0].bodyHtml).not.toContain("<b>");
+
+    sendWgcEmail.mockClear();
+    prismaMock.partner.findUnique.mockImplementation(async (args: { select: Record<string, boolean> }) => {
+      if (args.select.name) throw new Error("db");
+      return { embedSignInMode: "EMAIL_CODE" };
+    });
+    await post(send, { link: link(), email: "maya@c.test" });
+    expect(sendWgcEmail.mock.calls[0][0].subject).toBe("Your WGC Payments code");
+  });
+});
+
 describe("emailing the code", () => {
   it("emails a 6-digit code to a person on the team and stores only its hash", async () => {
     const res = await post(send, { link: link(), email: "Maya@C.test" });

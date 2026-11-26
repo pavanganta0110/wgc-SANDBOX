@@ -5,6 +5,7 @@ import { getEmbedSignInMode } from "@/lib/partners/embedEntry";
 import { findTeamMemberByEmail, issueEmailCode } from "@/lib/partners/embedEmailCode";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
+import { prisma } from "@/lib/prisma";
 import { MFA_CODE_TTL_MINUTES } from "@/lib/auth/mfaCode";
 
 const NOT_ON_TEAM = "That email is not set up for this organization. Ask your administrator to add you under Team, then try again.";
@@ -31,11 +32,19 @@ export async function POST(req: Request) {
   if (issued.status === "cooldown") return NextResponse.json({ error: `A code was just sent. Wait ${issued.retryAfterSeconds} seconds before asking for another.`, code: "cooldown" }, { status: 429 });
   if (issued.status === "limited") return NextResponse.json({ error: "Too many codes were requested. Try again later.", code: "limited" }, { status: 429 });
 
+  // Say which product this is opening from, so the organization's people, who know it by the partner's name
+  // and not WGC's, recognize the email. Falls back to the plain wording if the name can't be read.
+  const partner = await prisma.partner.findUnique({ where: { id: payload.partnerId }, select: { name: true } }).catch(() => null);
+  const partnerName = partner?.name?.trim() || null;
+  const safeName = partnerName ? partnerName.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string) : null;
+
   const result = await sendWgcEmail({
     to: user.email,
-    subject: "Your WGC Payments code",
+    subject: partnerName ? `Your ${partnerName} sign-in code (WGC Payments)` : "Your WGC Payments code",
     title: "Your sign-in code",
-    bodyHtml: `<p>Someone is opening WGC Payments with your email. Your code is <strong style="font-size:24px;letter-spacing:4px">${issued.code}</strong></p><p>It expires in ${MFA_CODE_TTL_MINUTES} minutes. If this was not you, ignore this email.</p>`,
+    bodyHtml: `<p>Someone is opening WGC Payments${safeName ? ` from <strong>${safeName}</strong>` : ""} with your email. Your code is <strong style="font-size:24px;letter-spacing:4px">${issued.code}</strong></p>${
+      safeName ? `<p>WGC Payments is the payments service inside ${safeName}.</p>` : ""
+    }<p>It expires in ${MFA_CODE_TTL_MINUTES} minutes. If this was not you, ignore this email.</p>`,
   });
   if (!result.success) return NextResponse.json({ error: "We could not send the email. Try again in a moment.", code: "send_failed" }, { status: 502 });
   return NextResponse.json({ ok: true });
