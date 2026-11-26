@@ -180,7 +180,7 @@ export default async function MerchantDashboardLayout({
                   is the correct action here, not the merchant logout — it
                   would clear the admin's real wgc_session, which is never
                   the intent while returning from a merchant view. */}
-              {!isDemoMode && !auth.impersonation && <LogoutButton />}
+              {!isDemoMode && !auth.impersonation && <LogoutButton embedded={Boolean(auth.embedded)} />}
             </div>
           </div>
           <main className="flex-grow px-6 md:px-10 py-8">

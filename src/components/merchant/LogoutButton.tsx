@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 
-export default function LogoutButton() {
+export default function LogoutButton({ embedded = false }: { embedded?: boolean }) {
   const router = useRouter();
 
   const handleLogout = async () => {
     await fetch("/api/merchant/logout", { method: "POST" });
-    router.push("/merchant/login");
+    // Inside a partner's frame, signing out lands on a signed-out screen in the frame. The normal WGC
+    // sign-in page is not for these people: they open WGC again from the partner's own screen.
+    router.push(embedded ? "/partner-embed/ended?signedOut=1" : "/merchant/login");
     router.refresh();
   };
 

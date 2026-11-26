@@ -86,3 +86,14 @@ describe("the Giving Hub menu for a fundraiser or viewer", () => {
     expect(limitEmbeddedMenuForRole(["/merchant/transactions"], "admin")).toEqual(["/merchant/transactions"]);
   });
 });
+
+describe("an embedded sign-in is recorded", () => {
+  it("sets the person's last sign-in, so they are not listed as a pending invitation", async () => {
+    const update = vi.fn().mockResolvedValue({});
+    (prismaMock.user as unknown as { update: typeof update }).update = update;
+    await enterGET(new Request(`https://wgc.test/partner-embed/enter?link=${linkFor({ role: "member", email: "m@c.test" })}`));
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0][0].where).toEqual({ id: "u1" });
+    expect(update.mock.calls[0][0].data.lastLoginAt).toBeInstanceOf(Date);
+  });
+});

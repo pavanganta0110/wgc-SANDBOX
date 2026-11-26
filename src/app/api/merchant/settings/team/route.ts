@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSettingsPermissions } from "@/lib/settings/settingsPermissions";
 import { isValidEmail } from "@/lib/donors/donorContact";
 import { sendWgcEmail } from "@/lib/email";
+import { teamInvitationStatus } from "@/lib/auth/teamInvitationStatus";
 import { logDashboardAction } from "@/lib/dashboardAudit";
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -32,12 +33,7 @@ function teamMemberView(user: {
   updatedAt: Date;
   permissionsJson?: unknown;
 }) {
-  const invitePending = !user.passwordHash;
-  const inviteExpired = invitePending && (!user.setPasswordTokenExpiresAt || user.setPasswordTokenExpiresAt < new Date());
-  let invitationStatus: "PENDING" | "EXPIRED" | "ACCEPTED";
-  if (!invitePending) invitationStatus = "ACCEPTED";
-  else if (inviteExpired) invitationStatus = "EXPIRED";
-  else invitationStatus = "PENDING";
+  const invitationStatus = teamInvitationStatus(user);
 
   return {
     id: user.id,

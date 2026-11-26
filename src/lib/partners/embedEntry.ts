@@ -67,6 +67,13 @@ export function buildEmbedSessionCookieFor(user: EmbedUser): string {
 }
 
 export async function auditEmbedSessionStart(user: EmbedUser, partnerId: string, via: "partner_embed_link" | "partner_embed_passcode" | "partner_embed_email_code", req: Request) {
+  // These people never set a password, so this is the only sign-in the Team page can show ("Last active"), and
+  // what stops them being listed as a pending invitation. Never blocks the sign-in.
+  try {
+    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  } catch (err) {
+    console.error("Failed to record the embedded sign-in time:", err);
+  }
   try {
     await logDashboardAction({
       churchId: user.churchId,
