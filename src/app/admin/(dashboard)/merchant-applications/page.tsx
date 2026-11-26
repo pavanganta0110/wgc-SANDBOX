@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 import IrsLetterReviewModal from '@/components/admin/IrsLetterReviewModal';
 
 // WGC's Finix partner dashboard is white-labeled at this custom domain —
@@ -38,6 +39,8 @@ interface Application {
   finixOnboardingFormId: string | null;
   documents: MerchantDocument[];
   churchId: string | null;
+  /** The software partner this application came through, or null for a direct sign-up. */
+  partner: { id: string; name: string; reference: string | null } | null;
 }
 
 export default function MerchantApplicationsPage() {
@@ -222,6 +225,7 @@ export default function MerchantApplicationsPage() {
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-6 py-4 font-semibold text-gray-900">Business Name</th>
+              <th className="px-6 py-4 font-semibold text-gray-900">Partner</th>
               <th className="px-6 py-4 font-semibold text-gray-900">Status</th>
               <th className="px-6 py-4 font-semibold text-gray-900 w-64">Required Info / Errors</th>
               <th className="px-6 py-4 font-semibold text-gray-900 w-64">Documents</th>
@@ -238,6 +242,16 @@ export default function MerchantApplicationsPage() {
                   <div className="text-gray-500 text-xs mt-1">{app.contactEmail}</div>
                   <div className="text-gray-400 font-mono text-[10px] mt-1" title="Merchant ID">M: {app.finixMerchantId || '-'}</div>
                   <div className="text-gray-400 font-mono text-[10px] mt-0.5" title="Identity ID">I: {app.finixIdentityId || '-'}</div>
+                </td>
+                <td className="px-6 py-4">
+                  {app.partner ? (
+                    <Link href={`/admin/partners/${app.partner.id}`} className="font-medium text-indigo-600 hover:text-indigo-800">
+                      {app.partner.name}
+                    </Link>
+                  ) : (
+                    <span className="text-gray-400">Direct</span>
+                  )}
+                  {app.partner?.reference && <div className="text-gray-400 text-xs mt-1 break-all">{app.partner.reference}</div>}
                 </td>
                 <td className="px-6 py-4">
                   <span className={`px-2 py-1 rounded text-xs font-semibold
@@ -361,7 +375,7 @@ export default function MerchantApplicationsPage() {
             ))}
             {apps.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
                   No applications found.
                 </td>
               </tr>

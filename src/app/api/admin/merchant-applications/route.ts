@@ -13,6 +13,8 @@ export async function GET() {
         id: true,
         organizationName: true,
         contactEmail: true,
+        partnerId: true,
+        partnerReference: true,
         finixMerchantId: true,
         finixIdentityId: true,
         onboardingStatus: true,
@@ -52,9 +54,16 @@ export async function GET() {
     });
     const churchByAppId = new Map(churches.map((c) => [c.onboardingApplicationId, c.id]));
 
-    const applicationsWithChurch = applications.map((a) => ({
+    // The software partner an application came through, if any (a plain FK too), so the list can say which
+    // applications are a partner's and link to that partner.
+    const partnerIds = [...new Set(applications.map((a) => a.partnerId).filter((id): id is string => Boolean(id)))];
+    const partners = partnerIds.length > 0 ? await prisma.partner.findMany({ where: { id: { in: partnerIds } }, select: { id: true, name: true } }) : [];
+    const partnerById = new Map(partners.map((p) => [p.id, p]));
+
+    const applicationsWithChurch = applications.map(({ partnerId, partnerReference, ...a }) => ({
       ...a,
       churchId: churchByAppId.get(a.id) ?? null,
+      partner: partnerId ? { id: partnerId, name: partnerById.get(partnerId)?.name ?? "Unknown partner", reference: partnerReference ?? null } : null,
     }));
 
     return NextResponse.json({ success: true, applications: applicationsWithChurch });
