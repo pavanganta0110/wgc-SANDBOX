@@ -1,5 +1,5 @@
 import { apiError, apiSuccess } from "@/lib/api/response";
-import { decodePartnerLedgerCursor, loadPartnerLedgerPage } from "@/lib/ledger/loadLedger";
+import { decodePartnerLedgerCursor, loadPartnerLedgerPage, resolveLedgerFundraiserFilter } from "@/lib/ledger/loadLedger";
 import { withSoftwarePartnerApiAuth } from "@/lib/partners/partnerApiAuth";
 import { loadPartnerApiOrganizations, pickPartnerOrganization } from "@/lib/partners/loadPartnerApiOrganizations";
 
@@ -23,6 +23,8 @@ function parseInstant(raw: string | null): Date | null {
  * `organization` (optional) limits the read to one of the partner's own
  * organizations, by WGC id or by the partner's reference; anything else is
  * rejected. Which organizations are readable always comes from the key.
+ * `fundraiser` (optional) limits the gifts by who they are attributed to: `none` (received directly by the
+ * organization, and all external gifts), `any` (attributed to some fundraiser), or one team member by email or WGC id.
  */
 export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const { searchParams } = new URL(req.url);
@@ -51,6 +53,12 @@ export const GET = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
     organizations = [one];
   }
 
-  const { rows, nextCursor } = await loadPartnerLedgerPage({ organizations, from, to, cursor, limit });
+  const rawFundraiser = searchParams.get("fundraiser");
+  if (rawFundraiser !== null && (!rawFundraiser.trim() || rawFundraiser.length > 254)) {
+    return apiError("validation_error", "`fundraiser` must be `none`, `any`, or a team member's email or id.", requestId);
+  }
+  const fundraiser = rawFundraiser ? await resolveLedgerFundraiserFilter(organizations.map((o) => o.id), rawFundraiser) : null;
+
+  const { rows, nextCursor } = await loadPartnerLedgerPage({ organizations, from, to, cursor, limit, fundraiser });
   return apiSuccess(rows, requestId, { count: rows.length, nextCursor, from: from.toISOString(), to: to.toISOString() });
 });

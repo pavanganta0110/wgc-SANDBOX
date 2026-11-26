@@ -266,6 +266,30 @@ export function decodePartnerLedgerCursor(raw: string): PartnerLedgerCursor | nu
 
 export type PartnerLedgerRow = LedgerRow & { organization: PartnerLedgerOrganization };
 
+/**
+ * Which gifts, by who they are attributed to (the fundraiser whose giving link they came through):
+ *  - none: gifts received directly by the organization, so no fundraiser. External (cash, check) gifts are never attributed.
+ *  - any: every gift attributed to some fundraiser.
+ *  - users: gifts attributed to these team members.
+ */
+export type LedgerFundraiserFilter = { kind: "none" } | { kind: "any" } | { kind: "users"; ids: string[] };
+
+/**
+ * Reads the request's `fundraiser` value: `none`, `any`, or one team member of the partner's organizations by email or id.
+ * Only people of the given organizations can match, so it can never reach outside what the key may read. A value that
+ * matches nobody gives an empty filter (no gifts), not an error.
+ */
+export async function resolveLedgerFundraiserFilter(churchIds: string[], raw: string): Promise<LedgerFundraiserFilter> {
+  const value = raw.trim();
+  if (value.toLowerCase() === "none") return { kind: "none" };
+  if (value.toLowerCase() === "any") return { kind: "any" };
+  const users = await prisma.user.findMany({
+    where: { churchId: { in: churchIds }, OR: [{ id: value }, { email: { equals: value, mode: "insensitive" } }] },
+    select: { id: true },
+  });
+  return { kind: "users", ids: users.map((u) => u.id) };
+}
+
 export interface LoadPartnerLedgerPageParams {
   /** Only the organizations the partner key may read — resolved by the caller from the key, never from the request. */
   organizations: PartnerLedgerOrganization[];
@@ -275,6 +299,8 @@ export interface LoadPartnerLedgerPageParams {
   to: Date;
   cursor: PartnerLedgerCursor | null;
   limit: number;
+  /** Optional: only gifts by who they are attributed to. */
+  fundraiser?: LedgerFundraiserFilter | null;
 }
 
 const rowOrder = (a: { date: string; id: string }, b: { date: string; id: string }) =>
@@ -286,8 +312,9 @@ const rowOrder = (a: { date: string; id: string }, b: { date: string; id: string
  * returned twice and none is skipped, even while new gifts arrive.
  */
 export async function loadPartnerLedgerPage(params: LoadPartnerLedgerPageParams): Promise<{ rows: PartnerLedgerRow[]; nextCursor: string | null }> {
-  const { organizations, from, to, cursor, limit } = params;
+  const { organizations, from, to, cursor, limit, fundraiser } = params;
   if (organizations.length === 0) return { rows: [], nextCursor: null };
+  if (fundraiser?.kind === "users" && fundraiser.ids.length === 0) return { rows: [], nextCursor: null };
 
   const churchIds = organizations.map((o) => o.id);
   const orgById = new Map(organizations.map((o) => [o.id, o]));
@@ -297,6 +324,9 @@ export async function loadPartnerLedgerPage(params: LoadPartnerLedgerPageParams)
     churchId: { in: churchIds },
     status: { in: LEDGER_PAYMENT_STATUSES },
     createdAt: { gte: from, lt: to },
+    ...(fundraiser?.kind === "none" ? { attributedUserId: null } : {}),
+    ...(fundraiser?.kind === "any" ? { attributedUserId: { not: null } } : {}),
+    ...(fundraiser?.kind === "users" ? { attributedUserId: { in: fundraiser.ids } } : {}),
     ...(cursor && after ? { OR: [{ createdAt: { gt: after } }, { createdAt: after, id: { gt: cursor.id } }] } : {}),
   };
   const externalWhere: Prisma.ExternalDonationWhereInput = {
@@ -307,7 +337,10 @@ export async function loadPartnerLedgerPage(params: LoadPartnerLedgerPageParams)
 
   const [payments, externals] = await Promise.all([
     prisma.payment.findMany({ where: paymentWhere, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit + 1, select: PAYMENT_SELECT }),
-    prisma.externalDonation.findMany({ where: externalWhere, orderBy: [{ donationDate: "asc" }, { id: "asc" }], take: limit + 1, select: EXTERNAL_SELECT }),
+    // External gifts are never attributed to a fundraiser, so only "none" (or no filter) includes them.
+    fundraiser && fundraiser.kind !== "none"
+      ? Promise.resolve([] as Array<Prisma.ExternalDonationGetPayload<{ select: typeof EXTERNAL_SELECT }>>)
+      : prisma.externalDonation.findMany({ where: externalWhere, orderBy: [{ donationDate: "asc" }, { id: "asc" }], take: limit + 1, select: EXTERNAL_SELECT }),
   ]);
 
   const merged = [

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   payment: { findMany: vi.fn() },
+  user: { findMany: vi.fn() },
   externalDonation: { findMany: vi.fn(), findFirst: vi.fn() },
   donor: { findMany: vi.fn() },
   finixRefundOrReversal: { findMany: vi.fn() },
@@ -10,7 +11,7 @@ const prismaMock = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { decodePartnerLedgerCursor, encodePartnerLedgerCursor, loadPartnerLedgerPage } from "../loadLedger";
+import { decodePartnerLedgerCursor, encodePartnerLedgerCursor, loadPartnerLedgerPage, resolveLedgerFundraiserFilter } from "../loadLedger";
 
 const orgs = [
   { id: "c1", name: "Grace", reference: "loc_1" },
@@ -72,6 +73,7 @@ beforeEach(() => {
   prismaMock.finixRefundOrReversal.findMany.mockResolvedValue([]);
   prismaMock.finixDispute.findMany.mockResolvedValue([]);
   prismaMock.finixTransfer.findMany.mockResolvedValue([]);
+  prismaMock.user.findMany.mockResolvedValue([]);
 });
 
 describe("loadPartnerLedgerPage", () => {
@@ -169,3 +171,62 @@ describe("external gift ledger row (for the donation.created / updated / voided 
     expect(await withExternalLedgerRow("c1", "e_1", { externalDonationId: "e_1" })).toEqual({ externalDonationId: "e_1" });
   });
 });
+
+describe("the fundraiser filter", () => {
+  beforeEach(() => {
+    prismaMock.payment.findMany.mockResolvedValue([]);
+    prismaMock.externalDonation.findMany.mockResolvedValue([]);
+  });
+  const run = (fundraiser: Parameters<typeof loadPartnerLedgerPage>[0]["fundraiser"]) =>
+    loadPartnerLedgerPage({ organizations: orgs, ...window, cursor: null, limit: 10, fundraiser });
+
+  it("none: gifts received directly by the organization, including external ones", async () => {
+    await run({ kind: "none" });
+    expect(prismaMock.payment.findMany.mock.calls[0][0].where.attributedUserId).toBeNull();
+    expect(prismaMock.externalDonation.findMany).toHaveBeenCalled();
+  });
+
+  it("any: only gifts attributed to some fundraiser, and no external gifts (they are never attributed)", async () => {
+    await run({ kind: "any" });
+    expect(prismaMock.payment.findMany.mock.calls[0][0].where.attributedUserId).toEqual({ not: null });
+    expect(prismaMock.externalDonation.findMany).not.toHaveBeenCalled();
+  });
+
+  it("users: only gifts attributed to those people, and no external gifts", async () => {
+    await run({ kind: "users", ids: ["u1"] });
+    expect(prismaMock.payment.findMany.mock.calls[0][0].where.attributedUserId).toEqual({ in: ["u1"] });
+    expect(prismaMock.externalDonation.findMany).not.toHaveBeenCalled();
+  });
+
+  it("users that match nobody read nothing", async () => {
+    expect(await run({ kind: "users", ids: [] })).toEqual({ rows: [], nextCursor: null });
+    expect(prismaMock.payment.findMany).not.toHaveBeenCalled();
+  });
+
+  it("no filter changes nothing", async () => {
+    await run(null);
+    const where = prismaMock.payment.findMany.mock.calls[0][0].where;
+    expect("attributedUserId" in where).toBe(false);
+  });
+});
+
+describe("resolveLedgerFundraiserFilter", () => {
+  it("understands none and any in any letter case, without reading users", async () => {
+    expect(await resolveLedgerFundraiserFilter(["c1"], " NONE ")).toEqual({ kind: "none" });
+    expect(await resolveLedgerFundraiserFilter(["c1"], "Any")).toEqual({ kind: "any" });
+    expect(prismaMock.user.findMany).not.toHaveBeenCalled();
+  });
+
+  it("finds a person by email or id, only among the given organizations", async () => {
+    prismaMock.user.findMany.mockResolvedValue([{ id: "u1" }]);
+    expect(await resolveLedgerFundraiserFilter(["c1", "c2"], "Ada@X.co")).toEqual({ kind: "users", ids: ["u1"] });
+    const where = prismaMock.user.findMany.mock.calls[0][0].where;
+    expect(where.churchId).toEqual({ in: ["c1", "c2"] });
+    expect(where.OR).toEqual([{ id: "Ada@X.co" }, { email: { equals: "Ada@X.co", mode: "insensitive" } }]);
+  });
+
+  it("matches nobody for an unknown person (an empty filter, not an error)", async () => {
+    expect(await resolveLedgerFundraiserFilter(["c1"], "ghost@x.co")).toEqual({ kind: "users", ids: [] });
+  });
+});
+

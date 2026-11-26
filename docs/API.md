@@ -236,6 +236,7 @@ Every gift of those organizations in `[from, to)`, oldest first, in pages. Each 
 | `limit` | Rows per page. Default 500, at most 1000. |
 | `cursor` | The `nextCursor` of the previous page. Keep calling until it is `null`. Rows are ordered by (date, id), so none is skipped or repeated even while new gifts arrive. |
 | `organization` | Optional. Limit to one of the partner's own organizations, by WGC id or by the partner's reference. Anything else is `404`. |
+| `fundraiser` | Optional. Limit by who the gift is attributed to (the fundraiser whose giving link it came through): `none` (received directly by the organization, plus every external gift, which is never attributed), `any` (attributed to some fundraiser), or one team member of the partner's organizations by email or WGC id (only their gifts; external gifts are not included). A person who matches nobody gives an empty page, not an error. It narrows what is returned; the key can still read every organization of the partner, so a CRM must still decide, on its server, who may ask for which slice. |
 
 Response: `{ data: [...], count, nextCursor, from, to, requestId }`. Rate limit: the same per-key limit as the organization API.
 
