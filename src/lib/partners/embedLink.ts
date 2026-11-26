@@ -18,10 +18,15 @@ export const PARTNER_EMBED_SESSION_SECONDS = 4 * 60 * 60;
 
 const SIGNING_CONTEXT = "wgc-partner-embed-link-v1";
 
+/** Who is opening the frame, as the partner says (only the partner can sign a link). A member sees status and the Giving Hub, never the onboarding form or its actions. */
+export type EmbedViewerRole = "admin" | "member";
+
 export interface PartnerEmbedLinkPayload {
   partnerId: string;
   /** The partner's own id for the organization. */
   reference: string;
+  /** The partner's role for the person opening the frame. Links made before this existed, or without it, are "admin": nothing changes for them. */
+  role: EmbedViewerRole;
   /** The CRM user looking at the screen; the owner is used when empty. */
   email: string | null;
   /** Fills the empty boxes of the application form. The person can change them. */
@@ -45,7 +50,7 @@ function sign(payloadB64: string): Buffer {
   return crypto.createHmac("sha256", getSecret()).update(`${SIGNING_CONTEXT}.${payloadB64}`).digest();
 }
 
-export function createPartnerEmbedLinkToken(payload: Omit<PartnerEmbedLinkPayload, "exp" | "jti">, nowMs: number = Date.now()): { token: string; expiresAt: Date } {
+export function createPartnerEmbedLinkToken(payload: Omit<PartnerEmbedLinkPayload, "exp" | "jti" | "role"> & { role?: EmbedViewerRole }, nowMs: number = Date.now()): { token: string; expiresAt: Date } {
   const exp = Math.floor(nowMs / 1000) + PARTNER_EMBED_LINK_TTL_SECONDS;
   const jti = crypto.randomBytes(16).toString("hex");
   const payloadB64 = Buffer.from(JSON.stringify({ ...payload, jti, exp })).toString("base64url");
@@ -69,6 +74,7 @@ export function verifyPartnerEmbedLinkToken(token: unknown, nowMs: number = Date
     return {
       partnerId: p.partnerId,
       reference: p.reference,
+      role: p.role === "member" ? "member" : "admin",
       email: typeof p.email === "string" && p.email ? p.email : null,
       prefill: p.prefill && typeof p.prefill === "object" ? p.prefill : {},
       jti: p.jti,

@@ -80,4 +80,11 @@ describe("POST /api/v1/partner/embed-links", () => {
     const res = await post({ reference: "loc_9", email: "new@church.test" });
     expect(res.status).toBe(200);
   });
+
+  it("puts the role in the link, defaulting to administrator, and refuses anything else", async () => {
+    const roleOf = async (res: Response) => verifyPartnerEmbedLinkToken(new URL((await res.json()).data.url).searchParams.get("link"))?.role;
+    expect(await roleOf(await post({ reference: "r1" }))).toBe("admin");
+    expect(await roleOf(await post({ reference: "r1", role: "member", email: "m@c.test" }))).toBe("member");
+    expect((await post({ reference: "r1", role: "owner" })).status).toBe(400);
+  });
 });

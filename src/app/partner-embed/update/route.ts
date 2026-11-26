@@ -16,6 +16,8 @@ export async function GET(req: Request) {
 
   const payload = verifyPartnerEmbedLinkToken(link);
   if (!payload) return NextResponse.redirect(new URL("/partner-embed", req.url), 303);
+  // Adding information is for the organization's administrator, not a member.
+  if (payload.role === "member") return back;
 
   const app = await prisma.onboardingApplication.findFirst({
     where: { partnerId: payload.partnerId, partnerReference: payload.reference },

@@ -85,3 +85,14 @@ export function newEmbeddedMenuItems(raw: unknown): EmbeddedMenuItem[] {
   const known = new Set(choice.known);
   return EMBEDDED_MENU_CATALOG.filter((i) => !known.has(i.href));
 }
+
+/**
+ * Inside a partner's frame a fundraiser or viewer sees only the Giving items (the "Giving Hub"), never Money, Back Office
+ * or Organization, whatever the partner's menu allows. Anyone else (owner, admin) sees the partner's menu as saved.
+ * Applies to embedded sessions only; it is the role that decides, so it holds even if a link is edited.
+ */
+export function limitEmbeddedMenuForRole(allowed: string[] | null, role: string | null | undefined): string[] | null {
+  if (role !== "fundraiser" && role !== "viewer") return allowed;
+  const giving = new Set([...EMBEDDED_MENU_CATALOG.filter((i) => i.section === "Giving").map((i) => i.href), ...EMBEDDED_MENU_ALWAYS_ON]);
+  return (allowed ?? [...giving]).filter((href) => giving.has(href));
+}

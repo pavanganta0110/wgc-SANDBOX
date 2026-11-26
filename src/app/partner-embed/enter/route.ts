@@ -32,6 +32,9 @@ export async function GET(req: Request) {
   });
   if (!church) return back(false);
 
+  // A member is always a named person. Never fall back to the owner's login for someone the partner calls a member.
+  if (payload.role === "member" && !payload.email) return back(true);
+
   const user = await prisma.user.findFirst({
     where: payload.email
       ? { churchId: church.id, email: payload.email, role: { in: EMBED_ROLES } }

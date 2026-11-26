@@ -17,7 +17,7 @@ import { reconcileComplianceFormsForChurch, resolveComplianceStatus } from "@/li
 import { requireMerchantSession } from "@/lib/auth/requireMerchantSession";
 import { isAuthError } from "@/lib/auth/errors";
 import { hasPermission } from "@/lib/auth/permissions";
-import { allowedEmbeddedHrefs } from "@/lib/partners/embeddedMenu";
+import { allowedEmbeddedHrefs, limitEmbeddedMenuForRole } from "@/lib/partners/embeddedMenu";
 import { resolveViewScope } from "@/lib/auth/viewScope";
 import ViewScopeSelector from "@/components/merchant/ViewScopeSelector";
 
@@ -134,7 +134,7 @@ export default async function MerchantDashboardLayout({
     // An organization billed through a partner has no WGC plan or invoices to show.
     canViewBillingPlan: !church.partnerId,
     // Inside a partner's frame, only the items that partner chose (null = everything).
-    embeddedMenu: auth.embedded && church.partnerId ? await loadEmbeddedMenu(church.partnerId) : null,
+    embeddedMenu: auth.embedded && church.partnerId ? limitEmbeddedMenuForRole(await loadEmbeddedMenu(church.partnerId), auth.role) : null,
     paymentMode: church.paymentMode,
   };
 

@@ -31,6 +31,12 @@ export const POST = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const contactEmail = text(body.contactEmail, 254);
   if (contactEmail && !isValidEmail(contactEmail)) return apiError("validation_error", "`contactEmail` must be a valid email address.", requestId);
 
+  // Optional. Without it the link behaves as it always has (an administrator opening it).
+  if (body.role !== undefined && body.role !== "admin" && body.role !== "member") {
+    return apiError("validation_error", "`role` must be \"admin\" or \"member\" when given.", requestId);
+  }
+  const viewerRole = body.role === "member" ? "member" : "admin";
+
   const recorded = await recordEmbedLinkRequest({ partnerId: auth.partnerId, partnerKeyId: auth.partnerKeyId, reference });
   if (recorded === "too_many") {
     return apiError("rate_limit_error", `Too many link requests (${EMBED_LINKS_PER_MINUTE} per minute per key). Wait a moment and try again.`, requestId);
@@ -54,6 +60,7 @@ export const POST = withSoftwarePartnerApiAuth(async (req, auth, requestId) => {
   const { token, expiresAt } = createPartnerEmbedLinkToken({
     partnerId: auth.partnerId,
     reference,
+    role: viewerRole,
     email: email ?? null,
     prefill: {
       organizationName: text(body.organizationName, 200),

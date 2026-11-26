@@ -59,8 +59,18 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
   const passcodeMode = signInMode === "PASSCODE";
   const here = `/partner-embed?link=${encodeURIComponent(link)}`;
 
+  const isMember = payload.role === "member";
+
   switch (state.kind) {
     case "form": {
+      // Only the organization's administrator starts the application.
+      if (isMember) {
+        return (
+          <Panel icon={<Clock className="w-8 h-8" />} tone="bg-slate-100 text-slate-600" title="Your organization hasn't started yet">
+            <p>Your organization hasn&apos;t set up WGC Payments yet. Ask your administrator to start it, then come back here.</p>
+          </Panel>
+        );
+      }
       // An old link, or a partner that changed its id for this organization: don't start a second application.
       const mismatch = await findReferenceMismatch(payload.partnerId, payload.reference, {
         emails: [payload.prefill.contactEmail, payload.email],
@@ -95,6 +105,14 @@ export default async function PartnerEmbedPage({ searchParams }: { searchParams:
       );
 
     case "information_required":
+      if (isMember) {
+        return (
+          <Panel icon={<FileWarning className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="More information needed">
+            <p>Your organization&apos;s application needs more information. Ask your administrator to add it.</p>
+            <AutoRefresh />
+          </Panel>
+        );
+      }
       return (
         <Panel icon={<FileWarning className="w-8 h-8" />} tone="bg-amber-50 text-amber-600" title="More information needed">
           <p>To finish reviewing {state.organizationName}, we need the following:</p>
