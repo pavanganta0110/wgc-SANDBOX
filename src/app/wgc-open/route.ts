@@ -91,14 +91,40 @@ async function roleInGhl(location: string, email: string): Promise<Lookup> {
   let result = await call(search);
   if (!result) return { ok: false, reason: "GHL did not answer in time" };
 
+  const companyRefused = (r: { ok: boolean; json: { message?: unknown } | null }) => !r.ok && /company/i.test(said(r.json));
+  let discovered = "";
+
+  // The company number we were given is not the one GHL ties to this token (the "Relationship Number" in the
+  // agency settings is not always the API's company id). Ask GHL which company this location belongs to, and
+  // search again with that. Needs the token to have the locations.readonly scope.
+  if (companyRefused(result)) {
+    try {
+      const res = await fetch(`https://services.leadconnectorhq.com/locations/${encodeURIComponent(location)}`, {
+        headers: { authorization: `Bearer ${token}`, version: "2021-07-28" },
+        signal: AbortSignal.timeout(8000),
+      });
+      const loc = (await res.json().catch(() => null)) as { location?: { companyId?: string }; companyId?: string; message?: unknown } | null;
+      const found = loc?.location?.companyId ?? loc?.companyId;
+      if (res.ok && typeof found === "string" && found) {
+        search.searchParams.set("companyId", found);
+        const again = await call(search);
+        if (again) result = again;
+      } else {
+        discovered = ` (and ${res.status} reading the location's company: ${said(loc).slice(0, 120) || "no company id in the answer"})`;
+      }
+    } catch {
+      discovered = " (and GHL did not answer when reading the location's company)";
+    }
+  }
+
   // A token made inside one sub-account cannot search by company. GHL's older "users of this location" call
-  // works for such a token, so try it when the company search is refused for company access.
-  if (!result.ok && /company/i.test(said(result.json))) {
+  // works for such a token, so try it as a last resort.
+  if (companyRefused(result)) {
     const legacy = new URL("https://services.leadconnectorhq.com/users/");
     legacy.searchParams.set("locationId", location);
     const second = await call(legacy);
     if (second?.ok) result = second;
-    else if (second) return { ok: false, reason: `GHL answered ${result.status}: ${said(result.json).slice(0, 160)} (and ${second.status} on the location lookup: ${said(second.json).slice(0, 120)})` };
+    else if (second) return { ok: false, reason: `GHL answered ${result.status}: ${said(result.json).slice(0, 160)}${discovered} (and ${second.status} on the location user list: ${said(second.json).slice(0, 100)})` };
   }
 
   if (!result.ok) {

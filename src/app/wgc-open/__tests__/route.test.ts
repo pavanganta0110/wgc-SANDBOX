@@ -9,6 +9,8 @@ let ghlUsers: unknown[];
 let ghlStatus: number;
 let searchMessage: string | undefined;
 let legacyOk = true;
+let locationCompany: string | null = "realco9";
+let searchedCompanies: string[] = [];
 let wgcCalls: Array<{ body: Record<string, unknown>; auth: string | null }>;
 let wgcResponse: { status: number; json: unknown };
 
@@ -17,6 +19,8 @@ beforeEach(() => {
   ghlStatus = 200;
   searchMessage = undefined;
   legacyOk = true;
+  locationCompany = "realco9";
+  searchedCompanies = [];
   ghlUsers = [{ email: "boss@x.co", roles: { type: "account", role: "admin", locationIds: ["L1"] } }];
   wgcCalls = [];
   wgcResponse = { status: 200, json: { data: { url: "https://wgc.test/partner-embed?link=abc" } } };
@@ -24,8 +28,17 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (url: unknown, init?: RequestInit) => {
       const u = String(url);
+      if (u.includes("leadconnectorhq.com/locations/")) {
+        return locationCompany
+          ? new Response(JSON.stringify({ location: { id: "L1", companyId: locationCompany } }), { status: 200 })
+          : new Response(JSON.stringify({ message: "forbidden" }), { status: 403 });
+      }
       if (u.includes("leadconnectorhq.com/users/search")) {
-        return new Response(JSON.stringify(searchMessage ? { message: searchMessage } : { users: ghlUsers }), { status: searchMessage ? 401 : ghlStatus });
+        const company = new URL(u).searchParams.get("companyId") ?? "";
+        searchedCompanies.push(company);
+        // the saved company number is rejected; the one GHL reports for the location is accepted
+        const refused = Boolean(searchMessage) && company !== locationCompany;
+        return new Response(JSON.stringify(refused ? { message: searchMessage } : { users: ghlUsers }), { status: refused ? 401 : ghlStatus });
       }
       if (u.includes("leadconnectorhq.com/users/")) return new Response(JSON.stringify(legacyOk ? { users: ghlUsers } : { message: "nope" }), { status: legacyOk ? 200 : 403 });
       wgcCalls.push({ body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get("authorization") });
@@ -95,22 +108,32 @@ describe("GET /wgc-open", () => {
     expect(wgcCalls).toHaveLength(0);
   });
 
-  it("falls back to the location's own user list when the token has no access to the company", async () => {
+  it("finds the real company id from the location when the saved one is refused, then searches again", async () => {
     searchMessage = "This token does not have access to the requested company.";
     const res = await open();
     expect(res.status).toBe(303);
     expect(wgcCalls[0].body.role).toBe("admin");
+    expect(searchedCompanies).toEqual(["co1", "realco9"]);
+  });
+
+  it("falls back to the location's own user list for a sub-account token that can read neither", async () => {
+    searchMessage = "This token does not have access to the requested company.";
+    locationCompany = null;
+    const res = await open();
+    expect(res.status).toBe(303);
     const calls = vi.mocked(fetch).mock.calls.map((c) => String(c[0]));
-    expect(calls.some((c) => c.includes("/users/search"))).toBe(true);
     expect(calls.some((c) => /users\/\?locationId=L1/.test(c))).toBe(true);
   });
 
-  it("shows both answers and lets nobody in when the fallback fails too", async () => {
+  it("shows every answer and lets nobody in when none of the lookups work", async () => {
     searchMessage = "This token does not have access to the requested company.";
+    locationCompany = null;
     legacyOk = false;
     const res = await open();
     expect(res.status).toBe(502);
-    expect(await res.text()).toContain("403");
+    const html = await res.text();
+    expect(html).toContain("401");
+    expect(html).toContain("403");
     expect(wgcCalls).toHaveLength(0);
   });
 
