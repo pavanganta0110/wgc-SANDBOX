@@ -1,5 +1,7 @@
 import StartOnboardingForm, { type StartPrefill } from "./StartOnboardingForm";
-import { looksLikeOnboardingCode } from "@/lib/partners/onboardingCode";
+import ExistingApplicationNotice from "./ExistingApplicationNotice";
+import { loadPartnerEmbedState } from "@/lib/partners/loadEmbedState";
+import { looksLikeOnboardingCode, resolvePartnerByOnboardingCode } from "@/lib/partners/onboardingCode";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -19,6 +21,18 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   const code = first(params.partner, 60);
   const partnerCode = looksLikeOnboardingCode(code) ? code : null;
+
+  // A link that names the organization (partner code + the partner's own id for it) must not open a second
+  // blank form once that organization has applied. It shows the application's status instead. Without a
+  // reference, or for a new organization, the form shows as before.
+  const reference = first(params.ref, 120);
+  if (partnerCode && reference) {
+    const partner = await resolvePartnerByOnboardingCode(partnerCode);
+    if (partner) {
+      const state = await loadPartnerEmbedState(partner.id, reference);
+      if (state.kind !== "form") return <ExistingApplicationNotice state={state} />;
+    }
+  }
 
   const prefill: StartPrefill = {
     organizationName: first(params.org, 200),
