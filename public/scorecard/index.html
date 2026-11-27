@@ -148,7 +148,7 @@ button.small,.btn.small{padding:8px 14px;font-size:.88rem}
       <button id="go" type="button">Score my organization</button>
       <span id="goStatus" class="status" aria-live="polite"></span>
     </div>
-    <label class="consent" for="dataConsent"><input type="checkbox" id="dataConsent" checked> WGC may use my answers, without my name or organization, to better understand the nonprofit sector and the needs of those we serve.</label>
+    <label class="consent" for="dataConsent"><input type="checkbox" id="dataConsent"> WGC may use my answers, without my name or organization, to better understand the nonprofit sector and the needs of those we serve.</label>
   </section>
 
   <section id="results" aria-live="polite" hidden></section>
@@ -320,6 +320,8 @@ function ruleScore(a,txt){
   const words=t.split(/\s+/).length,hits=a.kw.filter(r=>r.test(t)).length;
   let s=1+hits;if(words>40)s+=0.5;if(words<8)s-=1;
   s=Math.max(1,Math.min(5,Math.round(s)));
+  /* A very short answer, or one that says there is little or nothing, can't score well however many keywords it has. */
+  if(words<12||/\b(not much|nothing|none|no one|nobody|don'?t|do not|haven'?t|have not|never|rarely|barely|hardly)\b/.test(t))s=Math.min(s,2);
   return{score:s,why:s>=4?"Your answer covers most of what strong programs do here.":s>=3?"You have pieces in place, with clear room to grow.":"This area looks underdeveloped from your answer.",fix:a.fix};
 }
 function rulePitch(p){
@@ -346,6 +348,8 @@ $('go').addEventListener('click',async()=>{
   if(listening)stopRec();
   const name=$('leadName').value.trim(),email=$('leadEmail').value.trim();
   if(!name||!/^\S+@\S+\.\S+$/.test(email)){$('goStatus').innerHTML='<span class="error">Add your name and a valid email so we can send your results.</span>';(!name?$('leadName'):$('leadEmail')).focus();return}
+  const phoneRaw=$('leadPhone').value.trim();
+  if(phoneRaw&&(!/^[0-9+().\-\s]{7,25}$/.test(phoneRaw)||phoneRaw.replace(/\D/g,'').length<7)){$('goStatus').innerHTML='<span class="error">Enter a phone number with digits only (like 816-555-0123), or leave it blank.</span>';$('leadPhone').focus();return}
   const org=$('orgName').value.trim();
   const answers={};AREAS.forEach(a=>answers[a.key]=$('t_'+a.key).value.trim());
   const pitch=$('pitch').value.trim();
@@ -375,6 +379,9 @@ $('go').addEventListener('click',async()=>{
 /* Saved so the checkout success page knows whose report was bought */
 function saveScorecard(){
   try{
+    localStorage.setItem('wgcScorecardState',JSON.stringify(current));
+  }catch(e){}
+  try{
     const o=overall();
     localStorage.setItem('wgcScorecard',JSON.stringify({
       name:current.name,email:current.email,org:current.org,role:$('leadRole').value.trim(),
@@ -398,9 +405,9 @@ function render(){
   const adj=AREAS.map(a=>{const r=current.auto.areas[a.key],v=current.adjusted[a.key],u=!!current.unsure[a.key];
     return `<div class="adj${u?' is-unsure':''}">
       <div class="adj-head"><span>${a.name}</span><output id="v_${a.key}">${u?'?':v}</output></div>
-      <p class="why">${esc(r.why)}</p>
+      <p class="why"><b>Why we scored you ${r.score}:</b> ${esc(r.why)}</p>
       <input type="range" min="1" max="5" value="${v}" id="r_${a.key}" data-k="${a.key}" aria-label="${a.name} score" ${u?'disabled':''}>
-      <div class="scale"><span>1 Weak</span><span>We scored you ${r.score}</span><span>5 Strong</span></div>
+      <div class="scale"><span>1 Weak</span><span>We scored you ${r.score}${v!==r.score?` · you chose ${v}`:''}</span><span>5 Strong</span></div>
       <label class="unsure"><input type="checkbox" id="u_${a.key}" data-k="${a.key}" ${u?'checked':''}> Not sure</label>
     </div>`}).join('');
   const gaps=AREAS.filter(a=>!current.unsure[a.key]&&current.adjusted[a.key]<=3);
@@ -478,6 +485,18 @@ $('fbSend').addEventListener('click',async()=>{
     $('fbStatus').innerHTML='<span class="thanks">Thank you. Your feedback was sent.</span>';
   }catch(e){$('fbSend').disabled=false;$('fbStatus').innerHTML='<span class="error">That didn\'t send. Check your connection and try again.</span>'}
 });
+/* Coming back to the page (a reload, or later): show the saved scores again instead of a blank form. */
+(()=>{
+  if(new URLSearchParams(location.search).get('lead'))return; /* a follow-up email link has its own flow */
+  let saved=null;try{saved=JSON.parse(localStorage.getItem('wgcScorecardState')||'null')}catch(e){}
+  if(!saved||!saved.auto||!saved.auto.areas||!saved.adjusted||!AREAS.every(a=>saved.auto.areas[a.key]&&typeof saved.adjusted[a.key]==='number'))return;
+  current=saved;current.unsure=current.unsure||{};
+  render();$('results').hidden=false;$('feedback').hidden=false;
+  const bar=document.createElement('div');bar.className='invite';
+  bar.innerHTML='Welcome back. These are the scores you saved in this browser. <button type="button" class="secondary small" id="startOver">Start over</button>';
+  $('results').before(bar);
+  $('startOver').addEventListener('click',()=>{try{localStorage.removeItem('wgcScorecardState');localStorage.removeItem('wgcScorecard')}catch(e){}location.reload()});
+})();
 </script>
 <script src="/scorecard/giving-button.js" defer></script>
 </body>

@@ -4,6 +4,24 @@ import crypto from "crypto";
  * Settings for the fundraising scorecard (fund.wgcpayments.com). Everything that can differ between the sandbox
  * and live comes from the environment; nothing secret is in the code.
  */
+/**
+ * The giving link's slug from what was typed in the setting. A person may paste the whole link
+ * (https://.../g/SLUG or .../embed/SLUG) instead of the slug; the slug is the last part of the address.
+ */
+export function normalizeSlug(raw: string | undefined | null): string {
+  const value = String(raw ?? "").trim();
+  if (!value) return "";
+  if (/^[A-Za-z0-9_-]{4,64}$/.test(value)) return value;
+  try {
+    const parts = new URL(value).pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1] ?? "";
+    return /^[A-Za-z0-9_-]{4,64}$/.test(last) ? last : "";
+  } catch {
+    const last = value.split(/[/?#]/).filter(Boolean).pop() ?? "";
+    return /^[A-Za-z0-9_-]{4,64}$/.test(last) ? last : "";
+  }
+}
+
 export function scorecardConfig() {
   return {
     site: (process.env.SCORECARD_SITE_URL || "https://fund.wgcpayments.com").replace(/\/$/, ""),
@@ -11,7 +29,7 @@ export function scorecardConfig() {
     plan: process.env.SCORECARD_PLAN_URL || "", // the $500 report review + strategy hour checkout, once it exists
     postal: process.env.SCORECARD_MAIL_POSTAL_ADDRESS || "",
     priceCents: Number(process.env.SCORECARD_REPORT_PRICE_CENTS || 10000),
-    givingLinkSlug: process.env.SCORECARD_GIVING_LINK_SLUG || "IPHa4RsF8WlK",
+    givingLinkSlug: normalizeSlug(process.env.SCORECARD_GIVING_LINK_SLUG) || "IPHa4RsF8WlK",
     // Gemini model names change; the "-latest" names follow Google's current Flash and Pro. Set these to pin one.
     model: process.env.SCORECARD_MODEL || "gemini-flash-latest",
     reportModel: process.env.SCORECARD_REPORT_MODEL || "gemini-pro-latest",

@@ -36,7 +36,7 @@ ${areaText}
 Pitch score: ${c.pitch_score ?? "none"}/100. Pitch: """${clip(c.pitch, 6000) || "(none given)"}"""
 Areas they marked "not sure": ${c.unsure_areas || "none"}.
 
-Write the report. Be specific to what they actually wrote; quote a few of their own words back where it helps. Plain, warm, direct. Speak to them as "you". No em dashes. No filler, no generic praise, no summary at the end.
+Write the report. Be specific to what they actually wrote; quote a few of their own words back where it helps. Plain, warm, direct. Speak to them as "you". No em dashes. When you quote a count, fraction or percentage from their answers, work it out exactly (4 of 11 is more than a third, not "nearly a third"). No filler, no generic praise, no summary at the end.
 Reply with JSON only:
 {"opening":"2-3 sentences: the one thing that will move their giving most, and why",
  "areas":[{"key":"mission","working":"one sentence on what is already working (or empty if nothing)","fix_first":"the single change to make first, 1-2 sentences","steps":["2 or 3 concrete steps they can do in the next 30 days"]}],
