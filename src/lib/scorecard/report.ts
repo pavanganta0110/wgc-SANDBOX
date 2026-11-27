@@ -59,26 +59,27 @@ export function renderReportEmail(c: Contact, r: Report, links: { cta: string; f
     .map(([k, name]) => {
       const a = byKey[k] || {};
       const score = c.scores?.[k];
-      return `<h3 style="font-size:17px;margin:24px 0 6px">${esc(name)}${score ? ` <span style="color:#5a6a85;font-weight:400">(${esc(score)}/5)</span>` : ""}</h3>
+      return `<h3 style="font-size:17px;color:#0B1320;margin:24px 0 6px">${esc(name)}${score ? ` <span style="color:#718096;font-weight:400">(${esc(score)}/5)</span>` : ""}</h3>
       ${a.working ? `<p style="margin:0 0 8px"><b>Working:</b> ${esc(a.working)}</p>` : ""}
       <p style="margin:0 0 8px"><b>Fix first:</b> ${esc(a.fix_first)}</p>
       <ul style="margin:0 0 8px 18px;padding:0">${li(a.steps)}</ul>`;
     })
     .join("");
-  return `<div style="font-family:Inter,Segoe UI,Arial,sans-serif;font-size:15px;line-height:1.55;color:#14213a;max-width:640px">
-  <p style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;margin:0 0 4px">WGC Fundraising Report</p>
-  <h1 style="font-size:26px;margin:0 0 4px">${esc(c.org || "Your organization")}</h1>
-  <p style="color:#5a6a85;margin:0 0 18px">Fundraising score ${esc(c.fundraising_score ?? "?")}/100${c.pitch_score !== "" && c.pitch_score != null ? ` · Pitch score ${esc(c.pitch_score)}/100` : ""}</p>
+  return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#4A5568;max-width:640px;padding:8px 4px">
+  <div style="padding:0 0 14px;margin:0 0 22px;border-bottom:2px solid #C99A2E"><a href="https://www.wgcpayments.com"><img src="https://www.wgcpayments.com/wgc-logo.png" alt="WGC Payments" height="44" style="display:block;border:0;height:44px"></a></div>
+  <p style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#C99A2E;font-weight:700;margin:0 0 4px">WGC Fundraising Report</p>
+  <h1 style="font-size:26px;color:#0B1320;margin:0 0 4px">${esc(c.org || "Your organization")}</h1>
+  <p style="color:#718096;margin:0 0 18px">Fundraising score ${esc(c.fundraising_score ?? "?")}/100${c.pitch_score !== "" && c.pitch_score != null ? ` · Pitch score ${esc(c.pitch_score)}/100` : ""}</p>
   <p style="font-size:16px">${esc(r.opening)}</p>
-  <h2 style="font-size:20px;margin:28px 0 4px;border-top:1px solid #d8e0ec;padding-top:18px">What to fix first, area by area</h2>
+  <h2 style="font-size:20px;color:#0B1320;margin:28px 0 4px;border-top:1px solid #E5E7EB;padding-top:18px">What to fix first, area by area</h2>
   ${areas}
-  <h2 style="font-size:20px;margin:28px 0 8px;border-top:1px solid #d8e0ec;padding-top:18px">Reworking your ask</h2>
+  <h2 style="font-size:20px;color:#0B1320;margin:28px 0 8px;border-top:1px solid #E5E7EB;padding-top:18px">Reworking your ask</h2>
   <p>${esc(r.ask?.diagnosis)}</p>
   <p style="margin:12px 0 4px"><b>A stronger opening:</b></p>
-  <blockquote style="margin:0;padding:12px 16px;background:#eef3fe;border-left:4px solid #1d4ed8;border-radius:6px">${esc(r.ask?.rewrite)}</blockquote>
-  <h2 style="font-size:20px;margin:28px 0 8px;border-top:1px solid #d8e0ec;padding-top:18px">Your board's next three moves</h2>
+  <blockquote style="margin:0;padding:12px 16px;background:#FAFAF7;border-left:4px solid #C99A2E;border-radius:6px">${esc(r.ask?.rewrite)}</blockquote>
+  <h2 style="font-size:20px;color:#0B1320;margin:28px 0 8px;border-top:1px solid #E5E7EB;padding-top:18px">Your board's next three moves</h2>
   <ol style="margin:0 0 8px 18px;padding:0">${li(r.board_moves)}</ol>
-  <h2 style="font-size:20px;margin:24px 0 8px">Your leadership's next three moves</h2>
+  <h2 style="font-size:20px;color:#0B1320;margin:24px 0 8px">Your leadership's next three moves</h2>
   <ol style="margin:0 0 8px 18px;padding:0">${li(r.leader_moves)}</ol>
   ${links.cta}
   ${links.footer}
