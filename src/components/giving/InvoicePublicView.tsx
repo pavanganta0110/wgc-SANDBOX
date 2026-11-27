@@ -331,7 +331,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
     );
   }
   if (state.step === "processing") {
-    const pAccent = state.data.branding.accentColor || "#1d4ed8";
+    const pAccent = state.data.branding.accentColor || "#0f172a";
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
         <div className="max-w-md text-center bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
@@ -365,7 +365,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
 
   if (state.step === "paid") {
     const paidData = state.data;
-    const paidAccent = paidData.branding.accentColor || "#1d4ed8";
+    const paidAccent = paidData.branding.accentColor || "#0f172a";
     const r = state.result;
     return (
       <div className="min-h-screen flex items-center justify-center px-4 bg-slate-50">
@@ -389,7 +389,7 @@ export default function InvoicePublicView({ token }: { token: string }) {
   }
   if (!data) return null;
 
-  const accent = data.branding.accentColor || "#1d4ed8";
+  const accent = data.branding.accentColor || "#0f172a";
   const requestedAmountCents = data.allowPartialPayments
     ? Math.round((parseFloat(payAmountInput || "0") || 0) * 100)
     : data.balanceCents;

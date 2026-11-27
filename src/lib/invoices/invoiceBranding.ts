@@ -30,7 +30,7 @@ export interface InvoiceBrandingSnapshot {
   showWgcBranding: boolean;
 }
 
-const DEFAULT_ACCENT_COLOR = "#1d4ed8";
+const DEFAULT_ACCENT_COLOR = "#0f172a";
 
 /**
  * Resolves the current branding for a church — used for live preview and

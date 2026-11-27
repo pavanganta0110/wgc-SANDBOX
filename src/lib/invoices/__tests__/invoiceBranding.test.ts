@@ -61,7 +61,7 @@ describe("applyInvoiceOverrides", () => {
     const base = {
       logoUrl: null, organizationDisplayName: "X", organizationLegalName: null, organizationAddress: null,
       organizationPhone: null, organizationSupportEmail: null, organizationWebsite: null, taxRegistrationNumber: null,
-      invoiceNumberPrefix: "INV-", templateName: "CLASSIC", accentColor: "#1d4ed8", footerMessage: null,
+      invoiceNumberPrefix: "INV-", templateName: "CLASSIC", accentColor: "#0f172a", footerMessage: null,
       thankYouMessage: null, defaultMemo: null, defaultTerms: null, defaultPaymentInstructions: null,
       replyToEmail: null, showWgcBranding: true,
     };
@@ -75,12 +75,12 @@ describe("applyInvoiceOverrides", () => {
     const base = {
       logoUrl: null, organizationDisplayName: "X", organizationLegalName: null, organizationAddress: null,
       organizationPhone: null, organizationSupportEmail: null, organizationWebsite: null, taxRegistrationNumber: null,
-      invoiceNumberPrefix: "INV-", templateName: "CLASSIC", accentColor: "#1d4ed8", footerMessage: null,
+      invoiceNumberPrefix: "INV-", templateName: "CLASSIC", accentColor: "#0f172a", footerMessage: null,
       thankYouMessage: null, defaultMemo: null, defaultTerms: null, defaultPaymentInstructions: null,
       replyToEmail: null, showWgcBranding: true,
     };
     const result = applyInvoiceOverrides(base, { templateName: "", accentColor: null });
     expect(result.templateName).toBe("CLASSIC");
-    expect(result.accentColor).toBe("#1d4ed8");
+    expect(result.accentColor).toBe("#0f172a");
   });
 });

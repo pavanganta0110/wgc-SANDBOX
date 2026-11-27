@@ -69,7 +69,7 @@ export default function InvoiceSettingsForm({
     reminderOnDueDate: initial.reminderOnDueDate !== false,
     reminderAfterDueDays: Array.isArray(initial.reminderAfterDueDaysJson) ? (initial.reminderAfterDueDaysJson as number[]) : [3, 7],
     defaultTemplateName: String(initial.defaultTemplateName ?? "CLASSIC"),
-    accentColor: String(initial.accentColor ?? "#1d4ed8"),
+    accentColor: String(initial.accentColor ?? "#0f172a"),
     invoiceLogoUrl: (initial.invoiceLogoUrl as string | null) ?? null,
     organizationDisplayName: String(initial.organizationDisplayName ?? fallbackOrgName),
     organizationLegalName: String(initial.organizationLegalName ?? ""),
