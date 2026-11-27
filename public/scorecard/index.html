@@ -157,15 +157,7 @@ button.small,.btn.small{padding:8px 14px;font-size:.88rem}
     <h3 id="sBuy">Get your full written report</h3>
     <p class="hint">A written report built from your answers and your pitch, in your inbox within minutes of checkout: what to fix first in each area, a stronger opening for your ask, and the next three moves for your board and leadership.</p>
     <div class="buy-btn">
-      <script
-        src="/embed/wgc-giving.js"
-        data-wgc-slug="IPHa4RsF8WlK"
-        data-wgc-mode="button"
-        data-wgc-button-text="Get your pointers here ($100)"
-        data-wgc-button-size="medium"
-        data-wgc-button-color="navy"
-        data-wgc-button-radius="rounded">
-      </script>
+      <span data-scorecard-giving></span>
     </div>
     <p class="hint">Your scores are saved in this browser, so after checkout we know which report is yours.</p>
   </div>
@@ -487,5 +479,6 @@ $('fbSend').addEventListener('click',async()=>{
   }catch(e){$('fbSend').disabled=false;$('fbStatus').innerHTML='<span class="error">That didn\'t send. Check your connection and try again.</span>'}
 });
 </script>
+<script src="/scorecard/giving-button.js" defer></script>
 </body>
 </html>
