@@ -38,7 +38,15 @@ describe("the public scorecard routes", () => {
     await score(post({}));
     await submit(post({}));
     await purchase(post({}));
-    expect(limit.calls).toEqual([["score", 6], ["submit", 20], ["purchase", 10]]);
+    expect(limit.calls).toEqual([["score", 6], ["submit", 20], ["results-email", 3], ["purchase", 10]]);
+  });
+
+  it("pass the results-email limit on to the submit handler, so the page can't be used to email one address over and over", async () => {
+    await submit(post({ form: "scorecard-lead" }));
+    expect(svc.handleSubmit).toHaveBeenLastCalledWith({ form: "scorecard-lead" }, { allowResultsEmail: true });
+    limit.allowed = false;
+    // over the page limit: refused before anything runs
+    expect((await submit(post({}))).status).toBe(429);
   });
 
   it("answer 429 and do no work when over the limit (AI scoring costs money)", async () => {

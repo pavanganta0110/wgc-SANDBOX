@@ -3,7 +3,7 @@
 import { extractJsonObject, generateJson } from "./ai";
 import { runAfterResponse } from "@/lib/runAfterResponse";
 import { esc, oneLine, scorecardConfig, sign, verifySignature } from "./config";
-import { footer, nextSteps, SEQUENCES, unsubscribeUrl } from "./emails";
+import { buildResultsEmail, footer, nextSteps, SEQUENCES, unsubscribeUrl } from "./emails";
 import { sendScorecardMail } from "./mailer";
 import { renderReportEmail, writeReport } from "./report";
 import { claimTransfer, findContactByEmail, getContact, listContacts, transferUsedBy, updateContact, upsertContactByEmail } from "./store";
@@ -124,7 +124,7 @@ function applyFields(c: Contact, f: Record<string, string>) {
   c.unsure_areas = f.unsure_areas ?? c.unsure_areas ?? "";
 }
 
-export async function handleSubmit(body: unknown): Promise<HandlerResult> {
+export async function handleSubmit(body: unknown, opts: { allowResultsEmail?: boolean } = {}): Promise<HandlerResult> {
   const b = body as { form?: string; fields?: unknown; lead_id?: unknown; transfer_id?: unknown } | null;
   const form = b?.form;
   if (!form || !FORMS.has(form) || !b?.fields || typeof b.fields !== "object") return { status: 400, json: { error: "Unknown form." } };
@@ -138,6 +138,8 @@ export async function handleSubmit(body: unknown): Promise<HandlerResult> {
       c.last_scored_at = Date.now();
     });
     notify(form, fields);
+    // The person asked for their results, so send them now (not a day later). Never delays or fails the page.
+    if (opts.allowResultsEmail !== false) runAfterResponse(() => sendResultsEmail(id));
     return { status: 200, json: { ok: true, id } };
   }
   if (form === "scorecard-purchase") return handlePurchase({ lead_id: b.lead_id, transfer_id: b.transfer_id, fields });
@@ -145,6 +147,47 @@ export async function handleSubmit(body: unknown): Promise<HandlerResult> {
   if (!process.env.SCORECARD_WEBHOOK_URL) console.log("scorecard beta-feedback", JSON.stringify(fields));
   notify(form, fields);
   return { status: 200, json: { ok: true } };
+}
+
+const RESULTS_EMAIL_COOLDOWN_MS = DAY;
+
+/**
+ * The instant results email. Sent once per address per day (so typing someone else's address can't be used to send
+ * them repeated email), never to board or team members invited by an executive director, never to anyone who
+ * unsubscribed, and only when the secret and postal address are set (it is a sales email: it needs a working
+ * unsubscribe link and the address). Marked sent only after it really goes out.
+ */
+export async function sendResultsEmail(id: string): Promise<"sent" | "skipped" | "failed"> {
+  try {
+    const c = await getContact(id);
+    if (!c || c.unsubscribed_at || c.invited_as === "board" || c.invited_as === "team") return "skipped";
+    if (c.results_sent_at && Date.now() - c.results_sent_at < RESULTS_EMAIL_COOLDOWN_MS) return "skipped";
+    const un = unsubscribeUrl(c);
+    if (!un || !scorecardConfig().postal) {
+      console.error("scorecard results email skipped: SCORECARD_SECRET or SCORECARD_MAIL_POSTAL_ADDRESS is not set");
+      return "skipped";
+    }
+    // Take the turn first, so two quick submits can't both send it.
+    const won = await updateContact(id, (x) => {
+      if (x.results_sent_at && Date.now() - x.results_sent_at < RESULTS_EMAIL_COOLDOWN_MS) return false;
+      x.results_sent_at = Date.now();
+      return true;
+    });
+    if (!won) return "skipped";
+    const msg = buildResultsEmail(c);
+    try {
+      await sendScorecardMail({ to: c.email, subject: msg.subject, html: msg.html, unsubscribeUrl: un });
+    } catch (err) {
+      await updateContact(id, (x) => {
+        delete x.results_sent_at; // it did not go out, so a later try is allowed
+      });
+      throw err;
+    }
+    return "sent";
+  } catch (e) {
+    console.error("scorecard results email failed", e);
+    return "failed";
+  }
 }
 
 /** Called by the success page after checkout. */

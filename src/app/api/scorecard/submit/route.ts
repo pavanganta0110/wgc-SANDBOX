@@ -7,5 +7,7 @@ export async function POST(req: Request) {
   if (!(await allow(clientIp(req), "submit", 20))) return tooMany();
   const body = await readJson(req);
   if (body === null) return badBody();
-  return toResponse(await handleSubmit(body));
+  // Each scoring can send one email to the address typed in, so that is limited harder than the page itself.
+  const allowResultsEmail = await allow(clientIp(req), "results-email", 3);
+  return toResponse(await handleSubmit(body, { allowResultsEmail }));
 }

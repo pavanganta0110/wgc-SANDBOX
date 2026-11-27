@@ -55,6 +55,39 @@ export function nextSteps(): string {
 </div>`;
 }
 
+/** The names of the six areas, in the order the page shows them. */
+const AREA_ORDER = ["mission", "ask", "platform", "relationships", "board", "leaders"];
+
+/**
+ * The instant email with a person's own scores, sent when they finish the scorecard. It is a sales email as well as
+ * a copy of their results, so it carries the unsubscribe link and postal address like every follow-up.
+ */
+export function buildResultsEmail(c: Contact): { subject: string; html: string } {
+  const scores = c.scores || {};
+  const rows = AREA_ORDER.map((k) => {
+    const v = scores[k];
+    const label = v === "not sure" || v == null || v === "" ? "Not sure" : `${esc(v)}/5`;
+    return `<tr><td style="padding:6px 12px 6px 0">${esc(AREA[k][0])}</td><td style="padding:6px 0;font-weight:600;text-align:right">${label}</td></tr>`;
+  }).join("");
+  const k = weakest(c);
+  const [lowName, lowFix] = (k && AREA[k]) || ["", ""];
+  const pitch = c.pitch_score !== "" && c.pitch_score != null ? ` · Pitch score ${esc(c.pitch_score)}/100` : "";
+  return {
+    subject: `Your fundraising scorecard results${c.org ? `: ${c.org}` : ""}`,
+    html: wrap(
+      p(`Hi ${esc(first(c))},`) +
+        p(`Thanks for taking the WGC Fundraising Scorecard${c.org ? ` for ${esc(c.org)}` : ""}. Here are your results.`) +
+        `<p style="margin:0 0 6px;font-size:17px"><b>Fundraising score ${esc(c.fundraising_score ?? "?")}/100</b>${pitch}</p>` +
+        `<table style="border-collapse:collapse;margin:0 0 16px;min-width:260px">${rows}</table>` +
+        (k ? p(`<b>Where to start: ${esc(lowName)}.</b> ${esc(lowFix)}`) : "") +
+        p(`The full written report goes further. It covers what to fix first in all six areas, a rewritten opening for your pitch, and the next three moves for your board and your leadership. It's $100 and arrives within minutes of checkout.`) +
+        btn(buyLink(c), "Get the full report ($100)") +
+        sig +
+        footer(c)
+    ),
+  };
+}
+
 interface Step {
   id: string;
   days: number;

@@ -24,6 +24,9 @@ The success page posts the transfer id to `/api/scorecard/purchase`. The server 
 | `SCORECARD_MODEL`, `SCORECARD_REPORT_MODEL` | Optional. Gemini model names for scoring and for the report. Defaults `gemini-flash-latest` and `gemini-pro-latest`; set a specific name to pin one (Google retires models, so check AI Studio). |
 | `CRON_SECRET` | Already set. Protects `/api/scorecard/cron`. |
 
+## Instant results email
+When someone finishes the scorecard, they are emailed their scores at once (their fundraising and pitch scores, each area, where to start, and a link back to buy the $100 report), not a day later. It is a sales email, so it has the unsubscribe link and postal address and is not sent unless `SCORECARD_SECRET` and `SCORECARD_MAIL_POSTAL_ADDRESS` are set. Abuse limits: one per address per day, 3 a minute per visitor, never to board or team members invited by an ED, never to anyone who unsubscribed. A failure is logged and never affects the page.
+
 ## Follow-ups
 `/api/scorecard/cron` runs once a day (this Vercel plan only allows daily crons). People who did not buy get emails on day 1, 4 and 10; buyers on day 2, 6 and 14. No one gets two within two days; board and team members invited by an ED get none. A payment still being confirmed is rechecked on each run for a day; the admin link covers anything else.
 

@@ -19,6 +19,8 @@ export interface Contact {
   unsure_areas?: string;
   last_scored_at?: number;
   unsubscribed_at?: number;
+  /** When the instant results email was last sent, so one address is not emailed again within a day. */
+  results_sent_at?: number;
   purchase?: Purchase;
 }
 

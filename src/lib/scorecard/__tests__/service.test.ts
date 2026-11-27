@@ -50,10 +50,12 @@ vi.mock("../verifyTransfer", () => ({ verifyTransfer: async () => verify.result 
 // Background work runs now, so a test can see its result.
 vi.mock("@/lib/runAfterResponse", () => ({ runAfterResponse: (work: () => Promise<unknown>) => void work() }));
 
-import { handleAdminSend, handlePurchase, handleSubmit, handleUnsubscribe, runFollowups } from "../service";
+import { handleAdminSend, handlePurchase, handleSubmit as submitWithEmail, handleUnsubscribe, runFollowups, sendResultsEmail } from "../service";
 import { sign } from "../config";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
+// Most tests are about other things, so they save a lead without the instant results email; its own tests use submitWithEmail.
+const handleSubmit = (body: unknown) => submitWithEmail(body, { allowResultsEmail: false });
 const lead = { form: "scorecard-lead", fields: { name: "Ada Lovelace", email: "Ada@Church.test", organization: "Grace", answers_json: "{}", scores_json: '{"board":2,"ask":4}' } };
 
 beforeEach(() => {
@@ -235,5 +237,79 @@ describe("the follow-up run", () => {
     mail.fail = true;
     expect(await runFollowups()).toHaveLength(0);
     expect(db.contacts.get(id)!.sent.L1).toBeUndefined();
+  });
+});
+
+describe("the instant results email", () => {
+  const scored = { ...lead, fields: { ...lead.fields, scores_json: '{"mission":4,"ask":2,"platform":3,"relationships":5,"board":1,"leaders":"not sure"}', fundraising_score: "57", pitch_score: "74" } };
+
+  it("is sent when someone scores, with their scores, where to start, the link back and the unsubscribe link and address", async () => {
+    await submitWithEmail(scored);
+    await flush();
+    expect(mail.sent).toHaveLength(1);
+    const m = mail.sent[0];
+    expect(m.to).toBe("ada@church.test");
+    expect(m.subject).toContain("Your fundraising scorecard results: Grace");
+    expect(m.html).toContain("Fundraising score 57/100");
+    expect(m.html).toContain("Pitch score 74/100");
+    expect(m.html).toContain("Not sure");
+    expect(m.html).toContain("Where to start: Board");
+    expect(m.html).toMatch(/fund\.test\/\?lead=c1#report/);
+    expect(m.html).toContain("/api/scorecard/unsubscribe?id=");
+    expect(m.html).toContain("1 Main St, Kansas City, MO");
+  });
+
+  it("is sent once a day to one address, not again for each retake", async () => {
+    await submitWithEmail(scored);
+    await flush();
+    await submitWithEmail(scored);
+    await flush();
+    expect(mail.sent).toHaveLength(1);
+    // a day later it may go again
+    [...db.contacts.values()][0].results_sent_at = Date.now() - 25 * 3600_000;
+    await submitWithEmail(scored);
+    await flush();
+    expect(mail.sent).toHaveLength(2);
+  });
+
+  it("is not sent when the limit for emails says no, to board or team members, or to anyone who unsubscribed", async () => {
+    await submitWithEmail(scored, { allowResultsEmail: false });
+    await submitWithEmail({ ...scored, fields: { ...scored.fields, email: "board@church.test", invited_as: "board" } });
+    await submitWithEmail({ ...scored, fields: { ...scored.fields, email: "team@church.test", invited_as: "team" } });
+    await flush();
+    expect(mail.sent).toHaveLength(0);
+    const id = [...db.contacts.values()].find((c) => c.email === "ada@church.test")!.id;
+    db.contacts.get(id)!.unsubscribed_at = Date.now();
+    expect(await sendResultsEmail(id)).toBe("skipped");
+  });
+
+  it("is not sent without the secret or the postal address (it is a sales email), and the page still works", async () => {
+    delete process.env.SCORECARD_MAIL_POSTAL_ADDRESS;
+    const res = (await submitWithEmail(scored)) as { status: number };
+    await flush();
+    expect(res.status).toBe(200);
+    expect(mail.sent).toHaveLength(0);
+    process.env.SCORECARD_MAIL_POSTAL_ADDRESS = "1 Main St, Kansas City, MO";
+    delete process.env.SCORECARD_SECRET;
+    await submitWithEmail({ ...scored, fields: { ...scored.fields, email: "other@church.test" } });
+    await flush();
+    expect(mail.sent).toHaveLength(0);
+  });
+
+  it("never fails or delays the page when the email can't be sent, and lets a later try go out", async () => {
+    mail.fail = true;
+    const res = (await submitWithEmail(scored)) as { status: number; json: { ok: boolean } };
+    await flush();
+    expect(res.status).toBe(200);
+    expect(res.json.ok).toBe(true);
+    expect([...db.contacts.values()][0].results_sent_at).toBeUndefined();
+    mail.fail = false;
+    expect(await sendResultsEmail([...db.contacts.values()][0].id)).toBe("sent");
+  });
+
+  it("does not send twice when two submits arrive together", async () => {
+    await Promise.all([submitWithEmail(scored), submitWithEmail(scored)]);
+    await flush();
+    expect(mail.sent).toHaveLength(1);
   });
 });
