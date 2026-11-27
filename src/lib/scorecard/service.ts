@@ -1,6 +1,6 @@
 // WGC Fundraising Scorecard: the handlers behind the /api/scorecard routes. Framework-neutral: each takes the parsed
 // request data and returns { status, json } or { status, html }.
-import Anthropic from "@anthropic-ai/sdk";
+import { extractJsonObject, generateJson } from "./ai";
 import { runAfterResponse } from "@/lib/runAfterResponse";
 import { esc, oneLine, scorecardConfig, sign, verifySignature } from "./config";
 import { footer, nextSteps, SEQUENCES, unsubscribeUrl } from "./emails";
@@ -49,12 +49,8 @@ Score the pitch 0-100 against the ask-first method: a specific dollar goal named
 Reply with JSON only, no other text: {"areas":[{"key":"mission","score":1,"why":"one sentence on what you saw","fix":"one or two sentences of specific advice"}], "pitch":{"score":0,"notes":[{"ok":true,"text":"one sentence"}]}} with all six keys in areas. Pitch notes: 4 to 7, strengths first. If no pitch was given, set "pitch" to null. Speak to them as "you". Plain words, no em dashes.`;
 
   try {
-    const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY
-    const msg = await anthropic.messages.create({ model: scorecardConfig().model, max_tokens: 2000, messages: [{ role: "user", content: prompt }] });
-    const text = msg.content.map((blk) => (blk.type === "text" ? blk.text : "")).join("");
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("No JSON in model reply");
-    const j = JSON.parse(match[0]) as { areas?: Array<{ key: string; score: unknown; why: unknown; fix: unknown }>; pitch?: { score: unknown; notes?: Array<{ ok: unknown; text: unknown }> } | null };
+    const text = await generateJson({ model: scorecardConfig().model, prompt, maxOutputTokens: 8000 });
+    const j = extractJsonObject<{ areas?: Array<{ key: string; score: unknown; why: unknown; fix: unknown }>; pitch?: { score: unknown; notes?: Array<{ ok: unknown; text: unknown }> } | null }>(text);
     const byKey: Record<string, { score: unknown; why: unknown; fix: unknown }> = {};
     for (const x of j.areas ?? []) byKey[x.key] = x;
     const areas: Record<string, { score: number; why: string; fix: string }> = {};
@@ -67,7 +63,7 @@ Reply with JSON only, no other text: {"areas":[{"key":"mission","score":1,"why":
     if (j.pitch && typeof j.pitch.score === "number") {
       p = { score: Math.max(0, Math.min(100, Math.round(j.pitch.score))), notes: (j.pitch.notes ?? []).slice(0, 7).map((n) => ({ ok: !!n.ok, text: clip(n.text, 300) })) };
     }
-    return { status: 200, json: { areas, pitch: p, model: msg.model } };
+    return { status: 200, json: { areas, pitch: p, model: scorecardConfig().model } };
   } catch (e) {
     console.error("scorecard score failed", e);
     // The page falls back to keyword scoring when this returns an error.

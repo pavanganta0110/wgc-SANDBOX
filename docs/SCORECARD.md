@@ -14,14 +14,14 @@ The success page posts the transfer id to `/api/scorecard/purchase`. The server 
 ## Environment variables (server only)
 | Name | |
 |---|---|
-| `ANTHROPIC_API_KEY` | AI scoring and the written report. |
+| `GEMINI_API_KEY` | Google Gemini (paid key from Google AI Studio). AI scoring and the written report. |
 | `SCORECARD_SECRET` | 24+ random characters. Signs the unsubscribe and admin links. With it missing or weak, no link is trusted and no marketing email is sent. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Already set for WGC. Scorecard email goes through them; `SCORECARD_MAIL_FROM` overrides the sender, `SCORECARD_REPLY_TO` sets the reply-to (e.g. collin@wgcpayments.com), `SCORECARD_MAIL_BCC` copies every email. |
 | `SCORECARD_MAIL_POSTAL_ADDRESS` | Required. Printed in every follow-up (CAN-SPAM). With it missing, follow-ups are not sent. |
 | `SCORECARD_SITE_URL` | `https://fund.wgcpayments.com` (sandbox: the sandbox fund host). |
 | `SCORECARD_WEBHOOK_URL` | Optional. The Google Apps Script that adds each event to the leads sheet and emails Collin. |
 | `SCORECARD_CONSULT_URL`, `SCORECARD_PLAN_URL` | Optional links used in the emails. |
-| `SCORECARD_MODEL`, `SCORECARD_REPORT_MODEL` | Optional. Default `claude-sonnet-5-5`. |
+| `SCORECARD_MODEL`, `SCORECARD_REPORT_MODEL` | Optional. Gemini model names for scoring and for the report. Defaults `gemini-flash-latest` and `gemini-pro-latest`; set a specific name to pin one (Google retires models, so check AI Studio). |
 | `CRON_SECRET` | Already set. Protects `/api/scorecard/cron`. |
 
 ## Follow-ups

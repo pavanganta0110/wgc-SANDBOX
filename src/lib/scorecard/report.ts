@@ -1,5 +1,5 @@
-// Writes the $100 report with Claude from the organization's own answers and pitch, then renders it as an email.
-import Anthropic from "@anthropic-ai/sdk";
+// Writes the $100 report with Gemini from the organization's own answers and pitch, then renders it as an email.
+import { extractJsonObject, generateJson } from "./ai";
 import type { Contact } from "./types";
 import { esc, scorecardConfig } from "./config";
 
@@ -45,16 +45,9 @@ Reply with JSON only:
  "leader_moves":["three specific moves for the executive leader in the next 90 days"]}
 Include all six area keys: ${Object.keys(AREA_NAMES).join(", ")}.`;
 
-  const anthropic = new Anthropic(); // reads ANTHROPIC_API_KEY
-  const msg = await anthropic.messages.create({
-    model: scorecardConfig().reportModel,
-    max_tokens: 4000,
-    messages: [{ role: "user", content: prompt }],
-  });
-  const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("No JSON in report reply");
-  const r = JSON.parse(m[0]) as Report;
+  // Thinking models count their reasoning toward the output limit, so leave plenty of room for the whole report.
+  const text = await generateJson({ model: scorecardConfig().reportModel, prompt, maxOutputTokens: 16000 });
+  const r = extractJsonObject<Report>(text);
   if (!Array.isArray(r.areas) || !r.ask || !Array.isArray(r.board_moves)) throw new Error("Report JSON incomplete");
   return r;
 }

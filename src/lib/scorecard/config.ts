@@ -12,8 +12,9 @@ export function scorecardConfig() {
     postal: process.env.SCORECARD_MAIL_POSTAL_ADDRESS || "",
     priceCents: Number(process.env.SCORECARD_REPORT_PRICE_CENTS || 10000),
     givingLinkSlug: process.env.SCORECARD_GIVING_LINK_SLUG || "IPHa4RsF8WlK",
-    model: process.env.SCORECARD_MODEL || "claude-sonnet-5-5",
-    reportModel: process.env.SCORECARD_REPORT_MODEL || process.env.SCORECARD_MODEL || "claude-sonnet-5-5",
+    // Gemini model names change; the "-latest" names follow Google's current Flash and Pro. Set these to pin one.
+    model: process.env.SCORECARD_MODEL || "gemini-flash-latest",
+    reportModel: process.env.SCORECARD_REPORT_MODEL || "gemini-pro-latest",
   };
 }
 
