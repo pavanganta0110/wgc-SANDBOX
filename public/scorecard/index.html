@@ -25,7 +25,6 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.55}
 h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
 .wrap{max-width:780px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.beta{background:var(--fg);color:var(--bg);font-size:.85rem;text-align:center;padding:8px 16px}
 .hero{background:var(--accent);color:var(--accent-ink);padding-block:2.5rem}
 .hero .eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;opacity:.85}
 .hero h1{font-size:clamp(2rem,6vw,3rem);margin:.4rem 0 .6rem}
@@ -100,7 +99,6 @@ button.small,.btn.small{padding:8px 14px;font-size:.88rem}
 <body>
 
 
-<div class="beta">Beta version · Scoring is free. Tell us what you think at the end.</div>
 
 <header class="hero"><div class="wrap">
   <div class="eyebrow">Waypoint Gateway Collective · Fundraising</div>
@@ -162,34 +160,11 @@ button.small,.btn.small{padding:8px 14px;font-size:.88rem}
     <p class="hint">Your scores are saved in this browser, so after checkout we know which report is yours.</p>
   </div>
 
-  <section id="feedback" aria-labelledby="s5" hidden>
-    <h2 id="s5">Help us improve the beta</h2>
-    <p class="lede">Two minutes of feedback makes this better for the next organization.</p>
-    <p style="font-weight:600;margin:0 0 6px">How accurate did your scores feel?</p>
-    <div id="acc" style="margin-bottom:14px">
-      <label class="radio"><input type="radio" name="acc" value="1"> 1 Way off</label>
-      <label class="radio"><input type="radio" name="acc" value="2"> 2</label>
-      <label class="radio"><input type="radio" name="acc" value="3"> 3</label>
-      <label class="radio"><input type="radio" name="acc" value="4"> 4</label>
-      <label class="radio"><input type="radio" name="acc" value="5"> 5 Spot on</label>
-    </div>
-    <p style="font-weight:600;margin:0 0 6px">After the beta, would you pay for the full report?</p>
-    <div id="pay" style="margin-bottom:14px">
-      <label class="radio"><input type="radio" name="pay" value="Yes, $100 report"> Yes, the $100 report</label>
-      <label class="radio"><input type="radio" name="pay" value="Yes, $500 with strategy hour"> Yes, the $500 report with a strategy hour</label>
-      <label class="radio"><input type="radio" name="pay" value="No"> No</label>
-    </div>
-    <div class="field"><label for="fbComments">What would make this more useful?</label><textarea id="fbComments"></textarea></div>
-    <div class="row" style="margin-top:14px">
-      <button id="fbSend" type="button">Send feedback</button>
-      <span id="fbStatus" class="status" aria-live="polite"></span>
-    </div>
-  </section>
-
   <section aria-labelledby="s4">
     <h2 id="s4">Ongoing partnership</h2>
     <p class="lede">For organizations ready to grow giving year-round. Our team works alongside yours on board and executive coaching, ask preparation, presenting at your events, and donor strategy. Partners can also move giving onto WGC's gift processing platform, which is built for nonprofits and can be tailored to yours.</p>
     <p style="margin:0"><b>Every partnership is priced to fit your organization.</b> Retainer partners get ongoing access to our team at a better rate than hourly.</p>
+    <p style="margin:14px 0 0"><a class="btn" href="https://calendly.com/waypoint-gateway-collective/wgc-free-strategy-call" target="_blank" rel="noopener">Click to hear more</a></p>
   </section>
 
 </main>
@@ -363,7 +338,7 @@ $('go').addEventListener('click',async()=>{
   if(!out){scoredBy='fallback';out={areas:{},pitch:pitch?rulePitch(pitch):null};AREAS.forEach(a=>out.areas[a.key]=ruleScore(a,answers[a.key]))}
   $('go').disabled=false;$('goStatus').textContent='';
   current={org,name,email,answers,pitch,auto:out,adjusted:Object.fromEntries(AREAS.map(a=>[a.key,out.areas[a.key].score])),unsure:{},scoredBy};
-  render();$('results').hidden=false;$('feedback').hidden=false;
+  render();$('results').hidden=false;
   $('results').scrollIntoView({behavior:'smooth',block:'start'});
   const o=overall();
   postForm('scorecard-lead',{name,email,organization:org,role:$('leadRole').value.trim(),phone:$('leadPhone').value.trim(),
@@ -411,8 +386,8 @@ function render(){
       <label class="unsure"><input type="checkbox" id="u_${a.key}" data-k="${a.key}" ${u?'checked':''}> Not sure</label>
     </div>`}).join('');
   const gaps=AREAS.filter(a=>!current.unsure[a.key]&&current.adjusted[a.key]<=3);
-  const gapHtml=gaps.length?gaps.map(a=>`<div class="note fix"><i>!</i><span><b>${a.name}.</b> ${esc(current.auto.areas[a.key].fix)}</span></div>`).join(''):'<p>No major gaps in the areas you scored.</p>';
-  const pitchHtml=p?`<h3 style="margin-top:18px">Pitch review</h3>`+p.notes.map(n=>`<div class="note ${n.ok?'ok':'fix'}"><i>${n.ok?'✓':'!'}</i><span>${esc(n.text)}</span></div>`).join(''):'';
+  /* The free results name the areas to work on; what to do about each is in the full report. */
+  const gapHtml=gaps.length?gaps.map(a=>`<div class="note fix"><i>!</i><span><b>${a.name}</b></span></div>`).join('')+'<p class="hint">To get the details on each of these, get the full report below.</p>':'<p>No major gaps in the areas you scored.</p>';
   const unsure=AREAS.filter(a=>current.unsure[a.key]);
   $('results').innerHTML=`<div class="step"><b>STEP 4</b><h2>${current.org?esc(current.org)+': y':'Y'}our scores</h2></div>
    <div class="scores">
@@ -423,7 +398,7 @@ function render(){
    ${adj}
    ${unsure.length?`<div class="consult"><b>Worth a conversation.</b> You weren't sure about ${unsure.map(a=>a.name).join(', ')}. Those are good places to start on a call with our team.</div>`:''}
    <h3 style="margin-top:22px">Where you're falling short</h3>
-   ${gapHtml}${pitchHtml}
+   ${gapHtml}
    <div id="buySlot"></div>
    <div class="box">
     <h3>${invitedAs?'Share this with others on your team':'Get your board and team\'s view'}</h3>
@@ -470,28 +445,13 @@ $('results').addEventListener('change',e=>{
   if(e.target.type==='range'){render();$('r_'+k)?.focus();return}
   if(e.target.type==='checkbox'){current.unsure[k]=e.target.checked;render();$('u_'+k)?.focus()}
 });
-$('fbSend').addEventListener('click',async()=>{
-  if(!current)return;
-  const acc=document.querySelector('input[name=acc]:checked')?.value||'',pay=document.querySelector('input[name=pay]:checked')?.value||'';
-  const comments=$('fbComments').value.trim();
-  if(!acc&&!pay&&!comments){$('fbStatus').innerHTML='<span class="error">Pick an answer or leave a comment first.</span>';return}
-  $('fbSend').disabled=true;$('fbStatus').textContent='Sending…';
-  try{
-    const r=await postForm('beta-feedback',{name:current.name,email:current.email,organization:current.org,accuracy:acc,would_pay:pay,comments,
-      ai_scores:AREAS.map(a=>`${a.name}: ${current.auto.areas[a.key].score}`).join('\n'),
-      adjusted_scores:AREAS.map(a=>`${a.name}: ${current.unsure[a.key]?'not sure':current.adjusted[a.key]}`).join('\n'),
-      unsure_areas:AREAS.filter(a=>current.unsure[a.key]).map(a=>a.name).join(', ')});
-    if(!r.ok)throw new Error();
-    $('fbStatus').innerHTML='<span class="thanks">Thank you. Your feedback was sent.</span>';
-  }catch(e){$('fbSend').disabled=false;$('fbStatus').innerHTML='<span class="error">That didn\'t send. Check your connection and try again.</span>'}
-});
 /* Coming back to the page (a reload, or later): show the saved scores again instead of a blank form. */
 (()=>{
   if(new URLSearchParams(location.search).get('lead'))return; /* a follow-up email link has its own flow */
   let saved=null;try{saved=JSON.parse(localStorage.getItem('wgcScorecardState')||'null')}catch(e){}
   if(!saved||!saved.auto||!saved.auto.areas||!saved.adjusted||!AREAS.every(a=>saved.auto.areas[a.key]&&typeof saved.adjusted[a.key]==='number'))return;
   current=saved;current.unsure=current.unsure||{};
-  render();$('results').hidden=false;$('feedback').hidden=false;
+  render();$('results').hidden=false;
   const bar=document.createElement('div');bar.className='invite';
   bar.innerHTML='Welcome back. These are the scores you saved in this browser. <button type="button" class="secondary small" id="startOver">Start over</button>';
   $('results').before(bar);

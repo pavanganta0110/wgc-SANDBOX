@@ -55,6 +55,34 @@ describe("the scorecard page", () => {
   });
 });
 
+describe("the scorecard page after Collin's copy changes", () => {
+  it("has no beta banner and no feedback box, and the script no longer reaches for them", () => {
+    expect(html).not.toMatch(/Beta version/i);
+    expect(html).not.toContain("Help us improve the beta");
+    expect(html).not.toContain('id="feedback"');
+    expect(html).not.toContain("fbSend");
+    expect(html).not.toContain("$('feedback')");
+  });
+
+  it("every element the script looks up by a fixed id exists in the page, so removing a box can't break the whole script", () => {
+    const wanted = new Set([...html.matchAll(/\$\('([A-Za-z0-9_]+)'\)/g)].map((m) => m[1]));
+    expect(wanted.size).toBeGreaterThan(10);
+    for (const id of wanted) expect(html, `missing element #${id}`).toMatch(new RegExp(`id=\\\\?"${id}"`));
+  });
+
+  it("the free results name the areas to work on and send the detail to the paid report, with no pitch review", () => {
+    expect(html).toContain("To get the details on each of these, get the full report below.");
+    expect(html).not.toContain("Pitch review");
+    expect(html).not.toContain("pitchHtml");
+    expect(html).not.toMatch(/\$\{esc\(current\.auto\.areas\[a\.key\]\.fix\)\}/);
+  });
+
+  it("the Ongoing partnership box links to Collin's Calendly", () => {
+    expect(html).toContain('href="https://calendly.com/waypoint-gateway-collective/wgc-free-strategy-call"');
+    expect(html).toContain("Click to hear more");
+  });
+});
+
 describe("normalizeSlug", () => {
   it("takes a plain slug as it is", () => {
     expect(normalizeSlug("IPHa4RsF8WlK")).toBe("IPHa4RsF8WlK");
