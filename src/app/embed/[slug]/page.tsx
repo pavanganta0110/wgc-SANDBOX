@@ -114,6 +114,7 @@ export default async function EmbedGivingPage({ params }: { params: Promise<{ sl
           studentGiving={studentGiving}
           assignedFunds={assignedFunds}
           paymentMode={church.paymentMode}
+          successReturnUrl={link.successReturnUrl}
         />
 
         {!branding.hideFooter && (

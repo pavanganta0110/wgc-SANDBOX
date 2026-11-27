@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>WGC Fundraising Scorecard</title>
+<meta name="description" content="Score your organization's fundraising in six areas and get feedback on your pitch.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#f3f6fb; --surface:#ffffff; --fg:#14213a; --muted:#5a6a85; --line:#d8e0ec;
+  --accent:#1d4ed8; --accent-ink:#ffffff; --accent-soft:#e6edfd;
+  --good:#15803d; --warn:#b45309; --rec:#dc2626; --rec-ink:#ffffff; --err:#b91c1c;
+  --display:"Space Grotesk","Segoe UI",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0c1424; --surface:#131d33; --fg:#e7edf7; --muted:#9aa9c2; --line:#26344f;
+  --accent:#6b93ff; --accent-ink:#0c1424; --accent-soft:#1a2a4d;
+  --good:#4ade80; --warn:#fbbf24; --rec:#f87171; --rec-ink:#0c1424; --err:#f87171; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.55}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
+.wrap{max-width:780px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.beta{background:var(--fg);color:var(--bg);font-size:.85rem;text-align:center;padding:8px 16px}
+.hero{background:var(--accent);color:var(--accent-ink);padding-block:2.5rem}
+.hero .eyebrow{font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;opacity:.85}
+.hero h1{font-size:clamp(2rem,6vw,3rem);margin:.4rem 0 .6rem}
+.hero p{max-width:58ch;margin:0;opacity:.92}
+main{display:grid;gap:20px;padding-block:28px 48px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;min-width:0}
+.step{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.step b{font-family:var(--display);color:var(--accent);font-size:.9rem;letter-spacing:.08em}
+h2{font-size:1.4rem} h3{font-size:1.1rem}
+.lede{color:var(--muted);margin:.2rem 0 1rem;max-width:62ch}
+.q{display:grid;gap:8px;padding-block:16px;border-top:1px solid var(--line)}
+.q:first-of-type{border-top:0;padding-top:4px}
+.q-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.q-head label{font-weight:600}
+textarea,input[type=text],input[type=email],input[type=tel]{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px}
+textarea{min-height:110px;resize:vertical}
+#pitch{min-height:220px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.field label{display:block;font-weight:600;margin-bottom:6px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+button,.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;background:var(--accent);color:var(--accent-ink);text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+button.mic{background:var(--accent-soft);color:var(--accent);padding:7px 12px;font-size:.88rem}
+button.mic.big{padding:12px 20px;font-size:1rem}
+button.mic.live{background:var(--rec);color:var(--rec-ink)}
+button.secondary{background:var(--accent-soft);color:var(--accent)}
+button:focus-visible,.btn:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.55;cursor:default}
+.dot{width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+button.live .dot{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){button.live .dot{animation:none}}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.error{color:var(--err);font-size:.9rem}
+.big{font-family:var(--display);font-weight:700;font-size:3rem;color:var(--accent);font-variant-numeric:tabular-nums;line-height:1}
+.big small{font-size:1.1rem;color:var(--muted)}
+.scores{display:flex;flex-wrap:wrap;gap:28px;margin:12px 0 6px}
+.lbl{font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.adj{display:grid;gap:6px;padding-block:14px;border-top:1px solid var(--line)}
+.adj-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+.adj-head span{font-weight:600}
+.adj-head output{font-family:var(--display);font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums}
+.adj .why{color:var(--muted);font-size:.92rem;margin:0}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.scale{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.unsure{display:inline-flex;gap:6px;align-items:center;font-size:.88rem;color:var(--muted);cursor:pointer}
+.unsure input,.radio input{accent-color:var(--accent)}
+.adj.is-unsure input[type=range]{opacity:.4}
+.note{display:flex;gap:10px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);margin-top:8px}
+.note i{font-style:normal;font-weight:700;flex:none}
+.note.ok i{color:var(--good)} .note.fix i{color:var(--warn)}
+.consult{border:1.5px dashed var(--accent);border-radius:12px;padding:14px;margin-top:16px}
+.cta{background:var(--accent);color:var(--accent-ink);border:0}
+.cta h2{margin-bottom:.4rem}
+.cta .btn{background:var(--accent-ink);color:var(--accent)}
+.radio{display:inline-flex;gap:6px;align-items:center;margin-right:14px;cursor:pointer}
+.status{font-size:.9rem;color:var(--muted)}
+.thanks{color:var(--good);font-weight:600}
+.consent{display:flex;gap:8px;align-items:flex-start;margin-top:14px;font-size:.78rem;color:var(--muted);line-height:1.4;cursor:pointer;max-width:62ch}
+.consent input{margin:2px 0 0;width:14px;height:14px;flex:none;accent-color:var(--accent)}
+.invite{background:var(--accent-soft);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:.92rem}
+.box{border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:20px;display:grid;gap:10px}
+.box h3{margin:0}
+.box p{margin:0}
+.share-text{min-height:90px}
+button.small,.btn.small{padding:8px 14px;font-size:.88rem}
+[hidden]{display:none!important}
+.buy{border:2px solid var(--accent);margin-top:18px}
+.buy h3{margin-bottom:4px}
+.buy-btn{margin:14px 0 8px;min-height:44px}
+</style>
+</head>
+<body>
+
+
+<div class="beta">Beta version · Scoring is free. Tell us what you think at the end.</div>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Waypoint Gateway Collective · Fundraising</div>
+  <h1>Where does your fundraising stand?</h1>
+  <p>Tell us how your organization raises money today, then give your pitch. We'll score you in six areas and show you where to grow.</p>
+</div></header>
+
+<main class="wrap">
+  <section id="resume" hidden>
+    <h2>Your scorecard is saved</h2>
+    <p class="lede">Get the full written report for your organization. It arrives by email within minutes of checkout.</p>
+    <div id="resumeSlot"></div>
+    <p class="hint">Want to retake the scorecard instead? Scroll down and start again.</p>
+  </section>
+  <section aria-labelledby="s1">
+    <div class="step"><b>STEP 1</b><h2 id="s1">Your organization</h2></div>
+    <p class="lede">Answer in your own words. Type, or tap the mic and talk. Say as much or as little as you like.</p>
+    <div class="q">
+      <div class="q-head"><label for="orgName">Organization name</label>
+        <button type="button" class="mic" data-target="orgName" hidden><span class="dot"></span><span class="ml">Speak</span></button></div>
+      <input type="text" id="orgName" autocomplete="organization">
+    </div>
+    <div id="questions"></div>
+  </section>
+
+  <section aria-labelledby="s2">
+    <div class="step"><b>STEP 2</b><h2 id="s2">Your pitch</h2></div>
+    <p class="lede">Give your pitch the way you would give it to a room of potential donors.</p>
+    <div class="row" style="margin-bottom:10px">
+      <button type="button" class="mic big" data-target="pitch" hidden><span class="dot"></span><span class="ml">Start speaking</span></button>
+      <span class="hint" id="pitchHint">Type your pitch below.</span>
+    </div>
+    <textarea id="pitch" aria-label="Your pitch"></textarea>
+  </section>
+
+  <section aria-labelledby="s3">
+    <div class="step"><b>STEP 3</b><h2 id="s3">Where should we send your results?</h2></div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="field"><label for="leadName">Your name</label><input type="text" id="leadName" autocomplete="name" required></div>
+      <div class="field"><label for="leadEmail">Email</label><input type="email" id="leadEmail" autocomplete="email" required></div>
+      <div class="field"><label for="leadRole">Your role</label><input type="text" id="leadRole" autocomplete="organization-title"></div>
+      <div class="field"><label for="leadPhone">Phone (optional)</label><input type="tel" id="leadPhone" autocomplete="tel"></div>
+    </div>
+    <div class="row" style="margin-top:18px">
+      <button id="go" type="button">Score my organization</button>
+      <span id="goStatus" class="status" aria-live="polite"></span>
+    </div>
+    <label class="consent" for="dataConsent"><input type="checkbox" id="dataConsent" checked> WGC may use my answers, without my name or organization, to better understand the nonprofit sector and the needs of those we serve.</label>
+  </section>
+
+  <section id="results" aria-live="polite" hidden></section>
+
+  <div id="buy" class="box buy" aria-labelledby="sBuy" hidden>
+    <h3 id="sBuy">Get your full written report</h3>
+    <p class="hint">A written report built from your answers and your pitch, in your inbox within minutes of checkout: what to fix first in each area, a stronger opening for your ask, and the next three moves for your board and leadership.</p>
+    <div class="buy-btn">
+      <script
+        src="/embed/wgc-giving.js"
+        data-wgc-slug="IPHa4RsF8WlK"
+        data-wgc-mode="button"
+        data-wgc-button-text="Get your pointers here ($100)"
+        data-wgc-button-size="medium"
+        data-wgc-button-color="navy"
+        data-wgc-button-radius="rounded">
+      </script>
+    </div>
+    <p class="hint">Your scores are saved in this browser, so after checkout we know which report is yours.</p>
+  </div>
+
+  <section id="feedback" aria-labelledby="s5" hidden>
+    <h2 id="s5">Help us improve the beta</h2>
+    <p class="lede">Two minutes of feedback makes this better for the next organization.</p>
+    <p style="font-weight:600;margin:0 0 6px">How accurate did your scores feel?</p>
+    <div id="acc" style="margin-bottom:14px">
+      <label class="radio"><input type="radio" name="acc" value="1"> 1 Way off</label>
+      <label class="radio"><input type="radio" name="acc" value="2"> 2</label>
+      <label class="radio"><input type="radio" name="acc" value="3"> 3</label>
+      <label class="radio"><input type="radio" name="acc" value="4"> 4</label>
+      <label class="radio"><input type="radio" name="acc" value="5"> 5 Spot on</label>
+    </div>
+    <p style="font-weight:600;margin:0 0 6px">After the beta, would you pay for the full report?</p>
+    <div id="pay" style="margin-bottom:14px">
+      <label class="radio"><input type="radio" name="pay" value="Yes, $100 report"> Yes, the $100 report</label>
+      <label class="radio"><input type="radio" name="pay" value="Yes, $500 with strategy hour"> Yes, the $500 report with a strategy hour</label>
+      <label class="radio"><input type="radio" name="pay" value="No"> No</label>
+    </div>
+    <div class="field"><label for="fbComments">What would make this more useful?</label><textarea id="fbComments"></textarea></div>
+    <div class="row" style="margin-top:14px">
+      <button id="fbSend" type="button">Send feedback</button>
+      <span id="fbStatus" class="status" aria-live="polite"></span>
+    </div>
+  </section>
+
+  <section aria-labelledby="s4">
+    <h2 id="s4">Ongoing partnership</h2>
+    <p class="lede">For organizations ready to grow giving year-round. Our team works alongside yours on board and executive coaching, ask preparation, presenting at your events, and donor strategy. Partners can also move giving onto WGC's gift processing platform, which is built for nonprofits and can be tailored to yours.</p>
+    <p style="margin:0"><b>Every partnership is priced to fit your organization.</b> Retainer partners get ongoing access to our team at a better rate than hourly.</p>
+  </section>
+
+</main>
+
+<script>
+const AREAS=[
+ {key:"mission",name:"Mission & who you serve",q:"What does your organization do, and who do you serve?",
+  fix:"Get your mission down to one sentence a donor could repeat, and attach a real number to the change you make.",
+  kw:[/(serve|students|families|children|kids|communit|people|women|men|youth)/,/\d/,/(vision|impact|change|outcome|result|future)/,/(gospel|ministry|church|christ|jesus|faith|kingdom)/]},
+ {key:"ask",name:"The ask",q:"How do you ask for gifts today?",
+  fix:"Name a specific amount tied to a specific outcome, say it early, and come back to it at the close with a clear next step.",
+  kw:[/(\$|\d+\s?(k|thousand|dollar))/,/(in person|face to face|one on one|meeting|visit|lunch|coffee)/,/(specific|amount|goal|ask for)/,/(follow up|next step|pledge|commit)/]},
+ {key:"platform",name:"Donor platform",q:"How do donors give to you, and what happens after they give?",
+  fix:"Make giving work in a few taps on a phone, offer recurring giving by default, and thank every gift within 48 hours.",
+  kw:[/(online|website|app|text|mobile|qr)/,/(recurring|monthly|automatic)/,/(thank|receipt|confirm|call)/,/(crm|database|track|report)/]},
+ {key:"relationships",name:"Donor relationships",q:"How do you build relationships with donors between asks?",
+  fix:"Pick your top 25 donors and give each one a personal touch every quarter that asks for nothing: a call, a note, a visit, an update.",
+  kw:[/(call|visit|coffee|lunch|note|letter|card)/,/(update|report|newsletter|story|impact)/,/(pray|prayer)/,/(quarter|month|regular|every|plan)/]},
+ {key:"board",name:"Board",q:"How does your board take part in fundraising?",
+  fix:"Aim for 100% board giving this year, and ask each board member for three introductions this quarter.",
+  kw:[/(100|every member|all members|each member)/,/(give|giving|gift)/,/(introduc|open doors|connect|host|invite)/,/(committee|goal|expectation|commit)/]},
+ {key:"leaders",name:"Executive leadership",q:"How do your executive leaders take part in fundraising?",
+  fix:"Put your executive director in front of donors every week and protect that time on the calendar.",
+  kw:[/(ceo|executive|director|president|pastor|leader)/,/(meet|visit|call|ask)/,/(week|month|regular|calendar|time)/,/(vision|share|cast|story)/]}
+];
+const $=id=>document.getElementById(id);
+/* Server endpoints on our own site. See README for what each one expects. */
+const API={score:'/api/scorecard/score',submit:'/api/scorecard/submit'};
+/* Anonymous share lines: one per area, used for the weakest area */
+const SHARE={
+  mission:"tightening our mission into one sentence a donor could repeat",
+  ask:"naming a specific dollar amount, tied to a real outcome, early in every ask",
+  platform:"thanking every gift within 48 hours",
+  relationships:"reaching out to our top donors with no ask attached",
+  board:"asking every board member to open three new doors this quarter",
+  leaders:"putting our leader in front of donors every week"
+};
+const SITE=location.origin+location.pathname;
+/* Coming back from a follow-up email: ?lead=ID */
+(()=>{const id=new URLSearchParams(location.search).get('lead');
+  if(!id||!/^[A-Za-z0-9_-]{6,40}$/.test(id))return;
+  try{localStorage.setItem('wgcLeadId',id);localStorage.removeItem('wgcScorecard')}catch(e){}
+  const buy=document.getElementById('buy');document.getElementById('resumeSlot').replaceWith(buy);buy.hidden=false;
+  buy.querySelector('h3').textContent='Full written report ($100)';
+  const note=buy.querySelector('p.hint:last-child');if(note)note.textContent='We already have your answers, so after checkout your report goes straight to your inbox.';
+  document.getElementById('resume').hidden=false;})();
+/* Board and team invitations: ?org=Name&group=CODE&as=board|team */
+const params=new URLSearchParams(location.search);
+const invitedAs=['board','team'].includes(params.get('as'))?params.get('as'):'';
+const groupCode=(params.get('group')||'').replace(/[^A-Za-z0-9]/g,'').slice(0,12)||Math.random().toString(36).slice(2,8).toUpperCase();
+if(params.get('org')){
+  $('orgName').value=params.get('org').slice(0,200);
+}
+if(invitedAs){
+  const n=document.createElement('div');n.className='invite';
+  n.textContent=invitedAs==='board'
+    ?"Your executive director asked the board to take this scorecard. Answer from your seat on the board; there are no wrong answers."
+    :"Your executive director asked the team to take this scorecard. Answer from where you sit; there are no wrong answers.";
+  document.querySelector('#s1').closest('section').querySelector('.lede').after(n);
+}
+function inviteLink(as){
+  const u=new URL(SITE);
+  if(current&&current.org)u.searchParams.set('org',current.org);
+  u.searchParams.set('group',groupCode);u.searchParams.set('as',as);
+  return u.toString();
+}
+function inviteMail(as){
+  const link=inviteLink(as),org=current&&current.org?current.org:'our organization';
+  const subject=as==='board'?`Board input: a 10-minute fundraising scorecard for ${org}`:`Team input: a 10-minute fundraising scorecard for ${org}`;
+  const body=as==='board'
+    ?`I just scored how ${org} raises money using the WGC Fundraising Scorecard. Would you take it too, from your seat on the board? It takes about 10 minutes, and seeing where we agree and where we see things differently will help us plan.\n\n${link}\n\nThank you.`
+    :`I just scored how ${org} raises money using the WGC Fundraising Scorecard. Would you take it too, from where you sit? It takes about 10 minutes, and seeing where we agree and where we see things differently will help us plan.\n\n${link}\n\nThank you.`;
+  return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+function shareText(){
+  const ks=AREAS.map(a=>a.key).filter(k=>!current.unsure[k]);
+  let low=null;ks.forEach(k=>{if(low===null||current.adjusted[k]<current.adjusted[low])low=k});
+  const line=low&&current.adjusted[low]<=3?SHARE[low]:"taking 10 minutes to score how we raise money";
+  return `One way I'm improving my fundraising this week: ${line}. I found it with a free 10-minute scorecard for nonprofit leaders. ${SITE}`;
+}
+async function copyText(t,btn){
+  try{await navigator.clipboard.writeText(t);const o=btn.textContent;btn.textContent='Copied';setTimeout(()=>btn.textContent=o,1600)}
+  catch(e){btn.textContent='Select and copy the text'}
+}
+const qbox=$('questions');
+AREAS.forEach(a=>{
+  const d=document.createElement('div');d.className='q';
+  d.innerHTML=`<div class="q-head"><label for="t_${a.key}">${a.q}</label>
+    <button type="button" class="mic" data-target="t_${a.key}" hidden><span class="dot"></span><span class="ml">Speak</span></button></div>
+    <textarea id="t_${a.key}"></textarea>`;
+  qbox.appendChild(d);
+});
+
+/* Voice input through the browser's built-in speech recognition (Chrome, Edge, Safari) */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null,listening=false,target=null,base='';
+const mics=()=>document.querySelectorAll('button.mic');
+function paintMics(){
+  mics().forEach(b=>{
+    const on=listening&&b.dataset.target===target;
+    b.classList.toggle('live',on);
+    b.querySelector('.ml').textContent=on?'Stop':(b.classList.contains('big')?'Start speaking':'Speak');
+  });
+  $('pitchHint').textContent=SR?(listening&&target==='pitch'?'Listening.':'Or type below.'):'Type your pitch below. (Voice works in Chrome, Edge and Safari.)';
+}
+function stopRec(){listening=false;if(rec){try{rec.stop()}catch(e){}}target=null;paintMics()}
+function startRec(t){
+  if(listening)stopRec();
+  const el=$(t);target=t;listening=true;base=el.value.trim()?el.value.trim()+' ':'';
+  rec=new SR();rec.lang='en-US';rec.continuous=true;rec.interimResults=true;
+  rec.onresult=e=>{let interim='';for(let i=e.resultIndex;i<e.results.length;i++){const tr=e.results[i][0].transcript;if(e.results[i].isFinal)base+=tr.trim()+' ';else interim+=tr}el.value=base+interim};
+  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){listening=false;mics().forEach(m=>m.hidden=true);$('pitchHint').textContent='Microphone is blocked. Type your answers instead.'}};
+  rec.onend=()=>{if(listening&&target===t){try{rec.start()}catch(e){stopRec()}}else paintMics()};
+  try{rec.start()}catch(e){stopRec()}
+  paintMics();
+}
+if(SR){mics().forEach(b=>b.hidden=false)}
+paintMics();
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button.mic');if(!b||!SR)return;
+  if(listening&&target===b.dataset.target){stopRec();return}
+  startRec(b.dataset.target);
+});
+
+/* Fallback scoring if the AI service is unavailable */
+function ruleScore(a,txt){
+  const t=txt.toLowerCase().trim();if(!t)return{score:1,why:"No answer given.",fix:a.fix};
+  const words=t.split(/\s+/).length,hits=a.kw.filter(r=>r.test(t)).length;
+  let s=1+hits;if(words>40)s+=0.5;if(words<8)s-=1;
+  s=Math.max(1,Math.min(5,Math.round(s)));
+  return{score:s,why:s>=4?"Your answer covers most of what strong programs do here.":s>=3?"You have pieces in place, with clear room to grow.":"This area looks underdeveloped from your answer.",fix:a.fix};
+}
+function rulePitch(p){
+  const t=p.toLowerCase(),words=t.split(/\s+/).filter(Boolean).length,early=t.slice(0,Math.max(1,Math.floor(t.length/3)));
+  const money=/\$\s?\d|\d+\s?(thousand|k\b|dollars)/;
+  const c=[[money.test(t),"You named a specific amount.","Name a specific dollar amount. Vague asks get vague gifts."],
+   [money.test(early),"Your ask comes early.","Bring the ask to the opening so the room hears everything else knowing what it's for."],
+   [/(serve|students|families|children|kids|people|communit)/.test(t),"You say who you serve.","Say plainly who you serve and put a face on it."],
+   [/(vision|imagine|future|impact|will be|change)/.test(t),"You cast vision.","Paint the picture of what changes if this gets funded."],
+   [/(fund|provide|build|which means|that would|equals|launch)/.test(t),"You tie the money to an outcome.","Tie the dollars to something concrete people can picture."],
+   [/(pray|consider|partner|join|give|commit)/.test(t),"You invite a response.","Close with a direct invitation to partner."],
+   [/(come to me|come find me|find me|talk with|conversation with you|meet)/.test(t),"You give a clear next step.","Tell people exactly what to do next, tonight."]];
+  const notes=c.map(x=>({ok:x[0],text:x[0]?x[1]:x[2]}));
+  if(words<60)notes.push({ok:false,text:"Your pitch is short. Tell the story of one person you serve."});
+  return{score:Math.round(c.filter(x=>x[0]).length/c.length*100),notes};
+}
+function esc(s){const d=document.createElement('div');d.textContent=String(s??'');return d.innerHTML}
+function postForm(name,fields){
+  return fetch(API.submit,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({form:name,fields})});
+}
+
+let current=null;
+$('go').addEventListener('click',async()=>{
+  if(listening)stopRec();
+  const name=$('leadName').value.trim(),email=$('leadEmail').value.trim();
+  if(!name||!/^\S+@\S+\.\S+$/.test(email)){$('goStatus').innerHTML='<span class="error">Add your name and a valid email so we can send your results.</span>';(!name?$('leadName'):$('leadEmail')).focus();return}
+  const org=$('orgName').value.trim();
+  const answers={};AREAS.forEach(a=>answers[a.key]=$('t_'+a.key).value.trim());
+  const pitch=$('pitch').value.trim();
+  if(!Object.values(answers).some(Boolean)&&!pitch){$('goStatus').innerHTML='<span class="error">Answer at least one question or give your pitch first.</span>';return}
+  $('go').disabled=true;$('goStatus').textContent='Reading your answers. This takes about 20 seconds.';
+  let out=null,scoredBy='ai';
+  try{
+    const r=await fetch(API.score,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({org,answers,pitch})});
+    if(r.ok){const j=await r.json();if(j&&j.areas)out=j}
+  }catch(e){}
+  if(!out){scoredBy='fallback';out={areas:{},pitch:pitch?rulePitch(pitch):null};AREAS.forEach(a=>out.areas[a.key]=ruleScore(a,answers[a.key]))}
+  $('go').disabled=false;$('goStatus').textContent='';
+  current={org,name,email,answers,pitch,auto:out,adjusted:Object.fromEntries(AREAS.map(a=>[a.key,out.areas[a.key].score])),unsure:{},scoredBy};
+  render();$('results').hidden=false;$('feedback').hidden=false;
+  $('results').scrollIntoView({behavior:'smooth',block:'start'});
+  const o=overall();
+  postForm('scorecard-lead',{name,email,organization:org,role:$('leadRole').value.trim(),phone:$('leadPhone').value.trim(),
+    fundraising_score:String(o??''),pitch_score:out.pitch?String(out.pitch.score):'',scored_by:scoredBy,
+    area_scores:AREAS.map(a=>`${a.name}: ${out.areas[a.key].score}/5`).join('\n'),
+    answers:AREAS.map(a=>`${a.q}\n${answers[a.key]||'(blank)'}`).join('\n\n').slice(0,8000),
+    pitch:pitch.slice(0,6000),group_code:groupCode,invited_as:invitedAs||'self',
+    data_consent:$('dataConsent').checked?'yes':'no',
+    answers_json:JSON.stringify(answers),scores_json:JSON.stringify(Object.fromEntries(AREAS.map(a=>[a.key,out.areas[a.key].score])))})
+    .then(r=>r.ok?r.json():null).then(j=>{if(j&&j.id){try{localStorage.setItem('wgcLeadId',j.id)}catch(e){}}}).catch(()=>{});
+});
+
+/* Saved so the checkout success page knows whose report was bought */
+function saveScorecard(){
+  try{
+    const o=overall();
+    localStorage.setItem('wgcScorecard',JSON.stringify({
+      name:current.name,email:current.email,org:current.org,role:$('leadRole').value.trim(),
+      fundraising_score:o??'',pitch_score:current.auto.pitch?current.auto.pitch.score:'',group_code:groupCode,
+      area_scores:AREAS.map(a=>`${a.name}: ${current.unsure[a.key]?'not sure':current.adjusted[a.key]+'/5'}`).join('\n'),
+      unsure_areas:AREAS.filter(a=>current.unsure[a.key]).map(a=>a.name).join(', '),
+      answers_json:JSON.stringify(current.answers||{}),pitch:current.pitch||'',
+      scores_json:JSON.stringify(Object.fromEntries(AREAS.map(a=>[a.key,current.unsure[a.key]?'not sure':current.adjusted[a.key]]))),
+      saved:Date.now()}));
+  }catch(e){}
+}
+function overall(){
+  const ks=AREAS.map(a=>a.key).filter(k=>!current.unsure[k]);
+  if(!ks.length)return null;
+  return Math.round(ks.reduce((s,k)=>s+current.adjusted[k],0)/(ks.length*5)*100);
+}
+function render(){
+  $('resume').hidden=true;
+  const buy=$('buy');if(buy.parentNode)buy.remove();
+  const o=overall(),p=current.auto.pitch;
+  const adj=AREAS.map(a=>{const r=current.auto.areas[a.key],v=current.adjusted[a.key],u=!!current.unsure[a.key];
+    return `<div class="adj${u?' is-unsure':''}">
+      <div class="adj-head"><span>${a.name}</span><output id="v_${a.key}">${u?'?':v}</output></div>
+      <p class="why">${esc(r.why)}</p>
+      <input type="range" min="1" max="5" value="${v}" id="r_${a.key}" data-k="${a.key}" aria-label="${a.name} score" ${u?'disabled':''}>
+      <div class="scale"><span>1 Weak</span><span>We scored you ${r.score}</span><span>5 Strong</span></div>
+      <label class="unsure"><input type="checkbox" id="u_${a.key}" data-k="${a.key}" ${u?'checked':''}> Not sure</label>
+    </div>`}).join('');
+  const gaps=AREAS.filter(a=>!current.unsure[a.key]&&current.adjusted[a.key]<=3);
+  const gapHtml=gaps.length?gaps.map(a=>`<div class="note fix"><i>!</i><span><b>${a.name}.</b> ${esc(current.auto.areas[a.key].fix)}</span></div>`).join(''):'<p>No major gaps in the areas you scored.</p>';
+  const pitchHtml=p?`<h3 style="margin-top:18px">Pitch review</h3>`+p.notes.map(n=>`<div class="note ${n.ok?'ok':'fix'}"><i>${n.ok?'✓':'!'}</i><span>${esc(n.text)}</span></div>`).join(''):'';
+  const unsure=AREAS.filter(a=>current.unsure[a.key]);
+  $('results').innerHTML=`<div class="step"><b>STEP 4</b><h2>${current.org?esc(current.org)+': y':'Y'}our scores</h2></div>
+   <div class="scores">
+    <div><div class="lbl">Fundraising score</div><div class="big" id="overall">${o===null?'?':o}<small>/100</small></div></div>
+    ${p?`<div><div class="lbl">Pitch score</div><div class="big">${p.score}<small>/100</small></div></div>`:''}
+   </div>
+   <p class="hint">We scored each area from your answers. If a score looks wrong, move the slider. If you can't tell, tick "Not sure."</p>
+   ${adj}
+   ${unsure.length?`<div class="consult"><b>Worth a conversation.</b> You weren't sure about ${unsure.map(a=>a.name).join(', ')}. Those are good places to start on a call with our team.</div>`:''}
+   <h3 style="margin-top:22px">Where you're falling short</h3>
+   ${gapHtml}${pitchHtml}
+   <div id="buySlot"></div>
+   <div class="box">
+    <h3>${invitedAs?'Share this with others on your team':'Get your board and team\'s view'}</h3>
+    <p class="hint">Send the scorecard to your board or staff. Each person scores your organization from their seat. Our team can then compare everyone's answers and walk you through where you agree and where you see things differently. Only your link is shared, never your answers or scores.</p>
+    <div class="row">
+      <a class="btn small" href="${esc(inviteMail('board'))}">Email my board</a>
+      <a class="btn small" href="${esc(inviteMail('team'))}">Email my team</a>
+      <button type="button" class="secondary small" data-act="copy-board">Copy board link</button>
+      <button type="button" class="secondary small" data-act="copy-team">Copy team link</button>
+    </div>
+   </div>
+   <div class="box">
+    <h3>Share what you learned, anonymously</h3>
+    <p class="hint">No organization name and no scores. Edit it however you like, copy it, then paste it into your post.</p>
+    <textarea id="shareText" class="share-text" aria-label="Post text">${esc(current.shareText??shareText())}</textarea>
+    <div class="row">
+      <button type="button" class="small" data-act="copy-share">Copy text</button>
+      <a class="btn small secondary" href="https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(SITE)}" target="_blank" rel="noopener">LinkedIn</a>
+      <a class="btn small secondary" href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(SITE)}" target="_blank" rel="noopener">Facebook</a>
+      <a class="btn small secondary" data-act="x" href="#" target="_blank" rel="noopener">X</a>
+    </div>
+   </div>`;
+  $('buySlot').replaceWith(buy);buy.hidden=false;
+  saveScorecard();
+  const x=$('results').querySelector('[data-act=x]');
+  if(x)x.href='https://twitter.com/intent/tweet?text='+encodeURIComponent($('shareText').value);
+}
+$('results').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const act=b.dataset.act;
+  if(act==='copy-board')copyText(inviteLink('board'),b);
+  else if(act==='copy-team')copyText(inviteLink('team'),b);
+  else if(act==='copy-share')copyText($('shareText').value,b);
+  else if(act==='x')b.href='https://twitter.com/intent/tweet?text='+encodeURIComponent($('shareText').value);
+});
+$('results').addEventListener('input',e=>{
+  if(e.target.id==='shareText'){current.shareText=e.target.value;return}
+  const k=e.target.dataset.k;if(!k||e.target.type!=='range')return;
+  current.adjusted[k]=+e.target.value;$('v_'+k).textContent=e.target.value;
+  const o=overall();$('overall').innerHTML=`${o===null?'?':o}<small>/100</small>`;
+});
+$('results').addEventListener('change',e=>{
+  const k=e.target.dataset.k;if(!k)return;
+  if(e.target.type==='range'){render();$('r_'+k)?.focus();return}
+  if(e.target.type==='checkbox'){current.unsure[k]=e.target.checked;render();$('u_'+k)?.focus()}
+});
+$('fbSend').addEventListener('click',async()=>{
+  if(!current)return;
+  const acc=document.querySelector('input[name=acc]:checked')?.value||'',pay=document.querySelector('input[name=pay]:checked')?.value||'';
+  const comments=$('fbComments').value.trim();
+  if(!acc&&!pay&&!comments){$('fbStatus').innerHTML='<span class="error">Pick an answer or leave a comment first.</span>';return}
+  $('fbSend').disabled=true;$('fbStatus').textContent='Sending…';
+  try{
+    const r=await postForm('beta-feedback',{name:current.name,email:current.email,organization:current.org,accuracy:acc,would_pay:pay,comments,
+      ai_scores:AREAS.map(a=>`${a.name}: ${current.auto.areas[a.key].score}`).join('\n'),
+      adjusted_scores:AREAS.map(a=>`${a.name}: ${current.unsure[a.key]?'not sure':current.adjusted[a.key]}`).join('\n'),
+      unsure_areas:AREAS.filter(a=>current.unsure[a.key]).map(a=>a.name).join(', ')});
+    if(!r.ok)throw new Error();
+    $('fbStatus').innerHTML='<span class="thanks">Thank you. Your feedback was sent.</span>';
+  }catch(e){$('fbSend').disabled=false;$('fbStatus').innerHTML='<span class="error">That didn\'t send. Check your connection and try again.</span>'}
+});
+</script>
+</body>
+</html>

@@ -7450,3 +7450,37 @@ model InboxSenderRule {
   createdByEmail String
   createdAt      DateTime @default(now())
 }
+
+// ---------------------------------------------------------------------------
+// Fundraising Scorecard (fund.wgcpayments.com). A free scorecard that sells a $100
+// written report and follows up by email. See src/lib/scorecard.
+// ---------------------------------------------------------------------------
+
+/// One person who took the scorecard. One row per email. The scorecard's own record (answers, scores,
+/// purchase, which follow-ups were sent) is the JSON document, kept as one unit so it reads and writes
+/// the same way the original store did; email is the only column the app looks people up by.
+model ScorecardContact {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  dataJson  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A Finix transfer that has already paid for a report, so one payment can never buy two.
+model ScorecardUsedTransfer {
+  transferId String   @id
+  contactId  String
+  createdAt  DateTime @default(now())
+
+  @@index([contactId])
+}
+
+/// Hits for the per-visitor limit on the public scorecard endpoints (AI scoring costs money). Old rows are pruned as it runs.
+model ScorecardRateHit {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}

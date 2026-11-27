@@ -122,8 +122,28 @@ const partnerFrameHeaders =
       }))
     : [];
 
+// The fundraising scorecard is served at its own address (fund.wgcpayments.com, and the same name on the sandbox
+// domain) from this same app. On those hosts only, the home page and its two result pages are the scorecard's
+// static pages; every other host and path is untouched. SCORECARD_HOSTS (comma separated) adds more hosts.
+const scorecardHosts = Array.from(
+  new Set(["fund.wgcpayments.com", "fund.wgcpaymentssandbox.com", ...(process.env.SCORECARD_HOSTS || "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean)])
+);
+const scorecardRewrites = scorecardHosts.flatMap((host) => {
+  const has = [{ type: "host" as const, value: host.replace(/\./g, "\\.") }];
+  return [
+    { source: "/", has, destination: "/scorecard/index.html" },
+    { source: "/completescoreboard", has, destination: "/scorecard/completescoreboard/index.html" },
+    { source: "/completescoreboard/", has, destination: "/scorecard/completescoreboard/index.html" },
+    { source: "/tryagain", has, destination: "/scorecard/tryagain/index.html" },
+    { source: "/tryagain/", has, destination: "/scorecard/tryagain/index.html" },
+  ];
+});
+
 const nextConfig: NextConfig = {
   devIndicators: false,
+  async rewrites() {
+    return { beforeFiles: scorecardRewrites, afterFiles: [], fallback: [] };
+  },
   async redirects() {
     return [
       { source: "/for-software-partners", destination: "/software-partners", permanent: true },

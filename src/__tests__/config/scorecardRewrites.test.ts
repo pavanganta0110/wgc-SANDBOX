@@ -1,0 +1,31 @@
+import { describe, it, expect } from "vitest";
+import nextConfig from "../../../next.config";
+
+type Rewrite = { source: string; destination: string; has?: Array<{ type: string; value: string }> };
+
+describe("the fundraising scorecard's host rewrites", async () => {
+  const rewrites = (await nextConfig.rewrites!()) as { beforeFiles: Rewrite[]; afterFiles: Rewrite[]; fallback: Rewrite[] };
+
+  it("map the scorecard's pages only on the fund hosts, never for the main site", () => {
+    expect(rewrites.beforeFiles.length).toBeGreaterThan(0);
+    for (const r of rewrites.beforeFiles) {
+      expect(r.has?.[0].type).toBe("host");
+      expect(r.has?.[0].value).toMatch(/^fund\\\./);
+      expect(r.destination).toMatch(/^\/scorecard\//);
+    }
+    const hosts = new Set(rewrites.beforeFiles.map((r) => r.has![0].value));
+    expect(hosts).toEqual(new Set(["fund\\.wgcpayments\\.com", "fund\\.wgcpaymentssandbox\\.com"]));
+  });
+
+  it("cover the home page and both result pages for each host", () => {
+    const byHost = rewrites.beforeFiles.filter((r) => r.has![0].value === "fund\\.wgcpayments\\.com");
+    expect(byHost.map((r) => r.source).sort()).toEqual(["/", "/completescoreboard", "/completescoreboard/", "/tryagain", "/tryagain/"]);
+    expect(byHost.find((r) => r.source === "/")!.destination).toBe("/scorecard/index.html");
+    expect(byHost.find((r) => r.source === "/completescoreboard")!.destination).toBe("/scorecard/completescoreboard/index.html");
+  });
+
+  it("add nothing after or before other rules", () => {
+    expect(rewrites.afterFiles).toEqual([]);
+    expect(rewrites.fallback).toEqual([]);
+  });
+});

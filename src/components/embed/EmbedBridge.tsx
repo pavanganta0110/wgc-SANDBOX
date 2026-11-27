@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import GivingLinkForm from "@/components/giving/GivingLinkForm";
 import type { ResultState } from "@/components/giving/GivingLinkForm";
+import { successReturnTarget } from "@/lib/givingLinks/successReturn";
 
 /**
  * Bridges the embeddable giving page back to the site that opened it, via
@@ -25,7 +26,8 @@ import type { ResultState } from "@/components/giving/GivingLinkForm";
  * reference generated locally in this component (not a raw Finix
  * transfer/subscription id) as the "safe public reference".
  */
-export default function EmbedBridge(props: React.ComponentProps<typeof GivingLinkForm>) {
+export default function EmbedBridge(props: React.ComponentProps<typeof GivingLinkForm> & { successReturnUrl?: string | null }) {
+  const { successReturnUrl, ...formProps } = props;
   const referenceRef = useRef<string>(
     typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `wgc-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
@@ -44,7 +46,26 @@ export default function EmbedBridge(props: React.ComponentProps<typeof GivingLin
       );
     }
     props.onResult?.(result);
+
+    // A link whose success return URL is on the allow-list (the fundraising scorecard) sends the donor on to that page
+    // with the payment's transfer id, so the page can confirm the payment. The page that opened this popup is moved
+    // there and the popup closes; if that isn't possible this window goes there itself. Every other link is unchanged.
+    if (result.step === "success" || result.step === "pending") {
+      const target = successReturnTarget(successReturnUrl, result.transferId);
+      if (target) {
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.location.href = target;
+            window.close();
+            return;
+          }
+        } catch {
+          // The opener can't be moved: fall through and go there from this window.
+        }
+        window.location.href = target;
+      }
+    }
   }
 
-  return <GivingLinkForm {...props} onResult={handleResult} />;
+  return <GivingLinkForm {...formProps} onResult={handleResult} />;
 }
