@@ -139,6 +139,14 @@ const scorecardRewrites = scorecardHosts.flatMap((host) => {
   ];
 });
 
+// Speaking an answer needs the microphone, and the whole app tells browsers to block it (Permissions-Policy
+// microphone=()). The fund hosts allow it for their own pages only; every other host keeps it blocked.
+const scorecardHeaders = scorecardHosts.map((host) => ({
+  source: "/:path*",
+  has: [{ type: "host" as const, value: host.replace(/\./g, "\\.") }],
+  headers: [{ key: "Permissions-Policy", value: "camera=(), microphone=(self), geolocation=()" }],
+}));
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   async rewrites() {
@@ -180,6 +188,7 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       ...partnerFrameHeaders,
+      ...scorecardHeaders,
       {
         // /embed/* must be iframe-able from arbitrary third-party sites —
         // that's the entire point of the website-embed feature. Per-org

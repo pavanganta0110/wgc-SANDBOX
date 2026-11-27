@@ -29,3 +29,19 @@ describe("the fundraising scorecard's host rewrites", async () => {
     expect(rewrites.fallback).toEqual([]);
   });
 });
+
+describe("the fundraising scorecard's microphone", () => {
+  type HeaderRule = { source: string; has?: Array<{ type: string; value: string }>; headers: Array<{ key: string; value: string }> };
+
+  it("is allowed on the fund hosts only, so speaking an answer works there and nowhere else", async () => {
+    const rules = (await nextConfig.headers!()) as HeaderRule[];
+    const mic = rules.filter((r) => r.headers.some((h) => h.key === "Permissions-Policy" && h.value.includes("microphone=(self)")));
+    expect(mic.length).toBeGreaterThan(0);
+    for (const r of mic) expect(r.has?.[0].value).toMatch(/^fund\\\./);
+    // the site-wide rule still blocks the microphone for every other host
+    const global = rules.find((r) => r.source === "/(.*)" && !r.has)!;
+    expect(global.headers.find((h) => h.key === "Permissions-Policy")!.value).toContain("microphone=()");
+    // and a fund-host rule comes after it, so it wins
+    expect(rules.indexOf(mic[0])).toBeGreaterThan(rules.indexOf(global));
+  });
+});
