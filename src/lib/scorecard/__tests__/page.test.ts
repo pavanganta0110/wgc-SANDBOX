@@ -30,9 +30,9 @@ describe("the page's fallback scoring (used only when the AI can't be reached)",
 });
 
 describe("the scorecard page", () => {
-  it("does not pre-check the data-use box, so people opt in", () => {
-    expect(html).toMatch(/<input type="checkbox" id="dataConsent">/);
-    expect(html).not.toMatch(/id="dataConsent"[^>]*checked/);
+  it("pre-checks the data-use box (people can untick it)", () => {
+    expect(html).toMatch(/<input type="checkbox" id="dataConsent" checked>/);
+    expect(html).toMatch(/id="dataConsent"[^>]*checked/);
   });
 
   it("checks the phone number before it scores", () => {
@@ -79,7 +79,7 @@ describe("the scorecard page after Collin's copy changes", () => {
 
   it("the Ongoing partnership box links to Collin's Calendly", () => {
     expect(html).toContain('href="https://calendly.com/waypoint-gateway-collective/wgc-free-strategy-call"');
-    expect(html).toContain("Click to hear more");
+    expect(html).toContain("Click to know more");
   });
 });
 
