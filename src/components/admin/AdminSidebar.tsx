@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity, Handshake, MailOpen } from "lucide-react";
+import { LayoutDashboard, Inbox, FileText, Users, UserCircle, Mail, LifeBuoy, Building, CreditCard, RefreshCw, UserCheck, Webhook, Activity, Handshake, MailOpen, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { name: "Inbox", href: "/admin/inbox", icon: MailOpen },
   { name: "Support Tickets", href: "/admin/support/tickets", icon: LifeBuoy },
   { name: "First Look Leads", href: "/admin/first-look-leads", icon: Inbox },
+  { name: "Scorecard Leads", href: "/admin/scorecard", icon: ClipboardList },
   { name: "Inquiries", href: "/admin/inquiries", icon: Inbox },
   { name: "501(c)(3) Documents", href: "/admin/documents", icon: FileText },
   { name: "Email Logs", href: "/admin/email-logs", icon: Mail },
