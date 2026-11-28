@@ -39,8 +39,13 @@ export async function GET(req: Request) {
     }
 
     // Base WHERE conditions
-    // Merchants that came through a software partner are listed under Partners, not here.
-    const conditions: Prisma.Sql[] = [Prisma.sql`c."partnerId" IS NULL`];
+    // Every merchant is listed here. "source" narrows it: direct sign-ups, any partner, or one kind of partner.
+    const conditions: Prisma.Sql[] = [];
+    const source = searchParams.get("source");
+    if (source === "direct") conditions.push(Prisma.sql`c."partnerId" IS NULL`);
+    else if (source === "partner") conditions.push(Prisma.sql`c."partnerId" IS NOT NULL`);
+    else if (source === "software") conditions.push(Prisma.sql`pt."partnerType" = 'SOFTWARE'`);
+    else if (source === "referral") conditions.push(Prisma.sql`pt."partnerType" = 'REFERRAL'`);
 
     if (status) {
       conditions.push(Prisma.sql`c."status" = ${status}`);
@@ -93,7 +98,7 @@ export async function GET(req: Request) {
       )`);
     }
 
-    const whereClause = Prisma.join(conditions, " AND ");
+    const whereClause = conditions.length ? Prisma.join(conditions, " AND ") : Prisma.sql`TRUE`;
 
     // Get Total Count
     const countQuery = await prisma.$queryRaw<{ count: bigint }[]>`
@@ -102,6 +107,7 @@ export async function GET(req: Request) {
       LEFT JOIN "User" u ON c."primaryOwnerUserId" = u.id
       LEFT JOIN "OnboardingApplication" oa ON c."onboardingApplicationId" = oa.id
       LEFT JOIN "FinixMerchantSnapshot" fms ON c."finixMerchantId" = fms."finixMerchantId"
+      LEFT JOIN "Partner" pt ON c."partnerId" = pt.id
       WHERE ${whereClause}
     `;
     
@@ -114,6 +120,8 @@ export async function GET(req: Request) {
         c.id,
         c.name,
         c.status,
+        pt.name AS "partnerName",
+        pt."partnerType" AS "partnerType",
         COALESCE(
           c."primaryOwnerUserId",
           (SELECT u_f.id FROM "User" u_f WHERE u_f."churchId" = c.id AND u_f.role IN ('CHURCH_ADMIN', 'church_admin', 'ADMIN', 'admin', 'OWNER', 'owner') ORDER BY u_f."createdAt" ASC LIMIT 1),
@@ -160,6 +168,7 @@ export async function GET(req: Request) {
       LEFT JOIN "User" u ON c."primaryOwnerUserId" = u.id
       LEFT JOIN "OnboardingApplication" oa ON c."onboardingApplicationId" = oa.id
       LEFT JOIN "FinixMerchantSnapshot" fms ON c."finixMerchantId" = fms."finixMerchantId"
+      LEFT JOIN "Partner" pt ON c."partnerId" = pt.id
       WHERE ${whereClause}
       ORDER BY c."createdAt" DESC
       LIMIT ${pageSize} OFFSET ${offset}
@@ -170,6 +179,7 @@ export async function GET(req: Request) {
       id: m.id,
       name: m.name,
       status: m.status,
+      partner: m.partnerName ? { name: m.partnerName, type: m.partnerType } : null,
       primaryOwner: (m.resolvedPrimaryOwnerUserId || m.primaryOwnerEmail) ? {
         id: m.resolvedPrimaryOwnerUserId || "",
         name: m.primaryOwnerName,

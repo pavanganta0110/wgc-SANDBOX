@@ -40,14 +40,22 @@ describe("GET /api/admin/merchants — filters", () => {
     expect(where.sql).not.toContain("ILIKE");
   });
 
-  it("leaves out merchants that came through a partner (they are listed under Partners)", async () => {
+  it("lists partner merchants too", async () => {
     await get("");
-    const where = whereOfFirstQuery();
-    expect(where.sql).toContain('c."partnerId" IS NULL');
-    // The data query reads the same WHERE clause, so the page and its count agree.
+    expect(whereOfFirstQuery().sql).not.toContain("partnerId");
+  });
+
+  it("narrows to direct sign-ups on request", async () => {
+    await get("source=direct");
+    expect(whereOfFirstQuery().sql).toContain('c."partnerId" IS NULL');
+  });
+
+  it("narrows to one kind of partner, in the count and the data query alike", async () => {
+    await get("source=referral");
+    expect(whereOfFirstQuery().sql).toContain("REFERRAL");
     const secondValues = mockQueryRaw.mock.calls[1].slice(1) as unknown[];
-    const secondWhere = secondValues.find((v): v is SqlLike => typeof v === "object" && v !== null && "sql" in (v as object) && (v as SqlLike).sql.includes("partnerId"));
-    expect(secondWhere?.sql).toContain('c."partnerId" IS NULL');
+    const secondWhere = secondValues.find((v): v is SqlLike => typeof v === "object" && v !== null && "sql" in (v as object) && (v as SqlLike).sql.includes("partnerType"));
+    expect(secondWhere?.sql).toContain("REFERRAL");
   });
 
   it("filters created date as >= start and < the day after the end day (the end day is fully included)", async () => {

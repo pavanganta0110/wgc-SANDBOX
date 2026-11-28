@@ -20,6 +20,7 @@ interface MerchantData {
   id: string;
   name: string;
   status: string;
+  partner?: { name: string; type: string } | null;
   onboardingStatus: string;
   merchantActivationStatus: string | null;
   primaryOwner: {
@@ -77,6 +78,7 @@ export default function MerchantsDirectoryPage() {
   const [searchField, setSearchField] = useState<"name" | "any">("name");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [onboardingFilter, setOnboardingFilter] = useState("ALL");
+  const [sourceFilter, setSourceFilter] = useState("ALL");
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
 
@@ -95,6 +97,7 @@ export default function MerchantsDirectoryPage() {
       if (onboardingFilter !== "ALL") {
         query.append("onboardingStatus", onboardingFilter);
       }
+      if (sourceFilter !== "ALL") query.append("source", sourceFilter);
       if (createdFrom) query.append("createdDateStart", createdFrom);
       if (createdTo) query.append("createdDateEnd", createdTo);
       if (searchQuery) query.append("searchField", searchField);
@@ -113,7 +116,7 @@ export default function MerchantsDirectoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchQuery, searchField, statusFilter, onboardingFilter, createdFrom, createdTo]);
+  }, [page, pageSize, searchQuery, searchField, statusFilter, onboardingFilter, sourceFilter, createdFrom, createdTo]);
 
   useEffect(() => {
     fetchMerchants();
@@ -198,7 +201,7 @@ export default function MerchantsDirectoryPage() {
             Merchants Directory
           </h1>
           <p className="text-slate-500 mt-1">
-            Merchants that signed up directly. Merchants that came through a software partner are under{" "}
+            Every merchant: direct sign-ups and those that came through software or referral partners. Manage the partners themselves under{" "}
             <Link href="/admin/partners" className="font-semibold text-indigo-600 hover:text-indigo-800">Partners</Link>.
           </p>
         </div>
@@ -256,6 +259,21 @@ export default function MerchantsDirectoryPage() {
                 <option value="PENDING">Pending</option>
                 <option value="DISABLED">Disabled</option>
                 <option value="TERMINATED">Terminated</option>
+              </select>
+              <select
+                aria-label="Source"
+                value={sourceFilter}
+                onChange={(e) => {
+                  setSourceFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="bg-white border border-slate-300 text-slate-700 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 py-2 pl-3 pr-8 shadow-sm cursor-pointer"
+              >
+                <option value="ALL">All sources</option>
+                <option value="direct">Direct sign-ups</option>
+                <option value="partner">All partners</option>
+                <option value="software">Software partners</option>
+                <option value="referral">Referral partners</option>
               </select>
               <select
                 aria-label="Onboarding status"
@@ -399,6 +417,11 @@ export default function MerchantsDirectoryPage() {
                       <div className="text-xs text-slate-400 font-mono mt-0.5">
                         {merchant.id}
                       </div>
+                      {merchant.partner && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                          {merchant.partner.type === "REFERRAL" ? "Referral partner" : "Software partner"}: {merchant.partner.name}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col gap-1.5">
